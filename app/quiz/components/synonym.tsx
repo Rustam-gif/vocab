@@ -291,10 +291,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   progressText: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#9CA3AF',
     fontWeight: '500',
   },
@@ -311,11 +311,12 @@ const styles = StyleSheet.create({
     color: '#F87171',
   },
   progressBar: {
-    height: 5,
+    height: 6,
     backgroundColor: '#333',
     borderRadius: 3,
     overflow: 'hidden',
     width: '100%',
+    marginBottom: 24,
   },
   progressFill: {
     height: '100%',
