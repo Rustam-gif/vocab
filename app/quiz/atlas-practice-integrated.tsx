@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
+import LottieView from 'lottie-react-native';
 import WordIntroComponent from './components/word-intro';
 import MCQComponent from './components/mcq';
 import SynonymComponent from './components/synonym';
@@ -27,16 +28,19 @@ export default function AtlasPracticeIntegrated() {
   
   const [currentPhase, setCurrentPhase] = useState(0);
   const [phases, setPhases] = useState<Phase[]>([
-    { id: 'word-intro', name: 'Word Intro', component: WordIntroComponent, completed: false },
+    { id: 'intro', name: 'Intro', component: WordIntroComponent, completed: false },
     { id: 'mcq', name: 'MCQ', component: MCQComponent, completed: false },
     { id: 'synonym', name: 'Synonym', component: SynonymComponent, completed: false },
-    { id: 'sentence-usage', name: 'Natural Usage', component: SentenceUsageComponent, completed: false },
-    { id: 'missing-letters', name: 'Missing Letters', component: MissingLetters, completed: false },
+    { id: 'usage', name: 'Usage', component: SentenceUsageComponent, completed: false },
+    { id: 'letters', name: 'Letters', component: MissingLetters, completed: false },
   ]);
   const [totalScore, setTotalScore] = useState(100);
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [mlIndex, setMlIndex] = useState(0);
+  const timelineRef = useRef<LottieView>(null);
+  const lastTimelineStepRef = useRef(0);
+  const timelineFrames = useRef([10, 100, 190, 280, 280]);
 
   const handlePhaseComplete = (score: number = 0, questions: number = 0) => {
     const phase = phases[currentPhase];
@@ -56,7 +60,7 @@ export default function AtlasPracticeIntegrated() {
     let nextTotalCorrect = totalCorrect;
     let nextTotalQuestions = totalQuestions;
 
-    if (!wasCompleted && phase?.id !== 'word-intro') {
+    if (!wasCompleted && phase?.id !== 'intro') {
       nextTotalCorrect += clampedCorrect;
       nextTotalQuestions += clampedQuestions;
       setTotalCorrect(nextTotalCorrect);
@@ -85,10 +89,36 @@ export default function AtlasPracticeIntegrated() {
   useEffect(() => {
     // Reset Missing Letters index when entering that phase or when params change
     const phase = phases[currentPhase];
-    if (phase?.id === 'missing-letters') {
+    if (phase?.id === 'letters') {
       setMlIndex(0);
     }
   }, [currentPhase, setId, levelId]);
+
+  useEffect(() => {
+    const timeline = timelineRef.current;
+    if (!timeline) {
+      return;
+    }
+
+    const frames = timelineFrames.current;
+    const step = Math.min(currentPhase, frames.length - 1);
+    const targetFrame = frames[step];
+    const previousStep = Math.min(lastTimelineStepRef.current, frames.length - 1);
+    const previousFrame = frames[previousStep];
+
+    if (step === previousStep && targetFrame === previousFrame) {
+      timeline.goToAndStop(targetFrame, true);
+      return;
+    }
+
+    if (targetFrame < previousFrame) {
+      timeline.goToAndStop(targetFrame, true);
+    } else {
+      timeline.play(previousFrame, targetFrame);
+    }
+
+    lastTimelineStepRef.current = step;
+  }, [currentPhase]);
 
   const getCurrentPhaseComponent = () => {
     const phase = phases[currentPhase];
@@ -97,7 +127,7 @@ export default function AtlasPracticeIntegrated() {
     const Component = phase.component;
     
     // Handle Word Intro component differently
-    if (phase.id === 'word-intro') {
+    if (phase.id === 'intro') {
       return (
         <Component
           setId={setId || ''}
@@ -108,7 +138,7 @@ export default function AtlasPracticeIntegrated() {
     }
     
     // Special wiring for Missing Letters (new API: single-word component)
-    if (phase.id === 'missing-letters') {
+    if (phase.id === 'letters') {
       const level = levels.find(l => l.id === (levelId || ''));
       const currentSet = level?.sets.find(s => s.id.toString() === String(setId));
       const words = currentSet?.words ?? [];
@@ -193,10 +223,19 @@ export default function AtlasPracticeIntegrated() {
               activeOpacity={0.8}
             >
               <Text style={isActive ? styles.tabLabelActive : styles.tabLabel}>{phase.name}</Text>
-              <View style={isActive ? styles.tabUnderlineActive : styles.tabUnderline} />
             </TouchableOpacity>
           );
         })}
+      </View>
+
+      <View style={styles.timelineContainer}>
+        <LottieView
+          ref={timelineRef}
+          source={require('../../assets/lottie/Timeline.json')}
+          autoPlay={false}
+          loop={false}
+          style={styles.timelineAnimation}
+        />
       </View>
 
       {/* Current Phase Component */}
@@ -257,19 +296,15 @@ const styles = StyleSheet.create({
     color: '#F2935C',
     fontWeight: '600',
   },
-  tabUnderline: {
-    height: 2,
-    backgroundColor: 'transparent',
-    width: '60%',
-    marginTop: 6,
-    borderRadius: 1,
+  timelineContainer: {
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
   },
-  tabUnderlineActive: {
-    height: 2,
-    backgroundColor: '#F2935C',
-    width: '60%',
-    marginTop: 6,
-    borderRadius: 1,
+  timelineAnimation: {
+    width: '100%',
+    height: 40,
   },
   phaseContainer: {
     flex: 1,
