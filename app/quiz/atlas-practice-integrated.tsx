@@ -144,7 +144,6 @@ export default function AtlasPracticeIntegrated() {
         />
       );
     }
-
     return (
       <Component
         setId={setId || ''}

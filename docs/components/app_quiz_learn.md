@@ -1,0 +1,55 @@
+# LearnScreen
+File: app/quiz/learn.tsx
+
+## Props
+- completed
+- 0
+- total
+- useEffect
+- if
+- levelId
+- const
+- level
+- levels
+- find
+- l
+- id
+- setCurrentLevel
+- sets
+- filter
+- s
+- length
+- setProgress
+- handleSetPress
+- set
+- Set
+- console
+- log
+- LearnScreen
+- setId
+- setType
+- type
+- quiz
+- Navigate
+- to
+- screen
+- router
+- push
+- else
+- directly
+- practice
+- session
+- url
+- atlas
+- integrated
+- Navigating
+- handleChangeLevel
+- select
+- renderSetItem
+- item
+
+## Notes
+- (none)
+
+## Overview
+- Auto-generated. Add // @doc: note=... lines in source to enrich.

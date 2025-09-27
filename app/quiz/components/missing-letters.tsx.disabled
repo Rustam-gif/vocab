@@ -1,0 +1,784 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  AccessibilityInfo,
+  Dimensions,
+} from 'react-native';
+import Animated, {
+  interpolateColor,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import type { TextInput as TextInputType } from 'react-native';
+import { analyticsService } from '../../../services/AnalyticsService';
+import { levels } from '../data/levels';
+
+const ACCENT_COLOR = '#F2935C';
+const CORRECT_COLOR = '#437F76';
+const INCORRECT_COLOR = '#924646';
+const NEUTRAL_COLOR = '#3A3A3A';
+const HINT_COLOR = '#2f2f2f';
+const SLOT_GAP = 8;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+interface MissingLettersProps {
+  setId: string;
+  levelId: string;
+  sharedScore: number;
+  onScoreShare: (score: number) => void;
+  onPhaseComplete: (score: number, totalQuestions: number) => void;
+}
+
+interface SlotState {
+  index: number;
+  char: string;
+  value: string;
+  isLetter: boolean;
+  locked: boolean; // includes hints, revealed letters, and non-letter characters
+  isHint: boolean;
+  status: 'idle' | 'correct' | 'incorrect' | 'revealed' | 'hint' | 'revealing';
+  letterOrder?: number; // only defined for letter slots (1-based)
+}
+
+interface WordResult {
+  word: string;
+  score: number;
+  attempts: number;
+  reveals: number;
+  correct: boolean;
+}
+
+const removeDiacritics = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const isLetterChar = (char: string) => {
+  if (!char || char === ' ') return false;
+  const cleaned = removeDiacritics(char);
+  return /[a-zA-Z]/.test(cleaned);
+};
+
+const desiredHintCount = (letters: number) => {
+  if (letters <= 1) return 0;
+  if (letters <= 4) return 1;
+  if (letters <= 8) return 2;
+  return 3;
+};
+
+const createSeededRandom = (seed: number) => {
+  let current = seed % 233280;
+  return () => {
+    current = (current * 9301 + 49297) % 233280;
+    return current / 233280;
+  };
+};
+
+const generateHintIndices = (word: string, letterPositions: number[], hintCount: number) => {
+  if (hintCount <= 0) return [];
+  const adjustedHintCount = Math.min(hintCount, Math.max(letterPositions.length - 1, 0));
+  if (adjustedHintCount <= 0) return [];
+
+  const seed = word.split('').reduce((acc, char, idx) => acc + char.charCodeAt(0) * (idx + 1), 0);
+  const random = createSeededRandom(seed || 1);
+  const pool = [...letterPositions];
+  const result: number[] = [];
+
+  while (result.length < adjustedHintCount && pool.length > 0) {
+    const index = Math.floor(random() * pool.length);
+    result.push(pool[index]);
+    pool.splice(index, 1);
+  }
+
+  return result;
+};
+
+const buildSlotState = (word: string) => {
+  const characters = Array.from(word);
+  let letterOrder = 0;
+  const letterPositions: number[] = [];
+
+  characters.forEach((char, index) => {
+    if (isLetterChar(char)) {
+      letterPositions.push(index);
+    }
+  });
+
+  const hintIndices = generateHintIndices(word, letterPositions, desiredHintCount(letterPositions.length));
+
+  return characters.map<SlotState>((char, index) => {
+    const isLetter = isLetterChar(char);
+    const isHint = isLetter && hintIndices.includes(index);
+    const currentLetterOrder = isLetter ? ++letterOrder : undefined;
+
+    return {
+      index,
+      char,
+      value: isLetter ? (isHint ? char : '') : char,
+      isLetter,
+      locked: !isLetter || isHint,
+      isHint,
+      status: isHint ? 'hint' : 'idle',
+      letterOrder: currentLetterOrder,
+    };
+  });
+};
+
+const findLevelSetWords = (levelId: string, setId: string) => {
+  const level = levels.find(l => l.id === levelId);
+  if (!level) return [];
+  const set = level.sets.find(s => s.id.toString() === setId.toString());
+  return set?.words ?? [];
+};
+
+const clampScore = (score: number) => Math.max(0, Math.round(score));
+
+export default function MissingLettersComponent({
+  setId,
+  levelId,
+  sharedScore,
+  onScoreShare,
+  onPhaseComplete,
+}: MissingLettersProps) {
+  const inputRefs = useRef<Array<TextInputType | null>>([]);
+  const completingRef = useRef(false);
+
+  const [wordList, setWordList] = useState(() => findLevelSetWords(levelId, setId));
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [slots, setSlots] = useState<SlotState[]>(() =>
+    wordList.length ? buildSlotState(wordList[0].word) : []
+  );
+  const revealsRef = useRef(0);
+  const penaltyRef = useRef(0);
+  const pendingScoreRef = useRef<number | null>(null);
+  const [isRevealing, setIsRevealing] = useState(false);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [displayScore, setDisplayScore] = useState(sharedScore);
+  const [phaseCorrect, setPhaseCorrect] = useState(0);
+  const resultsRef = useRef<WordResult[]>([]);
+
+  const progressShared = useSharedValue(0);
+  const cardOpacity = useSharedValue(1);
+  const cardTranslate = useSharedValue(0);
+
+  useEffect(() => {
+    const words = findLevelSetWords(levelId, setId);
+    setWordList(words);
+    resultsRef.current = [];
+    if (words.length) {
+      setSlots(buildSlotState(words[0].word));
+      setCurrentIndex(0);
+      revealsRef.current = 0;
+      penaltyRef.current = 0;
+      setIsRevealing(false);
+      setActiveIndex(null);
+      progressShared.value = withTiming(0, { duration: 200 });
+    }
+    setPhaseCorrect(0);
+  }, [levelId, setId, progressShared]);
+
+  useEffect(() => {
+    setDisplayScore(sharedScore);
+  }, [sharedScore]);
+
+  const lettersTotal = useMemo(
+    () => slots.filter(slot => slot.isLetter).length,
+    [slots]
+  );
+
+  const slotDimensions = useMemo(() => {
+    if (lettersTotal === 0) {
+      return { width: 48, height: 56, fontSize: 22, nonLetterWidth: 24 };
+    }
+
+    const availableWidth = Math.max(220, SCREEN_WIDTH - 120); // card margin + padding buffer
+    const rawWidth = Math.floor((availableWidth - (lettersTotal - 1) * SLOT_GAP) / lettersTotal);
+    const dynamicWidth = Math.max(18, rawWidth);
+
+    const presets =
+      lettersTotal <= 4
+        ? { width: 48, height: 58, fontSize: 24 }
+        : lettersTotal <= 6
+        ? { width: 44, height: 56, fontSize: 22 }
+        : lettersTotal <= 8
+        ? { width: 40, height: 52, fontSize: 20 }
+        : lettersTotal <= 10
+        ? { width: 36, height: 48, fontSize: 18 }
+        : lettersTotal <= 12
+        ? { width: 32, height: 46, fontSize: 16 }
+        : { width: 28, height: 44, fontSize: 14 };
+
+    const maxWidth = presets.width + 14;
+    const width = Math.max(24, Math.min(dynamicWidth, maxWidth));
+    const height = Math.max(34, Math.min(64, width + 10));
+    const fontSize = Math.max(12, Math.min(presets.fontSize + (width - presets.width) * 0.4, width - 6));
+    const nonLetterWidth = Math.max(10, Math.round(width * 0.55));
+
+    return { width, height, fontSize, nonLetterWidth };
+  }, [lettersTotal]);
+
+  const editableIndices = useMemo(
+    () => slots
+      .filter(slot => slot.isLetter && !slot.locked)
+      .map(slot => slot.index),
+    [slots]
+  );
+
+  const updateSlotValue = useCallback((index: number, value: string) => {
+    setSlots(prev =>
+      prev.map(slot => {
+        if (slot.index !== index) return slot;
+        return {
+          ...slot,
+          value,
+          status: slot.status === 'incorrect' ? 'idle' : slot.status,
+        };
+      })
+    );
+  }, []);
+
+  const focusSlot = useCallback(
+    (index: number | null) => {
+      if (isRevealing || completingRef.current) return;
+      if (index === null) {
+        setActiveIndex(null);
+        return;
+      }
+      const slot = slots[index];
+      if (!slot || slot.locked || !slot.isLetter) return;
+      setActiveIndex(index);
+      inputRefs.current[index]?.focus();
+    },
+    [isRevealing, slots]
+  );
+
+  const applyPenalty = useCallback(
+    (amount: number) => {
+      if (amount <= 0) return;
+      penaltyRef.current = Math.min(5, penaltyRef.current + amount);
+      setDisplayScore(prev => {
+        const next = Math.max(0, prev - 5);
+        pendingScoreRef.current = next;
+        return next;
+      });
+    },
+    []
+  );
+
+  const loadNextWord = useCallback(() => {
+    const nextIndex = currentIndex + 1;
+
+    completingRef.current = false;
+    setIsRevealing(false);
+
+    if (nextIndex >= wordList.length) {
+      progressShared.value = withTiming(1, { duration: 200 });
+      // Pass the phase penalties (wrong answers for this phase only)
+      onPhaseComplete(phaseCorrect, wordList.length);
+      return;
+    }
+
+      setCurrentIndex(nextIndex);
+      setSlots(buildSlotState(wordList[nextIndex].word));
+      revealsRef.current = 0;
+      penaltyRef.current = 0;
+      setActiveIndex(null);
+
+    progressShared.value = withTiming(nextIndex / wordList.length, { duration: 200 });
+
+    cardOpacity.value = withTiming(1, { duration: 220 });
+    cardTranslate.value = withTiming(0, { duration: 220 });
+
+    const announcement = `Completed word ${nextIndex} of ${wordList.length}.`;
+    AccessibilityInfo.announceForAccessibility(announcement);
+  }, [cardOpacity, cardTranslate, currentIndex, onPhaseComplete, progressShared, wordList]);
+
+  const finalizeWord = useCallback(
+    (correct: boolean) => {
+      if (completingRef.current || !wordList.length) return;
+      completingRef.current = true;
+
+      const wordData = wordList[currentIndex];
+      const wordScore = clampScore(5 - penaltyRef.current);
+
+      // Track correct completions for results
+      if (correct) {
+        setPhaseCorrect(prev => prev + 1);
+      }
+
+      resultsRef.current.push({
+        word: wordData.word,
+        score: wordScore,
+        attempts: 0,
+        reveals: revealsRef.current,
+        correct,
+      });
+
+      analyticsService.recordResult({
+        wordId: wordData.word,
+        exerciseType: 'missing-letters',
+        correct,
+        score: wordScore,
+        timestamp: new Date(),
+      });
+
+      cardOpacity.value = withTiming(0, { duration: 200 });
+      cardTranslate.value = withTiming(-14, { duration: 200 }, () => {
+        runOnJS(loadNextWord)();
+      });
+    },
+    [cardOpacity, cardTranslate, currentIndex, loadNextWord, wordList]
+  );
+
+  const revealIncorrectSlots = useCallback(() => {
+    const toReveal: number[] = [];
+    const staged = slots.map(slot => {
+      if (!slot.isLetter || slot.locked) return slot;
+
+      const target = removeDiacritics(slot.char).toLowerCase();
+      const input = removeDiacritics(slot.value).toLowerCase();
+      if (input === target && slot.value.trim().length === 1) {
+        return { ...slot, status: 'correct' as const };
+      }
+
+      toReveal.push(slot.index);
+      return { ...slot, status: 'revealing' as const };
+    });
+
+    setActiveIndex(null);
+
+    if (toReveal.length === 0) {
+      setSlots(prev =>
+        prev.map(slot => {
+          if (!slot.isLetter || slot.locked) return slot;
+          return {
+            ...slot,
+            status: 'correct' as const,
+            locked: true,
+          };
+        })
+      );
+      setIsRevealing(true);
+      setTimeout(() => finalizeWord(true), 2000);
+      return;
+    }
+
+    setSlots(staged);
+    setIsRevealing(true);
+    revealsRef.current += 1;
+    const penalty = toReveal.length === 1 ? 1 : toReveal.length === 2 ? 3 : 5;
+    applyPenalty(penalty);
+
+    setTimeout(() => {
+      setSlots(prev =>
+        prev.map(slot => {
+          if (!slot.isLetter) return slot;
+          if (!toReveal.includes(slot.index)) return slot;
+          return {
+            ...slot,
+            value: slot.char,
+            locked: true,
+            status: 'revealed' as const,
+          };
+        })
+      );
+      setTimeout(() => finalizeWord(true), 2000);
+    }, 2000);
+  }, [applyPenalty, slots, finalizeWord]);
+
+  const animatedCardStyle = useAnimatedStyle(() => ({
+    opacity: cardOpacity.value,
+    transform: [{ translateY: cardTranslate.value }],
+  }));
+
+  const animatedProgressStyle = useAnimatedStyle(() => ({
+    width: `${Math.min(progressShared.value, 1) * 100}%`,
+  }));
+
+  const handleSlotChange = useCallback(
+    (index: number, text: string) => {
+      const slot = slots[index];
+      if (!slot || slot.locked || !slot.isLetter) return;
+
+      const char = text.slice(-1);
+      if (!char) {
+        updateSlotValue(index, '');
+        return;
+      }
+
+      const upper = char.toUpperCase();
+      updateSlotValue(index, upper);
+
+      const remaining = editableIndices.filter(i => i > index);
+      if (remaining.length > 0) {
+        focusSlot(remaining[0]);
+      }
+    },
+    [editableIndices, focusSlot, slots, updateSlotValue]
+  );
+
+  const handleBackspace = useCallback(
+    (index: number) => {
+      const prevEditable = [...editableIndices]
+        .filter(i => i < index)
+        .pop();
+
+      updateSlotValue(index, '');
+      if (prevEditable !== undefined) {
+        focusSlot(prevEditable);
+      }
+    },
+    [editableIndices, focusSlot, updateSlotValue]
+  );
+
+  if (!wordList.length || !slots.length) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>No words available.</Text>
+      </View>
+    );
+  }
+
+  const currentWord = wordList[currentIndex];
+  const disableActions = isRevealing || completingRef.current;
+
+  useEffect(() => {
+    if (pendingScoreRef.current !== null) {
+      const next = pendingScoreRef.current;
+      pendingScoreRef.current = null;
+      if (next !== sharedScore) {
+        onScoreShare(next);
+      }
+    }
+  }, [displayScore, onScoreShare, sharedScore]);
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.progressContainer}>
+          <Text style={styles.progressText}>
+            Word {currentIndex + 1} of {wordList.length}
+          </Text>
+          <Text style={styles.scoreText}>{displayScore}</Text>
+        </View>
+        <View style={styles.progressBar}>
+          <Animated.View style={[styles.progressFill, animatedProgressStyle]} />
+        </View>
+      </View>
+
+      <Animated.View style={[styles.exerciseBody, animatedCardStyle]}>
+        <View style={styles.wordHeader}>
+          <Text style={styles.instructionsText}>Complete the word using the missing letters.</Text>
+          <Text style={styles.definitionText}>{currentWord.definition}</Text>
+        </View>
+
+        <View style={styles.slotsWrapper}>
+          {slots.map((slot, idx) => (
+            <LetterSlot
+              key={slot.index}
+              slot={slot}
+              isActive={activeIndex === idx}
+              onFocus={() => focusSlot(idx)}
+              onChange={value => handleSlotChange(idx, value)}
+              onBackspace={() => handleBackspace(idx)}
+              inputRef={ref => {
+                inputRefs.current[idx] = ref;
+              }}
+              totalLetters={lettersTotal}
+              dimensions={slotDimensions}
+              disabled={disableActions}
+            />
+          ))}
+        </View>
+
+        <View style={styles.buttonsRow}>
+          <TouchableOpacity
+            style={[styles.actionButton, disableActions && styles.buttonDisabled]}
+            disabled={disableActions}
+            onPress={revealIncorrectSlots}
+          >
+            <Text style={styles.buttonText}>Reveal</Text>
+          </TouchableOpacity>
+        </View>
+
+      </Animated.View>
+    </View>
+  );
+}
+
+interface LetterSlotProps {
+  slot: SlotState;
+  isActive: boolean;
+  onFocus: () => void;
+  onChange: (value: string) => void;
+  onBackspace: () => void;
+  inputRef: (ref: TextInputType | null) => void;
+  totalLetters: number;
+  dimensions: { width: number; height: number; fontSize: number; nonLetterWidth: number };
+  disabled: boolean;
+}
+
+function LetterSlot({ slot, isActive, onFocus, onChange, onBackspace, inputRef, totalLetters, dimensions, disabled }: LetterSlotProps) {
+  const scale = useSharedValue(1);
+  const colorProgress = useSharedValue(0);
+  const wiggle = useSharedValue(0);
+
+  useEffect(() => {
+    if (slot.status === 'revealed') {
+      scale.value = 0.9;
+      scale.value = withSpring(1, { damping: 18, stiffness: 260 });
+    }
+
+    let target = 0;
+    if (slot.status === 'correct' || slot.status === 'revealed') {
+      target = 1;
+    } else if (slot.status === 'revealing' || slot.status === 'incorrect') {
+      target = 2;
+    } else {
+      target = 0;
+    }
+    colorProgress.value = withTiming(target, { duration: 200 });
+
+    if (slot.status === 'revealing') {
+      wiggle.value = 0;
+      wiggle.value = withSequence(
+        withTiming(-6, { duration: 40 }),
+        withTiming(6, { duration: 40 }),
+        withTiming(-4, { duration: 30 }),
+        withTiming(4, { duration: 30 }),
+        withTiming(0, { duration: 40 })
+      );
+    }
+  }, [slot.status, colorProgress, scale, wiggle]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const backgroundColor = interpolateColor(
+      colorProgress.value,
+      [0, 1, 2],
+      [NEUTRAL_COLOR, CORRECT_COLOR, INCORRECT_COLOR]
+    );
+
+    return {
+      backgroundColor,
+      transform: [{ translateX: wiggle.value }, { scale: scale.value }],
+    };
+  });
+
+  if (!slot.isLetter) {
+    return (
+      <View
+        style={[styles.slotNonLetter, { width: dimensions.nonLetterWidth, height: dimensions.height }]}
+        accessibilityRole="text"
+        accessibilityLabel={slot.char === ' ' ? 'Space' : slot.char}
+      >
+        <Text style={styles.nonLetterText}>{slot.char}</Text>
+      </View>
+    );
+  }
+
+  const accessibilityLabel = slot.locked
+    ? `Letter ${slot.letterOrder} of ${totalLetters}, locked ${slot.char}`
+    : `Letter ${slot.letterOrder} of ${totalLetters}, ${slot.value ? `filled '${slot.value}'` : 'empty'}`;
+
+  return (
+    <Animated.View
+      style={[
+        styles.slotContainer,
+        { width: dimensions.width, height: dimensions.height },
+        animatedStyle,
+        slot.locked && slot.status !== 'revealed' && styles.slotLocked,
+        isActive && styles.slotActive,
+      ]}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="adjustable"
+    >
+      {slot.locked ? (
+        <Text style={[styles.slotText, { fontSize: dimensions.fontSize }]}>
+          {slot.char.toUpperCase()}
+        </Text>
+      ) : (
+        <TextInput
+          ref={inputRef}
+          value={slot.value}
+          editable={!slot.locked && !disabled}
+          selectTextOnFocus
+          onFocus={onFocus}
+          onChangeText={onChange}
+          maxLength={1}
+          style={[styles.slotInput, { fontSize: dimensions.fontSize }]}
+          autoCapitalize="characters"
+          keyboardType="default"
+          returnKeyType="next"
+          onKeyPress={({ nativeEvent }) => {
+            if (nativeEvent.key === 'Backspace') {
+              if (slot.value) {
+                onChange('');
+              } else {
+                onBackspace();
+              }
+            }
+          }}
+        />
+      )}
+    </Animated.View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#252525',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#252525',
+  },
+  loadingText: {
+    color: '#9CA3AF',
+    fontSize: 16,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  progressText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  scoreText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: ACCENT_COLOR,
+  },
+  progressBar: {
+    height: 6,
+    backgroundColor: '#333',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: ACCENT_COLOR,
+    borderRadius: 3,
+  },
+  exerciseBody: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+  },
+  wordHeader: {
+    alignItems: 'center',
+    marginBottom: 32,
+    paddingHorizontal: 16,
+  },
+  instructionsTitle: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginBottom: 6,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  instructionsText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginBottom: 14,
+    fontWeight: '500',
+    letterSpacing: 0.4,
+  },
+  definitionText: {
+    fontSize: 20,
+    color: '#F9FAFB',
+    textAlign: 'center',
+    fontWeight: '600',
+    lineHeight: 28,
+  },
+  slotsWrapper: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 28,
+    paddingHorizontal: 12,
+    maxWidth: '100%',
+  },
+  slotContainer: {
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#3A3A3A',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    marginHorizontal: SLOT_GAP / 2,
+    overflow: 'hidden',
+  },
+  slotInput: {
+    width: '100%',
+    height: '100%',
+    textAlign: 'center',
+    color: '#fff',
+    fontWeight: '600',
+  },
+  slotActive: {
+    borderColor: ACCENT_COLOR,
+  },
+  slotLocked: {
+    backgroundColor: HINT_COLOR,
+  },
+  slotText: {
+    fontSize: 22,
+    color: '#E5E7EB',
+    fontWeight: '600',
+  },
+  slotNonLetter: {
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: SLOT_GAP / 2,
+  },
+  nonLetterText: {
+    color: '#9CA3AF',
+    fontSize: 20,
+  },
+  buttonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  actionButton: {
+    minWidth: 160,
+    backgroundColor: ACCENT_COLOR,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  buttonDisabled: {
+    opacity: 0.4,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
