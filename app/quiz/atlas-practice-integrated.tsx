@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
-import LottieView from 'lottie-react-native';
 import WordIntroComponent from './components/word-intro';
 import MCQComponent from './components/mcq';
 import SynonymComponent from './components/synonym';
@@ -38,9 +37,6 @@ export default function AtlasPracticeIntegrated() {
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [mlIndex, setMlIndex] = useState(0);
-  const timelineRef = useRef<LottieView>(null);
-  const lastTimelineStepRef = useRef(0);
-  const timelineFrames = useRef([10, 100, 190, 280, 280]);
 
   const handlePhaseComplete = (score: number = 0, questions: number = 0) => {
     const phase = phases[currentPhase];
@@ -93,43 +89,6 @@ export default function AtlasPracticeIntegrated() {
       setMlIndex(0);
     }
   }, [currentPhase, setId, levelId]);
-
-  useEffect(() => {
-    const timeline = timelineRef.current;
-    if (!timeline) {
-      return;
-    }
-
-    const frames = timelineFrames.current;
-    const step = Math.min(currentPhase, frames.length - 1);
-    const targetFrame = frames[step];
-    const previousStep = Math.min(lastTimelineStepRef.current, frames.length - 1);
-    const previousFrame = frames[previousStep];
-    const maxFrame = frames[frames.length - 1] || targetFrame;
-
-    const applyProgress = (frame: number) => {
-      const progress = maxFrame ? frame / maxFrame : 0;
-      const setProgress = (timeline as unknown as { setProgress?: (value: number) => void }).setProgress;
-      if (typeof setProgress === 'function') {
-        setProgress(progress);
-      } else {
-        timeline.play(frame, frame + 1);
-      }
-    };
-
-    if (step === previousStep && targetFrame === previousFrame) {
-      applyProgress(targetFrame);
-      return;
-    }
-
-    if (targetFrame < previousFrame) {
-      applyProgress(targetFrame);
-    } else {
-      timeline.play(previousFrame, targetFrame);
-    }
-
-    lastTimelineStepRef.current = step;
-  }, [currentPhase]);
 
   const getCurrentPhaseComponent = () => {
     const phase = phases[currentPhase];
@@ -239,16 +198,6 @@ export default function AtlasPracticeIntegrated() {
         })}
       </View>
 
-      <View style={styles.timelineContainer}>
-        <LottieView
-          ref={timelineRef}
-          source={require('../../assets/lottie/Timeline.json')}
-          autoPlay={false}
-          loop={false}
-          style={styles.timelineAnimation}
-        />
-      </View>
-
       {/* Current Phase Component */}
       <View style={styles.phaseContainer}>
         {getCurrentPhaseComponent()}
@@ -306,16 +255,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#F2935C',
     fontWeight: '600',
-  },
-  timelineContainer: {
-    alignItems: 'center',
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-  },
-  timelineAnimation: {
-    width: '100%',
-    height: 40,
   },
   phaseContainer: {
     flex: 1,
