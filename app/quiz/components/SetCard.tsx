@@ -20,8 +20,10 @@ export default function SetCard({ set, onPress }: SetCardProps) {
   const isCompleted = set.completed;
   const isInProgress = set.inProgress;
 
+  const accent = '#F2935C';
+
   const getStatusColor = () => {
-    if (isCompleted) return '#4CAF50';
+    if (isCompleted) return accent;
     if (isInProgress) return '#F2AB27';
     return '#666';
   };
@@ -39,7 +41,7 @@ export default function SetCard({ set, onPress }: SetCardProps) {
   };
 
   const getButtonColor = () => {
-    if (isCompleted) return '#4CAF50';
+    if (isCompleted) return accent;
     if (isInProgress) return '#F2AB27';
     return '#F2AB27';
   };
@@ -50,7 +52,7 @@ export default function SetCard({ set, onPress }: SetCardProps) {
         <View style={styles.titleContainer}>
           <Text style={styles.title}>{set.title}</Text>
           {isCompleted && (
-            <CheckCircle size={20} color="#4CAF50" style={styles.checkIcon} />
+            <CheckCircle size={20} color={accent} style={styles.checkIcon} />
           )}
         </View>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor() }]}>

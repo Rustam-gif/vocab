@@ -8,6 +8,8 @@ export default function HomeScreen() {
   const router = useRouter();
 
   // Organized sections with softer colors
+  const accent = '#F2935C';
+
   const sections = [
     {
       title: 'Learning Tools',
@@ -16,21 +18,21 @@ export default function HomeScreen() {
           title: 'Vault',
           subtitle: 'Manage your vocabulary',
           icon: BookOpen,
-          color: '#D97706', // Softer orange
+          color: accent,
           onPress: () => router.push('/vault'),
         },
         {
           title: 'Quiz Session',
           subtitle: '5-word practice session',
           icon: Brain,
-          color: '#D97706', // Softer yellow-orange
+          color: accent,
           onPress: () => router.push('/quiz/level-select'),
         },
         {
           title: 'Story Exercise',
           subtitle: 'AI-powered story practice',
           icon: FileText,
-          color: '#059669', // Softer green
+          color: accent,
           onPress: () => router.push('/story-exercise'),
         },
       ],
@@ -42,14 +44,14 @@ export default function HomeScreen() {
           title: 'Journal',
           subtitle: 'Track your learning journey',
           icon: FileText,
-          color: '#7C3AED', // Softer purple
+          color: accent,
           onPress: () => router.push('/journal'),
         },
         {
           title: 'Analytics',
           subtitle: 'View your progress',
           icon: BarChart3,
-          color: '#059669', // Softer green
+          color: accent,
           onPress: () => router.push('/stats'),
         },
       ],
@@ -61,7 +63,7 @@ export default function HomeScreen() {
           title: 'Profile',
           subtitle: 'Manage your account',
           icon: User,
-          color: '#7C3AED', // Softer purple
+          color: accent,
           onPress: () => router.push('/profile'),
         },
       ],
@@ -127,10 +129,11 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212',
+    backgroundColor: '#252525',
   },
   scrollView: {
     flex: 1,
+    backgroundColor: '#252525',
   },
   header: {
     paddingHorizontal: 24,
@@ -161,12 +164,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
   },
   card: {
-    backgroundColor: '#1F2937',
+    backgroundColor: '#2C2C2C',
     marginHorizontal: 24,
     marginBottom: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#333',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,

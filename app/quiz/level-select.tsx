@@ -37,12 +37,14 @@ export default function LevelSelectScreen() {
     );
   }
 
+  const accent = '#F2935C';
+
   const renderLevelItem = ({ item }: { item: Level }) => {
     const isSelected = selectedLevel === item.id;
     
     return (
       <TouchableOpacity
-        style={[styles.levelCard, isSelected && styles.selectedCard]}
+        style={[styles.levelCard, isSelected && styles.selectedCard, isSelected && { borderColor: accent }]}
         onPress={() => handleLevelSelect(item.id)}
       >
         <View style={styles.levelHeader}>
@@ -51,12 +53,12 @@ export default function LevelSelectScreen() {
             <View style={styles.levelDetails}>
               <Text style={styles.levelName}>{item.name}</Text>
               <Text style={styles.levelDescription}>{item.description}</Text>
-              <Text style={styles.levelCefr}>CEFR {item.cefr}</Text>
+              <Text style={[styles.levelCefr, { color: accent }]}>CEFR {item.cefr}</Text>
             </View>
           </View>
           {isSelected && (
             <View style={styles.checkContainer}>
-              <Check size={24} color="#4CAF50" />
+              <Check size={24} color={accent} />
             </View>
           )}
         </View>
@@ -90,7 +92,7 @@ export default function LevelSelectScreen() {
       {/* Continue Button */}
       <View style={styles.footer}>
         <TouchableOpacity
-          style={styles.continueButton}
+          style={[styles.continueButton, { backgroundColor: accent }]}
           onPress={handleContinue}
         >
           <Text style={styles.continueButtonText}>Continue</Text>
@@ -148,7 +150,6 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   selectedCard: {
-    borderColor: '#4CAF50',
     backgroundColor: '#3A3A3A',
   },
   levelHeader: {
@@ -181,14 +182,14 @@ const styles = StyleSheet.create({
   },
   levelCefr: {
     fontSize: 12,
-    color: '#4CAF50',
+    color: '#F2935C',
     fontWeight: '500',
   },
   checkContainer: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#F2935C',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -203,7 +204,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#333',
   },
   continueButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#F2935C',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
