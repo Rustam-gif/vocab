@@ -105,7 +105,7 @@ export default function LevelSelectScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
   },
   header: {
     flexDirection: 'row',
@@ -113,8 +113,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
   },
   backButton: {
     padding: 8,
@@ -134,7 +132,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   levelCard: {
-    backgroundColor: '#3A3A3A',
+    backgroundColor: '#2A2A2A',
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
@@ -198,10 +196,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
     padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#333',
   },
   continueButton: {
     backgroundColor: '#F2935C',

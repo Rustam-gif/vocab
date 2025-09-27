@@ -272,7 +272,7 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 24,

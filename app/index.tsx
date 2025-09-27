@@ -9,6 +9,7 @@ export default function HomeScreen() {
 
   // Organized sections with softer colors
   const accent = '#F2935C';
+  const background = '#1E1E1E';
 
   const sections = [
     {
@@ -71,8 +72,12 @@ export default function HomeScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={[styles.container, { backgroundColor: background }] }>
+      <ScrollView
+        style={[styles.scrollView, { backgroundColor: background }]}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Engniter Vocabulary</Text>
@@ -129,11 +134,13 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
   },
   scrollView: {
     flex: 1,
-    backgroundColor: '#252525',
+  },
+  scrollContent: {
+    paddingBottom: 32,
   },
   header: {
     paddingHorizontal: 24,

@@ -285,7 +285,7 @@ export default function SentenceUsageComponent({ onPhaseComplete, sharedScore, o
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
     paddingHorizontal: 20,
     paddingVertical: 24,
   },

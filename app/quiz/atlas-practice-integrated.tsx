@@ -209,7 +209,7 @@ export default function AtlasPracticeIntegrated() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
   },
   header: {
     flexDirection: 'row',
@@ -217,8 +217,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
   },
   backButton: {
     padding: 8,
@@ -239,8 +237,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
   },
   tabItem: {
     flex: 1,

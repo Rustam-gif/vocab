@@ -123,7 +123,7 @@ export default function LearnScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
   },
   header: {
     flexDirection: 'row',
@@ -131,8 +131,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
   },
   backButton: {
     padding: 8,
@@ -148,7 +146,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   levelInfo: {
-    backgroundColor: '#3A3A3A',
+    backgroundColor: '#2A2A2A',
     margin: 20,
     borderRadius: 16,
     padding: 20,
@@ -215,7 +213,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 6,
-    backgroundColor: '#333',
+    backgroundColor: '#2C2C2C',
     borderRadius: 3,
     overflow: 'hidden',
   },

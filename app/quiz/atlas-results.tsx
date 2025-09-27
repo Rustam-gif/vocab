@@ -242,7 +242,7 @@ export default function AtlasResults() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
   },
   header: {
     flexDirection: 'row',

@@ -353,7 +353,7 @@ const generateDistractor = (correctDef: string, type: string): string => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
   },
   loadingContainer: {
     flex: 1,
@@ -368,8 +368,6 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
   },
   progressContainer: {
     flexDirection: 'row',
