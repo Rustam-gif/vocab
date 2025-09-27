@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
@@ -8,6 +8,17 @@ import SynonymComponent from './components/synonym';
 import SentenceUsageComponent from './components/sentence-usage';
 import MissingLetters from './components/missing-letters';
 import { levels } from './data/levels';
+import Animated, {
+  useSharedValue,
+  withTiming,
+  useAnimatedStyle,
+  interpolateColor,
+  Easing,
+  type SharedValue,
+} from 'react-native-reanimated';
+
+const ACCENT = '#F2935C';
+const AnimatedText = Animated.createAnimatedComponent(Text);
 
 interface Phase {
   id: string;
@@ -37,6 +48,15 @@ export default function AtlasPracticeIntegrated() {
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [mlIndex, setMlIndex] = useState(0);
+  const animatedIndex = useSharedValue(0);
+  const indicatorX = useSharedValue(0);
+  const indicatorWidth = useSharedValue(0);
+  const tabLayouts = useRef<Record<number, { x: number; width: number }>>({});
+  const indicatorAnimatedStyle = useAnimatedStyle(() => ({
+    width: indicatorWidth.value,
+    transform: [{ translateX: indicatorX.value }],
+    opacity: indicatorWidth.value ? 1 : 0,
+  }));
 
   const handlePhaseComplete = (score: number = 0, questions: number = 0) => {
     const phase = phases[currentPhase];
@@ -91,6 +111,18 @@ export default function AtlasPracticeIntegrated() {
     }
   }, [currentPhase, setId, levelId]);
 
+  useEffect(() => {
+    animatedIndex.value = withTiming(currentPhase, {
+      duration: 350,
+      easing: Easing.out(Easing.cubic),
+    });
+    const layout = tabLayouts.current[currentPhase];
+    if (layout) {
+      indicatorWidth.value = withTiming(layout.width, { duration: 350, easing: Easing.out(Easing.cubic) });
+      indicatorX.value = withTiming(layout.x, { duration: 350, easing: Easing.out(Easing.cubic) });
+    }
+  }, [currentPhase, animatedIndex, indicatorWidth, indicatorX]);
+
   const getCurrentPhaseComponent = () => {
     const phase = phases[currentPhase];
     if (!phase) return null;
@@ -133,7 +165,8 @@ export default function AtlasPracticeIntegrated() {
           totalWords={words.length}
           sharedScore={totalScore}
           onResult={({ mistakes, usedReveal }) => {
-            const penalty = Math.max(0, mistakes) + (usedReveal ? 3 : 0);
+            const rawPenalty = Math.max(0, mistakes) + (usedReveal ? 3 : 0);
+            const penalty = Math.max(5, rawPenalty || 5);
             setTotalScore(prev => Math.max(0, prev - penalty));
           }}
           onNext={() => {
@@ -187,19 +220,23 @@ export default function AtlasPracticeIntegrated() {
 
       {/* Phase Progress */}
       <View style={styles.phaseTabs}>
-        {phases.map((phase, index) => {
-          const isActive = index === currentPhase;
-          return (
-            <TouchableOpacity
-              key={phase.id}
-              style={styles.tabItem}
-              onPress={() => setCurrentPhase(index)}
-              activeOpacity={0.8}
-            >
-              <Text style={isActive ? styles.tabLabelActive : styles.tabLabel}>{phase.name}</Text>
-            </TouchableOpacity>
-          );
-        })}
+        {phases.map((phase, index) => (
+          <PhaseTab
+            key={phase.id}
+            index={index}
+            title={phase.name}
+            onPress={() => setCurrentPhase(index)}
+            onLayout={(layout) => {
+              tabLayouts.current[index] = layout;
+              if (index === currentPhase && indicatorWidth.value === 0) {
+                indicatorWidth.value = layout.width;
+                indicatorX.value = layout.x;
+              }
+            }}
+            animatedIndex={animatedIndex}
+          />
+        ))}
+        <Animated.View style={[styles.tabIndicator, indicatorAnimatedStyle]} />
       </View>
 
       {/* Current Phase Component */}
@@ -207,6 +244,39 @@ export default function AtlasPracticeIntegrated() {
         {getCurrentPhaseComponent()}
       </View>
     </SafeAreaView>
+  );
+}
+
+type PhaseTabProps = {
+  index: number;
+  title: string;
+  onPress: () => void;
+  onLayout: (layout: { x: number; width: number }) => void;
+  animatedIndex: SharedValue<number>;
+};
+
+function PhaseTab({ index, title, onPress, onLayout, animatedIndex }: PhaseTabProps) {
+  const animatedColorStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(
+      animatedIndex.value,
+      [index - 1, index, index + 1],
+      ['#9CA3AF', ACCENT, '#9CA3AF'],
+      'clamp'
+    ),
+  }));
+
+  return (
+    <TouchableOpacity
+      style={styles.tabItem}
+      onPress={onPress}
+      activeOpacity={0.85}
+      onLayout={(event) => {
+        const { x, width } = event.nativeEvent.layout;
+        onLayout({ x, width });
+      }}
+    >
+      <AnimatedText style={[styles.tabLabel, animatedColorStyle]}>{title}</AnimatedText>
+    </TouchableOpacity>
   );
 }
 
@@ -255,6 +325,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#F2935C',
     fontWeight: '600',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: ACCENT,
   },
   phaseContainer: {
     flex: 1,
