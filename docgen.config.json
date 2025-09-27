@@ -1,0 +1,8 @@
+{
+  "roots": ["app", "services", "lib"],
+  "outDir": "docs",
+  "include": [".ts", ".tsx"],
+  "exclude": [".disabled"],
+  "adrTag": "ADR:",
+  "noteTag": "@doc:"
+}

@@ -1,0 +1,12 @@
+#!/bin/sh
+# Run doc generation before commit. Abort commit on failure.
+echo "[docgen] Generating project docs..."
+if npm run -s docgen; then
+  echo "[docgen] Docs updated."
+  git add docs/
+  exit 0
+else
+  echo "[docgen] Failed to generate docs. Aborting commit." >&2
+  exit 1
+fi
+
