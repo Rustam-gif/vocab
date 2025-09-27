@@ -12,7 +12,7 @@ import {
 import LottieView from 'lottie-react-native';
 import * as Haptics from 'expo-haptics';
 
-const SUCCESS_ANIMATION = require('../../../assets/lottie/Success.json');
+const SUCCESS_ANIMATION = require('../../../assets/lottie/completed.json');
 
 interface SuccessCelebrationProps {
   visible: boolean;
@@ -64,7 +64,7 @@ export default function SuccessCelebration({
       requestAnimationFrame(() => {
         try {
           lottieRef.current?.reset?.();
-          lottieRef.current?.play?.(0, 90);
+          lottieRef.current?.play?.();
         } catch (error) {
           console.warn('SuccessCelebration: failed to play animation', error);
         }
