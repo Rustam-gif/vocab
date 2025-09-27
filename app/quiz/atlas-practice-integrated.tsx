@@ -6,7 +6,7 @@ import WordIntroComponent from './components/word-intro';
 import MCQComponent from './components/mcq';
 import SynonymComponent from './components/synonym';
 import SentenceUsageComponent from './components/sentence-usage';
-import MissingLettersComponent from './components/missing-letters-simple';
+import MissingLetters from './components/missing-letters';
 import { levels } from './data/levels';
 
 interface Phase {
@@ -31,11 +31,12 @@ export default function AtlasPracticeIntegrated() {
     { id: 'mcq', name: 'MCQ', component: MCQComponent, completed: false },
     { id: 'synonym', name: 'Synonym', component: SynonymComponent, completed: false },
     { id: 'sentence-usage', name: 'Natural Usage', component: SentenceUsageComponent, completed: false },
-    { id: 'missing-letters', name: 'Missing Letters', component: MissingLettersComponent, completed: false },
+    { id: 'missing-letters', name: 'Missing Letters', component: MissingLetters, completed: false },
   ]);
   const [totalScore, setTotalScore] = useState(100);
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
+  const [mlIndex, setMlIndex] = useState(0);
 
   const handlePhaseComplete = (score: number = 0, questions: number = 0) => {
     const phase = phases[currentPhase];
@@ -81,6 +82,14 @@ export default function AtlasPracticeIntegrated() {
     });
   };
 
+  useEffect(() => {
+    // Reset Missing Letters index when entering that phase or when params change
+    const phase = phases[currentPhase];
+    if (phase?.id === 'missing-letters') {
+      setMlIndex(0);
+    }
+  }, [currentPhase, setId, levelId]);
+
   const getCurrentPhaseComponent = () => {
     const phase = phases[currentPhase];
     if (!phase) return null;
@@ -98,6 +107,43 @@ export default function AtlasPracticeIntegrated() {
       );
     }
     
+    // Special wiring for Missing Letters (new API: single-word component)
+    if (phase.id === 'missing-letters') {
+      const level = levels.find(l => l.id === (levelId || ''));
+      const currentSet = level?.sets.find(s => s.id.toString() === String(setId));
+      const words = currentSet?.words ?? [];
+      if (!words.length) {
+        return (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ color: '#9CA3AF' }}>No words found for this set.</Text>
+          </View>
+        );
+      }
+
+      const w = words[Math.min(mlIndex, words.length - 1)];
+
+      return (
+        <MissingLetters
+          word={w.word}
+          ipa={w.phonetic}
+          clue={w.definition}
+          theme="dark"
+          onResult={({ mistakes, usedReveal }) => {
+            const penalty = Math.max(0, mistakes) + (usedReveal ? 3 : 0);
+            setTotalScore(prev => Math.max(0, prev - penalty));
+          }}
+          onNext={() => {
+            const next = mlIndex + 1;
+            if (next < words.length) {
+              setMlIndex(next);
+            } else {
+              // Phase done; contribute questions count, scoring is already applied via penalties to totalScore
+              handlePhaseComplete(0, words.length);
+            }
+          }}
+        />
+      );
+    }
     return (
       <Component
         setId={setId || ''}

@@ -10,6 +10,7 @@ Directories and files discovered under configured roots:
   - story-exercise.tsx
   - vault.tsx
 - app/quiz
+  - _layout.tsx
   - atlas-practice-integrated.tsx
   - atlas-results.tsx
   - index.tsx
@@ -24,6 +25,7 @@ Directories and files discovered under configured roots:
   - dialogue-simple.tsx
   - mcq.tsx
   - missing-letters-simple.tsx
+  - missing-letters.tsx
   - sentence-best.tsx
   - sentence-usage.tsx
   - synonym.tsx
