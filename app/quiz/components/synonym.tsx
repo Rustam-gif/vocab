@@ -183,33 +183,45 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
     outputRange: [0, -35],
   });
 
+  const isLastWord = currentIndex === WORDS.length - 1;
+  const handlePrimary = () => {
+    if (!revealed) {
+      if (nextDisabled) return;
+      handleSubmit();
+    } else {
+      handleNext();
+    }
+  };
+  const primaryDisabled = !revealed && nextDisabled;
+  const primaryLabel = revealed ? (isLastWord ? 'Finish' : 'Next') : 'Next';
+
   return (
     <View style={styles.container}>
       <View style={styles.body}>
         <View style={styles.topRow}>
-          <View style={styles.progressContainer}>
-            <Text style={styles.progressText}>
-              Word {currentIndex + 1} of {WORDS.length}
-            </Text>
-            <View style={styles.scoreWrapper}>
-              <Animated.Text
-                style={[
-                  styles.deductionText,
-                  {
-                    opacity: deductionOpacity,
-                    transform: [{ translateY: deductionTranslateY }],
-                  },
-                ]}
-              >
-                -5
-              </Animated.Text>
-              <Text style={styles.scoreText}>{displayScore}</Text>
-            </View>
-          </View>
-          <View style={styles.progressBar}>
-            <Animated.View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+        <View style={styles.progressContainer}>
+          <Text style={styles.progressText}>
+            Word {currentIndex + 1} of {WORDS.length}
+          </Text>
+          <View style={styles.scoreWrapper}>
+            <Animated.Text
+              style={[
+                styles.deductionText,
+                {
+                  opacity: deductionOpacity,
+                  transform: [{ translateY: deductionTranslateY }],
+                },
+              ]}
+            >
+              -5
+            </Animated.Text>
+            <Text style={styles.scoreText}>{displayScore}</Text>
           </View>
         </View>
+        <View style={styles.progressBar}>
+          <Animated.View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+        </View>
+      </View>
 
         <View style={styles.wordHeader}>
           <Text style={styles.wordHighlight}>{currentWord.word}</Text>
@@ -249,21 +261,13 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
       </View>
 
       <View style={styles.footerButtons}>
-        {!revealed ? (
-          <TouchableOpacity
-            style={[styles.primaryButton, nextDisabled && styles.buttonDisabled]}
-            disabled={nextDisabled}
-            onPress={handleSubmit}
-          >
-            <Text style={styles.primaryButtonText}>Reveal</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.primaryButton} onPress={handleNext}>
-            <Text style={styles.primaryButtonText}>
-              {currentIndex === WORDS.length - 1 ? 'Finish' : 'Next'}
-            </Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={[styles.primaryButton, primaryDisabled && styles.buttonDisabled]}
+          disabled={primaryDisabled}
+          onPress={handlePrimary}
+        >
+          <Text style={styles.primaryButtonText}>{primaryLabel}</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -365,13 +369,14 @@ const styles = StyleSheet.create({
     width: '47%',
     backgroundColor: '#3A3A3A',
     borderRadius: 10,
-    paddingVertical: 20,
+    paddingVertical: 24,
     paddingHorizontal: 10,
     marginBottom: 12,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
+    minHeight: 88,
   },
   optionSelected: {
     borderColor: ACCENT_COLOR,

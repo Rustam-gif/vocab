@@ -1,20 +1,37 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Check } from 'lucide-react-native';
 import { levels, Level } from './data/levels';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 
 export default function LevelSelectScreen() {
   const router = useRouter();
-  const [selectedLevel, setSelectedLevel] = useState<string>('beginner');
+  const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    AsyncStorage.getItem(SELECTED_LEVEL_KEY).then(stored => {
+      if (!mounted) return;
+      if (stored) setSelectedLevel(stored);
+      else if (levels.length > 0) setSelectedLevel(levels[0].id);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleLevelSelect = (levelId: string) => {
     setSelectedLevel(levelId);
   };
 
   const handleContinue = () => {
-    // Navigate to learn screen with selected level
-    router.push(`/quiz/learn?level=${selectedLevel}`);
+    if (!selectedLevel) return;
+    AsyncStorage.setItem(SELECTED_LEVEL_KEY, selectedLevel).then(() => {
+      router.replace(`/quiz/learn?level=${selectedLevel}`);
+    });
   };
 
   if (!levels || levels.length === 0) {
@@ -66,6 +83,8 @@ export default function LevelSelectScreen() {
     );
   };
 
+  const canContinue = Boolean(selectedLevel);
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -92,8 +111,9 @@ export default function LevelSelectScreen() {
       {/* Continue Button */}
       <View style={styles.footer}>
         <TouchableOpacity
-          style={[styles.continueButton, { backgroundColor: accent }]}
+          style={[styles.continueButton, { backgroundColor: accent }, !canContinue && styles.continueButtonDisabled]}
           onPress={handleContinue}
+          disabled={!canContinue}
         >
           <Text style={styles.continueButtonText}>Continue</Text>
         </TouchableOpacity>
@@ -204,6 +224,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
+  },
+  continueButtonDisabled: {
+    opacity: 0.5,
   },
   continueButtonText: {
     fontSize: 16,

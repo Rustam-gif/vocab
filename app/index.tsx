@@ -1,11 +1,41 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { BookOpen, BarChart3, FileText, User, Plus, Brain, ChevronRight } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+
+const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const [storedLevel, setStoredLevel] = useState<string | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(SELECTED_LEVEL_KEY).then(level => {
+      if (level) setStoredLevel(level);
+    });
+  }, []);
+
+  const handleQuizSession = () => {
+    if (storedLevel) {
+      router.push(`/quiz/learn?level=${storedLevel}`);
+    } else {
+      router.push('/quiz/level-select');
+    }
+  };
+
+  const updateStoredLevel = async () => {
+    const level = await AsyncStorage.getItem(SELECTED_LEVEL_KEY);
+    if (level) setStoredLevel(level);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      updateStoredLevel();
+    }, [])
+  );
 
   // Organized sections with softer colors
   const accent = '#F2935C';
@@ -27,7 +57,7 @@ export default function HomeScreen() {
           subtitle: '5-word practice session',
           icon: Brain,
           color: accent,
-          onPress: () => router.push('/quiz/level-select'),
+          onPress: handleQuizSession,
         },
         {
           title: 'Story Exercise',

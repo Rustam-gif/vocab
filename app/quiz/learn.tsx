@@ -1,36 +1,69 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Settings, TrendingUp } from 'lucide-react-native';
+import { ArrowLeft, Settings } from 'lucide-react-native';
 import { levels, Level, Set } from './data/levels';
 import SetCard from './components/SetCard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+
+const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 
 export default function LearnScreen() {
   const router = useRouter();
   const { level: levelId } = useLocalSearchParams<{ level: string }>();
   const [currentLevel, setCurrentLevel] = useState<Level | null>(null);
   const [progress, setProgress] = useState({ completed: 0, total: 0 });
+  const [activeLevelId, setActiveLevelId] = useState<string | null>(levelId ?? null);
 
-  useEffect(() => {
+  const loadStoredLevel = useCallback(async () => {
     if (levelId) {
-      const level = levels.find(l => l.id === levelId);
-      if (level) {
-        setCurrentLevel(level);
-        const completed = level.sets.filter(s => s.completed).length;
-        setProgress({ completed, total: level.sets.length });
-      }
+      await AsyncStorage.setItem(SELECTED_LEVEL_KEY, levelId);
+      setActiveLevelId(levelId);
+      return;
+    }
+    const stored = await AsyncStorage.getItem(SELECTED_LEVEL_KEY);
+    if (stored) {
+      setActiveLevelId(stored);
     }
   }, [levelId]);
 
+  useEffect(() => {
+    loadStoredLevel();
+  }, [loadStoredLevel]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadStoredLevel();
+    }, [loadStoredLevel])
+  );
+
+  useEffect(() => {
+    if (!activeLevelId) {
+      setCurrentLevel(null);
+      return;
+    }
+    const level = levels.find(l => l.id === activeLevelId);
+    if (level) {
+      setCurrentLevel(level);
+      const completed = level.sets.filter(s => s.completed).length;
+      setProgress({ completed, total: level.sets.length });
+    }
+  }, [activeLevelId]);
+
   const handleSetPress = (set: Set) => {
-    console.log('LearnScreen - handleSetPress:', { setId: set.id, levelId, setType: set.type });
-    
+    if (!activeLevelId) {
+      router.push('/quiz/level-select');
+      return;
+    }
+    console.log('LearnScreen - handleSetPress:', { setId: set.id, levelId: activeLevelId, setType: set.type });
+
     if (set.type === 'quiz') {
       // Navigate to quiz screen
-      router.push(`/quiz/quiz-screen?setId=${set.id}&level=${levelId}`);
+      router.push(`/quiz/quiz-screen?setId=${set.id}&level=${activeLevelId}`);
     } else {
       // Navigate directly to practice session
-      const url = `/quiz/atlas-practice-integrated?setId=${set.id}&levelId=${levelId}`;
+      const url = `/quiz/atlas-practice-integrated?setId=${set.id}&levelId=${activeLevelId}`;
       console.log('LearnScreen - Navigating to:', url);
       router.push(url);
     }
