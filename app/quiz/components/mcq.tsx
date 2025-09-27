@@ -55,6 +55,7 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const deductionAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     console.log('MCQComponent - useEffect triggered:', { setId, levelId });
@@ -158,8 +159,19 @@ const generateDistractor = (correctDef: string, type: string): string => {
         pendingScoreRef.current = next;
         return next;
       });
+      triggerDeductionAnimation();
     }
     setIsProcessingNext(false);
+  };
+
+  const triggerDeductionAnimation = () => {
+    deductionAnim.stopAnimation();
+    deductionAnim.setValue(0);
+    Animated.timing(deductionAnim, {
+      toValue: 1,
+      duration: 700,
+      useNativeDriver: true,
+    }).start();
   };
 
   const handleNextPress = () => {
@@ -197,6 +209,14 @@ const generateDistractor = (correctDef: string, type: string): string => {
   }
 
   const currentQuestion = questions[currentWordIndex];
+  const deductionOpacity = deductionAnim.interpolate({
+    inputRange: [0, 0.2, 1],
+    outputRange: [0, 1, 0],
+  });
+  const deductionTranslateY = deductionAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -35],
+  });
 
   const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -239,7 +259,20 @@ const generateDistractor = (correctDef: string, type: string): string => {
           <Text style={styles.progressText}>
             Word {currentWordIndex + 1} of {questions.length}
           </Text>
-          <Text style={styles.scoreText}>{displayScore}</Text>
+          <View style={styles.scoreWrapper}>
+            <Animated.Text
+              style={[
+                styles.deductionText,
+                {
+                  opacity: deductionOpacity,
+                  transform: [{ translateY: deductionTranslateY }],
+                },
+              ]}
+            >
+              -5
+            </Animated.Text>
+            <Text style={styles.scoreText}>{displayScore}</Text>
+          </View>
         </View>
         <View style={styles.progressBar}>
           <Animated.View 
@@ -348,6 +381,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     fontWeight: '500',
+  },
+  scoreWrapper: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    minWidth: 48,
+  },
+  deductionText: {
+    position: 'absolute',
+    top: -20,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#F87171',
   },
   scoreText: {
     fontSize: 16,

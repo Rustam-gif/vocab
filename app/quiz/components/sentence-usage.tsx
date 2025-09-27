@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Animated,
   AccessibilityInfo,
   ViewStyle,
   TextStyle,
@@ -106,6 +107,7 @@ export default function SentenceUsageComponent({ onPhaseComplete, sharedScore, o
   const [correctCount, setCorrectCount] = useState(0);
   const [displayScore, setDisplayScore] = useState(sharedScore);
   const pendingScoreRef = useRef<number | null>(null);
+  const deductionAnim = useRef(new Animated.Value(0)).current;
 
   const item = useMemo(() => ITEMS[index], [index]);
 
@@ -157,6 +159,7 @@ export default function SentenceUsageComponent({ onPhaseComplete, sharedScore, o
         pendingScoreRef.current = next;
         return next;
       });
+      triggerDeductionAnimation();
     }
 
     setRevealed(true);
@@ -172,11 +175,43 @@ export default function SentenceUsageComponent({ onPhaseComplete, sharedScore, o
     }
   };
 
+  const triggerDeductionAnimation = () => {
+    deductionAnim.stopAnimation();
+    deductionAnim.setValue(0);
+    Animated.timing(deductionAnim, {
+      toValue: 1,
+      duration: 700,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const deductionOpacity = deductionAnim.interpolate({
+    inputRange: [0, 0.2, 1],
+    outputRange: [0, 1, 0],
+  });
+  const deductionTranslateY = deductionAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -35],
+  });
+
   return (
     <View style={styles.container}>
       <View style={styles.progressContainer}>
         <Text style={styles.progressText}>Word {index + 1} of {ITEMS.length}</Text>
-        <Text style={styles.scoreText}>{displayScore}</Text>
+        <View style={styles.scoreWrapper}>
+          <Animated.Text
+            style={[
+              styles.deductionText,
+              {
+                opacity: deductionOpacity,
+                transform: [{ translateY: deductionTranslateY }],
+              },
+            ]}
+          >
+            -5
+          </Animated.Text>
+          <Text style={styles.scoreText}>{displayScore}</Text>
+        </View>
       </View>
       <View style={styles.progressBar}>
         <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
@@ -264,6 +299,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     fontWeight: '500',
+  },
+  scoreWrapper: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    minWidth: 48,
+  },
+  deductionText: {
+    position: 'absolute',
+    top: -20,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#F87171',
   },
   scoreText: {
     fontSize: 16,
