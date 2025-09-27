@@ -1,0 +1,240 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { ArrowLeft } from 'lucide-react-native';
+import WordIntroComponent from './components/word-intro';
+import MCQComponent from './components/mcq';
+import SynonymComponent from './components/synonym';
+import SentenceUsageComponent from './components/sentence-usage';
+import MissingLettersComponent from './components/missing-letters-simple';
+import { levels } from './data/levels';
+
+interface Phase {
+  id: string;
+  name: string;
+  component: React.ComponentType<any>;
+  completed: boolean;
+  score?: number;
+  totalQuestions?: number;
+}
+
+export default function AtlasPracticeIntegrated() {
+  const router = useRouter();
+  const { setId, levelId } = useLocalSearchParams<{ setId: string; levelId: string }>();
+  
+  // Debug logging
+  console.log('AtlasPracticeIntegrated - Received params:', { setId, levelId });
+  
+  const [currentPhase, setCurrentPhase] = useState(0);
+  const [phases, setPhases] = useState<Phase[]>([
+    { id: 'word-intro', name: 'Word Intro', component: WordIntroComponent, completed: false },
+    { id: 'mcq', name: 'MCQ', component: MCQComponent, completed: false },
+    { id: 'synonym', name: 'Synonym', component: SynonymComponent, completed: false },
+    { id: 'sentence-usage', name: 'Natural Usage', component: SentenceUsageComponent, completed: false },
+    { id: 'missing-letters', name: 'Missing Letters', component: MissingLettersComponent, completed: false },
+  ]);
+  const [totalScore, setTotalScore] = useState(100);
+  const [totalCorrect, setTotalCorrect] = useState(0);
+  const [totalQuestions, setTotalQuestions] = useState(0);
+
+  const handlePhaseComplete = (score: number = 0, questions: number = 0) => {
+    const phase = phases[currentPhase];
+    const wasCompleted = phase?.completed ?? false;
+    const updatedPhases = [...phases];
+    updatedPhases[currentPhase] = {
+      ...updatedPhases[currentPhase],
+      completed: true,
+      score,
+      totalQuestions: questions,
+    };
+    setPhases(updatedPhases);
+
+    const clampedQuestions = Math.max(0, questions);
+    const clampedCorrect = Math.max(0, Math.min(clampedQuestions, score));
+
+    let nextTotalCorrect = totalCorrect;
+    let nextTotalQuestions = totalQuestions;
+
+    if (!wasCompleted && phase?.id !== 'word-intro') {
+      nextTotalCorrect += clampedCorrect;
+      nextTotalQuestions += clampedQuestions;
+      setTotalCorrect(nextTotalCorrect);
+      setTotalQuestions(nextTotalQuestions);
+    }
+
+    if (currentPhase < phases.length - 1) {
+      setCurrentPhase(prev => prev + 1);
+    } else {
+      navigateToResults(nextTotalCorrect, nextTotalQuestions);
+    }
+  };
+
+  const navigateToResults = (finalCorrect: number, finalQuestions: number) => {
+    router.push({
+      pathname: '/quiz/atlas-results',
+      params: {
+        score: Math.max(0, finalCorrect).toString(),
+        totalQuestions: Math.max(0, finalQuestions).toString(),
+        setId,
+        levelId
+      }
+    });
+  };
+
+  const getCurrentPhaseComponent = () => {
+    const phase = phases[currentPhase];
+    if (!phase) return null;
+
+    const Component = phase.component;
+    
+    // Handle Word Intro component differently
+    if (phase.id === 'word-intro') {
+      return (
+        <Component
+          setId={setId || ''}
+          levelId={levelId || ''}
+          onComplete={() => handlePhaseComplete(0, 0)}
+        />
+      );
+    }
+    
+    return (
+      <Component
+        setId={setId || ''}
+        levelId={levelId || ''}
+        onPhaseComplete={handlePhaseComplete}
+        sharedScore={totalScore}
+        onScoreShare={setTotalScore}
+      />
+    );
+  };
+
+  if (!setId || !levelId) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Missing set or level information</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <ArrowLeft size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.title}>
+          {phases[currentPhase]?.name || 'Practice'}
+        </Text>
+        <View style={styles.placeholder} />
+      </View>
+
+      {/* Phase Progress */}
+      <View style={styles.phaseTabs}>
+        {phases.map((phase, index) => {
+          const isActive = index === currentPhase;
+          return (
+            <TouchableOpacity
+              key={phase.id}
+              style={styles.tabItem}
+              onPress={() => setCurrentPhase(index)}
+              activeOpacity={0.8}
+            >
+              <Text style={isActive ? styles.tabLabelActive : styles.tabLabel}>{phase.name}</Text>
+              <View style={isActive ? styles.tabUnderlineActive : styles.tabUnderline} />
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Current Phase Component */}
+      <View style={styles.phaseContainer}>
+        {getCurrentPhaseComponent()}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#252525',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  backButton: {
+    padding: 8,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    flex: 1,
+    textAlign: 'center',
+  },
+  placeholder: {
+    width: 40,
+  },
+  phaseTabs: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  tabLabel: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  tabLabelActive: {
+    fontSize: 13,
+    color: '#F2935C',
+    fontWeight: '600',
+  },
+  tabUnderline: {
+    height: 2,
+    backgroundColor: 'transparent',
+    width: '60%',
+    marginTop: 6,
+    borderRadius: 1,
+  },
+  tabUnderlineActive: {
+    height: 2,
+    backgroundColor: '#F2935C',
+    width: '60%',
+    marginTop: 6,
+    borderRadius: 1,
+  },
+  phaseContainer: {
+    flex: 1,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#9CA3AF',
+  },
+});

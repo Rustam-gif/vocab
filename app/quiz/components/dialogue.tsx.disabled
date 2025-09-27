@@ -1,0 +1,642 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  AccessibilityInfo,
+  ViewStyle,
+  TextStyle,
+  findNodeHandle,
+  UIManager,
+} from 'react-native';
+// Temporarily disabled due to compatibility issues
+// import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+// import Animated, {
+//   useAnimatedStyle,
+//   useSharedValue,
+//   withTiming,
+//   withSpring,
+//   withSequence,
+//   runOnJS,
+//   SharedValue,
+// } from 'react-native-reanimated';
+import { analyticsService } from '../../../services/AnalyticsService';
+
+interface DialogueProps {
+  setId: string;
+  levelId: string;
+  onPhaseComplete: (score: number, totalQuestions: number) => void;
+  sharedScore: number;
+  onScoreShare: (newScore: number) => void;
+}
+
+interface DialogueOption {
+  text: string;
+  isCorrect: boolean;
+  key: string;
+}
+
+interface DialogueItem {
+  id: string;
+  word: string;
+  ipa: string;
+  speakerALine: string;
+  speakerBBefore: string;
+  speakerBAfter: string;
+  options: DialogueOption[];
+}
+
+const ACCENT_COLOR = '#F2935C';
+const CORRECT_COLOR = '#437F76';
+const INCORRECT_COLOR = '#924646';
+
+const ITEMS: DialogueItem[] = [
+  {
+    id: 'wake-up',
+    word: 'wake up',
+    ipa: '/weɪk ʌp/',
+    speakerALine: 'A: “How do you manage early shifts?”',
+    speakerBBefore: 'B: “I have to ',
+    speakerBAfter: ' before sunrise.”',
+    options: [
+      { text: 'wake up', isCorrect: true, key: 'wake-up-correct' },
+      { text: 'stay up', isCorrect: false, key: 'wake-up-stay' },
+      { text: 'give up', isCorrect: false, key: 'wake-up-give' },
+    ],
+  },
+  {
+    id: 'eat',
+    word: 'eat',
+    ipa: '/iːt/',
+    speakerALine: 'A: “What do the students do at noon?”',
+    speakerBBefore: 'B: “They ',
+    speakerBAfter: ' lunch in the cafeteria.”',
+    options: [
+      { text: 'eat', isCorrect: true, key: 'eat-correct' },
+      { text: 'skip', isCorrect: false, key: 'eat-skip' },
+      { text: 'call', isCorrect: false, key: 'eat-call' },
+    ],
+  },
+  {
+    id: 'study',
+    word: 'study',
+    ipa: '/ˈstʌdi/',
+    speakerALine: 'A: “What does Mia do after dinner?”',
+    speakerBBefore: 'B: “She likes to ',
+    speakerBAfter: ' English in her room.”',
+    options: [
+      { text: 'study', isCorrect: true, key: 'study-correct' },
+      { text: 'nap', isCorrect: false, key: 'study-nap' },
+      { text: 'sing', isCorrect: false, key: 'study-sing' },
+    ],
+  },
+  {
+    id: 'exercise',
+    word: 'exercise',
+    ipa: '/ˈeksərsaɪz/',
+    speakerALine: 'A: “Why does Carlos go to the park each evening?”',
+    speakerBBefore: 'B: “He goes there to ',
+    speakerBAfter: ' with his friends.”',
+    options: [
+      { text: 'exercise', isCorrect: true, key: 'exercise-correct' },
+      { text: 'chat', isCorrect: false, key: 'exercise-chat' },
+      { text: 'rest', isCorrect: false, key: 'exercise-rest' },
+    ],
+  },
+  {
+    id: 'sleep',
+    word: 'sleep',
+    ipa: '/sliːp/',
+    speakerALine: 'A: “Why is the baby so quiet now?”',
+    speakerBBefore: 'B: “The baby needs to ',
+    speakerBAfter: ' for many hours.”',
+    options: [
+      { text: 'sleep', isCorrect: true, key: 'sleep-correct' },
+      { text: 'eat', isCorrect: false, key: 'sleep-eat' },
+      { text: 'play', isCorrect: false, key: 'sleep-play' },
+    ],
+  },
+];
+
+const shuffleOptions = (options: DialogueOption[]) =>
+  [...options]
+    .map(option => ({ option, sort: Math.random() }))
+    .sort((a, b) => a.sort - b.sort)
+    .map(({ option }) => option);
+
+type MethodType = 'drag' | 'tap';
+
+type OptionStatus = 'idle' | 'selected' | 'correct' | 'incorrect' | 'reveal-correct';
+
+type LayoutData = { width: number; height: number; pageX: number; pageY: number };
+
+interface DraggableChipProps {
+  option: DialogueOption;
+  index: number;
+  status: OptionStatus;
+  disabled: boolean;
+  onTap: (idx: number) => void;
+  onDropResult: (idx: number, success: boolean, method: MethodType) => void;
+  dropZone: SharedValue<LayoutData>;
+  setHovering: (hover: boolean) => void;
+}
+
+export default function DialogueComponent({ onPhaseComplete, sharedScore, onScoreShare }: DialogueProps) {
+  const [index, setIndex] = useState(0);
+  const [options, setOptions] = useState<DialogueOption[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [revealed, setRevealed] = useState(false);
+  const [displayScore, setDisplayScore] = useState(sharedScore);
+  const [phaseCorrect, setPhaseCorrect] = useState(0);
+  const pendingScoreRef = useRef<number | null>(null);
+  const [filledWord, setFilledWord] = useState<string>('___');
+  const [dropHover, setDropHover] = useState(false);
+  const dropZone = useSharedValue<LayoutData>({ width: 0, height: 0, pageX: 0, pageY: 0 });
+
+  const item = useMemo(() => ITEMS[index], [index]);
+
+  useEffect(() => {
+    setOptions(shuffleOptions(item.options));
+    setSelectedIndex(null);
+    setRevealed(false);
+    setFilledWord('___');
+    setDropHover(false);
+  }, [item]);
+
+  useEffect(() => {
+    setDisplayScore(sharedScore);
+  }, [sharedScore]);
+
+  useEffect(() => {
+    if (pendingScoreRef.current !== null && pendingScoreRef.current !== sharedScore) {
+      const next = pendingScoreRef.current;
+      pendingScoreRef.current = null;
+      onScoreShare(next);
+    }
+  }, [displayScore, onScoreShare, sharedScore]);
+
+  const correctOptionIndex = useMemo(
+    () => options.findIndex(option => option.isCorrect),
+    [options]
+  );
+
+  const progress = index / ITEMS.length;
+
+  const evaluateAnswer = (optionIdx: number, method: MethodType) => {
+    if (revealed) return;
+
+    const option = options[optionIdx];
+    const isCorrect = option.isCorrect;
+
+    setSelectedIndex(optionIdx);
+    setFilledWord(option.text);
+
+    if (isCorrect) {
+      setPhaseCorrect(prev => prev + 1);
+    } else {
+      setDisplayScore(prev => {
+        const next = Math.max(0, prev - 5);
+        pendingScoreRef.current = next;
+        return next;
+      });
+    }
+    setRevealed(true);
+    setDropHover(false);
+
+    analyticsService.recordResult({
+      wordId: item.id,
+      exerciseType: 'dialogue',
+      correct: isCorrect,
+      score: isCorrect ? 0 : -1, // Penalty system: 0 for correct, -1 for wrong
+      method,
+      timestamp: new Date(),
+    });
+
+    AccessibilityInfo.announceForAccessibility(
+      isCorrect
+        ? 'Correct'
+        : `Incorrect. Correct word is ${item.options.find(opt => opt.isCorrect)?.text ?? 'the word'}`
+    );
+  };
+
+  const handleTap = (idx: number) => {
+    if (revealed) return;
+    evaluateAnswer(idx, 'tap');
+  };
+
+  const handleDropResult = (idx: number, success: boolean, method: MethodType) => {
+    if (!success) {
+      evaluateAnswer(idx, method);
+    } else {
+      evaluateAnswer(idx, method);
+    }
+  };
+
+  const handleNext = () => {
+    if (!revealed) return;
+
+    if (index === ITEMS.length - 1) {
+      onPhaseComplete(phaseCorrect, ITEMS.length);
+    } else {
+      setIndex(prev => prev + 1);
+    }
+  };
+
+  const getStatusForOption = (idx: number): OptionStatus => {
+    if (!revealed) {
+      return selectedIndex === idx ? 'selected' : 'idle';
+    }
+
+    const option = options[idx];
+
+    if (selectedIndex === idx) {
+      return option.isCorrect ? 'correct' : 'incorrect';
+    }
+
+    if (option.isCorrect) {
+      return 'reveal-correct';
+    }
+
+    return 'idle';
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.progressContainer}>
+        <Text style={styles.progressText}>Word {index + 1} of {ITEMS.length}</Text>
+        <Text style={styles.scoreText}>{displayScore}</Text>
+      </View>
+      <View style={styles.progressBar}>
+        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+      </View>
+
+      <Text style={styles.headerText}>Dialogue Completion</Text>
+      <Text style={styles.subHeaderText}>Drag or tap the word that best completes the reply.</Text>
+
+      <View style={styles.dialogueCard}>
+        <Text style={styles.dialogueLine}>{item.speakerALine}</Text>
+        <View style={styles.dialogueLineRow}>
+          <Text style={styles.dialogueLine}>{item.speakerBBefore}</Text>
+          <View
+            ref={ref => {
+              if (!ref) return;
+              const handle = findNodeHandle(ref);
+              if (handle) {
+                UIManager.measure(handle, (x, y, width, height, pageX, pageY) => {
+                  dropZone.value = { width, height, pageX, pageY };
+                });
+              }
+            }}
+            onLayout={event => {
+              const { width, height, x, y } = event.nativeEvent.layout;
+              dropZone.value = { width, height, pageX: x, pageY: y };
+            }}
+            style={[styles.dropZone, dropHover && styles.dropZoneHover]}
+          >
+            <Text style={[styles.dropZoneText, filledWord === '___' && styles.dropZonePlaceholder]}>
+              {filledWord}
+            </Text>
+          </View>
+          <Text style={styles.dialogueLine}>{item.speakerBAfter}</Text>
+        </View>
+      </View>
+
+      <View style={styles.optionsWrapper}>
+        {options.map((option, idx) => (
+          <DraggableChip
+            key={option.key}
+            option={option}
+            index={idx}
+            status={getStatusForOption(idx)}
+            disabled={revealed}
+            onTap={handleTap}
+            onDropResult={handleDropResult}
+            dropZone={dropZone}
+            setHovering={setDropHover}
+          />
+        ))}
+      </View>
+
+      <View style={styles.footer}>
+        <TouchableOpacity
+          style={[styles.primaryButton, !revealed && styles.disabledButton]}
+          disabled={!revealed}
+          onPress={handleNext}
+        >
+          <Text style={styles.primaryButtonText}>
+            {index === ITEMS.length - 1 ? 'Finish' : 'Next'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function DraggableChip({
+  option,
+  index,
+  status,
+  disabled,
+  onTap,
+  onDropResult,
+  dropZone,
+  setHovering,
+}: DraggableChipProps) {
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const scale = useSharedValue(1);
+  const zIndex = useSharedValue(0);
+  const startX = useSharedValue(0);
+  const startY = useSharedValue(0);
+  const chipOrigin = useSharedValue<LayoutData>({ width: 0, height: 0, pageX: 0, pageY: 0 });
+
+  const chipRef = React.useRef<View>(null);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+    zIndex: zIndex.value,
+  }));
+
+  const backgroundStyles: ViewStyle[] = [styles.optionCard];
+  const textStyles: TextStyle[] = [styles.optionText];
+
+  switch (status) {
+    case 'selected':
+      backgroundStyles.push(styles.cardSelected);
+      break;
+    case 'correct':
+      backgroundStyles.push(styles.cardCorrect);
+      break;
+    case 'incorrect':
+      backgroundStyles.push(styles.cardIncorrect);
+      break;
+    case 'reveal-correct':
+      backgroundStyles.push(styles.cardCorrect);
+      break;
+    default:
+      break;
+  }
+
+  const updateChipOrigin = () => {
+    const handle = chipRef.current;
+    if (!handle) return;
+    handle.measureInWindow((pageX, pageY, width, height) => {
+      chipOrigin.value = { width, height, pageX, pageY };
+    });
+  };
+
+  const shakeBack = () => {
+    'worklet';
+    translateY.value = withSpring(0, { stiffness: 220, damping: 18 });
+    translateX.value = withSequence(
+      withTiming(-8, { duration: 40 }),
+      withTiming(8, { duration: 40 }),
+      withTiming(-4, { duration: 30 }),
+      withTiming(4, { duration: 30 }),
+      withSpring(0, { stiffness: 220, damping: 18 }, () => {
+        runOnJS(onDropResult)(index, false, 'drag');
+      })
+    );
+  };
+
+  const panGesture = React.useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(!disabled)
+        .onBegin(() => {
+          'worklet';
+          if (disabled) return;
+          startX.value = translateX.value;
+          startY.value = translateY.value;
+          scale.value = withTiming(1.04, { duration: 120 });
+          zIndex.value = 10;
+        })
+        .onChange(event => {
+          'worklet';
+          if (disabled) return;
+          translateX.value = startX.value + event.translationX;
+          translateY.value = startY.value + event.translationY;
+
+          const dz = dropZone.value;
+          const origin = chipOrigin.value;
+          const centerX = origin.pageX + translateX.value + origin.width / 2;
+          const centerY = origin.pageY + translateY.value + origin.height / 2;
+          const inside =
+            dz.width > 0 &&
+            centerX >= dz.pageX &&
+            centerX <= dz.pageX + dz.width &&
+            centerY >= dz.pageY &&
+            centerY <= dz.pageY + dz.height;
+
+          runOnJS(setHovering)(inside);
+        })
+        .onFinalize(() => {
+          'worklet';
+          scale.value = withTiming(1, { duration: 120 });
+          zIndex.value = 0;
+
+          const dz = dropZone.value;
+          const origin = chipOrigin.value;
+          const centerX = origin.pageX + translateX.value + origin.width / 2;
+          const centerY = origin.pageY + translateY.value + origin.height / 2;
+          const inside =
+            dz.width > 0 &&
+            centerX >= dz.pageX &&
+            centerX <= dz.pageX + dz.width &&
+            centerY >= dz.pageY &&
+            centerY <= dz.pageY + dz.height;
+
+          runOnJS(setHovering)(false);
+
+          if (!inside || disabled) {
+            translateX.value = withSpring(0, { stiffness: 220, damping: 18 });
+            translateY.value = withSpring(0, { stiffness: 220, damping: 18 });
+            return;
+          }
+
+          if (option.isCorrect) {
+            const targetX = dz.pageX + dz.width / 2 - (origin.pageX + origin.width / 2);
+            const targetY = dz.pageY + dz.height / 2 - (origin.pageY + origin.height / 2);
+            translateX.value = withSpring(targetX, { stiffness: 260, damping: 20 }, () => {
+              runOnJS(onDropResult)(index, true, 'drag');
+            });
+            translateY.value = withSpring(targetY, { stiffness: 260, damping: 20 });
+          } else {
+            shakeBack();
+          }
+        }),
+    [disabled, dropZone, option.isCorrect, setHovering]
+  );
+
+  return (
+    <GestureDetector gesture={panGesture}>
+      <Animated.View ref={chipRef} style={[backgroundStyles, animatedStyle]} onLayout={updateChipOrigin}>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          disabled={disabled}
+          onPress={() => onTap(index)}
+        >
+          <Text style={textStyles}>{option.text}</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    </GestureDetector>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#171a1a',
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  progressText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  scoreText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: ACCENT_COLOR,
+  },
+  progressBar: {
+    height: 6,
+    backgroundColor: '#2c2f2f',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 24,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: ACCENT_COLOR,
+  },
+  headerText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  subHeaderText: {
+    color: '#9CA3AF',
+    fontSize: 14,
+    marginTop: 4,
+    marginBottom: 24,
+  },
+  dialogueCard: {
+    backgroundColor: '#2c2f2f',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 28,
+  },
+  dialogueLine: {
+    color: '#fff',
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  dialogueLineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: 12,
+  },
+  dropZone: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#2c2f2f',
+    backgroundColor: '#1f2121',
+    marginHorizontal: 4,
+  },
+  dropZoneHover: {
+    borderColor: ACCENT_COLOR,
+  },
+  dropZoneText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  dropZonePlaceholder: {
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  wordHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  wordText: {
+    color: '#fff',
+    fontSize: 30,
+    fontWeight: '700',
+  },
+  ipaText: {
+    color: '#9CA3AF',
+    fontSize: 16,
+    fontStyle: 'italic',
+  },
+  optionsWrapper: {
+    gap: 12,
+    marginTop: 12,
+  },
+  optionCard: {
+    backgroundColor: '#2c2f2f',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  optionText: {
+    color: '#fff',
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  cardSelected: {
+    borderColor: ACCENT_COLOR,
+  },
+  cardCorrect: {
+    backgroundColor: CORRECT_COLOR,
+    borderColor: CORRECT_COLOR,
+  },
+  cardIncorrect: {
+    backgroundColor: INCORRECT_COLOR,
+    borderColor: INCORRECT_COLOR,
+  },
+  correctText: {
+    color: CORRECT_COLOR,
+    fontWeight: '600',
+  },
+  footer: {
+    marginTop: 32,
+    alignItems: 'center',
+  },
+  primaryButton: {
+    backgroundColor: ACCENT_COLOR,
+    borderRadius: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    minWidth: 160,
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+});

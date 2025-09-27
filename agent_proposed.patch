@@ -1,0 +1,7 @@
+diff --git a/README.md b/README.md
+new file mode 100644
+index 0000000..6edbc58
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1 @@
++Vocab — run: npm install && npx expo start -c

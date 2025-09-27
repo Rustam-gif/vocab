@@ -1,0 +1,176 @@
+import { create } from 'zustand';
+import { Word, User, Story, ExerciseResult, NewWordPayload } from '../types';
+import { vaultService } from '../services/VaultService';
+import { analyticsService } from '../services/AnalyticsService';
+
+interface AppState {
+  // User state
+  user: User | null;
+  setUser: (user: User | null) => void;
+  
+  // Vault state
+  words: Word[];
+  loading: boolean;
+  loadWords: () => Promise<void>;
+  addWord: (word: NewWordPayload) => Promise<Word | null>;
+  updateWord: (id: string, updates: Partial<Word>) => Promise<void>;
+  deleteWord: (id: string) => Promise<void>;
+  searchWords: (query: string) => Word[];
+  
+  // Story state
+  currentStory: Story | null;
+  setCurrentStory: (story: Story | null) => void;
+  savedStories: Story[];
+  loadStories: () => Promise<void>;
+  saveStory: (story: Story) => Promise<void>;
+  
+  // Exercise state
+  currentExercise: any;
+  setCurrentExercise: (exercise: any) => void;
+  exerciseResults: ExerciseResult[];
+  recordExerciseResult: (result: ExerciseResult) => Promise<void>;
+  
+  // Analytics state
+  analytics: any;
+  loadAnalytics: () => Promise<void>;
+  
+  // Initialize app
+  initialize: () => Promise<void>;
+}
+
+export const useAppStore = create<AppState>((set, get) => ({
+  // User state
+  user: {
+    id: '1',
+    name: 'Vocabulary Learner',
+    email: 'learner@example.com',
+    avatar: 'https://via.placeholder.com/100',
+    xp: 1250,
+    streak: 7,
+    exercisesCompleted: 45,
+    createdAt: new Date(),
+  },
+  setUser: (user) => set({ user }),
+  
+  // Vault state
+  words: [],
+  loading: false,
+  loadWords: async () => {
+    set({ loading: true });
+    try {
+      await vaultService.initialize();
+      const words = vaultService.getAllWords();
+      set({ words });
+    } catch (error) {
+      console.error('Failed to load words:', error);
+    } finally {
+      set({ loading: false });
+    }
+  },
+  addWord: async (wordData: NewWordPayload) => {
+    try {
+      const newWord = await vaultService.addWord(wordData);
+      if (newWord) {
+        set(state => ({ words: [...state.words, newWord] }));
+      }
+      return newWord;
+    } catch (error) {
+      console.error('Failed to add word:', error);
+      return null;
+    }
+  },
+  updateWord: async (id, updates) => {
+    try {
+      const updatedWord = await vaultService.updateWord(id, updates);
+      if (updatedWord) {
+        set(state => ({
+          words: state.words.map(word => 
+            word.id === id ? updatedWord : word
+          )
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to update word:', error);
+    }
+  },
+  deleteWord: async (id) => {
+    try {
+      const success = await vaultService.deleteWord(id);
+      if (success) {
+        set(state => ({
+          words: state.words.filter(word => word.id !== id)
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to delete word:', error);
+    }
+  },
+  searchWords: (query) => {
+    return vaultService.searchWords(query);
+  },
+  
+  // Story state
+  currentStory: null,
+  setCurrentStory: (story) => set({ currentStory: story }),
+  savedStories: [],
+  loadStories: async () => {
+    try {
+      // In a real app, this would load from storage
+      set({ savedStories: [] });
+    } catch (error) {
+      console.error('Failed to load stories:', error);
+    }
+  },
+  saveStory: async (story) => {
+    try {
+      set(state => ({
+        savedStories: [...state.savedStories, story]
+      }));
+    } catch (error) {
+      console.error('Failed to save story:', error);
+    }
+  },
+  
+  // Exercise state
+  currentExercise: null,
+  setCurrentExercise: (exercise) => set({ currentExercise: exercise }),
+  exerciseResults: [],
+  recordExerciseResult: async (result) => {
+    try {
+      await analyticsService.recordResult(result);
+      set(state => ({
+        exerciseResults: [...state.exerciseResults, result]
+      }));
+    } catch (error) {
+      console.error('Failed to record exercise result:', error);
+    }
+  },
+  
+  // Analytics state
+  analytics: null,
+  loadAnalytics: async () => {
+    try {
+      const analytics = analyticsService.getAnalyticsData();
+      set({ analytics });
+    } catch (error) {
+      console.error('Failed to load analytics:', error);
+    }
+  },
+  
+  // Initialize app
+  initialize: async () => {
+    try {
+      await Promise.all([
+        vaultService.initialize(),
+        analyticsService.initialize(),
+      ]);
+      
+      const words = vaultService.getAllWords();
+      const analytics = analyticsService.getAnalyticsData();
+      
+      set({ words, analytics });
+    } catch (error) {
+      console.error('Failed to initialize app:', error);
+    }
+  },
+}));
