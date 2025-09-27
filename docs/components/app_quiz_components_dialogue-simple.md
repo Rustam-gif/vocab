@@ -9,7 +9,7 @@ File: app/quiz/components/dialogue-simple.tsx
 - onScoreShare
 
 ## Notes
-- (none)
+- note=Two-scenario prototype to validate dialogue pacing before wiring dynamic content
 
 ## Overview
 - Auto-generated. Add // @doc: note=... lines in source to enrich.

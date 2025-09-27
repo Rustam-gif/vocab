@@ -19,6 +19,7 @@ export default function DialogueSimple({ onPhaseComplete, sharedScore, onScoreSh
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [isAnswered, setIsAnswered] = useState(false);
 
+  // @doc: note=Two-scenario prototype to validate dialogue pacing before wiring dynamic content
   // Simple dialogue data
   const dialogues = [
     {
