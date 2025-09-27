@@ -15,6 +15,8 @@ File: app/quiz/atlas-practice-integrated.tsx
 - toString
 - totalQuestions
 - finalQuestions
+- points
+- totalScore
 - setId
 - levelId
 - useEffect
@@ -88,6 +90,9 @@ File: app/quiz/atlas-practice-integrated.tsx
 - definition
 - theme
 - dark
+- wordIndex
+- totalWords
+- sharedScore
 - onResult
 - mistakes
 - usedReveal

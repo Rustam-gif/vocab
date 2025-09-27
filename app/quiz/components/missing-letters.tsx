@@ -10,6 +10,7 @@ import {
   UIManager,
   AccessibilityInfo,
   InteractionManager,
+  Animated,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { TextInput as TextInputRef } from 'react-native';
@@ -27,6 +28,9 @@ export interface MissingLettersProps {
   onResult: (result: MissingLettersResult) => void;
   onNext: () => void;
   theme?: 'dark' | 'light';
+  wordIndex: number;
+  totalWords: number;
+  sharedScore: number;
 }
 
 // Enable LayoutAnimation on Android
@@ -81,7 +85,7 @@ function pickHintPositions(letterIndices: number[]): number[] {
   return Array.from(new Set(result));
 }
 
-export default function MissingLetters({ word, ipa, clue, onResult, onNext, theme = 'dark' }: MissingLettersProps) {
+export default function MissingLetters({ word, ipa, clue, onResult, onNext, theme = 'dark', wordIndex, totalWords, sharedScore }: MissingLettersProps) {
   const displayWord = useMemo(() => word, [word]);
   const lettersOnly = useMemo(() => normalize(word), [word]);
 
@@ -119,6 +123,9 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
   const inputRefs = useRef<Array<TextInputRef | null>>([]);
   const pendingFocusRef = useRef<number | null>(null);
   const evaluationTimeout = useRef<NodeJS.Timeout | null>(null);
+  const [displayScore, setDisplayScore] = useState(sharedScore);
+  const prevScoreRef = useRef(sharedScore);
+  const deductionAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     setSlots(initialSlots);
@@ -139,6 +146,20 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
       clearTimeout(evaluationTimeout.current);
     }
   }, []);
+
+  useEffect(() => {
+    if (sharedScore < prevScoreRef.current) {
+      deductionAnim.stopAnimation();
+      deductionAnim.setValue(0);
+      Animated.timing(deductionAnim, {
+        toValue: 1,
+        duration: 700,
+        useNativeDriver: true,
+      }).start();
+    }
+    prevScoreRef.current = sharedScore;
+    setDisplayScore(sharedScore);
+  }, [sharedScore, deductionAnim]);
 
   const editableFilled = useMemo(() => {
     const editable = slots.filter(s => s.isLetter && !s.isHint);
@@ -267,9 +288,38 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
   }, [completed]);
 
   const themeStyles = theme === 'dark' ? darkStyles : darkStyles; // light theme could be added later
+  const deductionOpacity = deductionAnim.interpolate({
+    inputRange: [0, 0.2, 1],
+    outputRange: [0, 1, 0],
+  });
+  const deductionTranslateY = deductionAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -35],
+  });
+  const progress = totalWords > 0 ? (wordIndex / totalWords) : 0;
 
   return (
     <View style={themeStyles.container}>
+      <View style={themeStyles.progressContainer}>
+        <Text style={themeStyles.progressText}>Word {wordIndex + 1} of {totalWords}</Text>
+        <View style={themeStyles.scoreWrapper}>
+          <Animated.Text
+            style={[
+              themeStyles.deductionText,
+              {
+                opacity: deductionOpacity,
+                transform: [{ translateY: deductionTranslateY }],
+              },
+            ]}
+          >
+            -5
+          </Animated.Text>
+          <Text style={themeStyles.scoreText}>{displayScore}</Text>
+        </View>
+      </View>
+      <View style={themeStyles.progressBar}>
+        <View style={[themeStyles.progressFill, { width: `${Math.min(100, progress * 100)}%` }]} />
+      </View>
       <View style={themeStyles.header}> 
         <Text style={themeStyles.clue} accessibilityLabel={`Clue: ${clue}`}>{clue}</Text>
         {ipa ? <Text style={themeStyles.ipa}>{ipa}</Text> : null}
@@ -327,6 +377,45 @@ const darkStyles = StyleSheet.create({
     backgroundColor: COLORS.bg,
     paddingHorizontal: 20,
     paddingTop: 20,
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  progressText: {
+    fontSize: 14,
+    color: COLORS.sub,
+    fontWeight: '500',
+  },
+  scoreWrapper: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    minWidth: 48,
+  },
+  deductionText: {
+    position: 'absolute',
+    top: -20,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#F87171',
+  },
+  scoreText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.accent,
+  },
+  progressBar: {
+    height: 6,
+    backgroundColor: COLORS.border,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 18,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: COLORS.accent,
   },
   header: {
     alignItems: 'center',

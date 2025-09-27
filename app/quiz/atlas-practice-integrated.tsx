@@ -76,6 +76,7 @@ export default function AtlasPracticeIntegrated() {
       params: {
         score: Math.max(0, finalCorrect).toString(),
         totalQuestions: Math.max(0, finalQuestions).toString(),
+        points: Math.max(0, totalScore).toString(),
         setId,
         levelId
       }
@@ -128,6 +129,9 @@ export default function AtlasPracticeIntegrated() {
           ipa={w.phonetic}
           clue={w.definition}
           theme="dark"
+          wordIndex={mlIndex}
+          totalWords={words.length}
+          sharedScore={totalScore}
           onResult={({ mistakes, usedReveal }) => {
             const penalty = Math.max(0, mistakes) + (usedReveal ? 3 : 0);
             setTotalScore(prev => Math.max(0, prev - penalty));
