@@ -1,5 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  Animated,
+  Easing,
+} from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import WordIntroComponent from './components/word-intro';
@@ -8,17 +16,7 @@ import SynonymComponent from './components/synonym';
 import SentenceUsageComponent from './components/sentence-usage';
 import MissingLetters from './components/missing-letters';
 import { levels } from './data/levels';
-import Animated, {
-  useSharedValue,
-  withTiming,
-  useAnimatedStyle,
-  interpolateColor,
-  Easing,
-  type SharedValue,
-} from 'react-native-reanimated';
-
 const ACCENT = '#F2935C';
-const AnimatedText = Animated.createAnimatedComponent(Text);
 
 interface Phase {
   id: string;
@@ -48,15 +46,15 @@ export default function AtlasPracticeIntegrated() {
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [mlIndex, setMlIndex] = useState(0);
-  const animatedIndex = useSharedValue(0);
-  const indicatorX = useSharedValue(0);
-  const indicatorWidth = useSharedValue(0);
+  const animatedIndex = useRef(new Animated.Value(0)).current;
+  const indicatorX = useRef(new Animated.Value(0)).current;
+  const indicatorWidth = useRef(new Animated.Value(0)).current;
   const tabLayouts = useRef<Record<number, { x: number; width: number }>>({});
-  const indicatorAnimatedStyle = useAnimatedStyle(() => ({
-    width: indicatorWidth.value,
-    transform: [{ translateX: indicatorX.value }],
-    opacity: indicatorWidth.value ? 1 : 0,
-  }));
+  const indicatorAnimatedStyle = {
+    width: indicatorWidth,
+    transform: [{ translateX: indicatorX }],
+    opacity: indicatorWidth.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: 'clamp' }),
+  } as const;
 
   const handlePhaseComplete = (score: number = 0, questions: number = 0) => {
     const phase = phases[currentPhase];
@@ -112,14 +110,26 @@ export default function AtlasPracticeIntegrated() {
   }, [currentPhase, setId, levelId]);
 
   useEffect(() => {
-    animatedIndex.value = withTiming(currentPhase, {
+    Animated.timing(animatedIndex, {
+      toValue: currentPhase,
       duration: 350,
       easing: Easing.out(Easing.cubic),
-    });
+      useNativeDriver: false,
+    }).start();
     const layout = tabLayouts.current[currentPhase];
     if (layout) {
-      indicatorWidth.value = withTiming(layout.width, { duration: 350, easing: Easing.out(Easing.cubic) });
-      indicatorX.value = withTiming(layout.x, { duration: 350, easing: Easing.out(Easing.cubic) });
+      Animated.timing(indicatorWidth, {
+        toValue: layout.width,
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+      Animated.timing(indicatorX, {
+        toValue: layout.x,
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
     }
   }, [currentPhase, animatedIndex, indicatorWidth, indicatorX]);
 
@@ -228,9 +238,9 @@ export default function AtlasPracticeIntegrated() {
             onPress={() => setCurrentPhase(index)}
             onLayout={(layout) => {
               tabLayouts.current[index] = layout;
-              if (index === currentPhase && indicatorWidth.value === 0) {
-                indicatorWidth.value = layout.width;
-                indicatorX.value = layout.x;
+              if (index === currentPhase && tabLayouts.current[index]) {
+                indicatorWidth.setValue(layout.width);
+                indicatorX.setValue(layout.x);
               }
             }}
             animatedIndex={animatedIndex}
@@ -252,18 +262,15 @@ type PhaseTabProps = {
   title: string;
   onPress: () => void;
   onLayout: (layout: { x: number; width: number }) => void;
-  animatedIndex: SharedValue<number>;
+  animatedIndex: Animated.Value;
 };
 
 function PhaseTab({ index, title, onPress, onLayout, animatedIndex }: PhaseTabProps) {
-  const animatedColorStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(
-      animatedIndex.value,
-      [index - 1, index, index + 1],
-      ['#9CA3AF', ACCENT, '#9CA3AF'],
-      'clamp'
-    ),
-  }));
+  const color = animatedIndex.interpolate({
+    inputRange: [index - 1, index, index + 1],
+    outputRange: ['#9CA3AF', ACCENT, '#9CA3AF'],
+    extrapolate: 'clamp',
+  });
 
   return (
     <TouchableOpacity
@@ -275,7 +282,7 @@ function PhaseTab({ index, title, onPress, onLayout, animatedIndex }: PhaseTabPr
         onLayout({ x, width });
       }}
     >
-      <AnimatedText style={[styles.tabLabel, animatedColorStyle]}>{title}</AnimatedText>
+      <Animated.Text style={[styles.tabLabel, { color }]}>{title}</Animated.Text>
     </TouchableOpacity>
   );
 }
