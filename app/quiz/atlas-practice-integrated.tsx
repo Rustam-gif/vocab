@@ -105,14 +105,25 @@ export default function AtlasPracticeIntegrated() {
     const targetFrame = frames[step];
     const previousStep = Math.min(lastTimelineStepRef.current, frames.length - 1);
     const previousFrame = frames[previousStep];
+    const maxFrame = frames[frames.length - 1] || targetFrame;
+
+    const applyProgress = (frame: number) => {
+      const progress = maxFrame ? frame / maxFrame : 0;
+      const setProgress = (timeline as unknown as { setProgress?: (value: number) => void }).setProgress;
+      if (typeof setProgress === 'function') {
+        setProgress(progress);
+      } else {
+        timeline.play(frame, frame + 1);
+      }
+    };
 
     if (step === previousStep && targetFrame === previousFrame) {
-      timeline.goToAndStop(targetFrame, true);
+      applyProgress(targetFrame);
       return;
     }
 
     if (targetFrame < previousFrame) {
-      timeline.goToAndStop(targetFrame, true);
+      applyProgress(targetFrame);
     } else {
       timeline.play(previousFrame, targetFrame);
     }
