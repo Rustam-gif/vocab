@@ -1,0 +1,8 @@
+[proxy] Loaded API_PORT: 4000
+[proxy] Loaded PORT: <unset>
+[proxy] Loaded OPENAI_API_KEY prefix: sk-proj-Fy
+[proxy] Loaded OPENAI_PROJECT_ID: proj_9oUNSiKxwHO69ZOsIq8xvGZ6
+[proxy] Using OPENAI key prefix: sk-proj-FyFL...
+[proxy] Using Project ID: proj_9oUNSiKxwHO69ZOsIq8xvGZ6
+[proxy] Attempting to listen on: 4000 (attempts left: 5 )
+[proxy] Server running on http://localhost:4000

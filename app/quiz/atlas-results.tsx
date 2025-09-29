@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Animated, Easing } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
+import ProgressService from '../../services/ProgressService';
 
 const ACCENT = '#F2935C';
+const CORRECT_COLOR = '#437F76';
 
 export default function AtlasResults() {
   const router = useRouter();
@@ -26,14 +27,19 @@ export default function AtlasResults() {
   }, [points, score, totalQuestions]);
 
   const [displayPoints, setDisplayPoints] = useState(0);
+  const [showDoneButton, setShowDoneButton] = useState(false);
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const lottieRef = useRef<LottieView>(null);
 
   useEffect(() => {
     setDisplayPoints(0);
-    const step = numericPoints > 0 ? Math.max(1, Math.ceil(numericPoints / 40)) : 1;
+    const target = Math.round(numericPoints);
+    const step = target > 0 ? Math.max(1, Math.ceil(target / 40)) : 1;
     const interval = setInterval(() => {
       setDisplayPoints(prev => {
-        const next = Math.min(prev + step, numericPoints);
-        if (next >= numericPoints) {
+        const next = Math.min(prev + step, target);
+        if (next >= target) {
           clearInterval(interval);
         }
         return next;
@@ -42,7 +48,55 @@ export default function AtlasResults() {
     return () => clearInterval(interval);
   }, [numericPoints]);
 
-  const handleDone = () => {
+  useEffect(() => {
+    // Start animation immediately
+    const sequence = Animated.parallel([
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 1170,
+        easing: Easing.out(Easing.back(1.1)),
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 1170,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]);
+    
+    sequence.start(() => {
+      lottieRef.current?.reset?.();
+      lottieRef.current?.play?.();
+    });
+    
+    // Show Done button after 2 seconds
+    const buttonTimer = setTimeout(() => {
+      setShowDoneButton(true);
+    }, 2000);
+    
+    return () => clearTimeout(buttonTimer);
+  }, [scaleAnim, opacityAnim]);
+
+  const handleDone = async () => {
+    // Save the score to ProgressService
+    if (setId) {
+      try {
+        const progressService = ProgressService.getInstance();
+        await progressService.initialize();
+        const bestScore = Math.round(Math.max(0, Math.min(100, numericPoints)));
+        await progressService.completeSet(
+          setId,
+          bestScore,
+          100
+        );
+        console.log('Score saved:', { setId, score: bestScore });
+      } catch (error) {
+        console.error('Failed to save score:', error);
+      }
+    }
+
+    // Navigate back to learn screen
     if (levelId) {
       router.replace(`/quiz/learn?level=${levelId}`);
     } else {
@@ -52,28 +106,45 @@ export default function AtlasResults() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowLeft size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Results</Text>
-        <View style={styles.placeholder} />
-      </View>
-
       <View style={styles.content}>
-        <View style={styles.animationWrapper}>
+        <Animated.View
+          style={[
+            styles.animationWrapper,
+            {
+              transform: [
+                {
+                  scale: scaleAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.45, 1],
+                  }),
+                },
+              ],
+              opacity: opacityAnim,
+            },
+          ]}
+        >
           <LottieView
-            source={require('../../assets/lottie/completed.json')}
-            autoPlay
+            ref={lottieRef}
+            source={require('../../assets/lottie/Check.json')}
+            autoPlay={false}
             loop={false}
-            style={styles.animation}
+            style={styles.lottieOverlay}
+            speed={0.6}
           />
+        </Animated.View>
+        <View style={styles.scoreSection}>
+          <Text style={styles.pointsText}>{displayPoints}</Text>
+          <Text style={styles.label}>Score Achieved</Text>
         </View>
-        <Text style={styles.label}>Score Achieved</Text>
-        <Text style={styles.pointsText}>{displayPoints}</Text>
-        <TouchableOpacity style={styles.primaryButton} onPress={handleDone}>
-          <Text style={styles.primaryButtonText}>Done</Text>
-        </TouchableOpacity>
+        <View style={styles.buttonContainer}>
+          {showDoneButton ? (
+            <TouchableOpacity style={styles.primaryButton} onPress={handleDone}>
+              <Text style={styles.primaryButtonText}>Done</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.buttonPlaceholder} />
+          )}
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -84,26 +155,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1E1E1E',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  backButton: {
-    padding: 8,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-    flex: 1,
-    textAlign: 'center',
-  },
-  placeholder: {
-    width: 40,
-  },
   content: {
     flex: 1,
     alignItems: 'center',
@@ -112,12 +163,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   animationWrapper: {
-    width: 180,
-    height: 180,
+    width: 110,
+    height: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  animation: {
-    width: '100%',
-    height: '100%',
+  lottieOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
   label: {
     fontSize: 14,
@@ -126,12 +178,26 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   pointsText: {
-    fontSize: 44,
+    fontSize: 38,
     fontWeight: '700',
     color: ACCENT,
   },
+  scoreSection: {
+    alignItems: 'center',
+    marginTop: 24,
+    gap: 8,
+  },
+  buttonContainer: {
+    marginTop: 94,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonPlaceholder: {
+    height: 50,
+    width: 100,
+    opacity: 0,
+  },
   primaryButton: {
-    marginTop: 8,
     backgroundColor: ACCENT,
     paddingVertical: 16,
     paddingHorizontal: 32,

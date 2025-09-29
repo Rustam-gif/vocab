@@ -185,13 +185,79 @@ function writeDecisions(cfg, codeFiles, outDir) {
   fs.writeFileSync(path.join(outDir, 'decisions.md'), md, 'utf8');
 }
 
+function writeContextSummary(outDir) {
+  const memoryPath = path.resolve(cwd, 'context-agent/memory.json');
+  const configPath = path.resolve(cwd, 'context-agent/agent-config.json');
+  if (!fs.existsSync(memoryPath)) return;
+
+  let memory;
+  try {
+    memory = JSON.parse(fs.readFileSync(memoryPath, 'utf8'));
+  } catch (err) {
+    console.warn('[docgen] Failed to parse context memory.', err);
+    return;
+  }
+
+  let config = {};
+  if (fs.existsSync(configPath)) {
+    try {
+      config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } catch (err) {
+      console.warn('[docgen] Failed to parse context config.', err);
+    }
+  }
+
+  const lines = ['# Context Agent Memory', ''];
+  if (config.agentName || config.role) {
+    lines.push(`- Agent: ${config.agentName || 'Context Agent'} (${config.role || 'Guide'})`);
+  }
+  if (config.mission) lines.push(`- Mission: ${config.mission}`);
+  lines.push('');
+
+  lines.push('## Goals');
+  if (Array.isArray(memory.goals) && memory.goals.length) {
+    memory.goals.forEach((goal) => {
+      lines.push(`- ${goal.title || goal.detail || JSON.stringify(goal)}`);
+    });
+  } else {
+    lines.push('- (none logged)');
+  }
+
+  lines.push('', '## Decisions');
+  if (Array.isArray(memory.decisions) && memory.decisions.length) {
+    memory.decisions.forEach((decision) => {
+      const when = decision.when ? ` (${decision.when})` : '';
+      lines.push(`- ${decision.title || decision.detail}${when}`);
+    });
+  } else {
+    lines.push('- (none logged)');
+  }
+
+  lines.push('', '## Style Guidance');
+  const styleItems = Array.isArray(memory.style) && memory.style.length ? memory.style : (config.styleRules || []);
+  if (styleItems.length) {
+    styleItems.forEach((item) => {
+      if (typeof item === 'string') {
+        lines.push(`- ${item}`);
+      } else {
+        lines.push(`- ${item.title || 'Style'}: ${item.detail || ''}`);
+      }
+    });
+  } else {
+    lines.push('- (none logged)');
+  }
+
+  fs.writeFileSync(path.join(outDir, 'context-agent.md'), lines.join('\n') + '\n', 'utf8');
+}
+
 function writeIndex(outDir) {
   const lines = [
     '# Project Docs',
     '',
     '- docs/components/: per-file auto-generated notes.',
     '- docs/architecture.md: directory structure overview.',
-    '- docs/decisions.md: ADR-style log from commits and @doc: decision(...) notes.'
+    '- docs/decisions.md: ADR-style log from commits and @doc: decision(...) notes.',
+    '- docs/context-agent.md: snapshot of the persistent project memory.'
   ];
   fs.writeFileSync(path.join(outDir, 'README.md'), lines.join('\n') + '\n', 'utf8');
 }
@@ -228,6 +294,7 @@ function main() {
   fs.writeFileSync(path.join(outDir, 'architecture.md'), arch, 'utf8');
 
   writeDecisions(cfg, codeFiles, outDir);
+  writeContextSummary(outDir);
   writeIndex(outDir);
 }
 

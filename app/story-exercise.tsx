@@ -1,345 +1,267 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  SafeAreaView,
   TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  Modal,
   ScrollView,
-  Animated,
+  ActivityIndicator,
+  TextInput,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Brain, Save, Plus } from 'lucide-react-native';
-import { useAppStore } from '../lib/store';
-import { aiService } from '../services/AIService';
-import { vaultService } from '../services/VaultService';
-import { analyticsService } from '../services/AnalyticsService';
-import { Story, StoryBlank } from '../types';
+import { ArrowLeft, Edit, Sparkles, Layers, ChevronRight } from 'lucide-react-native';
+import { generateStory, StoryLevel } from '../services/StoryGenerator';
+
+const COLORS = {
+  background: '#1E1E1E',
+  surface: '#262626',
+  surfaceAlt: '#2F2F2F',
+  accent: '#F2935C',
+  muted: '#9CA3AF',
+  text: '#FFFFFF',
+};
+
+const DEFAULT_WORDS = ['wake up', 'water', 'family', 'market', 'celebrate'];
+const LEVELS: StoryLevel[] = ['Beginner', 'Intermediate', 'Advanced'];
+const GENRES = ['Slice-of-Life', 'Fantasy', 'Mystery', 'Sci-Fi', 'Historical'];
+const TONES = ['Playful', 'Adventurous', 'Dramatic', 'Humorous', 'Serious'];
 
 export default function StoryExerciseScreen() {
   const router = useRouter();
-  const { words, currentStory, setCurrentStory, saveStory } = useAppStore();
+  const [words, setWords] = useState<string[]>(DEFAULT_WORDS);
+  const [level, setLevel] = useState<StoryLevel>('Beginner');
+  const [genre, setGenre] = useState<string>('Slice-of-Life');
+  const [tone, setTone] = useState<string>('Playful');
   const [loading, setLoading] = useState(false);
-  const [story, setStory] = useState<Story | null>(null);
-  const [blanks, setBlanks] = useState<StoryBlank[]>([]);
-  const [selectedBlank, setSelectedBlank] = useState<StoryBlank | null>(null);
-  const [showWordModal, setShowWordModal] = useState(false);
-  const [score, setScore] = useState(0);
-  const [completedBlanks, setCompletedBlanks] = useState<Set<string>>(new Set());
-  const [floatingAnimations, setFloatingAnimations] = useState<Array<{ id: string; animatedValue: Animated.Value }>>([]);
+  const [rawStory, setRawStory] = useState<string | null>(null);
+  const [storyWithBlanks, setStoryWithBlanks] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [fillMode, setFillMode] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  useEffect(() => {
-    generateStory();
-  }, []);
+  const activeStory = useMemo(() => {
+    if (!rawStory || !storyWithBlanks) return null;
+    return fillMode ? storyWithBlanks : rawStory;
+  }, [rawStory, storyWithBlanks, fillMode]);
 
-  const generateStory = async () => {
-    if (words.length === 0) {
-      Alert.alert('No Words', 'Add some words to your vault first!');
-      router.back();
+  const handleGenerate = async () => {
+    const sanitized = words.map(w => w.trim()).filter(Boolean);
+    if (sanitized.length !== 5) {
+      setError('Please provide exactly five words.');
       return;
     }
 
     setLoading(true);
+    setError(null);
     try {
-      const weakestWords = vaultService.getWeakestWords(5);
-      const generatedStory = await aiService.generateStory(weakestWords);
-      
-      if (generatedStory) {
-        setStory(generatedStory);
-        setCurrentStory(generatedStory);
-        
-        // Create blanks from the story
-        const storyBlanks = createBlanksFromStory(generatedStory, weakestWords);
-        setBlanks(storyBlanks);
-        setCompletedBlanks(new Set());
-        setScore(0);
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to generate story');
+      const result = await generateStory({ words: sanitized, level, genre, tone });
+      setRawStory(result.rawStory);
+    setStoryWithBlanks(result.storyWithBlanks);
+    setIsModalOpen(false);
+  } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setError(message);
     } finally {
       setLoading(false);
     }
   };
 
-  const createBlanksFromStory = (story: Story, words: any[]): StoryBlank[] => {
-    const blanks: StoryBlank[] = [];
-    let position = 0;
-    
-    words.forEach((word, index) => {
-      const blankPosition = story.content.indexOf('●●●●', position);
-      if (blankPosition !== -1) {
-        blanks.push({
-          id: `blank_${index}`,
-          word: word.word,
-          position: blankPosition,
-          candidates: aiService['generateCandidates'](word, words),
-        });
-        position = blankPosition + 4; // Move past the blank
-      }
+  const updateWord = (value: string, idx: number) => {
+    setWords(prev => {
+      const next = [...prev];
+      next[idx] = value;
+      return next;
     });
-    
-    return blanks;
   };
-
-  const handleBlankPress = (blank: StoryBlank) => {
-    setSelectedBlank(blank);
-    setShowWordModal(true);
-  };
-
-  const handleWordSelect = async (selectedWord: string) => {
-    if (!selectedBlank) return;
-
-    const isCorrect = selectedWord === selectedBlank.word;
-    const scoreChange = isCorrect ? 1 : 0;
-    
-    if (isCorrect) {
-      setScore(prev => prev + scoreChange);
-      setCompletedBlanks(prev => new Set([...prev, selectedBlank.id]));
-      
-      // Create floating animation
-      const animatedValue = new Animated.Value(0);
-      const animationId = `anim_${Date.now()}`;
-      
-      setFloatingAnimations(prev => [...prev, { id: animationId, animatedValue }]);
-      
-      Animated.sequence([
-        Animated.timing(animatedValue, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(animatedValue, {
-          toValue: 0,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setFloatingAnimations(prev => prev.filter(anim => anim.id !== animationId));
-      });
-
-      // Update word stats in vault
-      await vaultService.recordPracticeResult(selectedBlank.word, {
-        scoreChange: 1,
-        correct: true,
-        exerciseType: 'story',
-      });
-
-      // Record result
-      await analyticsService.recordResult({
-        wordId: selectedBlank.word,
-        exerciseType: 'story',
-        correct: true,
-        score: 1,
-        timestamp: new Date(),
-      });
-    } else {
-      // Animate word flying to correct blank
-      // This would be implemented with more complex animations
-      Alert.alert('Incorrect', `The correct word is: ${selectedBlank.word}`);
-    }
-
-    setShowWordModal(false);
-    setSelectedBlank(null);
-  };
-
-  const handleSaveStory = async () => {
-    if (!story) return;
-    
-    const completedStory = {
-      ...story,
-      completedAt: new Date(),
-    };
-    
-    await saveStory(completedStory);
-    Alert.alert('Success', 'Story saved to your journal!');
-  };
-
-  const renderStoryWithBlanks = () => {
-    if (!story) return null;
-
-    let content = story.content;
-    const parts = [];
-    let lastIndex = 0;
-
-    // Split content by blanks and create clickable elements
-    blanks.forEach((blank, index) => {
-      const blankStart = content.indexOf('●●●●', lastIndex);
-      if (blankStart !== -1) {
-        // Add text before blank
-        if (blankStart > lastIndex) {
-          parts.push(
-            <Text key={`text_${index}`} style={styles.storyText}>
-              {content.substring(lastIndex, blankStart)}
-            </Text>
-          );
-        }
-
-        // Add clickable blank
-        const isCompleted = completedBlanks.has(blank.id);
-        parts.push(
-          <TouchableOpacity
-            key={`blank_${index}`}
-            style={[
-              styles.blankButton,
-              isCompleted && styles.completedBlank,
-            ]}
-            onPress={() => !isCompleted && handleBlankPress(blank)}
-            disabled={isCompleted}
-          >
-            <Text style={[
-              styles.blankText,
-              isCompleted && styles.completedBlankText,
-            ]}>
-              {isCompleted ? blank.word : '●●●●'}
-            </Text>
-          </TouchableOpacity>
-        );
-
-        lastIndex = blankStart + 4;
-      }
-    });
-
-    // Add remaining text
-    if (lastIndex < content.length) {
-      parts.push(
-        <Text key="text_end" style={styles.storyText}>
-          {content.substring(lastIndex)}
-        </Text>
-      );
-    }
-
-    return <View style={styles.storyContent}>{parts}</View>;
-  };
-
-  const renderFloatingAnimations = () => {
-    return floatingAnimations.map(({ id, animatedValue }) => (
-      <Animated.View
-        key={id}
-        style={[
-          styles.floatingText,
-          {
-            opacity: animatedValue,
-            transform: [
-              {
-                translateY: animatedValue.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, -50],
-                }),
-              },
-            ],
-          },
-        ]}
-      >
-        <Text style={styles.floatingTextContent}>+1</Text>
-      </Animated.View>
-    ));
-  };
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#e28743" />
-          <Text style={styles.loadingText}>Generating your story...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!story) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>No story available</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <ArrowLeft size={24} color="#fff" />
+        <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+          <ArrowLeft size={22} color={COLORS.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Story Exercise</Text>
-        <View style={styles.scoreContainer}>
-          <Text style={styles.scoreText}>Score: {score}</Text>
-        </View>
+        <Text style={styles.headerTitle}>Story Builder</Text>
+        <TouchableOpacity onPress={() => setIsModalOpen(true)} style={styles.iconButton}>
+          <Edit size={22} color={COLORS.text} />
+        </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.storyContainer}>
-          <Text style={styles.storyTitle}>{story.title}</Text>
-          <View style={styles.storyContent}>
-            {renderStoryWithBlanks()}
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.storyCard}>
+          <View style={styles.storyCardHeader}>
+            <View>
+              <Text style={styles.storyTitle}>Your Story</Text>
+              <Text style={styles.storySubtitle}>
+                {rawStory ? `${genre} · ${tone} · ${level}` : 'Tap customize to craft a story.'}
+              </Text>
+            </View>
+            <View style={styles.modeToggle}>
+              <TouchableOpacity
+                style={[styles.modeChip, !fillMode && styles.modeChipActive]}
+                onPress={() => setFillMode(false)}
+              >
+                <Layers size={16} color={!fillMode ? COLORS.background : COLORS.muted} />
+                <Text style={[styles.modeChipText, !fillMode && styles.modeChipTextActive]}>Context</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modeChip, fillMode && styles.modeChipActive]}
+                onPress={() => setFillMode(true)}
+              >
+                <Sparkles size={16} color={fillMode ? COLORS.background : COLORS.muted} />
+                <Text style={[styles.modeChipText, fillMode && styles.modeChipTextActive]}>Fill-in</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
 
-        <View style={styles.instructionsContainer}>
-          <Text style={styles.instructionsText}>
-            Tap the yellow dots to fill in the missing words
-          </Text>
+          <View style={styles.storyBody}>
+            {loading && (
+              <View style={styles.placeholder}>
+                <ActivityIndicator color={COLORS.accent} />
+                <Text style={styles.placeholderText}>Spinning a new story…</Text>
+              </View>
+            )}
+
+            {!loading && activeStory && (
+              <Text style={styles.storyText}>{activeStory}</Text>
+            )}
+
+            {!loading && !activeStory && (
+              <View style={styles.placeholder}>
+                <Text style={styles.placeholderText}>No story yet. Customize one to begin.</Text>
+              </View>
+            )}
+
+            {error && (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+          </View>
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={generateStory}
-        >
-          <Brain size={20} color="#fff" />
-          <Text style={styles.actionButtonText}>New Story</Text>
+        <TouchableOpacity style={styles.secondaryButton} onPress={() => router.push('/vault')}>
+          <Text style={styles.secondaryButtonText}>Add Words from Vault</Text>
+          <ChevronRight size={18} color={COLORS.accent} />
         </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.actionButton, styles.saveButton]}
-          onPress={handleSaveStory}
-        >
-          <Save size={20} color="#fff" />
-          <Text style={styles.actionButtonText}>Save Story</Text>
+        <TouchableOpacity style={styles.primaryButton} onPress={() => setIsModalOpen(true)}>
+          <Text style={styles.primaryButtonText}>Customize Story</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Word Selection Modal */}
-      <Modal
-        visible={showWordModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowWordModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Choose the correct word</Text>
-            <View style={styles.wordOptionsContainer}>
-              {selectedBlank?.candidates.map((word, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={styles.wordOption}
-                  onPress={() => handleWordSelect(word)}
-                >
-                  <Text style={styles.wordOptionText}>{word}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setShowWordModal(false)}
-            >
-              <Text style={styles.closeButtonText}>Close</Text>
+      <Modal visible={isModalOpen} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setIsModalOpen(false)} style={styles.modalIconButton}>
+              <ArrowLeft size={20} color={COLORS.text} />
             </TouchableOpacity>
+            <Text style={styles.modalHeaderTitle}>Customize Story</Text>
+            <View style={{ width: 36 }} />
           </View>
-        </View>
-      </Modal>
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <ScrollView
+              contentContainerStyle={styles.modalContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.settingsGroup}>
+                <Text style={styles.sectionLabel}>Vocabulary Words</Text>
+                <View style={styles.wordsGrid}>
+                  {words.map((word, idx) => (
+                    <View key={idx} style={styles.wordCell}>
+                      <Text style={styles.inputLabel}>Word {idx + 1}</Text>
+                      <TextInput
+                        value={word}
+                        onChangeText={value => updateWord(value, idx)}
+                        placeholder={`Word ${idx + 1}`}
+                        placeholderTextColor={COLORS.muted}
+                        style={styles.input}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                      />
+                    </View>
+                  ))}
+                </View>
+                <TouchableOpacity
+                  style={styles.inlineLink}
+                  onPress={() => {
+                    setIsModalOpen(false);
+                    router.push('/vault');
+                  }}
+                >
+                  <Text style={styles.inlineLinkText}>Browse words in Vault</Text>
+                </TouchableOpacity>
+              </View>
 
-      {/* Floating Animations */}
-      {renderFloatingAnimations()}
+              <View style={styles.settingsGroup}>
+                <Text style={styles.sectionLabel}>Level</Text>
+                <View style={styles.pillRow}>
+                  {LEVELS.map(option => (
+                    <TouchableOpacity
+                      key={option}
+                      style={[styles.pill, level === option && styles.pillActive]}
+                      onPress={() => setLevel(option)}
+                    >
+                      <Text style={[styles.pillText, level === option && styles.pillTextActive]}>{option}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.settingsGroup}>
+                <Text style={styles.sectionLabel}>Genre</Text>
+                <View style={styles.pillRow}>
+                  {GENRES.map(option => (
+                    <TouchableOpacity
+                      key={option}
+                      style={[styles.pill, genre === option && styles.pillActive]}
+                      onPress={() => setGenre(option)}
+                    >
+                      <Text style={[styles.pillText, genre === option && styles.pillTextActive]}>{option}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.settingsGroup}>
+                <Text style={styles.sectionLabel}>Tone</Text>
+                <View style={styles.pillRow}>
+                  {TONES.map(option => (
+                    <TouchableOpacity
+                      key={option}
+                      style={[styles.pill, tone === option && styles.pillActive]}
+                      onPress={() => setTone(option)}
+                    >
+                      <Text style={[styles.pillText, tone === option && styles.pillTextActive]}>{option}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={styles.modalSecondary} onPress={() => setIsModalOpen(false)}>
+                  <Text style={styles.modalSecondaryText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalPrimary} onPress={handleGenerate} disabled={loading}>
+                  {loading ? (
+                    <ActivityIndicator color={COLORS.background} />
+                  ) : (
+                    <Text style={styles.modalPrimaryText}>Generate Story</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -347,26 +269,7 @@ export default function StoryExerciseScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#a0a0a0',
-    marginTop: 16,
-    fontSize: 16,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorText: {
-    color: '#a0a0a0',
-    fontSize: 16,
+    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: 'row',
@@ -374,162 +277,262 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2c2f2f',
   },
-  backButton: {
+  iconButton: {
     padding: 8,
+    borderRadius: 12,
+    backgroundColor: '#242424',
   },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  scoreContainer: {
-    padding: 8,
-  },
-  scoreText: {
-    fontSize: 16,
+  headerTitle: {
+    color: COLORS.text,
+    fontSize: 18,
     fontWeight: '600',
-    color: '#e28743',
   },
   content: {
-    flex: 1,
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 120,
   },
-  storyContainer: {
-    backgroundColor: '#2c2f2f',
-    borderRadius: 12,
+  storyCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
     padding: 20,
-    marginBottom: 20,
+    gap: 16,
+  },
+  storyCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
   },
   storyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 16,
-    textAlign: 'center',
+    color: COLORS.text,
+    fontSize: 20,
+    fontWeight: '700',
   },
-  storyContent: {
+  storySubtitle: {
+    color: COLORS.muted,
+    marginTop: 4,
+    fontSize: 13,
+  },
+  modeToggle: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    gap: 8,
+  },
+  modeChip: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#2D2D2D',
+  },
+  modeChipActive: {
+    backgroundColor: COLORS.accent,
+  },
+  modeChipText: {
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modeChipTextActive: {
+    color: COLORS.background,
+  },
+  storyBody: {
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: 16,
+    padding: 16,
+    minHeight: 220,
   },
   storyText: {
-    fontSize: 18,
-    lineHeight: 28,
-    color: '#e0e0e0',
+    color: COLORS.text,
+    fontSize: 15,
+    lineHeight: 22,
   },
-  blankButton: {
-    backgroundColor: '#F2AB27',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    marginHorizontal: 2,
+  placeholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 12,
   },
-  completedBlank: {
-    backgroundColor: '#4CAF50',
+  placeholderText: {
+    color: COLORS.muted,
+    fontSize: 14,
+    textAlign: 'center',
   },
-  blankText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  completedBlankText: {
-    color: '#fff',
-  },
-  instructionsContainer: {
-    backgroundColor: '#2c2f2f',
+  errorBanner: {
+    marginTop: 16,
+    padding: 12,
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
+    backgroundColor: '#442727',
   },
-  instructionsText: {
-    fontSize: 16,
-    color: '#a0a0a0',
+  errorText: {
+    color: '#FCA5A5',
+    fontSize: 13,
     textAlign: 'center',
   },
   footer: {
-    flexDirection: 'row',
-    padding: 20,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    backgroundColor: COLORS.background,
     gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#2c2f2f',
   },
-  actionButton: {
-    flex: 1,
-    backgroundColor: '#e28743',
+  secondaryButton: {
+    backgroundColor: COLORS.surface,
+    paddingVertical: 14,
+    borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#323232',
   },
-  saveButton: {
-    backgroundColor: '#4CAF50',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 16,
+  secondaryButtonText: {
+    color: COLORS.accent,
+    fontSize: 15,
     fontWeight: '600',
-    marginLeft: 8,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
+  primaryButton: {
+    backgroundColor: COLORS.accent,
+    borderRadius: 16,
+    paddingVertical: 16,
     alignItems: 'center',
+  },
+  primaryButtonText: {
+    color: COLORS.background,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  modalIconButton: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: '#242424',
+  },
+  modalHeaderTitle: {
+    color: COLORS.text,
+    fontSize: 17,
+    fontWeight: '600',
   },
   modalContent: {
-    backgroundColor: '#2c2f2f',
-    borderRadius: 16,
-    padding: 24,
-    width: '90%',
-    maxWidth: 400,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    gap: 20,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 20,
-    textAlign: 'center',
+  settingsGroup: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 18,
+    padding: 16,
+    gap: 14,
   },
-  wordOptionsContainer: {
+  wordsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
   },
-  wordOption: {
-    backgroundColor: '#3A3A3A',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
+  wordCell: {
+    width: '48%',
+    gap: 6,
   },
-  wordOptionText: {
-    color: '#fff',
-    fontSize: 16,
+  sectionLabel: {
+    color: COLORS.text,
+    fontSize: 15,
     fontWeight: '600',
   },
-  closeButton: {
-    backgroundColor: '#444',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 16,
-    alignItems: 'center',
+  inputBlock: {
+    gap: 6,
   },
-  closeButtonText: {
-    color: '#fff',
-    fontSize: 16,
+  inputLabel: {
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  input: {
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#3A3A3A',
+    color: COLORS.text,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  inlineLink: {
+    alignSelf: 'flex-start',
+  },
+  inlineLinkText: {
+    color: COLORS.accent,
+    fontSize: 13,
     fontWeight: '600',
   },
-  floatingText: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    zIndex: 1000,
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  floatingTextContent: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#4CAF50',
+  pill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#3A3A3A',
+  },
+  pillActive: {
+    backgroundColor: 'rgba(242, 147, 92, 0.12)',
+    borderColor: COLORS.accent,
+  },
+  pillText: {
+    color: COLORS.muted,
+    fontSize: 13,
+  },
+  pillTextActive: {
+    color: COLORS.accent,
+    fontWeight: '600',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalSecondary: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#3A3A3A',
+    alignItems: 'center',
+  },
+  modalSecondaryText: {
+    color: COLORS.muted,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  modalPrimary: {
+    flex: 1,
+    borderRadius: 14,
+    paddingVertical: 14,
+    backgroundColor: COLORS.accent,
+    alignItems: 'center',
+  },
+  modalPrimaryText: {
+    color: COLORS.background,
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

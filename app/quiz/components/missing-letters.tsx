@@ -363,7 +363,7 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
       </View>
 
       {completed && (
-        <TouchableOpacity onPress={onNext} style={[themeStyles.button, { alignSelf: 'center', marginTop: 16 }]}> 
+        <TouchableOpacity onPress={onNext} style={[themeStyles.button, themeStyles.continueButton]}> 
           <Text style={themeStyles.buttonText}>Continue</Text>
         </TouchableOpacity>
       )}
@@ -419,6 +419,7 @@ const darkStyles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
+    marginTop: 40,
     marginBottom: 18,
   },
   clue: {
@@ -433,11 +434,13 @@ const darkStyles = StyleSheet.create({
     fontSize: 14,
   },
   slotsRow: {
+    position: 'absolute',
+    bottom: 360,
+    left: 20,
+    right: 20,
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    marginTop: 10,
-    marginBottom: 12,
     gap: 8,
   },
   slot: {
@@ -466,6 +469,13 @@ const darkStyles = StyleSheet.create({
     paddingHorizontal: 32,
     borderRadius: 12,
     alignItems: 'center',
+  },
+  continueButton: {
+    position: 'absolute',
+    bottom: 250,
+    alignSelf: 'center',
+    left: '50%',
+    transform: [{ translateX: -50 }],
   },
   buttonText: {
     color: COLORS.text,

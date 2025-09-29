@@ -61,10 +61,10 @@ export default function HomeScreen() {
         },
         {
           title: 'Story Exercise',
-          subtitle: 'AI-powered story practice',
+          subtitle: 'Fill-in-the-blanks with pill UI',
           icon: FileText,
           color: accent,
-          onPress: () => router.push('/story-exercise'),
+          onPress: () => router.push('/story/StoryExercise'),
         },
       ],
     },

@@ -6,6 +6,7 @@ import { levels, Level, Set } from './data/levels';
 import SetCard from './components/SetCard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+import ProgressService from '../../services/ProgressService';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 
@@ -39,16 +40,44 @@ export default function LearnScreen() {
   );
 
   useEffect(() => {
-    if (!activeLevelId) {
-      setCurrentLevel(null);
-      return;
-    }
-    const level = levels.find(l => l.id === activeLevelId);
-    if (level) {
-      setCurrentLevel(level);
-      const completed = level.sets.filter(s => s.completed).length;
-      setProgress({ completed, total: level.sets.length });
-    }
+    const loadLevelWithProgress = async () => {
+      if (!activeLevelId) {
+        setCurrentLevel(null);
+        return;
+      }
+      
+      const level = levels.find(l => l.id === activeLevelId);
+      if (level) {
+        // Initialize ProgressService and get progress data
+        const progressService = ProgressService.getInstance();
+        await progressService.initialize();
+        
+        // TEMPORARY: Clear test data - ALREADY RUN, COMMENTED OUT
+        // await AsyncStorage.removeItem('set_progress');
+        // await AsyncStorage.removeItem('user_progress');
+        
+        // Merge sets with progress data
+        const setsWithProgress = await Promise.all(
+          level.sets.map(async (set) => {
+            const setProgress = await progressService.getSetProgress(`${set.id}`);
+            return {
+              ...set,
+              completed: setProgress?.completed || set.completed,
+              inProgress: setProgress ? (!setProgress.completed && setProgress.attempts > 0) : set.inProgress,
+              score: setProgress?.bestScore || set.score
+            };
+          })
+        );
+        
+        const levelWithProgress = { ...level, sets: setsWithProgress };
+        setCurrentLevel(levelWithProgress);
+        
+        const completed = setsWithProgress.filter(s => s.completed).length;
+        setProgress({ completed, total: setsWithProgress.length });
+      }
+    };
+    
+    loadLevelWithProgress();
   }, [activeLevelId]);
 
   const handleSetPress = (set: Set) => {
@@ -179,26 +208,18 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   levelInfo: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#2C2C2C',
     margin: 20,
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    borderRadius: 12,
+    padding: 16,
   },
   levelHeader: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   levelIcon: {
-    fontSize: 32,
-    marginRight: 16,
+    fontSize: 40,
+    marginRight: 20,
   },
   levelDetails: {
     flex: 1,
@@ -207,23 +228,26 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     color: '#fff',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   levelCefr: {
     fontSize: 14,
     color: '#F2935C',
-    fontWeight: '500',
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   changeButton: {
-    backgroundColor: '#333',
+    backgroundColor: 'transparent',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#F2935C',
   },
   changeButtonText: {
+    color: '#F2935C',
     fontSize: 12,
     fontWeight: '500',
-    color: '#fff',
   },
   progressContainer: {
     marginHorizontal: 20,

@@ -8,6 +8,8 @@ import {
   Animated,
 } from 'react-native';
 import { ArrowLeft, ArrowRight, Volume2, Bookmark, Check, Sparkles } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { useAppStore } from '../../../lib/store';
 import { levels } from '../data/levels';
 
 interface WordIntroProps {
@@ -32,6 +34,8 @@ const CARD_SPACING = 16;
 const SIDE_PADDING = Math.round((SCREEN_WIDTH - CARD_WIDTH) / 2);
 
 export default function WordIntroComponent({ setId, levelId, onComplete }: WordIntroProps) {
+  const router = useRouter();
+  const { addWord } = useAppStore();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [words, setWords] = useState<Word[]>([]);
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
@@ -85,20 +89,39 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
     }
   };
 
-  const handleSaveWord = async (word: string) => {
-    if (savingWords.has(word) || savedWords.has(word)) return;
+  const handleSaveWord = async (wordText: string) => {
+    if (savingWords.has(wordText) || savedWords.has(wordText)) return;
 
-    setSavingWords(prev => new Set(prev).add(word));
+    setSavingWords(prev => new Set(prev).add(wordText));
     
-    // Simulate save operation
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    setSavedWords(prev => new Set(prev).add(word));
-    setSavingWords(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(word);
-      return newSet;
-    });
+    try {
+      // Find the full word data
+      const wordData = words.find(w => w.word === wordText);
+      if (wordData) {
+        // Save to store
+        await addWord({
+          word: wordData.word,
+          definition: wordData.definition,
+          example: wordData.example,
+          phonetics: wordData.phonetic,
+          notes: '',
+          tags: [],
+        });
+        
+        setSavedWords(prev => new Set(prev).add(wordText));
+        
+        // Don't navigate - let user continue their lesson
+        // The word is now saved and will show as saved (checkmark instead of bookmark)
+      }
+    } catch (error) {
+      console.error('Failed to save word:', error);
+    } finally {
+      setSavingWords(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(wordText);
+        return newSet;
+      });
+    }
   };
 
   const handleStartPractice = () => {
