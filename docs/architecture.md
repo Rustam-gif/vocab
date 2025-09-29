@@ -33,12 +33,16 @@ Directories and files discovered under configured roots:
 - app/quiz/data
   - levels.ts
   - sentence-best.ts
+- app/story
+  - StoryExercise.tsx
+  - _layout.tsx
 - lib
   - store.ts
 - services
   - AIService.ts
   - AnalyticsService.ts
   - ProgressService.ts
+  - StoryGenerator.ts
   - VaultService.ts
 
 ## Build & Run
@@ -48,4 +52,6 @@ Directories and files discovered under configured roots:
   - ios: expo run:ios
   - web: expo start --web
   - docgen: node scripts/docgen.mjs
+  - server: node server/index.mjs
+  - dev: concurrently "npm run server" "npm run start"
   - postinstall: node -e "try{require('fs').unlinkSync('node_modules/expo-router/ios/ExpoHead.podspec')}catch(e){}"

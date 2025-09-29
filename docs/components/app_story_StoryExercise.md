@@ -1,8 +1,8 @@
 # StoryExerciseScreen
-File: app/story-exercise.tsx
+File: app/story/StoryExercise.tsx
 
 ## Props
-- (none detected)
+- style
 
 ## Notes
 - (none)

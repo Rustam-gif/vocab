@@ -1,5 +1,5 @@
-# StoryExerciseScreen
-File: app/story-exercise.tsx
+# StoryLayout
+File: app/story/_layout.tsx
 
 ## Props
 - (none detected)

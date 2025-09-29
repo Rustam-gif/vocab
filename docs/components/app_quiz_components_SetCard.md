@@ -10,6 +10,7 @@ File: app/quiz/components/SetCard.tsx
 - description
 - completed
 - inProgress
+- score
 - onPress
 
 ## Notes

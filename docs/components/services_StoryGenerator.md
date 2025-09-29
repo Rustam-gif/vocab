@@ -1,5 +1,5 @@
-# StoryExerciseScreen
-File: app/story-exercise.tsx
+# StoryGenerator
+File: services/StoryGenerator.ts
 
 ## Props
 - (none detected)
