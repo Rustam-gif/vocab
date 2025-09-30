@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { levels } from '../data/levels';
+import { analyticsService } from '../../../services/AnalyticsService';
 
 interface MCQProps {
   setId: string;
@@ -56,6 +57,7 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
   const slideAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const deductionAnim = useRef(new Animated.Value(0)).current;
+  const questionStartRef = useRef<number>(Date.now());
 
   useEffect(() => {
     console.log('MCQComponent - useEffect triggered:', { setId, levelId });
@@ -114,6 +116,7 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
     setQuestions(generatedQuestions);
     setDisplayScore(sharedScore);
     setPhaseCorrect(0);
+    questionStartRef.current = Date.now();
   };
 
 const generateDistractor = (correctDef: string, type: string): string => {
@@ -150,6 +153,19 @@ const generateDistractor = (correctDef: string, type: string): string => {
     const correct = answerIndex === questions[currentWordIndex].correctAnswer;
     setIsCorrect(correct);
     setShowFeedback(true);
+
+    // Track analytics for this question
+    try {
+      const timeSpent = Math.max(0, Math.round((Date.now() - questionStartRef.current) / 1000));
+      analyticsService.recordResult({
+        wordId: questions[currentWordIndex]?.word || String(currentWordIndex + 1),
+        exerciseType: 'mcq',
+        correct,
+        timeSpent,
+        timestamp: new Date(),
+        score: correct ? 1 : 0,
+      });
+    } catch {}
 
     if (correct) {
       setPhaseCorrect(prev => prev + 1);
@@ -190,6 +206,7 @@ const generateDistractor = (correctDef: string, type: string): string => {
     setSelectedAnswer(null);
     setShowFeedback(false);
     setIsAnswered(false);
+    questionStartRef.current = Date.now();
 
     Animated.timing(progressAnim, {
       toValue: (currentWordIndex + 1) / questions.length,

@@ -58,6 +58,15 @@ export interface ExerciseResult {
   score?: number;
 }
 
+// Aggregated analytics snapshot used by Stats screen
+export interface AnalyticsData {
+  accuracyByType: Record<string, number>;
+  accuracyTrend: Array<{ date: string; accuracy: number }>;
+  overallAccuracy: number;
+  streak: number;
+  personalBest: number;
+}
+
 export interface ExercisePerformance {
   wordId: string;
   exerciseType: string;

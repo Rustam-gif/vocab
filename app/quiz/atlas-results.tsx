@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Animated, Easing } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import LottieView from 'lottie-react-native';
+import { BookOpen, CheckCircle } from 'lucide-react-native';
 import ProgressService from '../../services/ProgressService';
+import { levels } from './data/levels';
 
 const ACCENT = '#F2935C';
 const CORRECT_COLOR = '#437F76';
@@ -28,9 +30,26 @@ export default function AtlasResults() {
 
   const [displayPoints, setDisplayPoints] = useState(0);
   const [showDoneButton, setShowDoneButton] = useState(false);
+  const [hideLottie, setHideLottie] = useState(false);
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const buttonsOpacity = useRef(new Animated.Value(0)).current;
+  const buttonsTranslateY = useRef(new Animated.Value(8)).current;
   const lottieRef = useRef<LottieView>(null);
+  const lottieStarted = useRef(false);
+  const playLottieFromStart = useCallback(() => {
+    // Ensure we start exactly at frame 0 every time and only once
+    if (lottieStarted.current) return;
+    lottieStarted.current = true;
+    try {
+      lottieRef.current?.reset?.();
+      // Defer to next frame to ensure layout is ready
+      requestAnimationFrame(() => {
+        // Play full animation from start; no hard-coded end frame
+        lottieRef.current?.play?.();
+      });
+    } catch {}
+  }, []);
 
   useEffect(() => {
     setDisplayPoints(0);
@@ -65,18 +84,42 @@ export default function AtlasResults() {
       }),
     ]);
     
+    // Reset visibility/animation states on enter
+    setHideLottie(false);
+    lottieStarted.current = false;
+
     sequence.start(() => {
-      lottieRef.current?.reset?.();
-      lottieRef.current?.play?.();
+      // Start from the beginning reliably
+      playLottieFromStart();
     });
     
-    // Show Done button after 2 seconds
-    const buttonTimer = setTimeout(() => {
-      setShowDoneButton(true);
-    }, 2000);
-    
-    return () => clearTimeout(buttonTimer);
-  }, [scaleAnim, opacityAnim]);
+    return () => {
+      // Cleanup animation state so next mount is fresh
+      try { lottieRef.current?.reset?.(); } catch {}
+    };
+  }, [scaleAnim, opacityAnim, playLottieFromStart]);
+
+  // Animate buttons in smoothly once they are revealed
+  useEffect(() => {
+    if (showDoneButton) {
+      buttonsOpacity.setValue(0);
+      buttonsTranslateY.setValue(8);
+      Animated.parallel([
+        Animated.timing(buttonsOpacity, {
+          toValue: 1,
+          duration: 280,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(buttonsTranslateY, {
+          toValue: 0,
+          duration: 280,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [showDoneButton, buttonsOpacity, buttonsTranslateY]);
 
   const handleDone = async () => {
     // Save the score to ProgressService
@@ -96,7 +139,7 @@ export default function AtlasResults() {
       }
     }
 
-    // Navigate back to learn screen
+    // Go to Learn section for the same level; replace history to avoid back to results
     if (levelId) {
       router.replace(`/quiz/learn?level=${levelId}`);
     } else {
@@ -104,45 +147,118 @@ export default function AtlasResults() {
     }
   };
 
+  const handleCreateStory = () => {
+    // Find the set and extract words
+    if (!setId || !levelId) return;
+    
+    const level = levels.find(l => l.id === levelId);
+    if (!level) return;
+    
+    const set = level.sets.find(s => String(s.id) === String(setId));
+    if (!set || !set.words || set.words.length === 0) return;
+
+    // Use ALL words from the set; trim, filter empties, and de-duplicate
+    const wordsToUse = Array.from(
+      new Set(
+        set.words
+          .map(w => (typeof w.word === 'string' ? w.word.trim() : ''))
+          .filter(Boolean)
+      )
+    );
+    
+    // Navigate to story exercise with words as query params
+    router.push({
+      pathname: '/story/StoryExercise',
+      params: { words: wordsToUse.join(',') }
+    });
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        <Animated.View
-          style={[
-            styles.animationWrapper,
-            {
-              transform: [
-                {
-                  scale: scaleAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.45, 1],
-                  }),
-                },
-              ],
-              opacity: opacityAnim,
-            },
-          ]}
-        >
-          <LottieView
-            ref={lottieRef}
-            source={require('../../assets/lottie/Check.json')}
-            autoPlay={false}
-            loop={false}
-            style={styles.lottieOverlay}
-            speed={0.6}
-          />
-        </Animated.View>
+        {!hideLottie ? (
+          <Animated.View
+            style={[
+              styles.animationWrapper,
+              {
+                transform: [
+                  {
+                    scale: scaleAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.45, 1],
+                    }),
+                  },
+                ],
+                opacity: opacityAnim,
+              },
+            ]}
+          >
+            <LottieView
+              ref={lottieRef}
+              source={require('../../assets/lottie/Check.json')}
+              autoPlay={false}
+              loop={false}
+              style={styles.lottieAnimation}
+              speed={0.6}
+              resizeMode="contain"
+              onLayout={playLottieFromStart}
+              onAnimationFinish={() => {
+                setHideLottie(true);
+                setShowDoneButton(true);
+              }}
+            />
+          </Animated.View>
+        ) : (
+          <Animated.View
+            style={[
+              styles.animationWrapper,
+              {
+                transform: [
+                  {
+                    scale: scaleAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.45, 1],
+                    }),
+                  },
+                ],
+                opacity: opacityAnim,
+              },
+            ]}
+          >
+            <CheckCircle size={72} color={CORRECT_COLOR} />
+          </Animated.View>
+        )}
         <View style={styles.scoreSection}>
           <Text style={styles.pointsText}>{displayPoints}</Text>
           <Text style={styles.label}>Score Achieved</Text>
         </View>
         <View style={styles.buttonContainer}>
           {showDoneButton ? (
-            <TouchableOpacity style={styles.primaryButton} onPress={handleDone}>
-              <Text style={styles.primaryButtonText}>Done</Text>
-            </TouchableOpacity>
+            <Animated.View
+              style={[
+                styles.buttonsAnimated,
+                { opacity: buttonsOpacity, transform: [{ translateY: buttonsTranslateY }] },
+              ]}
+            >
+              <TouchableOpacity style={styles.primaryButton} onPress={handleDone}>
+                <Text style={styles.primaryButtonText}>Done</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.storyButton} onPress={handleCreateStory}>
+                <BookOpen size={22} color="#FFFFFF" />
+                <Text style={styles.storyButtonText}>Create Story with These Words</Text>
+              </TouchableOpacity>
+            </Animated.View>
           ) : (
-            <View style={styles.buttonPlaceholder} />
+            // Render invisible buttons to reserve exact layout space and prevent content shift
+            <View style={styles.ghostContainer} pointerEvents="none">
+              <View style={[styles.primaryButton, styles.ghost]}>
+                <Text style={[styles.primaryButtonText, styles.ghostText]}>Done</Text>
+              </View>
+              <View style={[styles.storyButton, styles.ghost]}>
+                <BookOpen size={22} color="#FFFFFF" />
+                <Text style={[styles.storyButtonText, styles.ghostText]}>Create Story with These Words</Text>
+              </View>
+            </View>
           )}
         </View>
       </View>
@@ -167,9 +283,11 @@ const styles = StyleSheet.create({
     height: 110,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
-  lottieOverlay: {
-    ...StyleSheet.absoluteFillObject,
+  lottieAnimation: {
+    width: 110,
+    height: 110,
   },
   label: {
     fontSize: 14,
@@ -191,20 +309,58 @@ const styles = StyleSheet.create({
     marginTop: 94,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 16,
+    width: '100%',
   },
-  buttonPlaceholder: {
-    height: 50,
-    width: 100,
+  ghostContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    width: '100%',
+  },
+  buttonsAnimated: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    width: '100%',
+  },
+  ghost: {
     opacity: 0,
+  },
+  ghostText: {
+    color: 'transparent',
   },
   primaryButton: {
     backgroundColor: ACCENT,
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 18,
+    minWidth: 200,
+    alignItems: 'center',
   },
   primaryButtonText: {
     fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  storyButton: {
+    backgroundColor: '#437F76',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    minWidth: 280,
+    shadowColor: '#437F76',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  storyButtonText: {
+    fontSize: 15,
     fontWeight: '600',
     color: '#FFFFFF',
   },

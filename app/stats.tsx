@@ -6,10 +6,11 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, BarChart3, TrendingUp, Target, Award } from 'lucide-react-native';
+import { ArrowLeft, BarChart3, TrendingUp, CalendarDays, Award } from 'lucide-react-native';
 import { useAppStore } from '../lib/store';
 import { analyticsService } from '../services/AnalyticsService';
 
@@ -167,19 +168,10 @@ export default function StatsScreen() {
 
   const renderSummaryCards = () => {
     if (!analytics || !stats) return null;
-
+    const counts = analyticsService.getTodayAndTotalCounts();
+    const recordStreak = analyticsService.getRecordStreak();
     return (
       <View style={styles.summaryContainer}>
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryIcon}>
-            <Target size={24} color="#e28743" />
-          </View>
-          <View style={styles.summaryContent}>
-            <Text style={styles.summaryValue}>{analytics.overallAccuracy}%</Text>
-            <Text style={styles.summaryLabel}>Overall Accuracy</Text>
-          </View>
-        </View>
-
         <View style={styles.summaryCard}>
           <View style={styles.summaryIcon}>
             <TrendingUp size={24} color="#4CAF50" />
@@ -192,11 +184,11 @@ export default function StatsScreen() {
 
         <View style={styles.summaryCard}>
           <View style={styles.summaryIcon}>
-            <Award size={24} color="#F2AB27" />
+            <CalendarDays size={24} color="#F2AB27" />
           </View>
           <View style={styles.summaryContent}>
-            <Text style={styles.summaryValue}>{analytics.personalBest}%</Text>
-            <Text style={styles.summaryLabel}>Personal Best</Text>
+            <Text style={styles.summaryValue}>{counts.today}</Text>
+            <Text style={styles.summaryLabel}>Exercises Today</Text>
           </View>
         </View>
 
@@ -205,8 +197,18 @@ export default function StatsScreen() {
             <BarChart3 size={24} color="#2196F3" />
           </View>
           <View style={styles.summaryContent}>
-            <Text style={styles.summaryValue}>{stats.totalExercises}</Text>
-            <Text style={styles.summaryLabel}>Exercises Done</Text>
+            <Text style={styles.summaryValue}>{counts.total}</Text>
+            <Text style={styles.summaryLabel}>Exercises Overall</Text>
+          </View>
+        </View>
+
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryIcon}>
+            <Award size={24} color="#e28743" />
+          </View>
+          <View style={styles.summaryContent}>
+            <Text style={styles.summaryValue}>{recordStreak}</Text>
+            <Text style={styles.summaryLabel}>Record Streak</Text>
           </View>
         </View>
       </View>
@@ -223,7 +225,30 @@ export default function StatsScreen() {
           <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.title}>Analytics</Text>
-        <View style={styles.placeholder} />
+        <TouchableOpacity
+          style={styles.resetButton}
+          onPress={async () => {
+            Alert.alert('Reset analytics?', 'This will clear your local analytics history.', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Reset',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await analyticsService.clearData();
+                    await loadAnalytics();
+                    const exerciseStats = analyticsService.getExerciseStats();
+                    setStats(exerciseStats);
+                  } catch (e) {
+                    console.error('Failed to reset analytics:', e);
+                  }
+                },
+              },
+            ]);
+          }}
+        >
+          <Text style={styles.resetText}>Reset</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -260,6 +285,18 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 40,
+  },
+  resetButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e05f2a',
+  },
+  resetText: {
+    color: '#e05f2a',
+    fontSize: 12,
+    fontWeight: '600',
   },
   content: {
     flex: 1,

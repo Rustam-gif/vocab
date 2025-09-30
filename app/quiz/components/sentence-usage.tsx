@@ -10,6 +10,7 @@ import {
   TextStyle,
 } from 'react-native';
 import { Vibration } from 'react-native';
+import { analyticsService } from '../../../services/AnalyticsService';
 
 const ACCENT_COLOR = '#F2935C';
 const CORRECT_COLOR = '#437F76';
@@ -108,6 +109,7 @@ export default function SentenceUsageComponent({ onPhaseComplete, sharedScore, o
   const [displayScore, setDisplayScore] = useState(sharedScore);
   const pendingScoreRef = useRef<number | null>(null);
   const deductionAnim = useRef(new Animated.Value(0)).current;
+  const itemStartRef = useRef<number>(Date.now());
 
   const item = useMemo(() => ITEMS[index], [index]);
 
@@ -121,6 +123,7 @@ export default function SentenceUsageComponent({ onPhaseComplete, sharedScore, o
     setOptions(shuffled);
     setSelected(null);
     setRevealed(false);
+    itemStartRef.current = Date.now();
   }, [item]);
 
   useEffect(() => {
@@ -163,6 +166,19 @@ export default function SentenceUsageComponent({ onPhaseComplete, sharedScore, o
     }
 
     setRevealed(true);
+
+    // Track analytics for this item
+    try {
+      const timeSpent = Math.max(0, Math.round((Date.now() - itemStartRef.current) / 1000));
+      analyticsService.recordResult({
+        wordId: item.word,
+        exerciseType: 'usage',
+        correct: chosen.isCorrect,
+        timeSpent,
+        timestamp: new Date(),
+        score: chosen.isCorrect ? 1 : 0,
+      });
+    } catch {}
   };
 
   const handleNext = () => {
@@ -172,6 +188,7 @@ export default function SentenceUsageComponent({ onPhaseComplete, sharedScore, o
       onPhaseComplete(correctCount, ITEMS.length);
     } else {
       setIndex(prev => prev + 1);
+      itemStartRef.current = Date.now();
     }
   };
 

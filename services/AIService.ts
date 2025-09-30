@@ -203,19 +203,19 @@ class AIService {
       tone?: 'playful' | 'dramatic' | 'serious' | 'humorous' | 'wistful';
     }
   ): Promise<Story> {
-    const genre = customization?.genre ?? 'fantasy';
-    const difficulty = customization?.difficulty ?? 'medium';
-    const tone = customization?.tone ?? (genre === 'comedy' ? 'humorous' : 'dramatic');
-    const length = customization?.length ?? 'medium';
+    const genre = customization?.genre ?? 'adventure';
+    const difficulty = customization?.difficulty ?? 'easy';
+    const tone = customization?.tone ?? 'casual';
+    const length = customization?.length ?? 'short';
 
     const lengthDescription = {
-      short: 'roughly one hundred and thirty words across two to three paragraphs',
+      short: 'EXACTLY 100-120 words total (strictly enforce this limit) across two paragraphs',
       medium: 'roughly one hundred and eighty words across three paragraphs',
       long: 'roughly two hundred and ten words across three to four paragraphs',
     }[length];
 
     const difficultyDescription = {
-      easy: 'Use CEFR A1–A2 English with clear language, simple sentence structures, and direct vocabulary choices.',
+      easy: 'Use STRICTLY CEFR A1 English level ONLY. Write in a casual, conversational style with very simple present tense sentences, basic vocabulary (everyday words), short sentences (5-8 words), and elementary grammar. Keep the tone friendly and easy-going. Avoid complex words, idioms, or advanced structures.',
       medium: 'Use varied sentence structures and rich but accessible vocabulary.',
       hard: 'Use sophisticated sentence structures and advanced vocabulary while staying coherent.',
     }[difficulty];
@@ -253,9 +253,9 @@ class AIService {
       .map((w, index) => `${index + 1}. ${w.word} — ${w.definition || 'no definition provided'}`)
       .join('\n');
 
-    const systemPrompt = `You are a master storyteller who writes vivid, original narratives on demand. Always respond with valid JSON using the structure:\n{\n  "id": string,\n  "title": string,\n  "content": string\n}\nRules:\n1. Produce a ${lengthDescription} story that feels unmistakably ${tone} in tone and sits firmly in the ${genre} genre.\n2. Naturally weave each supplied vocabulary word exactly once, wrapping the word in double asterisks (e.g., **word**) so it is easy to spot.\n3. STRICTLY FORBIDDEN: You MUST NOT place ANY vocabulary word in the first sentence, the first paragraph, the last sentence, or the last paragraph. This is an absolute requirement. The story MUST begin and end with regular narrative text only.\n4. MANDATORY: Distribute vocabulary words evenly in the MIDDLE sections of the story only. Each word must be separated by multiple sentences of regular text.\n5. Craft a unique plot with sensory detail, emotional stakes, and at least one surprising twist—avoid formulaic openings or endings.\n6. Vary sentence length and rhythm to keep the narrative lively.\n7. Never add commentary outside the JSON fields.`;
+    const systemPrompt = `You are a master storyteller who writes vivid, original narratives on demand. Always respond with valid JSON using the structure:\n{\n  "id": string,\n  "title": string,\n  "content": string\n}\n\n🚨🚨🚨 CRITICAL RULE #1 - VOCABULARY WORD PLACEMENT (VIOLATIONS = AUTOMATIC REJECTION) 🚨🚨🚨\n\nYOU WILL BE IMMEDIATELY REJECTED IF:\n❌ ANY vocabulary word (marked with **) appears in the FIRST sentence\n❌ ANY vocabulary word (marked with **) appears in the LAST sentence  \n❌ ANY vocabulary word (marked with **) appears within the final 20 words of the story\n❌ There are fewer than 20 words of plain text AFTER the last ** wrapped word\n\n✅ REQUIRED STRUCTURE:\n1. First sentence: MUST be 100% plain narrative text (NO ** wrapped words)\n2. Middle sentences: Vocabulary words can appear here, separated by 2-3 sentences each\n3. Last vocabulary word: MUST have at least 20 words of plain text after it\n4. Last sentence: MUST be 100% plain narrative text (NO ** wrapped words)\n\n📌 EXAMPLE OF CORRECT ENDING:\n"...The children discovered a mysterious **artifact** hidden beneath the sand. They carefully cleaned it off and examined its strange markings. As the sun began to set, they packed their things and headed home, already planning their next adventure together the following weekend."\n\n❌ EXAMPLE OF WRONG ENDING (DO NOT DO THIS):\n"...They headed home with their new **artifact**."\n\nOther Rules:\n1. Produce a ${lengthDescription} story that feels unmistakably ${tone} in tone and sits firmly in the ${genre} genre.\n2. Naturally weave each supplied vocabulary word exactly once, wrapping the word in double asterisks (e.g., **word**) so it is easy to spot.\n3. MANDATORY: Each vocabulary word must be separated by at least 2-3 full sentences of regular text.\n4. CRITICAL: Write grammatically correct, coherent sentences. NO repetition of sentences or phrases. Each sentence must be unique and make logical sense.\n5. CRITICAL: Ensure perfect grammar, proper sentence structure, and natural flow. Proofread for errors.\n6. Never add commentary outside the JSON fields.`;
 
-    const userPrompt = `Vocabulary to include:\n${vocabularyList}\n\nDifficulty guidance: ${difficultyDescription}\nTone: ${tone}.\nGenre cues: ${genre}. Include world-specific flavor and conflict resolution.\nNarrative voice directive: ${selectedVoice}.\nStructural directive: ${selectedStructure}.\nSetting directive: ${selectedSetting}.\nHard bans: do not open with phrases like "In the heart of" or "In the dimly lit"; avoid recycled urban reconciliation tropes; ensure the core conflict, imagery, and resolution feel distinct from contemporary city romances.\n\n🚫 ABSOLUTE PLACEMENT RULES - VIOLATION WILL CAUSE FAILURE:\n1. The FIRST paragraph and FIRST sentence MUST contain ZERO vocabulary words.\n2. The LAST paragraph and LAST sentence MUST contain ZERO vocabulary words.\n3. ALL vocabulary words MUST appear ONLY in the middle paragraphs.\n4. Each vocabulary word MUST be separated by at least 3-4 sentences of regular narrative.\n5. NO clustering of vocabulary words - spread them evenly across the middle section.\n\nWrite the story now, strictly following these placement rules.`;
+    const userPrompt = `Vocabulary to include:\n${vocabularyList}\n\nDifficulty guidance: ${difficultyDescription}\nTone: ${tone}.\nGenre cues: ${genre}. Include world-specific flavor and conflict resolution.\n\n⚠️ QUALITY REQUIREMENTS:\n- Each sentence must be grammatically correct and unique\n- NO repetition of any sentence or phrase\n- Ensure logical flow and coherent story progression\n- Proofread carefully for errors before responding\n\n🚫🚫🚫 CRITICAL SENTENCE PLACEMENT RULES - YOUR RESPONSE WILL BE REJECTED IF VIOLATED:\n\n1. FIRST SENTENCE of the story = NO VOCABULARY WORDS (must be plain narrative)\n2. LAST SENTENCE of the story = NO VOCABULARY WORDS (must be plain narrative)\n3. The story MUST end with at least 15-20 words of regular text AFTER the final vocabulary word\n4. Vocabulary words can appear anywhere EXCEPT the first and last sentences\n5. Separate each vocabulary word with 2-3 complete sentences\n\nBEFORE responding, verify:\n✓ First sentence has NO ** wrapped words\n✓ Last sentence has NO ** wrapped words  \n✓ Story ends with at least 15 words of regular narrative\n✓ At least 15-20 words after the last ** wrapped word\n\nWrite the story now.`;
 
     try {
       const response = await this.callOpenAI({
@@ -263,10 +263,10 @@ class AIService {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        temperature: 0.88,
-        top_p: 0.9,
-        presence_penalty: 0.55,
-        frequency_penalty: 0.3,
+        temperature: 0.7,
+        top_p: 0.95,
+        presence_penalty: 0.6,
+        frequency_penalty: 0.8,
         max_tokens: 1600,
       });
 

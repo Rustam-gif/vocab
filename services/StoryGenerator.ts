@@ -91,9 +91,11 @@ const SYSTEM_PROMPT = `You are a creative storyteller for a vocabulary learning 
 Rules:
 1. Produce a short story of about two hundred words that uses all supplied vocabulary words exactly as provided.
 2. The narrative must match the requested level, genre, and tone.
-3. In raw_story, keep the words visible exactly as given.
-4. In story_with_blanks, replace the words in the order they appear with [[BLANK_1]] ... [[BLANK_5]].
-5. Do not add any extra keys, commentary, or Markdown.`;
+3. STRICTLY FORBIDDEN: You MUST NOT place ANY vocabulary word in the first sentence, the first paragraph, the last sentence, or the last paragraph. The story MUST begin and end with regular narrative text only.
+4. MANDATORY: Distribute vocabulary words evenly in the MIDDLE sections of the story only. Each word must be separated by multiple sentences of regular text.
+5. In raw_story, keep the words visible exactly as given.
+6. In story_with_blanks, replace the words in the order they appear with [[BLANK_1]] ... [[BLANK_5]].
+7. Do not add any extra keys, commentary, or Markdown.`;
 
 export async function generateStory(options: StoryGenerationOptions): Promise<GeneratedStory> {
   if (options.words.length !== 5) {
@@ -110,7 +112,7 @@ export async function generateStory(options: StoryGenerationOptions): Promise<Ge
       ? 'Use CEFR B1-B2 vocabulary with varied sentence structures.'
       : 'Use CEFR C1-C2 vocabulary with rich and varied sentences.';
 
-  const userPrompt = `Words to use (exact form):\n${wordsList}\n\nLevel: ${options.level}\nInstructions: ${levelInstruction}\nGenre: ${options.genre}\nTone: ${options.tone}\n\nWrite a cohesive story of roughly two hundred words. Use each word naturally. After writing the story, replace each vocabulary word with [[BLANK_1]] ... [[BLANK_5]] in the order they appeared. Ensure the surrounding context gives strong hints for the missing word. Avoid using numerals.`;
+  const userPrompt = `Words to use (exact form):\n${wordsList}\n\nLevel: ${options.level}\nInstructions: ${levelInstruction}\nGenre: ${options.genre}\nTone: ${options.tone}\n\n🚫 ABSOLUTE PLACEMENT RULES - VIOLATION WILL CAUSE FAILURE:\n1. The FIRST paragraph and FIRST sentence MUST contain ZERO vocabulary words.\n2. The LAST paragraph and LAST sentence MUST contain ZERO vocabulary words.\n3. ALL vocabulary words MUST appear ONLY in the middle paragraphs.\n4. Each vocabulary word MUST be separated by at least 3-4 sentences of regular narrative.\n5. NO clustering of vocabulary words - spread them evenly across the middle section.\n\nWrite a cohesive story of roughly two hundred words. Use each word naturally in the MIDDLE sections only. After writing the story, replace each vocabulary word with [[BLANK_1]] ... [[BLANK_5]] in the order they appeared. Ensure the surrounding context gives strong hints for the missing word. Avoid using numerals.`;
 
   // If proxy base URL is available, go through server
   if (base) {

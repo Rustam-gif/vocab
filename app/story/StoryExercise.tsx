@@ -17,7 +17,7 @@ import {
   Modal,
   Animated,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, X, Settings, Maximize2, Minimize2, Sun, Moon, Check, AlertCircle } from 'lucide-react-native';
 import { aiService } from '../../services/AIService';
 import { useAppStore } from '../../lib/store';
@@ -66,7 +66,7 @@ const sanitizeWords = (words: string[]): string[] => {
 
 // Inline one-shot dots animation for blanks (slower, visible jump; plays once)
 const InlineDotsOnce: React.FC<{ style?: any }> = ({ style }) => {
-  const dots = [0, 1, 2, 3, 4].map(() => useRef(new Animated.Value(0)).current);
+  const dots = [0, 1, 2, 3, 4, 5, 6].map(() => useRef(new Animated.Value(0)).current);
 
   useEffect(() => {
     const sequences = dots.map((v) =>
@@ -84,6 +84,7 @@ const InlineDotsOnce: React.FC<{ style?: any }> = ({ style }) => {
     <Animated.Text
       key={idx}
       style={{
+        color: '#FFB380', // Pale orange
         opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }),
         transform: [
           // Higher jump: increase upward travel
@@ -101,6 +102,7 @@ const InlineDotsOnce: React.FC<{ style?: any }> = ({ style }) => {
 
 export default function StoryExerciseScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ words?: string }>();
   const [loading, setLoading] = useState(false);
   const [score, setScore] = useState(100);
   const [selectedWords, setSelectedWords] = useState<Set<string>>(new Set());
@@ -110,16 +112,19 @@ export default function StoryExerciseScreen() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true); // true = dark mode, false = light mode
   const [customization, setCustomization] = useState<StoryCustomization>({
-    genre: 'sci-fi',
-    difficulty: 'medium',
-    length: 'medium',
+    genre: 'adventure',
+    difficulty: 'easy',
+    length: 'short',
   });
   const [wordPickerOpen, setWordPickerOpen] = useState(false);
   const [tempSelection, setTempSelection] = useState<string[]>([]);
   const [showWordSelectionModal, setShowWordSelectionModal] = useState(false);
   const [selectedBlankId, setSelectedBlankId] = useState<string | null>(null);
   const [currentVocabulary, setCurrentVocabulary] = useState<string[]>([]);
-  const [showCorrectAnswerId, setShowCorrectAnswerId] = useState<string | null>(null);
+  const [showCorrectAnswerBlank, setShowCorrectAnswerBlank] = useState<StoryBlank | null>(null);
+  const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null);
+  const [answersChecked, setAnswersChecked] = useState(false);
+  const iconRefs = useRef<{ [key: string]: Text | null }>({});
 
   const { words: vaultWords, loadWords } = useAppStore();
   const hasStory = Boolean(story);
@@ -129,6 +134,18 @@ export default function StoryExerciseScreen() {
   useEffect(() => {
     loadWords();
   }, []);
+
+  // Auto-generate story if words are passed via params
+  useEffect(() => {
+    if (params.words && !story && !loading) {
+      const wordsArray = params.words.split(',').map(w => w.trim()).filter(Boolean);
+      if (wordsArray.length >= 5) {
+        const wordsToUse = wordsArray.slice(0, 5);
+        setCurrentVocabulary(wordsToUse);
+        generateStory(wordsToUse);
+      }
+    }
+  }, [params.words]);
 
   const generateStory = async (overrideWords?: string[]) => {
     const fallbackWords = story ? story.availableWords : currentVocabulary;
@@ -141,6 +158,8 @@ export default function StoryExerciseScreen() {
     }
 
     setLoading(true);
+    setAnswersChecked(false); // Reset check state for new story
+    
     try {
       console.log('Generating story with customization:', customization);
 
@@ -177,7 +196,7 @@ export default function StoryExerciseScreen() {
     // Remove word from available words
     setSelectedWords(prev => new Set([...prev, word]));
 
-    // Update the story with the selected word
+    // Update the story with the selected word (don't check correctness yet)
     setStory(prevStory => {
       if (!prevStory) return prevStory;
 
@@ -188,7 +207,7 @@ export default function StoryExerciseScreen() {
             blank: {
               ...sentence.blank,
               userAnswer: word,
-              isCorrect: word === sentence.blank.correctWord,
+              isCorrect: false, // Don't check until "Check Answers" is clicked
             },
           };
         }
@@ -198,7 +217,7 @@ export default function StoryExerciseScreen() {
             secondBlank: {
               ...sentence.secondBlank,
               userAnswer: word,
-              isCorrect: word === sentence.secondBlank.correctWord,
+              isCorrect: false, // Don't check until "Check Answers" is clicked
             },
           };
         }
@@ -207,16 +226,6 @@ export default function StoryExerciseScreen() {
 
       return { ...prevStory, sentences: updatedSentences };
     });
-
-    // Update score
-    const isCorrect = story.sentences.some(sentence => 
-      (sentence.blank.id === blankId && sentence.blank.correctWord === word) ||
-      (sentence.secondBlank?.id === blankId && sentence.secondBlank.correctWord === word)
-    );
-
-    if (!isCorrect) {
-      setScore(prev => Math.max(0, prev - 5));
-    }
   };
 
   const handleRemoveWord = (word: string, blankId: string) => {
@@ -304,11 +313,7 @@ export default function StoryExerciseScreen() {
 
     setStory({ ...story, sentences: updatedSentences });
     setScore(Math.round((correctCount / total) * 100));
-
-    Alert.alert(
-      correctCount === total ? 'Great job!' : 'Keep practicing',
-      `${correctCount} of ${total} blanks are correct.`
-    );
+    setAnswersChecked(true); // Mark that answers have been checked
   };
 
   const handleSaveToJournal = () => {
@@ -348,36 +353,69 @@ export default function StoryExerciseScreen() {
     );
   };
 
+  const handleInfoPress = (blank: StoryBlank) => {
+    const isShowingAnswer = showCorrectAnswerBlank?.id === blank.id;
+    if (isShowingAnswer) {
+      setShowCorrectAnswerBlank(null);
+      setPopupPosition(null);
+    } else {
+      const iconRef = iconRefs.current[blank.id];
+      if (iconRef && iconRef.measure) {
+        iconRef.measure((x, y, width, height, pageX, pageY) => {
+          setPopupPosition({ x: pageX - 20, y: pageY - 50 });
+          setShowCorrectAnswerBlank(blank);
+        });
+      } else {
+        // Fallback if measure doesn't work
+        setPopupPosition({ x: 100, y: 200 });
+        setShowCorrectAnswerBlank(blank);
+      }
+    }
+  };
+
   const renderBlankInline = (blank: StoryBlank) => {
     if (blank.userAnswer) {
-      const isShowingAnswer = showCorrectAnswerId === blank.id;
+      const isShowingAnswer = showCorrectAnswerBlank?.id === blank.id;
+      
+      // Only show colors and icon after answers are checked
+      const showCorrectness = answersChecked;
+      
       return (
-        <View style={styles.blankWrapper}>
+        <>
           <Text
+            onPress={() => handleBlankPress(blank.id)}
             style={[
               styles.blankPillInline,
-              blank.isCorrect ? styles.blankTextCorrect : styles.blankTextIncorrect,
+              showCorrectness && blank.isCorrect ? styles.blankTextCorrect : 
+              showCorrectness && !blank.isCorrect ? styles.blankTextIncorrect :
+              styles.blankTextFilled,
             ]}
           >
             {blank.userAnswer}
           </Text>
-          {!blank.isCorrect && blank.userAnswer && (
+          {showCorrectness && !blank.isCorrect && blank.userAnswer && (
             <>
               <Text
-                onPress={() => setShowCorrectAnswerId(isShowingAnswer ? null : blank.id)}
+                onPress={() => {
+                  if (isShowingAnswer) {
+                    setShowCorrectAnswerBlank(null);
+                  } else {
+                    setShowCorrectAnswerBlank(blank);
+                  }
+                }}
                 style={styles.incorrectIcon}
               >
                 {' '}ⓘ
               </Text>
               {isShowingAnswer && (
-                <View style={styles.correctAnswerPopup}>
-                  <Text style={styles.correctAnswerText}>{blank.correctWord}</Text>
-                  <View style={styles.popupArrow} />
-                </View>
+                <Text style={styles.inlinePopup}>
+                  {'\n'}
+                  <Text style={styles.inlinePopupText}>{blank.correctWord}</Text>
+                </Text>
               )}
             </>
           )}
-        </View>
+        </>
       );
     }
 
@@ -394,7 +432,7 @@ export default function StoryExerciseScreen() {
 
     if (isNormalMode) {
       return (
-        <Text key={sentence.id} style={[styles.sentenceText, !isDarkMode && styles.sentenceTextLight]}>
+        <React.Fragment key={sentence.id}>
           {sentence.beforeBlank}
           {sentence.beforeBlank && !endsWithWhitespace(sentence.beforeBlank) ? ' ' : ''}
           <Text style={styles.completedWord}>{sentence.blank.correctWord}</Text>
@@ -417,12 +455,12 @@ export default function StoryExerciseScreen() {
               {sentence.afterSecondBlank}
             </>
           )}
-        </Text>
+        </React.Fragment>
       );
     }
 
     return (
-      <Text key={sentence.id} style={[styles.sentenceText, !isDarkMode && styles.sentenceTextLight]}>
+      <React.Fragment key={sentence.id}>
         {sentence.beforeBlank}
         {sentence.beforeBlank && !endsWithWhitespace(sentence.beforeBlank) ? ' ' : ''}
         {renderBlankInline(sentence.blank)}
@@ -446,7 +484,7 @@ export default function StoryExerciseScreen() {
             {sentence.afterSecondBlank}
           </>
         )}
-      </Text>
+      </React.Fragment>
     );
   };  const getAvailableWords = () => {
     if (!story) return [];
@@ -459,23 +497,40 @@ const buildStoryFromContent = (
   meta?: { id?: string; title?: string }
 ): StoryData => {
   const cleanWords = sanitizeWords(vocabulary);
-  const pieces = rawContent.replace(/\r\n/g, '\n').split(/\*\*(.+?)\*\*/g);
+  // Normalize newlines
+  let normalized = rawContent.replace(/\r\n/g, '\n');
+  // If the model forgot to wrap some words with **, wrap the first occurrence ourselves.
+  const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const w of cleanWords) {
+    const wrapped = new RegExp(`\\*\\*${escapeRe(w)}\\*\\*`, 'i');
+    if (!wrapped.test(normalized)) {
+      const plain = new RegExp(`\\b${escapeRe(w)}\\b`, 'i');
+      if (plain.test(normalized)) {
+        normalized = normalized.replace(plain, (m) => `**${m}**`);
+      }
+    }
+  }
+  const pieces = normalized.split(/\*\*(.+?)\*\*/g);
 
   const sentences: StorySentence[] = [];
   for (let i = 0; i < cleanWords.length; i += 1) {
-    // Trim trailing whitespace/newlines on the segment before the blank
-    const beforeSegment = (pieces[2 * i] ?? '').replace(/[\s\u00A0]+$/, '');
+    const beforeSegment = (pieces[2 * i] ?? '');
     const highlightedWord = pieces[2 * i + 1]?.trim() || cleanWords[i];
-    // Trim leading whitespace/newlines on the segment after the blank to avoid unexpected line breaks
-    const trailingSegmentRaw = i === cleanWords.length - 1 ? pieces[2 * i + 2] ?? '' : '';
-    const trailingSegment = trailingSegmentRaw.replace(/^[\s\u00A0]+/, '');
+    const afterSegment = pieces[2 * i + 2] ?? '';
+
+    // Only use words from our vocabulary list - ignore extra words the AI might have wrapped
+    const isVocabWord = cleanWords.some(w => w.toLowerCase() === highlightedWord.toLowerCase());
+    if (!isVocabWord) {
+      console.warn(`Skipping non-vocabulary word: "${highlightedWord}"`);
+      continue;
+    }
 
     sentences.push({
-      id: `sentence-${i + 1}`,
+      id: `sentence-${sentences.length + 1}`,
       beforeBlank: beforeSegment,
-      afterBlank: trailingSegment,
+      afterBlank: afterSegment,
       blank: {
-        id: `blank-${i + 1}`,
+        id: `blank-${sentences.length + 1}`,
         correctWord: highlightedWord,
         userAnswer: '',
         isCorrect: false,
@@ -487,7 +542,7 @@ const buildStoryFromContent = (
   if (!sentences.length) {
     sentences.push({
       id: 'sentence-1',
-      beforeBlank: rawContent,
+  beforeBlank: normalized,
       blank: {
         id: 'blank-1',
         correctWord: cleanWords[0] || '',
@@ -495,6 +550,22 @@ const buildStoryFromContent = (
         isCorrect: false,
       },
     });
+  }
+
+  // VALIDATION: Check if the last sentence has a blank word at the end or very close to the end
+  if (sentences.length > 0) {
+    const lastSentence = sentences[sentences.length - 1];
+    const textAfterLastBlank = lastSentence.afterBlank?.trim() || '';
+    
+    // Count words after the last blank
+    const wordsAfter = textAfterLastBlank.split(/\s+/).filter(w => w.length > 0);
+    
+    if (wordsAfter.length < 5) {
+      console.error('❌ VALIDATION FAILED: Last vocabulary word is too close to the end of the story');
+      console.error(`Words after last blank: ${wordsAfter.length} (minimum required: 5)`);
+      console.error(`Text after last blank: "${textAfterLastBlank}"`);
+      console.error('The AI did not follow the placement rules. This story should be regenerated.');
+    }
   }
 
   return {
@@ -511,10 +582,10 @@ const buildStoryFromContent = (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <LottieView
-            source={require('../../assets/lottie/LoadingDots.json')}
+            source={require('./Poetry.json')}
             autoPlay
             loop
-            style={{ width: 120, height: 60 }}
+            style={{ width: 200, height: 200 }}
           />
           <Text style={styles.loadingText}>Generating your story…</Text>
         </View>
@@ -624,7 +695,9 @@ const buildStoryFromContent = (
             
             <View style={[styles.storyText, !isDarkMode && styles.storyTextLight]}>
               {hasStory ? (
-                (story?.sentences ?? []).map(renderSentence)
+                <Text style={[styles.sentenceText, !isDarkMode && styles.sentenceTextLight]}>
+                  {(story?.sentences ?? []).map(renderSentence)}
+                </Text>
               ) : (
                 <View style={styles.storyPlaceholder}>
                   <Text style={styles.storyPlaceholderTitle}>Ready when you are</Text>
@@ -1154,10 +1227,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   blankTextCorrect: {
-    color: '#FFA366',
+    color: '#10B981', // Green for correct answers
   },
   blankTextIncorrect: {
-    color: '#EF4444',
+    color: '#EF4444', // Red for incorrect answers
+  },
+  blankTextFilled: {
+    color: '#FFB380', // Pale orange for filled but not checked
   },
   emptyBlank: {
     paddingHorizontal: 8,
@@ -1567,45 +1643,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1E1E1E',
   },
-  blankWrapper: {
-    position: 'relative',
-  },
   incorrectIcon: {
     color: '#EF4444',
     fontSize: 14,
     fontWeight: '600',
   },
-  correctAnswerPopup: {
-    position: 'absolute',
-    bottom: 28,
-    left: 0,
+  inlinePopup: {
+    fontSize: 14,
+  },
+  inlinePopupText: {
     backgroundColor: 'rgba(16, 185, 129, 0.5)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 16,
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 20,
-    elevation: 12,
-    zIndex: 1000,
-  },
-  popupArrow: {
-    position: 'absolute',
-    bottom: -6,
-    left: 12,
-    width: 0,
-    height: 0,
-    borderLeftWidth: 6,
-    borderRightWidth: 6,
-    borderTopWidth: 6,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: 'rgba(16, 185, 129, 0.5)',
-  },
-  correctAnswerText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
 });

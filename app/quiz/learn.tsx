@@ -125,7 +125,7 @@ export default function LearnScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => router.replace('/')}
         >
           <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>

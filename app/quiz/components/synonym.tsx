@@ -11,6 +11,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Vibration } from 'react-native';
+import { analyticsService } from '../../../services/AnalyticsService';
 
 interface SynonymProps {
   setId: string;
@@ -72,6 +73,7 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
   const [phaseCorrect, setPhaseCorrect] = useState(0);
   const pendingScoreRef = useRef<number | null>(null);
   const deductionAnim = useRef(new Animated.Value(0)).current;
+  const itemStartRef = useRef<number>(Date.now());
 
   const currentWord = useMemo(() => WORDS[currentIndex], [currentIndex]);
   const requiredCount = currentWord.correct.length;
@@ -97,6 +99,7 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
   useEffect(() => {
     setSelected([]);
     setRevealed(false);
+    itemStartRef.current = Date.now();
   }, [currentIndex]);
 
   useEffect(() => {
@@ -151,6 +154,19 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
     AccessibilityInfo.announceForAccessibility(
       selectedCorrect ? 'Correct' : 'Review the correct synonyms'
     );
+
+    // Track analytics for this item
+    try {
+      const timeSpent = Math.max(0, Math.round((Date.now() - itemStartRef.current) / 1000));
+      analyticsService.recordResult({
+        wordId: currentWord.word,
+        exerciseType: 'synonym',
+        correct: selectedCorrect,
+        timeSpent,
+        timestamp: new Date(),
+        score: selectedCorrect ? 1 : 0,
+      });
+    } catch {}
   };
 
   const handleNext = () => {
@@ -160,6 +176,7 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
       onPhaseComplete(phaseCorrect, WORDS.length);
     } else {
       setCurrentIndex(prev => prev + 1);
+      itemStartRef.current = Date.now();
     }
   };
 

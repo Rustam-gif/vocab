@@ -31,6 +31,47 @@ class AnalyticsService {
     await this.saveResults();
   }
 
+  // Count exercises done today and overall (all time)
+  getTodayAndTotalCounts(): { today: number; total: number } {
+    const total = this.results.length;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const today = this.results.filter(r => new Date(r.timestamp).toISOString().split('T')[0] === todayStr).length;
+    return { today, total };
+  }
+
+  // Best streak across all-time: most consecutive days with at least one correct answer
+  getRecordStreak(): number {
+    if (!this.results.length) return 0;
+    const byDay: Record<string, { correct: number; total: number }> = {};
+    this.results.forEach(r => {
+      const day = new Date(r.timestamp).toISOString().split('T')[0];
+      byDay[day] = byDay[day] || { correct: 0, total: 0 };
+      byDay[day].total += 1;
+      if (r.correct) byDay[day].correct += 1;
+    });
+
+    const days = Object.keys(byDay)
+      .sort(); // ascending YYYY-MM-DD order
+
+    let record = 0;
+    let current = 0;
+    let prevDate: Date | null = null;
+    for (const dayStr of days) {
+      const hasCorrect = byDay[dayStr].correct > 0;
+      const date = new Date(dayStr + 'T00:00:00Z');
+      const isConsecutive = prevDate ? (date.getTime() - prevDate.getTime() === 24 * 60 * 60 * 1000) : false;
+
+      if (hasCorrect) {
+        current = isConsecutive ? current + 1 : 1;
+        record = Math.max(record, current);
+      } else {
+        current = 0; // break streak on a day with no correct answers
+      }
+      prevDate = date;
+    }
+    return record;
+  }
+
   getAnalyticsData(): AnalyticsData {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
