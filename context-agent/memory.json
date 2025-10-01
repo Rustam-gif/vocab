@@ -1,0 +1,137 @@
+{
+  "decisions": [
+    {
+      "title": "Created .github/copilot-instructions.md",
+      "detail": "Generated comprehensive AI agent onboarding guide covering architecture, patterns, scoring rules, and development workflows",
+      "when": "2025-09-27T22:37:13.491Z"
+    },
+    {
+      "title": "Adjusted Done button spacing",
+      "detail": "Increased marginTop from 44 to 64px in atlas-results.tsx for better breathing room",
+      "when": "2025-09-27T22:39:09.906Z"
+    },
+    {
+      "title": "Improved score section spacing",
+      "detail": "Wrapped score label and number in scoreSection with marginTop 24px for better vertical spacing",
+      "when": "2025-09-27T22:41:16.572Z"
+    },
+    {
+      "title": "Enhanced checkmark animation",
+      "detail": "Improved scale range to 0.3-1.0, added bounce easing, 200ms delay, and better timing for smoother animation",
+      "when": "2025-09-28T09:52:21.812Z"
+    },
+    {
+      "title": "Fixed checkmark circle visibility",
+      "detail": "Changed circle dimensions from percentage to fixed 90px and added shadows for better visual presence",
+      "when": "2025-09-28T09:53:54.223Z"
+    },
+    {
+      "title": "Simplified results header",
+      "detail": "Removed header with Results title and back arrow for cleaner, minimal design",
+      "when": "2025-09-28T09:57:03.388Z"
+    },
+    {
+      "title": "Increased animation size",
+      "detail": "Made checkmark animation 50% larger, changing dimensions from 90x90 to 135x135 pixels for better visibility",
+      "when": "2025-09-28T10:11:24.828Z"
+    },
+    {
+      "title": "Slowed animation timing",
+      "detail": "Increased animation duration by 30% from 900ms to 1170ms for a more relaxed, appreciable success moment",
+      "when": "2025-09-28T10:12:30.810Z"
+    },
+    {
+      "title": "Unified checkmark color",
+      "detail": "Replaced Lottie animation with custom checkmark using correct answer green (#437F76) for visual consistency",
+      "when": "2025-09-28T10:14:32.576Z"
+    },
+    {
+      "title": "Restored Lottie animation with correct color",
+      "detail": "Fixed broken animation by restoring LottieView while keeping correct green background color, reduced size to 110px",
+      "when": "2025-09-28T10:16:03.991Z"
+    },
+    {
+      "title": "Fixed double green circle issue",
+      "detail": "Removed background checkCircle view, keeping only Lottie animation to eliminate duplicate green backgrounds",
+      "when": "2025-09-28T10:18:01.769Z"
+    },
+    {
+      "title": "Pure custom animation with correct color",
+      "detail": "Replaced Lottie with custom animated checkmark using #437F76, removed delay for immediate start",
+      "when": "2025-09-28T10:20:53.299Z"
+    },
+    {
+      "title": "Restored Lottie with color filtering",
+      "detail": "Brought back full Lottie animation with colorFilters to change green to #437F76 while preserving all animation effects",
+      "when": "2025-09-28T10:23:32.944Z"
+    },
+    {
+      "title": "Simplified Lottie with colorFilters only",
+      "detail": "Removed background overlay to restore checkmark visibility, relying only on Lottie colorFilters for color change",
+      "when": "2025-09-28T10:33:06.936Z"
+    },
+    {
+      "title": "Added checkmark overlay",
+      "detail": "Overlaid custom white checkmark on top of Lottie animation to ensure visibility while keeping animation effects",
+      "when": "2025-09-28T10:41:16.883Z"
+    },
+    {
+      "title": "Made checkmark overlay animated",
+      "detail": "Synchronized checkmark with main animation using same scale and opacity transforms for smooth unified animation",
+      "when": "2025-09-28T10:42:13.641Z"
+    },
+    {
+      "title": "Switched to Check.json animation",
+      "detail": "Replaced completed.json with Check.json which has correct green color built-in, removed overlays and colorFilters",
+      "when": "2025-09-28T10:52:53.526Z"
+    },
+    {
+      "title": "Removed animation delay",
+      "detail": "Eliminated 200ms delay from animation sequence for immediate start when results screen loads",
+      "when": "2025-09-28T10:56:52.602Z"
+    },
+    {
+      "title": "Fixed double animation glitch",
+      "detail": "Removed Lottie trigger from animation callback and set autoPlay=true to prevent double animation starts",
+      "when": "2025-09-28T11:01:39.457Z"
+    },
+    {
+      "title": "Fixed button repositioning issue",
+      "detail": "Added buttonContainer and buttonPlaceholder to reserve space and prevent content shifting when Done button appears",
+      "when": "2025-09-28T11:27:21.015Z"
+    },
+    {
+      "title": "Fixed letter box positioning",
+      "detail": "Made missing letters input boxes absolutely positioned lower on screen with fixed position for better UX",
+      "when": "2025-09-28T12:08:30.477Z"
+    },
+    {
+      "title": "Adjusted letter box height",
+      "detail": "Moved letter boxes higher by changing bottom position from 120 to 180 pixels",
+      "when": "2025-09-28T12:32:22.964Z"
+    },
+    {
+      "title": "Moved letter boxes much higher",
+      "detail": "Changed bottom position from 180 to 280 pixels for better screen positioning",
+      "when": "2025-09-28T12:33:15.643Z"
+    },
+    {
+      "title": "Moved clue text lower",
+      "detail": "Added marginTop: 40 to header section to position clue text lower on screen",
+      "when": "2025-09-28T12:37:03.199Z"
+    },
+    {
+      "title": "Story Exercise Modal Redesign",
+      "detail": "Completely redesigned customize story modal with centered layout, reduced padding/margins, smaller option pills (12px/6px padding, 16px borderRadius), and compact 380px maxWidth for better UX",
+      "when": "2025-09-28T20:46:26.122Z"
+    }
+  ],
+  "goals": [],
+  "style": [
+    {
+      "title": "AI instructions maintenance",
+      "detail": "Update .github/copilot-instructions.md when architectural patterns or critical rules change to keep AI agents current",
+      "when": "2025-09-27T22:37:51.304Z"
+    }
+  ]
+}

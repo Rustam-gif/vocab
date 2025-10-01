@@ -141,12 +141,18 @@ class ProgressService {
   async completeSet(setId: string, score: number, totalQuestions: number): Promise<void> {
     if (!this.progress) return;
 
+    const key = String(setId);
+    const altKey = key.startsWith('set-') ? key : `set-${key}`;
+
     const percentage = (score / totalQuestions) * 100;
     const points = Math.round(percentage * 1.2); // Bonus points for higher scores
 
     // Update set progress
-    const setProgress = this.setProgress.get(setId) || {
-      setId,
+    const existing = this.setProgress.get(key) || this.setProgress.get(altKey);
+    const progressKey = existing ? existing.setId : key;
+
+    const setProgress = existing || {
+      setId: progressKey,
       completed: false,
       score: 0,
       attempts: 0,
@@ -179,7 +185,14 @@ class ProgressService {
     }
 
     this.progress.lastActivity = new Date();
-    this.setProgress.set(setId, setProgress);
+    this.setProgress.set(progressKey, setProgress);
+    // Ensure both key formats resolve to the same data
+    if (progressKey !== key) {
+      this.setProgress.set(key, { ...setProgress, setId: key });
+    }
+    if (progressKey !== altKey) {
+      this.setProgress.set(altKey, { ...setProgress, setId: altKey });
+    }
 
     await this.saveProgress();
     await this.saveSetProgress();

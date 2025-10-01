@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { levels } from '../data/levels';
+import { analyticsService } from '../../../services/AnalyticsService';
 
 interface MCQProps {
   setId: string;
@@ -55,6 +56,8 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const deductionAnim = useRef(new Animated.Value(0)).current;
+  const questionStartRef = useRef<number>(Date.now());
 
   useEffect(() => {
     console.log('MCQComponent - useEffect triggered:', { setId, levelId });
@@ -113,6 +116,7 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
     setQuestions(generatedQuestions);
     setDisplayScore(sharedScore);
     setPhaseCorrect(0);
+    questionStartRef.current = Date.now();
   };
 
 const generateDistractor = (correctDef: string, type: string): string => {
@@ -150,6 +154,19 @@ const generateDistractor = (correctDef: string, type: string): string => {
     setIsCorrect(correct);
     setShowFeedback(true);
 
+    // Track analytics for this question
+    try {
+      const timeSpent = Math.max(0, Math.round((Date.now() - questionStartRef.current) / 1000));
+      analyticsService.recordResult({
+        wordId: questions[currentWordIndex]?.word || String(currentWordIndex + 1),
+        exerciseType: 'mcq',
+        correct,
+        timeSpent,
+        timestamp: new Date(),
+        score: correct ? 1 : 0,
+      });
+    } catch {}
+
     if (correct) {
       setPhaseCorrect(prev => prev + 1);
     } else {
@@ -158,8 +175,19 @@ const generateDistractor = (correctDef: string, type: string): string => {
         pendingScoreRef.current = next;
         return next;
       });
+      triggerDeductionAnimation();
     }
     setIsProcessingNext(false);
+  };
+
+  const triggerDeductionAnimation = () => {
+    deductionAnim.stopAnimation();
+    deductionAnim.setValue(0);
+    Animated.timing(deductionAnim, {
+      toValue: 1,
+      duration: 700,
+      useNativeDriver: true,
+    }).start();
   };
 
   const handleNextPress = () => {
@@ -178,6 +206,7 @@ const generateDistractor = (correctDef: string, type: string): string => {
     setSelectedAnswer(null);
     setShowFeedback(false);
     setIsAnswered(false);
+    questionStartRef.current = Date.now();
 
     Animated.timing(progressAnim, {
       toValue: (currentWordIndex + 1) / questions.length,
@@ -197,6 +226,14 @@ const generateDistractor = (correctDef: string, type: string): string => {
   }
 
   const currentQuestion = questions[currentWordIndex];
+  const deductionOpacity = deductionAnim.interpolate({
+    inputRange: [0, 0.2, 1],
+    outputRange: [0, 1, 0],
+  });
+  const deductionTranslateY = deductionAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -35],
+  });
 
   const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -239,7 +276,20 @@ const generateDistractor = (correctDef: string, type: string): string => {
           <Text style={styles.progressText}>
             Word {currentWordIndex + 1} of {questions.length}
           </Text>
-          <Text style={styles.scoreText}>{displayScore}</Text>
+          <View style={styles.scoreWrapper}>
+            <Animated.Text
+              style={[
+                styles.deductionText,
+                {
+                  opacity: deductionOpacity,
+                  transform: [{ translateY: deductionTranslateY }],
+                },
+              ]}
+            >
+              -5
+            </Animated.Text>
+            <Text style={styles.scoreText}>{displayScore}</Text>
+          </View>
         </View>
         <View style={styles.progressBar}>
           <Animated.View 
@@ -320,7 +370,7 @@ const generateDistractor = (correctDef: string, type: string): string => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
   },
   loadingContainer: {
     flex: 1,
@@ -335,8 +385,6 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
   },
   progressContainer: {
     flexDirection: 'row',
@@ -349,6 +397,18 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontWeight: '500',
   },
+  scoreWrapper: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    minWidth: 48,
+  },
+  deductionText: {
+    position: 'absolute',
+    top: -20,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#F87171',
+  },
   scoreText: {
     fontSize: 16,
     fontWeight: '600',
@@ -359,6 +419,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#333',
     borderRadius: 3,
     overflow: 'hidden',
+    marginBottom: 24,
   },
   progressFill: {
     height: '100%',

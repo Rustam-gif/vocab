@@ -1,20 +1,37 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Check } from 'lucide-react-native';
 import { levels, Level } from './data/levels';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 
 export default function LevelSelectScreen() {
   const router = useRouter();
-  const [selectedLevel, setSelectedLevel] = useState<string>('beginner');
+  const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    AsyncStorage.getItem(SELECTED_LEVEL_KEY).then(stored => {
+      if (!mounted) return;
+      if (stored) setSelectedLevel(stored);
+      else if (levels.length > 0) setSelectedLevel(levels[0].id);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleLevelSelect = (levelId: string) => {
     setSelectedLevel(levelId);
   };
 
   const handleContinue = () => {
-    // Navigate to learn screen with selected level
-    router.push(`/quiz/learn?level=${selectedLevel}`);
+    if (!selectedLevel) return;
+    AsyncStorage.setItem(SELECTED_LEVEL_KEY, selectedLevel).then(() => {
+      router.replace(`/quiz/learn?level=${selectedLevel}`);
+    });
   };
 
   if (!levels || levels.length === 0) {
@@ -37,12 +54,14 @@ export default function LevelSelectScreen() {
     );
   }
 
+  const accent = '#F2935C';
+
   const renderLevelItem = ({ item }: { item: Level }) => {
     const isSelected = selectedLevel === item.id;
     
     return (
       <TouchableOpacity
-        style={[styles.levelCard, isSelected && styles.selectedCard]}
+        style={[styles.levelCard, isSelected && styles.selectedCard, isSelected && { borderColor: accent }]}
         onPress={() => handleLevelSelect(item.id)}
       >
         <View style={styles.levelHeader}>
@@ -51,18 +70,20 @@ export default function LevelSelectScreen() {
             <View style={styles.levelDetails}>
               <Text style={styles.levelName}>{item.name}</Text>
               <Text style={styles.levelDescription}>{item.description}</Text>
-              <Text style={styles.levelCefr}>CEFR {item.cefr}</Text>
+              <Text style={[styles.levelCefr, { color: accent }]}>CEFR {item.cefr}</Text>
             </View>
           </View>
           {isSelected && (
             <View style={styles.checkContainer}>
-              <Check size={24} color="#4CAF50" />
+              <Check size={24} color={accent} />
             </View>
           )}
         </View>
       </TouchableOpacity>
     );
   };
+
+  const canContinue = Boolean(selectedLevel);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -90,8 +111,9 @@ export default function LevelSelectScreen() {
       {/* Continue Button */}
       <View style={styles.footer}>
         <TouchableOpacity
-          style={styles.continueButton}
+          style={[styles.continueButton, { backgroundColor: accent }, !canContinue && styles.continueButtonDisabled]}
           onPress={handleContinue}
+          disabled={!canContinue}
         >
           <Text style={styles.continueButtonText}>Continue</Text>
         </TouchableOpacity>
@@ -103,7 +125,7 @@ export default function LevelSelectScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
   },
   header: {
     flexDirection: 'row',
@@ -111,8 +133,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
   },
   backButton: {
     padding: 8,
@@ -132,7 +152,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   levelCard: {
-    backgroundColor: '#3A3A3A',
+    backgroundColor: '#2A2A2A',
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
@@ -148,7 +168,6 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   selectedCard: {
-    borderColor: '#4CAF50',
     backgroundColor: '#3A3A3A',
   },
   levelHeader: {
@@ -181,14 +200,14 @@ const styles = StyleSheet.create({
   },
   levelCefr: {
     fontSize: 12,
-    color: '#4CAF50',
+    color: '#F2935C',
     fontWeight: '500',
   },
   checkContainer: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#F2935C',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -197,16 +216,17 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
     padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#333',
   },
   continueButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#F2935C',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
+  },
+  continueButtonDisabled: {
+    opacity: 0.5,
   },
   continueButtonText: {
     fontSize: 16,

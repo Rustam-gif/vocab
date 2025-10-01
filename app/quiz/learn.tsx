@@ -1,36 +1,98 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Settings, TrendingUp } from 'lucide-react-native';
+import { ArrowLeft, Settings } from 'lucide-react-native';
 import { levels, Level, Set } from './data/levels';
 import SetCard from './components/SetCard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+import ProgressService from '../../services/ProgressService';
+
+const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 
 export default function LearnScreen() {
   const router = useRouter();
   const { level: levelId } = useLocalSearchParams<{ level: string }>();
   const [currentLevel, setCurrentLevel] = useState<Level | null>(null);
   const [progress, setProgress] = useState({ completed: 0, total: 0 });
+  const [activeLevelId, setActiveLevelId] = useState<string | null>(levelId ?? null);
 
-  useEffect(() => {
+  const loadStoredLevel = useCallback(async () => {
     if (levelId) {
-      const level = levels.find(l => l.id === levelId);
-      if (level) {
-        setCurrentLevel(level);
-        const completed = level.sets.filter(s => s.completed).length;
-        setProgress({ completed, total: level.sets.length });
-      }
+      await AsyncStorage.setItem(SELECTED_LEVEL_KEY, levelId);
+      setActiveLevelId(levelId);
+      return;
+    }
+    const stored = await AsyncStorage.getItem(SELECTED_LEVEL_KEY);
+    if (stored) {
+      setActiveLevelId(stored);
     }
   }, [levelId]);
 
-  const handleSetPress = (set: Set) => {
-    console.log('LearnScreen - handleSetPress:', { setId: set.id, levelId, setType: set.type });
+  useEffect(() => {
+    loadStoredLevel();
+  }, [loadStoredLevel]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadStoredLevel();
+    }, [loadStoredLevel])
+  );
+
+  useEffect(() => {
+    const loadLevelWithProgress = async () => {
+      if (!activeLevelId) {
+        setCurrentLevel(null);
+        return;
+      }
+      
+      const level = levels.find(l => l.id === activeLevelId);
+      if (level) {
+        // Initialize ProgressService and get progress data
+        const progressService = ProgressService.getInstance();
+        await progressService.initialize();
+        
+        // TEMPORARY: Clear test data - ALREADY RUN, COMMENTED OUT
+        // await AsyncStorage.removeItem('set_progress');
+        // await AsyncStorage.removeItem('user_progress');
+        
+        // Merge sets with progress data
+        const setsWithProgress = await Promise.all(
+          level.sets.map(async (set) => {
+            const setProgress = await progressService.getSetProgress(`${set.id}`);
+            return {
+              ...set,
+              completed: setProgress?.completed || set.completed,
+              inProgress: setProgress ? (!setProgress.completed && setProgress.attempts > 0) : set.inProgress,
+              score: setProgress?.bestScore || set.score
+            };
+          })
+        );
+        
+        const levelWithProgress = { ...level, sets: setsWithProgress };
+        setCurrentLevel(levelWithProgress);
+        
+        const completed = setsWithProgress.filter(s => s.completed).length;
+        setProgress({ completed, total: setsWithProgress.length });
+      }
+    };
     
+    loadLevelWithProgress();
+  }, [activeLevelId]);
+
+  const handleSetPress = (set: Set) => {
+    if (!activeLevelId) {
+      router.push('/quiz/level-select');
+      return;
+    }
+    console.log('LearnScreen - handleSetPress:', { setId: set.id, levelId: activeLevelId, setType: set.type });
+
     if (set.type === 'quiz') {
       // Navigate to quiz screen
-      router.push(`/quiz/quiz-screen?setId=${set.id}&level=${levelId}`);
+      router.push(`/quiz/quiz-screen?setId=${set.id}&level=${activeLevelId}`);
     } else {
       // Navigate directly to practice session
-      const url = `/quiz/atlas-practice-integrated?setId=${set.id}&levelId=${levelId}`;
+      const url = `/quiz/atlas-practice-integrated?setId=${set.id}&levelId=${activeLevelId}`;
       console.log('LearnScreen - Navigating to:', url);
       router.push(url);
     }
@@ -54,6 +116,7 @@ export default function LearnScreen() {
     );
   }
 
+  const accent = '#F2935C';
   const progressPercentage = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
 
   return (
@@ -62,7 +125,7 @@ export default function LearnScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => router.replace('/')}
         >
           <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>
@@ -81,7 +144,7 @@ export default function LearnScreen() {
           <Text style={styles.levelIcon}>{currentLevel.icon}</Text>
           <View style={styles.levelDetails}>
             <Text style={styles.levelName}>{currentLevel.name}</Text>
-            <Text style={styles.levelCefr}>CEFR {currentLevel.cefr}</Text>
+          <Text style={[styles.levelCefr, { color: accent }]}>CEFR {currentLevel.cefr}</Text>
           </View>
           <TouchableOpacity style={styles.changeButton} onPress={handleChangeLevel}>
             <Text style={styles.changeButtonText}>Change</Text>
@@ -95,13 +158,13 @@ export default function LearnScreen() {
           <Text style={styles.progressText}>
             {progress.completed}/{progress.total} sets completed
           </Text>
-          <Text style={styles.progressPercentage}>{Math.round(progressPercentage)}%</Text>
+          <Text style={[styles.progressPercentage, { color: accent }]}>{Math.round(progressPercentage)}%</Text>
         </View>
         <View style={styles.progressBar}>
           <View 
             style={[
               styles.progressFill, 
-              { width: `${progressPercentage}%` }
+              { width: `${progressPercentage}%`, backgroundColor: accent }
             ]} 
           />
         </View>
@@ -122,7 +185,7 @@ export default function LearnScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
   },
   header: {
     flexDirection: 'row',
@@ -130,8 +193,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
   },
   backButton: {
     padding: 8,
@@ -147,26 +208,18 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   levelInfo: {
-    backgroundColor: '#3A3A3A',
+    backgroundColor: '#2C2C2C',
     margin: 20,
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    borderRadius: 12,
+    padding: 16,
   },
   levelHeader: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   levelIcon: {
-    fontSize: 32,
-    marginRight: 16,
+    fontSize: 40,
+    marginRight: 20,
   },
   levelDetails: {
     flex: 1,
@@ -175,23 +228,26 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '600',
     color: '#fff',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   levelCefr: {
     fontSize: 14,
-    color: '#4CAF50',
-    fontWeight: '500',
+    color: '#F2935C',
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   changeButton: {
-    backgroundColor: '#333',
+    backgroundColor: 'transparent',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#F2935C',
   },
   changeButtonText: {
+    color: '#F2935C',
     fontSize: 12,
     fontWeight: '500',
-    color: '#fff',
   },
   progressContainer: {
     marginHorizontal: 20,
@@ -209,18 +265,18 @@ const styles = StyleSheet.create({
   },
   progressPercentage: {
     fontSize: 14,
-    color: '#4CAF50',
+    color: '#F2935C',
     fontWeight: '600',
   },
   progressBar: {
     height: 6,
-    backgroundColor: '#333',
+    backgroundColor: '#2C2C2C',
     borderRadius: 3,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#F2935C',
     borderRadius: 3,
   },
   listContainer: {

@@ -14,6 +14,7 @@ export interface Set {
   description?: string;
   completed: boolean;
   inProgress?: boolean;
+  score?: number;
 }
 
 export interface Level {

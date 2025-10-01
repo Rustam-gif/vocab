@@ -11,6 +11,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { Vibration } from 'react-native';
+import { analyticsService } from '../../../services/AnalyticsService';
 
 interface SynonymProps {
   setId: string;
@@ -71,6 +72,8 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
   const [displayScore, setDisplayScore] = useState(sharedScore);
   const [phaseCorrect, setPhaseCorrect] = useState(0);
   const pendingScoreRef = useRef<number | null>(null);
+  const deductionAnim = useRef(new Animated.Value(0)).current;
+  const itemStartRef = useRef<number>(Date.now());
 
   const currentWord = useMemo(() => WORDS[currentIndex], [currentIndex]);
   const requiredCount = currentWord.correct.length;
@@ -96,6 +99,7 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
   useEffect(() => {
     setSelected([]);
     setRevealed(false);
+    itemStartRef.current = Date.now();
   }, [currentIndex]);
 
   useEffect(() => {
@@ -143,12 +147,26 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
         pendingScoreRef.current = next;
         return next;
       });
+      triggerDeductionAnimation();
     }
     setRevealed(true);
 
     AccessibilityInfo.announceForAccessibility(
       selectedCorrect ? 'Correct' : 'Review the correct synonyms'
     );
+
+    // Track analytics for this item
+    try {
+      const timeSpent = Math.max(0, Math.round((Date.now() - itemStartRef.current) / 1000));
+      analyticsService.recordResult({
+        wordId: currentWord.word,
+        exerciseType: 'synonym',
+        correct: selectedCorrect,
+        timeSpent,
+        timestamp: new Date(),
+        score: selectedCorrect ? 1 : 0,
+      });
+    } catch {}
   };
 
   const handleNext = () => {
@@ -158,25 +176,69 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
       onPhaseComplete(phaseCorrect, WORDS.length);
     } else {
       setCurrentIndex(prev => prev + 1);
+      itemStartRef.current = Date.now();
     }
   };
 
+  const triggerDeductionAnimation = () => {
+    deductionAnim.stopAnimation();
+    deductionAnim.setValue(0);
+    Animated.timing(deductionAnim, {
+      toValue: 1,
+      duration: 700,
+      useNativeDriver: true,
+    }).start();
+  };
+
   const progress = currentIndex / WORDS.length;
+  const deductionOpacity = deductionAnim.interpolate({
+    inputRange: [0, 0.2, 1],
+    outputRange: [0, 1, 0],
+  });
+  const deductionTranslateY = deductionAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -35],
+  });
+
+  const isLastWord = currentIndex === WORDS.length - 1;
+  const handlePrimary = () => {
+    if (!revealed) {
+      if (nextDisabled) return;
+      handleSubmit();
+    } else {
+      handleNext();
+    }
+  };
+  const primaryDisabled = !revealed && nextDisabled;
+  const primaryLabel = revealed ? (isLastWord ? 'Finish' : 'Next') : 'Next';
 
   return (
     <View style={styles.container}>
       <View style={styles.body}>
         <View style={styles.topRow}>
-          <View style={styles.progressContainer}>
-            <Text style={styles.progressText}>
-              Word {currentIndex + 1} of {WORDS.length}
-            </Text>
+        <View style={styles.progressContainer}>
+          <Text style={styles.progressText}>
+            Word {currentIndex + 1} of {WORDS.length}
+          </Text>
+          <View style={styles.scoreWrapper}>
+            <Animated.Text
+              style={[
+                styles.deductionText,
+                {
+                  opacity: deductionOpacity,
+                  transform: [{ translateY: deductionTranslateY }],
+                },
+              ]}
+            >
+              -5
+            </Animated.Text>
             <Text style={styles.scoreText}>{displayScore}</Text>
           </View>
-          <View style={styles.progressBar}>
-            <Animated.View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-          </View>
         </View>
+        <View style={styles.progressBar}>
+          <Animated.View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+        </View>
+      </View>
 
         <View style={styles.wordHeader}>
           <Text style={styles.wordHighlight}>{currentWord.word}</Text>
@@ -216,21 +278,13 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
       </View>
 
       <View style={styles.footerButtons}>
-        {!revealed ? (
-          <TouchableOpacity
-            style={[styles.primaryButton, nextDisabled && styles.buttonDisabled]}
-            disabled={nextDisabled}
-            onPress={handleSubmit}
-          >
-            <Text style={styles.primaryButtonText}>Reveal</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.primaryButton} onPress={handleNext}>
-            <Text style={styles.primaryButtonText}>
-              {currentIndex === WORDS.length - 1 ? 'Finish' : 'Next'}
-            </Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={[styles.primaryButton, primaryDisabled && styles.buttonDisabled]}
+          disabled={primaryDisabled}
+          onPress={handlePrimary}
+        >
+          <Text style={styles.primaryButtonText}>{primaryLabel}</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -239,7 +293,7 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 24,
@@ -254,19 +308,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   progressText: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#9CA3AF',
     fontWeight: '500',
   },
+  scoreWrapper: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    minWidth: 48,
+  },
+  deductionText: {
+    position: 'absolute',
+    top: -20,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#F87171',
+  },
   progressBar: {
-    height: 5,
+    height: 6,
     backgroundColor: '#333',
     borderRadius: 3,
     overflow: 'hidden',
     width: '100%',
+    marginBottom: 24,
   },
   progressFill: {
     height: '100%',
@@ -320,13 +387,14 @@ const styles = StyleSheet.create({
     width: '47%',
     backgroundColor: '#3A3A3A',
     borderRadius: 10,
-    paddingVertical: 20,
+    paddingVertical: 24,
     paddingHorizontal: 10,
     marginBottom: 12,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
+    minHeight: 88,
   },
   optionSelected: {
     borderColor: ACCENT_COLOR,

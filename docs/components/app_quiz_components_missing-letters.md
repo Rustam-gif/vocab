@@ -8,6 +8,9 @@ File: app/quiz/components/missing-letters.tsx
 - onResult
 - onNext
 - theme
+- wordIndex
+- totalWords
+- sharedScore
 
 ## Notes
 - (none)

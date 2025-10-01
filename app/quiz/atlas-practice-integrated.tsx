@@ -1,5 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  Animated,
+  Easing,
+} from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import WordIntroComponent from './components/word-intro';
@@ -8,6 +16,8 @@ import SynonymComponent from './components/synonym';
 import SentenceUsageComponent from './components/sentence-usage';
 import MissingLetters from './components/missing-letters';
 import { levels } from './data/levels';
+import { analyticsService } from '../../services/AnalyticsService';
+const ACCENT = '#F2935C';
 
 interface Phase {
   id: string;
@@ -27,16 +37,25 @@ export default function AtlasPracticeIntegrated() {
   
   const [currentPhase, setCurrentPhase] = useState(0);
   const [phases, setPhases] = useState<Phase[]>([
-    { id: 'word-intro', name: 'Word Intro', component: WordIntroComponent, completed: false },
+    { id: 'intro', name: 'Intro', component: WordIntroComponent, completed: false },
     { id: 'mcq', name: 'MCQ', component: MCQComponent, completed: false },
     { id: 'synonym', name: 'Synonym', component: SynonymComponent, completed: false },
-    { id: 'sentence-usage', name: 'Natural Usage', component: SentenceUsageComponent, completed: false },
-    { id: 'missing-letters', name: 'Missing Letters', component: MissingLetters, completed: false },
+    { id: 'usage', name: 'Usage', component: SentenceUsageComponent, completed: false },
+    { id: 'letters', name: 'Letters', component: MissingLetters, completed: false },
   ]);
   const [totalScore, setTotalScore] = useState(100);
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [mlIndex, setMlIndex] = useState(0);
+  const animatedIndex = useRef(new Animated.Value(0)).current;
+  const indicatorX = useRef(new Animated.Value(0)).current;
+  const indicatorWidth = useRef(new Animated.Value(0)).current;
+  const tabLayouts = useRef<Record<number, { x: number; width: number }>>({});
+  const indicatorAnimatedStyle = {
+    width: indicatorWidth,
+    transform: [{ translateX: indicatorX }],
+    opacity: indicatorWidth.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: 'clamp' }),
+  } as const;
 
   const handlePhaseComplete = (score: number = 0, questions: number = 0) => {
     const phase = phases[currentPhase];
@@ -56,7 +75,7 @@ export default function AtlasPracticeIntegrated() {
     let nextTotalCorrect = totalCorrect;
     let nextTotalQuestions = totalQuestions;
 
-    if (!wasCompleted && phase?.id !== 'word-intro') {
+    if (!wasCompleted && phase?.id !== 'intro') {
       nextTotalCorrect += clampedCorrect;
       nextTotalQuestions += clampedQuestions;
       setTotalCorrect(nextTotalCorrect);
@@ -76,6 +95,7 @@ export default function AtlasPracticeIntegrated() {
       params: {
         score: Math.max(0, finalCorrect).toString(),
         totalQuestions: Math.max(0, finalQuestions).toString(),
+        points: Math.max(0, totalScore).toString(),
         setId,
         levelId
       }
@@ -85,10 +105,34 @@ export default function AtlasPracticeIntegrated() {
   useEffect(() => {
     // Reset Missing Letters index when entering that phase or when params change
     const phase = phases[currentPhase];
-    if (phase?.id === 'missing-letters') {
+    if (phase?.id === 'letters') {
       setMlIndex(0);
     }
   }, [currentPhase, setId, levelId]);
+
+  useEffect(() => {
+    Animated.timing(animatedIndex, {
+      toValue: currentPhase,
+      duration: 350,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+    const layout = tabLayouts.current[currentPhase];
+    if (layout) {
+      Animated.timing(indicatorWidth, {
+        toValue: layout.width,
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+      Animated.timing(indicatorX, {
+        toValue: layout.x,
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [currentPhase, animatedIndex, indicatorWidth, indicatorX]);
 
   const getCurrentPhaseComponent = () => {
     const phase = phases[currentPhase];
@@ -97,7 +141,7 @@ export default function AtlasPracticeIntegrated() {
     const Component = phase.component;
     
     // Handle Word Intro component differently
-    if (phase.id === 'word-intro') {
+    if (phase.id === 'intro') {
       return (
         <Component
           setId={setId || ''}
@@ -108,7 +152,7 @@ export default function AtlasPracticeIntegrated() {
     }
     
     // Special wiring for Missing Letters (new API: single-word component)
-    if (phase.id === 'missing-letters') {
+    if (phase.id === 'letters') {
       const level = levels.find(l => l.id === (levelId || ''));
       const currentSet = level?.sets.find(s => s.id.toString() === String(setId));
       const words = currentSet?.words ?? [];
@@ -128,9 +172,25 @@ export default function AtlasPracticeIntegrated() {
           ipa={w.phonetic}
           clue={w.definition}
           theme="dark"
+          wordIndex={mlIndex}
+          totalWords={words.length}
+          sharedScore={totalScore}
           onResult={({ mistakes, usedReveal }) => {
-            const penalty = Math.max(0, mistakes) + (usedReveal ? 3 : 0);
+            const rawPenalty = Math.max(0, mistakes) + (usedReveal ? 3 : 0);
+            const penalty = Math.max(5, rawPenalty || 5);
             setTotalScore(prev => Math.max(0, prev - penalty));
+            // Record analytics for Missing Letters
+            try {
+              const isCorrect = (mistakes || 0) === 0 && !usedReveal;
+              analyticsService.recordResult({
+                wordId: w.word,
+                exerciseType: 'letters',
+                correct: isCorrect,
+                timeSpent: 0,
+                timestamp: new Date(),
+                score: isCorrect ? 1 : 0,
+              });
+            } catch {}
           }}
           onNext={() => {
             const next = mlIndex + 1;
@@ -183,20 +243,23 @@ export default function AtlasPracticeIntegrated() {
 
       {/* Phase Progress */}
       <View style={styles.phaseTabs}>
-        {phases.map((phase, index) => {
-          const isActive = index === currentPhase;
-          return (
-            <TouchableOpacity
-              key={phase.id}
-              style={styles.tabItem}
-              onPress={() => setCurrentPhase(index)}
-              activeOpacity={0.8}
-            >
-              <Text style={isActive ? styles.tabLabelActive : styles.tabLabel}>{phase.name}</Text>
-              <View style={isActive ? styles.tabUnderlineActive : styles.tabUnderline} />
-            </TouchableOpacity>
-          );
-        })}
+        {phases.map((phase, index) => (
+          <PhaseTab
+            key={phase.id}
+            index={index}
+            title={phase.name}
+            onPress={() => setCurrentPhase(index)}
+            onLayout={(layout) => {
+              tabLayouts.current[index] = layout;
+              if (index === currentPhase && tabLayouts.current[index]) {
+                indicatorWidth.setValue(layout.width);
+                indicatorX.setValue(layout.x);
+              }
+            }}
+            animatedIndex={animatedIndex}
+          />
+        ))}
+        <Animated.View style={[styles.tabIndicator, indicatorAnimatedStyle]} />
       </View>
 
       {/* Current Phase Component */}
@@ -207,10 +270,40 @@ export default function AtlasPracticeIntegrated() {
   );
 }
 
+type PhaseTabProps = {
+  index: number;
+  title: string;
+  onPress: () => void;
+  onLayout: (layout: { x: number; width: number }) => void;
+  animatedIndex: Animated.Value;
+};
+
+function PhaseTab({ index, title, onPress, onLayout, animatedIndex }: PhaseTabProps) {
+  const color = animatedIndex.interpolate({
+    inputRange: [index - 1, index, index + 1],
+    outputRange: ['#9CA3AF', ACCENT, '#9CA3AF'],
+    extrapolate: 'clamp',
+  });
+
+  return (
+    <TouchableOpacity
+      style={styles.tabItem}
+      onPress={onPress}
+      activeOpacity={0.85}
+      onLayout={(event) => {
+        const { x, width } = event.nativeEvent.layout;
+        onLayout({ x, width });
+      }}
+    >
+      <Animated.Text style={[styles.tabLabel, { color }]}>{title}</Animated.Text>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
   },
   header: {
     flexDirection: 'row',
@@ -218,8 +311,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
   },
   backButton: {
     padding: 8,
@@ -240,8 +331,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
   },
   tabItem: {
     flex: 1,
@@ -257,19 +346,12 @@ const styles = StyleSheet.create({
     color: '#F2935C',
     fontWeight: '600',
   },
-  tabUnderline: {
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
     height: 2,
-    backgroundColor: 'transparent',
-    width: '60%',
-    marginTop: 6,
     borderRadius: 1,
-  },
-  tabUnderlineActive: {
-    height: 2,
-    backgroundColor: '#F2935C',
-    width: '60%',
-    marginTop: 6,
-    borderRadius: 1,
+    backgroundColor: ACCENT,
   },
   phaseContainer: {
     flex: 1,

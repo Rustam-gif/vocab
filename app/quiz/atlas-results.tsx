@@ -1,240 +1,267 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Animated } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Animated, Easing } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, RotateCcw, Home, Trophy, Target } from 'lucide-react-native';
-import SuccessCelebration from './components/SuccessCelebration';
+import LottieView from 'lottie-react-native';
+import { BookOpen, CheckCircle } from 'lucide-react-native';
+import ProgressService from '../../services/ProgressService';
+import { levels } from './data/levels';
+
+const ACCENT = '#F2935C';
+const CORRECT_COLOR = '#437F76';
 
 export default function AtlasResults() {
   const router = useRouter();
-  const { score, totalQuestions, setId, levelId } = useLocalSearchParams<{
-    score: string;
-    totalQuestions: string;
-    setId: string;
-    levelId: string;
+  const { score, totalQuestions, setId, levelId, points } = useLocalSearchParams<{
+    score?: string;
+    totalQuestions?: string;
+    setId?: string;
+    levelId?: string;
+    points?: string;
   }>();
 
-  const [animatedScore, setAnimatedScore] = useState(0);
-  const [scaleAnim] = useState(new Animated.Value(0));
-  const [fadeAnim] = useState(new Animated.Value(0));
-  const [showCelebration, setShowCelebration] = useState(false);
-  const [hasCelebrated, setHasCelebrated] = useState(false);
-  const [forceCelebration, setForceCelebration] = useState(false);
+  const numericPoints = useMemo(() => {
+    const parsedPoints = parseInt(points || '', 10);
+    if (!Number.isNaN(parsedPoints)) return Math.max(0, parsedPoints);
+    const correct = parseInt(score || '0', 10);
+    const total = parseInt(totalQuestions || '0', 10);
+    if (Number.isNaN(correct) || Number.isNaN(total) || total === 0) return Math.max(0, correct * 20);
+    return Math.max(0, Math.round((correct / total) * 100));
+  }, [points, score, totalQuestions]);
 
-  const scoreNum = parseInt(score || '0');
-  const totalNum = parseInt(totalQuestions || '0');
-  const incorrectNum = Math.max(totalNum - scoreNum, 0);
-  const percentage = totalNum > 0 ? Math.round((scoreNum / totalNum) * 100) : 0;
+  const [displayPoints, setDisplayPoints] = useState(0);
+  const [showDoneButton, setShowDoneButton] = useState(false);
+  const [hideLottie, setHideLottie] = useState(false);
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const buttonsOpacity = useRef(new Animated.Value(0)).current;
+  const buttonsTranslateY = useRef(new Animated.Value(8)).current;
+  const lottieRef = useRef<LottieView>(null);
+  const lottieStarted = useRef(false);
+  const playLottieFromStart = useCallback(() => {
+    // Ensure we start exactly at frame 0 every time and only once
+    if (lottieStarted.current) return;
+    lottieStarted.current = true;
+    try {
+      lottieRef.current?.reset?.();
+      // Defer to next frame to ensure layout is ready
+      requestAnimationFrame(() => {
+        // Play full animation from start; no hard-coded end frame
+        lottieRef.current?.play?.();
+      });
+    } catch {}
+  }, []);
 
   useEffect(() => {
-    setAnimatedScore(0);
-    const increment = scoreNum > 0 ? Math.max(1, Math.ceil(scoreNum / 20)) : 1;
-    const scoreInterval = setInterval(() => {
-      setAnimatedScore(prev => {
-        const next = Math.min(prev + increment, scoreNum);
-        if (next >= scoreNum) {
-          clearInterval(scoreInterval);
+    setDisplayPoints(0);
+    const target = Math.round(numericPoints);
+    const step = target > 0 ? Math.max(1, Math.ceil(target / 40)) : 1;
+    const interval = setInterval(() => {
+      setDisplayPoints(prev => {
+        const next = Math.min(prev + step, target);
+        if (next >= target) {
+          clearInterval(interval);
         }
         return next;
       });
-    }, 50);
-
-    return () => clearInterval(scoreInterval);
-  }, [scoreNum]);
+    }, 20);
+    return () => clearInterval(interval);
+  }, [numericPoints]);
 
   useEffect(() => {
-    scaleAnim.setValue(0);
-    fadeAnim.setValue(0);
-
-    const entranceAnimation = Animated.sequence([
+    // Start animation immediately
+    const sequence = Animated.parallel([
       Animated.timing(scaleAnim, {
         toValue: 1,
-        duration: 600,
+        duration: 1170,
+        easing: Easing.out(Easing.back(1.1)),
         useNativeDriver: true,
       }),
-      Animated.timing(fadeAnim, {
+      Animated.timing(opacityAnim, {
         toValue: 1,
-        duration: 300,
+        duration: 1170,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
     ]);
+    
+    // Reset visibility/animation states on enter
+    setHideLottie(false);
+    lottieStarted.current = false;
 
-    entranceAnimation.start();
+    sequence.start(() => {
+      // Start from the beginning reliably
+      playLottieFromStart();
+    });
+    
+    return () => {
+      // Cleanup animation state so next mount is fresh
+      try { lottieRef.current?.reset?.(); } catch {}
+    };
+  }, [scaleAnim, opacityAnim, playLottieFromStart]);
 
-    return () => entranceAnimation.stop();
-  }, [fadeAnim, scaleAnim, scoreNum]);
-
+  // Animate buttons in smoothly once they are revealed
   useEffect(() => {
-    if (percentage < 90) {
-      setShowCelebration(false);
-      setHasCelebrated(false);
-      return;
+    if (showDoneButton) {
+      buttonsOpacity.setValue(0);
+      buttonsTranslateY.setValue(8);
+      Animated.parallel([
+        Animated.timing(buttonsOpacity, {
+          toValue: 1,
+          duration: 280,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(buttonsTranslateY, {
+          toValue: 0,
+          duration: 280,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [showDoneButton, buttonsOpacity, buttonsTranslateY]);
+
+  const handleDone = async () => {
+    // Save the score to ProgressService
+    if (setId) {
+      try {
+        const progressService = ProgressService.getInstance();
+        await progressService.initialize();
+        const bestScore = Math.round(Math.max(0, Math.min(100, numericPoints)));
+        await progressService.completeSet(
+          setId,
+          bestScore,
+          100
+        );
+        console.log('Score saved:', { setId, score: bestScore });
+      } catch (error) {
+        console.error('Failed to save score:', error);
+      }
     }
 
-    if (hasCelebrated) {
-      return;
-    }
-
-    const celebrationTimer = setTimeout(() => {
-      setShowCelebration(true);
-      setHasCelebrated(true);
-    }, 1500);
-
-    return () => clearTimeout(celebrationTimer);
-  }, [percentage, hasCelebrated]);
-
-  const getPerformanceMessage = () => {
-    if (percentage >= 80) {
-      return {
-        message: "Excellent! You own these words 🎉",
-        color: "#4CAF50",
-        icon: Trophy
-      };
-    } else if (percentage >= 60) {
-      return {
-        message: "Good work! Keep practicing 🌟",
-        color: "#F2AB27",
-        icon: Target
-      };
+    // Go to Learn section for the same level; replace history to avoid back to results
+    if (levelId) {
+      router.replace(`/quiz/learn?level=${levelId}`);
     } else {
-      return {
-        message: "Try again to master these words 💪",
-        color: "#F44336",
-        icon: RotateCcw
-      };
+      router.replace('/');
     }
   };
 
-  const performance = getPerformanceMessage();
-  const PerformanceIcon = performance.icon;
+  const handleCreateStory = () => {
+    // Find the set and extract words
+    if (!setId || !levelId) return;
+    
+    const level = levels.find(l => l.id === levelId);
+    if (!level) return;
+    
+    const set = level.sets.find(s => String(s.id) === String(setId));
+    if (!set || !set.words || set.words.length === 0) return;
 
-  const handleRetry = () => {
-    router.push(`/quiz/atlas-practice-integrated?setId=${setId}&levelId=${levelId}`);
-  };
-
-  const handleBackToSets = () => {
-    router.push(`/quiz/learn?level=${levelId}`);
-  };
-
-  const handleHome = () => {
-    router.push('/');
-  };
-
-  const handleCelebrationClose = () => {
-    setShowCelebration(false);
-    setForceCelebration(false);
-  };
-
-  const handleTestCelebrate = () => {
-    setForceCelebration(true);
-    setShowCelebration(true);
+    // Use ALL words from the set; trim, filter empties, and de-duplicate
+    const wordsToUse = Array.from(
+      new Set(
+        set.words
+          .map(w => (typeof w.word === 'string' ? w.word.trim() : ''))
+          .filter(Boolean)
+      )
+    );
+    
+    // Navigate to story exercise with words as query params
+    router.push({
+      pathname: '/story/StoryExercise',
+      params: { words: wordsToUse.join(',') }
+    });
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <ArrowLeft size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Results</Text>
-        <View style={styles.placeholder} />
-      </View>
-
       <View style={styles.content}>
-        {/* Score Highlight */}
-        <Animated.View 
-          style={[
-            styles.scoreContainer,
-            { 
-              transform: [{ scale: scaleAnim }],
-              opacity: fadeAnim 
-            }
-          ]}
-        >
-          <View style={styles.scoreCircle}>
-            <Text style={styles.scoreText}>{animatedScore}</Text>
-            <Text style={styles.totalText}>/ {totalNum}</Text>
-          </View>
-          <View style={styles.scoreSummary}>
-            <Text style={styles.percentageText}>{percentage}%</Text>
-            <Text style={styles.scoreBreakdown}>
-              {totalNum > 0 ? `${animatedScore} / ${totalNum}` : `${animatedScore}`}
-            </Text>
-          </View>
-        </Animated.View>
-
-        {/* Performance Message */}
-        <View style={styles.messageContainer}>
-          <PerformanceIcon size={32} color={performance.color} />
-          <Text style={[styles.messageText, { color: performance.color }]}>
-            {performance.message}
-          </Text>
+        {!hideLottie ? (
+          <Animated.View
+            style={[
+              styles.animationWrapper,
+              {
+                transform: [
+                  {
+                    scale: scaleAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.45, 1],
+                    }),
+                  },
+                ],
+                opacity: opacityAnim,
+              },
+            ]}
+          >
+            <LottieView
+              ref={lottieRef}
+              source={require('../../assets/lottie/Check.json')}
+              autoPlay={false}
+              loop={false}
+              style={styles.lottieAnimation}
+              speed={0.6}
+              resizeMode="contain"
+              onLayout={playLottieFromStart}
+              onAnimationFinish={() => {
+                setHideLottie(true);
+                setShowDoneButton(true);
+              }}
+            />
+          </Animated.View>
+        ) : (
+          <Animated.View
+            style={[
+              styles.animationWrapper,
+              {
+                transform: [
+                  {
+                    scale: scaleAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.45, 1],
+                    }),
+                  },
+                ],
+                opacity: opacityAnim,
+              },
+            ]}
+          >
+            <CheckCircle size={72} color={CORRECT_COLOR} />
+          </Animated.View>
+        )}
+        <View style={styles.scoreSection}>
+          <Text style={styles.pointsText}>{displayPoints}</Text>
+          <Text style={styles.label}>Score Achieved</Text>
         </View>
-
-        {/* Stats */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{scoreNum}</Text>
-            <Text style={styles.statLabel}>Correct</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{incorrectNum}</Text>
-            <Text style={styles.statLabel}>Incorrect</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{totalNum}</Text>
-            <Text style={styles.statLabel}>Total</Text>
-          </View>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.retryButton]}
-            onPress={handleRetry}
-          >
-            <RotateCcw size={20} color="#fff" />
-            <Text style={styles.actionButtonText}>Try Again</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.setsButton]}
-            onPress={handleBackToSets}
-          >
-            <Target size={20} color="#fff" />
-            <Text style={styles.actionButtonText}>Back to Sets</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.homeButton]}
-            onPress={handleHome}
-          >
-            <Home size={20} color="#fff" />
-            <Text style={styles.actionButtonText}>Home</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.testButton]}
-            onPress={handleTestCelebrate}
-          >
-            <Text style={styles.actionButtonText}>Test Celebration</Text>
-          </TouchableOpacity>
-
+        <View style={styles.buttonContainer}>
+          {showDoneButton ? (
+            <Animated.View
+              style={[
+                styles.buttonsAnimated,
+                { opacity: buttonsOpacity, transform: [{ translateY: buttonsTranslateY }] },
+              ]}
+            >
+              <TouchableOpacity style={styles.primaryButton} onPress={handleDone}>
+                <Text style={styles.primaryButtonText}>Done</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.storyButton} onPress={handleCreateStory}>
+                <BookOpen size={22} color="#FFFFFF" />
+                <Text style={styles.storyButtonText}>Create Story with These Words</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          ) : (
+            // Render invisible buttons to reserve exact layout space and prevent content shift
+            <View style={styles.ghostContainer} pointerEvents="none">
+              <View style={[styles.primaryButton, styles.ghost]}>
+                <Text style={[styles.primaryButtonText, styles.ghostText]}>Done</Text>
+              </View>
+              <View style={[styles.storyButton, styles.ghost]}>
+                <BookOpen size={22} color="#FFFFFF" />
+                <Text style={[styles.storyButtonText, styles.ghostText]}>Create Story with These Words</Text>
+              </View>
+            </View>
+          )}
         </View>
       </View>
-
-      {/* Success Celebration Modal */}
-      <SuccessCelebration
-        visible={showCelebration}
-        score={percentage}
-        onClose={handleCelebrationClose}
-        threshold={forceCelebration ? 0 : 90}
-        title="Fantastic!"
-        subtitle={`You scored ${percentage}% - Outstanding work!`}
-      />
     </SafeAreaView>
   );
 }
@@ -242,128 +269,99 @@ export default function AtlasResults() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-  },
-  backButton: {
-    padding: 8,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-    flex: 1,
-    textAlign: 'center',
-  },
-  placeholder: {
-    width: 40,
+    backgroundColor: '#1E1E1E',
   },
   content: {
     flex: 1,
-    padding: 20,
     alignItems: 'center',
-  },
-  scoreContainer: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  scoreCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#2a2a2a',
     justifyContent: 'center',
+    gap: 18,
+    paddingHorizontal: 32,
+  },
+  animationWrapper: {
+    width: 110,
+    height: 110,
     alignItems: 'center',
-    borderWidth: 4,
-    borderColor: '#4CAF50',
-    marginBottom: 16,
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
-  scoreText: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#4CAF50',
+  lottieAnimation: {
+    width: 110,
+    height: 110,
   },
-  totalText: {
-    fontSize: 18,
-    color: '#9CA3AF',
-  },
-  percentageText: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#4CAF50',
-  },
-  scoreSummary: {
-    alignItems: 'center',
-  },
-  scoreBreakdown: {
-    marginTop: 6,
-    fontSize: 16,
-    color: '#9CA3AF',
-  },
-  messageContainer: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  messageText: {
-    fontSize: 18,
-    fontWeight: '500',
-    textAlign: 'center',
-    marginTop: 12,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    marginBottom: 40,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 4,
-  },
-  statLabel: {
+  label: {
     fontSize: 14,
     color: '#9CA3AF',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
-  actionsContainer: {
+  pointsText: {
+    fontSize: 38,
+    fontWeight: '700',
+    color: ACCENT,
+  },
+  scoreSection: {
+    alignItems: 'center',
+    marginTop: 24,
+    gap: 8,
+  },
+  buttonContainer: {
+    marginTop: 94,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
     width: '100%',
-    gap: 12,
   },
-  actionButton: {
+  ghostContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    width: '100%',
+  },
+  buttonsAnimated: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    width: '100%',
+  },
+  ghost: {
+    opacity: 0,
+  },
+  ghostText: {
+    color: 'transparent',
+  },
+  primaryButton: {
+    backgroundColor: ACCENT,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 18,
+    minWidth: 200,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  storyButton: {
+    backgroundColor: '#437F76',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
+    gap: 10,
+    minWidth: 280,
+    shadowColor: '#437F76',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  retryButton: {
-    backgroundColor: '#F2AB27',
-  },
-  setsButton: {
-    backgroundColor: '#4CAF50',
-  },
-  homeButton: {
-    backgroundColor: '#666',
-  },
-  testButton: {
-    backgroundColor: '#1E3A8A',
-  },
-  actionButtonText: {
-    fontSize: 16,
+  storyButtonText: {
+    fontSize: 15,
     fontWeight: '600',
-    color: '#fff',
+    color: '#FFFFFF',
   },
 });

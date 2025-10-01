@@ -31,6 +31,47 @@ class AnalyticsService {
     await this.saveResults();
   }
 
+  // Count exercises done today and overall (all time)
+  getTodayAndTotalCounts(): { today: number; total: number } {
+    const total = this.results.length;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const today = this.results.filter(r => new Date(r.timestamp).toISOString().split('T')[0] === todayStr).length;
+    return { today, total };
+  }
+
+  // Best streak across all-time: most consecutive days with at least one correct answer
+  getRecordStreak(): number {
+    if (!this.results.length) return 0;
+    const byDay: Record<string, { correct: number; total: number }> = {};
+    this.results.forEach(r => {
+      const day = new Date(r.timestamp).toISOString().split('T')[0];
+      byDay[day] = byDay[day] || { correct: 0, total: 0 };
+      byDay[day].total += 1;
+      if (r.correct) byDay[day].correct += 1;
+    });
+
+    const days = Object.keys(byDay)
+      .sort(); // ascending YYYY-MM-DD order
+
+    let record = 0;
+    let current = 0;
+    let prevDate: Date | null = null;
+    for (const dayStr of days) {
+      const hasCorrect = byDay[dayStr].correct > 0;
+      const date = new Date(dayStr + 'T00:00:00Z');
+      const isConsecutive = prevDate ? (date.getTime() - prevDate.getTime() === 24 * 60 * 60 * 1000) : false;
+
+      if (hasCorrect) {
+        current = isConsecutive ? current + 1 : 1;
+        record = Math.max(record, current);
+      } else {
+        current = 0; // break streak on a day with no correct answers
+      }
+      prevDate = date;
+    }
+    return record;
+  }
+
   getAnalyticsData(): AnalyticsData {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -40,9 +81,10 @@ class AnalyticsService {
       result => new Date(result.timestamp) >= thirtyDaysAgo
     );
 
-    // Calculate accuracy by exercise type
+    // Calculate accuracy by exercise type (ensure all main types show up even if 0)
     const accuracyByType: Record<string, number> = {};
-    const exerciseTypes = [...new Set(recentResults.map(r => r.exerciseType))];
+    const baseTypes = ['mcq', 'synonym', 'usage', 'letters', 'sprint'];
+    const exerciseTypes = [...new Set([...baseTypes, ...recentResults.map(r => r.exerciseType)])];
     
     exerciseTypes.forEach(type => {
       const typeResults = recentResults.filter(r => r.exerciseType === type);
@@ -52,8 +94,9 @@ class AnalyticsService {
         : 0;
     });
 
-    // Calculate accuracy trend (last 7 days)
-    const accuracyTrend = [];
+    // Calculate accuracy trend (last 7 days) and time spent per day
+    const accuracyTrend = [] as Array<{ date: string; accuracy: number }>;
+    const timeTrend = [] as Array<{ date: string; seconds: number }>;
     for (let i = 6; i >= 0; i--) {
       const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
       const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -69,10 +112,15 @@ class AnalyticsService {
       const dayAccuracy = dayResults.length > 0 
         ? Math.round((dayResults.filter(r => r.correct).length / dayResults.length) * 100)
         : 0;
+      const daySeconds = dayResults.reduce((sum, r) => sum + Math.max(0, Number(r.timeSpent || 0)), 0);
       
       accuracyTrend.push({
         date: dayStart.toISOString().split('T')[0],
         accuracy: dayAccuracy,
+      });
+      timeTrend.push({
+        date: dayStart.toISOString().split('T')[0],
+        seconds: daySeconds,
       });
     }
 
@@ -128,6 +176,7 @@ class AnalyticsService {
       overallAccuracy,
       streak,
       personalBest,
+      timeTrend,
     };
   }
 

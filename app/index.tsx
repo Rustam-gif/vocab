@@ -1,13 +1,46 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { BookOpen, BarChart3, FileText, User, Plus, Brain, ChevronRight } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+
+const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const [storedLevel, setStoredLevel] = useState<string | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(SELECTED_LEVEL_KEY).then(level => {
+      if (level) setStoredLevel(level);
+    });
+  }, []);
+
+  const handleQuizSession = () => {
+    if (storedLevel) {
+      router.push(`/quiz/learn?level=${storedLevel}`);
+    } else {
+      router.push('/quiz/level-select');
+    }
+  };
+
+  const updateStoredLevel = async () => {
+    const level = await AsyncStorage.getItem(SELECTED_LEVEL_KEY);
+    if (level) setStoredLevel(level);
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      updateStoredLevel();
+    }, [])
+  );
 
   // Organized sections with softer colors
+  const accent = '#F2935C';
+  const background = '#1E1E1E';
+
   const sections = [
     {
       title: 'Learning Tools',
@@ -16,22 +49,22 @@ export default function HomeScreen() {
           title: 'Vault',
           subtitle: 'Manage your vocabulary',
           icon: BookOpen,
-          color: '#D97706', // Softer orange
+          color: accent,
           onPress: () => router.push('/vault'),
         },
         {
           title: 'Quiz Session',
           subtitle: '5-word practice session',
           icon: Brain,
-          color: '#D97706', // Softer yellow-orange
-          onPress: () => router.push('/quiz/level-select'),
+          color: accent,
+          onPress: handleQuizSession,
         },
         {
           title: 'Story Exercise',
-          subtitle: 'AI-powered story practice',
+          subtitle: 'Fill-in-the-blanks with pill UI',
           icon: FileText,
-          color: '#059669', // Softer green
-          onPress: () => router.push('/story-exercise'),
+          color: accent,
+          onPress: () => router.push('/story/StoryExercise'),
         },
       ],
     },
@@ -42,14 +75,14 @@ export default function HomeScreen() {
           title: 'Journal',
           subtitle: 'Track your learning journey',
           icon: FileText,
-          color: '#7C3AED', // Softer purple
+          color: accent,
           onPress: () => router.push('/journal'),
         },
         {
           title: 'Analytics',
           subtitle: 'View your progress',
           icon: BarChart3,
-          color: '#059669', // Softer green
+          color: accent,
           onPress: () => router.push('/stats'),
         },
       ],
@@ -61,7 +94,7 @@ export default function HomeScreen() {
           title: 'Profile',
           subtitle: 'Manage your account',
           icon: User,
-          color: '#7C3AED', // Softer purple
+          color: accent,
           onPress: () => router.push('/profile'),
         },
       ],
@@ -69,8 +102,12 @@ export default function HomeScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={[styles.container, { backgroundColor: background }] }>
+      <ScrollView
+        style={[styles.scrollView, { backgroundColor: background }]}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Engniter Vocabulary</Text>
@@ -127,10 +164,13 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212',
+    backgroundColor: '#1E1E1E',
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 32,
   },
   header: {
     paddingHorizontal: 24,
@@ -161,12 +201,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
   },
   card: {
-    backgroundColor: '#1F2937',
+    backgroundColor: '#2C2C2C',
     marginHorizontal: 24,
     marginBottom: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#333',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,

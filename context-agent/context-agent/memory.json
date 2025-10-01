@@ -1,0 +1,36 @@
+{
+  "decisions": [
+    {
+      "title": "Story Exercise Modal Redesign",
+      "detail": "Completely redesigned customize story modal with centered layout, reduced padding/margins, smaller option pills and compact 380px maxWidth for better UX",
+      "when": "2025-09-28T20:46:43.843Z"
+    },
+    {
+      "title": "Story Exercise Button Layout Fixed",
+      "detail": "Repositioned theme toggle to left corner and fullscreen button to right corner with proper spacing (theme: left 16px, fullscreen: right 8px) to eliminate overlapping issues",
+      "when": "2025-09-28T20:46:56.920Z"
+    },
+    {
+      "title": "Story Exercise Container Height Optimization",
+      "detail": "Increased story content card height with paddingTop 100px, minHeight 600px, and proper button spacing. Later optimized to paddingTop 50px, minHeight 300px for better proportions",
+      "when": "2025-09-28T20:47:20.676Z"
+    },
+    {
+      "title": "Story Generation System Overhaul",
+      "detail": "Fixed story generation issues: improved OpenAI prompts for longer creative stories (250-500 words), completely rewrote mock story templates with real vocabulary integration instead of generic placeholders, increased max_tokens to 2000 and temperature to 0.8",
+      "when": "2025-09-28T20:47:59.632Z"
+    },
+    {
+      "title": "Story Exercise Blank Areas Complete Redesign",
+      "detail": "Fixed critical blank positioning issue where blanks overlapped text. Replaced View-in-Text structure with inline Text components (renderBlankInline), created proper inline styles (blankPillInline, emptyBlankInline), and made blanks much larger and user-friendly with minWidth 120px, better padding, and clear visual design",
+      "when": "2025-09-28T20:48:31.904Z"
+    },
+    {
+      "title": "Story Exercise Word Selection Modal",
+      "detail": "Added interactive word selection popup that opens when clicking blank areas. Includes modal overlay, available words filtering, proper state management (selectedBlankId, showWordSelectionModal), and clean modal design with word selection functionality",
+      "when": "2025-09-28T20:48:47.279Z"
+    }
+  ],
+  "goals": [],
+  "style": []
+}
