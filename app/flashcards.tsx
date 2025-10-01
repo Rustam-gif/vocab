@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, PanResponder, Dimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppStore } from '../lib/store';
 
@@ -38,6 +39,7 @@ export default function Flashcards() {
   );
 
   useEffect(() => { (async () => { await loadWords(); })(); }, [loadWords]);
+
 
   // Build a session queue prioritized by due SRS (initialize only when folder changes or word count changes)
   const didInitRef = useRef(false);
@@ -316,9 +318,7 @@ export default function Flashcards() {
             <View style={styles.tapCatcher} {...panResponder.panHandlers} />
           </Animated.View>
         </Animated.View>
-        <View style={styles.controls}> 
-          <TouchableOpacity style={styles.ctrlBtn} onPress={doFlip}><Text style={styles.ctrlTxt}>Flip</Text></TouchableOpacity>
-        </View>
+        
       </View>
     </SafeAreaView>
   );
