@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ExercisePerformance, ExerciseResult, NewWordPayload, Word } from '../types';
+import { ExercisePerformance, ExerciseResult, NewWordPayload, Word, SrsState } from '../types';
 
 const VAULT_KEY = 'vocab_vault';
 const DEMO_WORDS: Word[] = [
@@ -141,6 +141,7 @@ class VaultService {
       incorrectCount: 0,
       exerciseStats: {},
       isWeak: true,
+      srs: this.createInitialSrs(),
     };
 
     this.words.push(newWord);
@@ -313,11 +314,22 @@ class VaultService {
         ? word.lastPracticed
         : new Date(word.lastPracticed)
       : undefined;
+    const srs: SrsState = word.srs
+      ? {
+          easeFactor: Math.max(1.3, (word.srs as any).easeFactor ?? 2.5),
+          interval: Math.max(0, (word.srs as any).interval ?? 0),
+          repetition: Math.max(0, (word.srs as any).repetition ?? 0),
+          dueAt: new Date((word.srs as any).dueAt ?? Date.now()),
+          lastReviewedAt: word.srs.lastReviewedAt ? new Date(word.srs.lastReviewedAt) : undefined,
+          lapses: Math.max(0, (word.srs as any).lapses ?? 0),
+        }
+      : this.createInitialSrs();
 
     return {
       ...word,
       savedAt,
       lastPracticed,
+      srs,
       correctCount: word.correctCount ?? 0,
       incorrectCount: word.incorrectCount ?? 0,
       exerciseStats: word.exerciseStats ?? {},
@@ -325,6 +337,71 @@ class VaultService {
       practiceCount: word.practiceCount ?? 0,
       score: word.score ?? 0,
     };
+  }
+
+  // --- SRS helpers (SM-2 variant) ---
+  private createInitialSrs(): SrsState {
+    return {
+      easeFactor: 2.5,
+      interval: 0,
+      repetition: 0,
+      dueAt: new Date(),
+      lapses: 0,
+    };
+  }
+
+  // quality: 0-5 (0 total blackout, 5 perfect)
+  updateSrs(word: Word, quality: number): SrsState {
+    const s = this.applyDefaults(word).srs!;
+    let { easeFactor, interval, repetition, lapses } = s;
+
+    // Adjust ease factor
+    easeFactor = easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+    if (easeFactor < 1.3) easeFactor = 1.3;
+
+    let nextInterval = interval;
+    if (quality < 3) {
+      repetition = 0;
+      lapses += 1;
+      nextInterval = 1; // immediate short review tomorrow
+    } else {
+      repetition += 1;
+      if (repetition === 1) nextInterval = 1; // 1 day
+      else if (repetition === 2) nextInterval = 6; // 6 days
+      else nextInterval = Math.round(interval * easeFactor);
+    }
+
+    const dueAt = new Date();
+    dueAt.setDate(dueAt.getDate() + nextInterval);
+
+    return { easeFactor, interval: nextInterval, repetition, dueAt, lastReviewedAt: new Date(), lapses };
+  }
+
+  async gradeWordSrs(wordId: string, quality: number): Promise<Word | null> {
+    const idx = this.words.findIndex(w => w.id === wordId);
+    if (idx === -1) return null;
+    const updatedSrs = this.updateSrs(this.words[idx], quality);
+    const updated: Word = { ...this.words[idx], srs: updatedSrs, lastPracticed: new Date(), practiceCount: (this.words[idx].practiceCount ?? 0) + 1 };
+    this.words[idx] = updated;
+    await this.saveWords();
+    return updated;
+  }
+
+  getDueWords(limit?: number, folderId?: string): Word[] {
+    const now = new Date();
+    const filtered = this.words.filter(w => (!folderId || w.folderId === folderId) && (w.srs?.dueAt ? new Date(w.srs.dueAt) <= now : true));
+    const sorted = filtered.sort((a, b) => new Date(a.srs?.dueAt ?? 0).getTime() - new Date(b.srs?.dueAt ?? 0).getTime());
+    return typeof limit === 'number' ? sorted.slice(0, limit) : sorted;
+  }
+
+  async resetSrs(folderId?: string): Promise<void> {
+    const now = new Date();
+    this.words = this.words.map(w => {
+      if (folderId && w.folderId !== folderId) return w;
+      const init = this.createInitialSrs();
+      return { ...w, srs: { ...init, dueAt: now } };
+    });
+    await this.saveWords();
   }
 }
 

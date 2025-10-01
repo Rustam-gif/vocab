@@ -20,6 +20,9 @@ interface AppState {
   createFolder: (title: string) => Promise<{ id: string; title: string; createdAt: string } | null>;
   moveWordToFolder: (wordId: string, folderId?: string) => Promise<boolean>;
   deleteFolder: (folderId: string) => Promise<boolean>;
+  getDueWords: (limit?: number, folderId?: string) => Word[];
+  gradeWordSrs: (wordId: string, quality: number) => Promise<Word | null>;
+  resetSrs: (folderId?: string) => Promise<void>;
   
   // Story state
   currentStory: Story | null;
@@ -113,6 +116,29 @@ export const useAppStore = create<AppState>((set, get) => ({
     return vaultService.searchWords(query);
   },
   getFolders: () => vaultService.getFolders(),
+  getDueWords: (limit, folderId) => vaultService.getDueWords(limit, folderId),
+  gradeWordSrs: async (wordId, quality) => {
+    try {
+      const updated = await vaultService.gradeWordSrs(wordId, quality);
+      if (updated) {
+        const words = get().words.map(w => (w.id === updated.id ? updated : w));
+        set({ words });
+      }
+      return updated;
+    } catch (e) {
+      console.error('Failed to grade SRS:', e);
+      return null;
+    }
+  },
+  resetSrs: async (folderId) => {
+    try {
+      await vaultService.resetSrs(folderId);
+      const words = vaultService.getAllWords();
+      set({ words });
+    } catch (e) {
+      console.error('Failed to reset SRS:', e);
+    }
+  },
   createFolder: async (title) => {
     try {
       const folder = await vaultService.createFolder(title);

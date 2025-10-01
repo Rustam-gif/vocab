@@ -28,6 +28,7 @@ export interface Word {
   exerciseStats: ExerciseStats;
   isWeak?: boolean;
   folderId?: string; // optional grouping
+  srs?: SrsState; // spaced repetition metadata
 }
 
 export interface NewWordPayload {
@@ -77,6 +78,16 @@ export interface ExercisePerformance {
   timeSpent: number;
   correct: boolean;
   timestamp: Date;
+}
+
+// Spaced Repetition SM-2-style state kept per word
+export interface SrsState {
+  easeFactor: number; // E-Factor (min 1.3)
+  interval: number; // current interval in days
+  repetition: number; // consecutive successful reviews
+  dueAt: Date; // next scheduled review time
+  lastReviewedAt?: Date;
+  lapses: number; // number of times failed (<3 quality)
 }
 
 export interface Story {
