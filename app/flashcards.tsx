@@ -317,9 +317,7 @@ export default function Flashcards() {
           </Animated.View>
         </Animated.View>
         <View style={styles.controls}> 
-          <TouchableOpacity style={styles.ctrlBtn} onPress={handleKnow}><Text style={styles.ctrlTxt}>I know</Text></TouchableOpacity>
           <TouchableOpacity style={styles.ctrlBtn} onPress={doFlip}><Text style={styles.ctrlTxt}>Flip</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.ctrlBtn} onPress={handleDontKnow}><Text style={styles.ctrlTxt}>I don't know</Text></TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
