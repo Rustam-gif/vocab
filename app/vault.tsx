@@ -11,26 +11,35 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Plus, Search, BookOpen, Star, Calendar } from 'lucide-react-native';
+import { ArrowLeft, Plus, Search, BookOpen, Folder, FolderOpen, FolderPlus, Trash2 } from 'lucide-react-native';
 import { useAppStore } from '../lib/store';
 import { Word } from '../types';
 import { aiService } from '../services/AIService';
 
 export default function VaultScreen() {
   const router = useRouter();
-  const { words, loading, loadWords, addWord, searchWords } = useAppStore();
+  const { words, loading, loadWords, addWord, searchWords, getFolders, createFolder, moveWordToFolder, deleteFolder } = useAppStore();
   const [searchQuery, setSearchQuery] = useState('');
-  const [isAddingWord, setIsAddingWord] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
   const [newWord, setNewWord] = useState('');
+  const [folders, setFolders] = useState(getFolders());
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [showFolderCreate, setShowFolderCreate] = useState(false);
+  const [newFolderTitle, setNewFolderTitle] = useState('');
+  const [selectedModalFolderId, setSelectedModalFolderId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadWords();
+    (async () => {
+      await loadWords();
+      setFolders(getFolders());
+    })();
   }, []);
 
   const handleAddWord = async () => {
     if (!newWord.trim()) return;
 
-    setIsAddingWord(true);
+    setIsAdding(true);
     try {
       const definition = await aiService.getWordDefinition(newWord.trim());
       
@@ -42,10 +51,12 @@ export default function VaultScreen() {
           phonetics: definition.phonetics,
           notes: '',
           tags: [],
+          folderId: selectedModalFolderId || undefined,
         };
 
         await addWord(wordData);
         setNewWord('');
+        setIsAddModalOpen(false);
         Alert.alert('Success', 'Word added to vault!');
       } else {
         Alert.alert('Word Not Found', 'Sorry, we couldn\'t find this word in the dictionary.');
@@ -53,13 +64,14 @@ export default function VaultScreen() {
     } catch (error) {
       Alert.alert('Error', 'Failed to add word. Please try again.');
     } finally {
-      setIsAddingWord(false);
+      setIsAdding(false);
     }
   };
 
-  const filteredWords = searchQuery 
-    ? searchWords(searchQuery)
-    : words;
+  const baseFiltered = folders;
+  const foldersToShow = searchQuery
+    ? baseFiltered.filter(f => f.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    : baseFiltered;
 
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString();
@@ -94,7 +106,13 @@ export default function VaultScreen() {
         <Text style={styles.title}>Vocabulary Vault</Text>
         <TouchableOpacity
           style={styles.addButtonIcon}
-          onPress={() => setIsAddingWord(true)}
+          onPress={() => {
+            setIsAddModalOpen(true);
+            if (!selectedModalFolderId) {
+              const guess = folders.find(f => f.title.toLowerCase().includes('my saved'))?.id || folders[0]?.id || null;
+              setSelectedModalFolderId(guess);
+            }
+          }}
         >
           <Plus size={24} color="#fff" />
         </TouchableOpacity>
@@ -112,66 +130,51 @@ export default function VaultScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {filteredWords.length === 0 ? (
+        {foldersToShow.length === 0 ? (
           <View style={styles.emptyState}>
             <BookOpen size={64} color="#a0a0a0" />
             <Text style={styles.emptyTitle}>
-              {searchQuery ? 'No words found' : 'Your vault is empty'}
+              {searchQuery ? 'No folders found' : 'No folders yet'}
             </Text>
-            <Text style={styles.emptySubtitle}>
-              {searchQuery 
-                ? 'Try a different search term'
-                : 'Add your first word to get started'
-              }
-            </Text>
+            <Text style={styles.emptySubtitle}>Create a folder to organize your saved words.</Text>
           </View>
         ) : (
           <View style={styles.wordsList}>
-            {filteredWords.map((word) => (
-              <TouchableOpacity
-                key={word.id}
-                style={styles.wordCard}
-                activeOpacity={0.7}
-              >
-                <View style={styles.wordHeader}>
-                  <Text style={styles.wordText}>{word.word}</Text>
-                  <View style={styles.scoreContainer}>
-                    <Star 
-                      size={16} 
-                      color={getScoreColor(word.score)} 
-                      fill={getScoreColor(word.score)}
-                    />
-                    <Text style={[styles.scoreText, { color: getScoreColor(word.score) }]}>
-                      {word.score}
-                    </Text>
+            <TouchableOpacity style={styles.newFolderRow} onPress={() => setShowFolderCreate(true)}>
+              <FolderPlus size={18} color="#fff" />
+              <Text style={styles.newFolderText}>New Folder</Text>
+            </TouchableOpacity>
+            {foldersToShow.map((f) => {
+              const count = words.filter(w => w.folderId === f.id).length;
+              return (
+                <TouchableOpacity key={f.id} style={styles.folderRow} onPress={() => router.push({ pathname: '/vault-folder', params: { id: f.id, title: f.title } })}>
+                  <Folder size={20} color="#e28743" />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.folderTitle}>{f.title}</Text>
+                    <Text style={styles.folderSubtitle}>{count} {count === 1 ? 'word' : 'words'}</Text>
                   </View>
-                </View>
-                
-                <Text style={styles.definitionText}>{word.definition}</Text>
-                
-                <Text style={styles.exampleText}>"{word.example}"</Text>
-                
-                <View style={styles.wordFooter}>
-                  <View style={styles.practiceInfo}>
-                    <Text style={styles.practiceText}>
-                      Practiced {word.practiceCount} times
-                    </Text>
-                  </View>
-                  <View style={styles.dateInfo}>
-                    <Calendar size={14} color="#a0a0a0" />
-                    <Text style={styles.dateText}>
-                      {formatDate(word.savedAt)}
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))}
+                  <TouchableOpacity
+                    onPress={async (e) => {
+                      e.stopPropagation();
+                      // Prevent deleting default folders
+                      const ok = await deleteFolder(f.id);
+                      if (ok) {
+                        setFolders(getFolders());
+                      }
+                    }}
+                    style={{ padding: 6 }}
+                  >
+                    <Trash2 size={18} color="#a0a0a0" />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
       </ScrollView>
 
       {/* Add Word Modal */}
-      {isAddingWord && (
+      {isAddModalOpen && (
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add New Word</Text>
@@ -183,11 +186,25 @@ export default function VaultScreen() {
               onChangeText={setNewWord}
               autoFocus
             />
+            <View style={{ marginBottom: 16 }}>
+              <Text style={styles.modalSectionLabel}>Save to</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+                {folders.map(f => (
+                  <TouchableOpacity
+                    key={f.id}
+                    style={[styles.folderChip, selectedModalFolderId === f.id && styles.folderChipActive]}
+                    onPress={() => setSelectedModalFolderId(f.id)}
+                  >
+                    <Text style={styles.folderChipText}>{f.title}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => {
-                  setIsAddingWord(false);
+                  setIsAddModalOpen(false);
                   setNewWord('');
                 }}
               >
@@ -196,13 +213,52 @@ export default function VaultScreen() {
               <TouchableOpacity
                 style={[styles.modalButton, styles.addButton]}
                 onPress={handleAddWord}
-                disabled={isAddingWord || !newWord.trim()}
+                disabled={isAdding || !newWord.trim()}
               >
-                {isAddingWord ? (
+                {isAdding ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Text style={styles.addButtonText}>Add Word</Text>
                 )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Create Folder Modal */}
+      {showFolderCreate && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Create Folder</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Folder title"
+              placeholderTextColor="#a0a0a0"
+              value={newFolderTitle}
+              onChangeText={setNewFolderTitle}
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => { setShowFolderCreate(false); setNewFolderTitle(''); }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.addButton]}
+                onPress={async () => {
+                  const folder = await createFolder(newFolderTitle.trim());
+                  if (folder) {
+                    setFolders(getFolders());
+                    setShowFolderCreate(false);
+                    setNewFolderTitle('');
+                  }
+                }}
+                disabled={!newFolderTitle.trim()}
+              >
+                <Text style={styles.addButtonText}>Create</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -334,6 +390,45 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  moveButton: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    backgroundColor: '#3A3A3A',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  moveButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  folderChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#3A3A3A',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    marginRight: 8,
+  },
+  folderChipStatic: {
+    backgroundColor: '#2c2f2f',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    marginRight: 8,
+  },
+  folderChipActive: {
+    borderWidth: 1,
+    borderColor: '#e28743',
+  },
+  folderChipText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   practiceInfo: {
     flex: 1,
   },
@@ -383,6 +478,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 20,
   },
+  modalSectionLabel: {
+    color: '#a0a0a0',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
   modalButtons: {
     flexDirection: 'row',
     gap: 12,
@@ -408,5 +509,37 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  newFolderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#2c2f2f',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+  },
+  newFolderText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  folderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2c2f2f',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+  },
+  folderTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  folderSubtitle: {
+    color: '#a0a0a0',
+    fontSize: 12,
+    marginTop: 2,
   },
 });

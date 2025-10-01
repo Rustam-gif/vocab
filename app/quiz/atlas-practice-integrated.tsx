@@ -16,6 +16,7 @@ import SynonymComponent from './components/synonym';
 import SentenceUsageComponent from './components/sentence-usage';
 import MissingLetters from './components/missing-letters';
 import { levels } from './data/levels';
+import { analyticsService } from '../../services/AnalyticsService';
 const ACCENT = '#F2935C';
 
 interface Phase {
@@ -178,6 +179,18 @@ export default function AtlasPracticeIntegrated() {
             const rawPenalty = Math.max(0, mistakes) + (usedReveal ? 3 : 0);
             const penalty = Math.max(5, rawPenalty || 5);
             setTotalScore(prev => Math.max(0, prev - penalty));
+            // Record analytics for Missing Letters
+            try {
+              const isCorrect = (mistakes || 0) === 0 && !usedReveal;
+              analyticsService.recordResult({
+                wordId: w.word,
+                exerciseType: 'letters',
+                correct: isCorrect,
+                timeSpent: 0,
+                timestamp: new Date(),
+                score: isCorrect ? 1 : 0,
+              });
+            } catch {}
           }}
           onNext={() => {
             const next = mlIndex + 1;

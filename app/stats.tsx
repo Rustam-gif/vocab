@@ -63,52 +63,26 @@ export default function StatsScreen() {
   };
 
   const renderTrendChart = () => {
-    if (!analytics?.accuracyTrend) return null;
+    if (!analytics?.timeTrend) return null;
 
-    const trendData = analytics.accuracyTrend;
-    const maxAccuracy = Math.max(...trendData.map((d: any) => d.accuracy));
+    const trendData = analytics.timeTrend;
+    const maxSeconds = Math.max(...trendData.map((d: any) => d.seconds), 1);
 
     return (
       <View style={styles.chartContainer}>
-        <Text style={styles.chartTitle}>Accuracy Trend (Last 7 Days)</Text>
+        <Text style={styles.chartTitle}>Time Spent per Day (Last 7 Days)</Text>
         <View style={styles.trendChart}>
           <View style={styles.trendLine}>
             {trendData.map((point: any, index: number) => {
-              const nextPoint = trendData[index + 1];
-              if (!nextPoint) return null;
-
-              const currentHeight = (point.accuracy / maxAccuracy) * 100;
-              const nextHeight = (nextPoint.accuracy / maxAccuracy) * 100;
-
+              const barHeight = (point.seconds / maxSeconds) * 100;
               return (
                 <View key={index} style={styles.trendSegment}>
                   <View
                     style={[
-                      styles.trendDot,
-                      { bottom: currentHeight },
+                      styles.trendBar,
+                      { height: barHeight },
                     ]}
                   />
-                  {index < trendData.length - 1 && (
-                    <View
-                      style={[
-                        styles.trendLineSegment,
-                        {
-                          height: Math.abs(nextHeight - currentHeight),
-                          bottom: Math.min(currentHeight, nextHeight),
-                          transform: [
-                            {
-                              rotate: `${
-                                Math.atan2(
-                                  nextHeight - currentHeight,
-                                  1
-                                ) * (180 / Math.PI)
-                              }deg`,
-                            },
-                          ],
-                        },
-                      ]}
-                    />
-                  )}
                 </View>
               );
             })}
@@ -408,6 +382,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#e28743',
     position: 'absolute',
     left: 3,
+  },
+  trendBar: {
+    width: 10,
+    backgroundColor: '#e28743',
+    borderRadius: 3,
+    alignSelf: 'center',
   },
   trendLabels: {
     flexDirection: 'row',

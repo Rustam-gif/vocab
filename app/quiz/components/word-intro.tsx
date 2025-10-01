@@ -106,6 +106,7 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
           phonetics: wordData.phonetic,
           notes: '',
           tags: [],
+          folderId: 'folder-sets-default',
         });
         
         setSavedWords(prev => new Set(prev).add(wordText));

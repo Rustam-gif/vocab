@@ -144,6 +144,7 @@ export default function WordIntro({
         synonyms: word.synonyms || [],
         notes: '',
         tags: [],
+        folderId: 'folder-sets-default',
       };
       const result = await addWord(payload);
       if (result) {

@@ -27,6 +27,7 @@ export interface Word {
   incorrectCount: number;
   exerciseStats: ExerciseStats;
   isWeak?: boolean;
+  folderId?: string; // optional grouping
 }
 
 export interface NewWordPayload {
@@ -38,6 +39,7 @@ export interface NewWordPayload {
   tags?: string[];
   level?: string;
   category?: string;
+  folderId?: string;
 }
 
 export interface ExerciseStats {
@@ -65,6 +67,7 @@ export interface AnalyticsData {
   overallAccuracy: number;
   streak: number;
   personalBest: number;
+  timeTrend?: Array<{ date: string; seconds: number }>;
 }
 
 export interface ExercisePerformance {

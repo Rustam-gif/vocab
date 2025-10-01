@@ -81,9 +81,10 @@ class AnalyticsService {
       result => new Date(result.timestamp) >= thirtyDaysAgo
     );
 
-    // Calculate accuracy by exercise type
+    // Calculate accuracy by exercise type (ensure all main types show up even if 0)
     const accuracyByType: Record<string, number> = {};
-    const exerciseTypes = [...new Set(recentResults.map(r => r.exerciseType))];
+    const baseTypes = ['mcq', 'synonym', 'usage', 'letters', 'sprint'];
+    const exerciseTypes = [...new Set([...baseTypes, ...recentResults.map(r => r.exerciseType)])];
     
     exerciseTypes.forEach(type => {
       const typeResults = recentResults.filter(r => r.exerciseType === type);
@@ -93,8 +94,9 @@ class AnalyticsService {
         : 0;
     });
 
-    // Calculate accuracy trend (last 7 days)
-    const accuracyTrend = [];
+    // Calculate accuracy trend (last 7 days) and time spent per day
+    const accuracyTrend = [] as Array<{ date: string; accuracy: number }>;
+    const timeTrend = [] as Array<{ date: string; seconds: number }>;
     for (let i = 6; i >= 0; i--) {
       const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
       const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -110,10 +112,15 @@ class AnalyticsService {
       const dayAccuracy = dayResults.length > 0 
         ? Math.round((dayResults.filter(r => r.correct).length / dayResults.length) * 100)
         : 0;
+      const daySeconds = dayResults.reduce((sum, r) => sum + Math.max(0, Number(r.timeSpent || 0)), 0);
       
       accuracyTrend.push({
         date: dayStart.toISOString().split('T')[0],
         accuracy: dayAccuracy,
+      });
+      timeTrend.push({
+        date: dayStart.toISOString().split('T')[0],
+        seconds: daySeconds,
       });
     }
 
@@ -169,6 +176,7 @@ class AnalyticsService {
       overallAccuracy,
       streak,
       personalBest,
+      timeTrend,
     };
   }
 

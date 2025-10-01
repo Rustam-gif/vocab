@@ -3,12 +3,15 @@
 Directories and files discovered under configured roots:
 - app
   - _layout.tsx
+  - flashcards.tsx
   - index.tsx
   - journal.tsx
   - profile.tsx
   - stats.tsx
   - story-exercise.tsx
+  - vault-folder.tsx
   - vault.tsx
+  - word-sprint.tsx
 - app/quiz
   - _layout.tsx
   - atlas-practice-integrated.tsx

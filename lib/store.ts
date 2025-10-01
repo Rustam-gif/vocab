@@ -16,6 +16,10 @@ interface AppState {
   updateWord: (id: string, updates: Partial<Word>) => Promise<void>;
   deleteWord: (id: string) => Promise<void>;
   searchWords: (query: string) => Word[];
+  getFolders: () => { id: string; title: string; createdAt: string }[];
+  createFolder: (title: string) => Promise<{ id: string; title: string; createdAt: string } | null>;
+  moveWordToFolder: (wordId: string, folderId?: string) => Promise<boolean>;
+  deleteFolder: (folderId: string) => Promise<boolean>;
   
   // Story state
   currentStory: Story | null;
@@ -107,6 +111,32 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   searchWords: (query) => {
     return vaultService.searchWords(query);
+  },
+  getFolders: () => vaultService.getFolders(),
+  createFolder: async (title) => {
+    try {
+      const folder = await vaultService.createFolder(title);
+      return folder;
+    } catch (e) {
+      console.error('Failed to create folder:', e);
+      return null;
+    }
+  },
+  moveWordToFolder: async (wordId, folderId) => {
+    try {
+      return await vaultService.moveWordToFolder(wordId, folderId);
+    } catch (e) {
+      console.error('Failed to move word:', e);
+      return false;
+    }
+  },
+  deleteFolder: async (folderId) => {
+    try {
+      return await vaultService.deleteFolder(folderId);
+    } catch (e) {
+      console.error('Failed to delete folder:', e);
+      return false;
+    }
   },
   
   // Story state
