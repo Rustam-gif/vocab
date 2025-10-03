@@ -146,6 +146,9 @@ export default function VaultScreen() {
             </TouchableOpacity>
             {foldersToShow.map((f) => {
               const count = words.filter(w => w.folderId === f.id).length;
+              // Check if this is a default folder (don't allow deletion)
+              const isDefaultFolder = ['folder-sets-default', 'folder-user-default', 'folder-phrasal-default', 'folder-daily-default'].includes(f.id);
+              
               return (
                 <TouchableOpacity key={f.id} style={styles.folderRow} onPress={() => router.push({ pathname: '/vault-folder', params: { id: f.id, title: f.title } })}>
                   <Folder size={20} color="#e28743" />
@@ -153,19 +156,20 @@ export default function VaultScreen() {
                     <Text style={styles.folderTitle}>{f.title}</Text>
                     <Text style={styles.folderSubtitle}>{count} {count === 1 ? 'word' : 'words'}</Text>
                   </View>
-                  <TouchableOpacity
-                    onPress={async (e) => {
-                      e.stopPropagation();
-                      // Prevent deleting default folders
-                      const ok = await deleteFolder(f.id);
-                      if (ok) {
-                        setFolders(getFolders());
-                      }
-                    }}
-                    style={{ padding: 6 }}
-                  >
-                    <Trash2 size={18} color="#a0a0a0" />
-                  </TouchableOpacity>
+                  {!isDefaultFolder && (
+                    <TouchableOpacity
+                      onPress={async (e) => {
+                        e.stopPropagation();
+                        const ok = await deleteFolder(f.id);
+                        if (ok) {
+                          setFolders(getFolders());
+                        }
+                      }}
+                      style={{ padding: 6 }}
+                    >
+                      <Trash2 size={18} color="#a0a0a0" />
+                    </TouchableOpacity>
+                  )}
                 </TouchableOpacity>
               );
             })}

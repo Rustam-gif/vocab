@@ -6,10 +6,15 @@ export interface User {
   id: string;
   name: string;
   email?: string;
-  level: string;
-  streak: number;
-  totalScore: number;
-  joinedAt: Date;
+  avatar?: string;
+  avatarId?: number; // ID for local avatar images (1-6)
+  xp?: number;
+  streak?: number;
+  exercisesCompleted?: number;
+  createdAt?: Date;
+  level?: string;
+  totalScore?: number;
+  joinedAt?: Date;
 }
 
 export interface Word {

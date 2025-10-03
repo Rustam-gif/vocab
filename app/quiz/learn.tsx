@@ -6,7 +6,7 @@ import { levels, Level, Set } from './data/levels';
 import SetCard from './components/SetCard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import ProgressService from '../../services/ProgressService';
+import { ProgressService } from '../../services/ProgressService';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 
@@ -49,25 +49,16 @@ export default function LearnScreen() {
       const level = levels.find(l => l.id === activeLevelId);
       if (level) {
         // Initialize ProgressService and get progress data
-        const progressService = ProgressService.getInstance();
-        await progressService.initialize();
+        await ProgressService.initialize();
         
-        // TEMPORARY: Clear test data - ALREADY RUN, COMMENTED OUT
-        // await AsyncStorage.removeItem('set_progress');
-        // await AsyncStorage.removeItem('user_progress');
-        
-        // Merge sets with progress data
-        const setsWithProgress = await Promise.all(
-          level.sets.map(async (set) => {
-            const setProgress = await progressService.getSetProgress(`${set.id}`);
-            return {
-              ...set,
-              completed: setProgress?.completed || set.completed,
-              inProgress: setProgress ? (!setProgress.completed && setProgress.attempts > 0) : set.inProgress,
-              score: setProgress?.bestScore || set.score
-            };
-          })
-        );
+        // Simply use the level sets as-is
+        // Progress tracking is now handled by the new XP system
+        const setsWithProgress = level.sets.map((set) => ({
+          ...set,
+          completed: set.completed || false,
+          inProgress: set.inProgress || false,
+          score: set.score || 0
+        }));
         
         const levelWithProgress = { ...level, sets: setsWithProgress };
         setCurrentLevel(levelWithProgress);

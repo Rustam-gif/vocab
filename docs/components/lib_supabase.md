@@ -1,8 +1,8 @@
-# ProfileScreen
-File: app/profile.tsx
+# Supabase
+File: lib/supabase.ts
 
 ## Props
-- data
+- (none detected)
 
 ## Notes
 - (none)

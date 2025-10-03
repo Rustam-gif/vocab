@@ -3,6 +3,7 @@
 Directories and files discovered under configured roots:
 - app
   - _layout.tsx
+  - auth-callback.tsx
   - flashcards.tsx
   - index.tsx
   - journal.tsx
@@ -41,6 +42,7 @@ Directories and files discovered under configured roots:
   - _layout.tsx
 - lib
   - store.ts
+  - supabase.ts
 - services
   - AIService.ts
   - AnalyticsService.ts

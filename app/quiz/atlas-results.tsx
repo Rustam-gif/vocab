@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Animated, Easin
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import LottieView from 'lottie-react-native';
 import { BookOpen, CheckCircle } from 'lucide-react-native';
-import ProgressService from '../../services/ProgressService';
+import { ProgressService } from '../../services/ProgressService';
+import { useAppStore } from '../../lib/store';
 import { levels } from './data/levels';
 
 const ACCENT = '#F2935C';
@@ -11,12 +12,14 @@ const CORRECT_COLOR = '#437F76';
 
 export default function AtlasResults() {
   const router = useRouter();
-  const { score, totalQuestions, setId, levelId, points } = useLocalSearchParams<{
+  const { loadProgress } = useAppStore();
+  const { score, totalQuestions, setId, levelId, points, exerciseType } = useLocalSearchParams<{
     score?: string;
     totalQuestions?: string;
     setId?: string;
     levelId?: string;
     points?: string;
+    exerciseType?: string;
   }>();
 
   const numericPoints = useMemo(() => {
@@ -122,21 +125,30 @@ export default function AtlasResults() {
   }, [showDoneButton, buttonsOpacity, buttonsTranslateY]);
 
   const handleDone = async () => {
-    // Save the score to ProgressService
-    if (setId) {
-      try {
-        const progressService = ProgressService.getInstance();
-        await progressService.initialize();
-        const bestScore = Math.round(Math.max(0, Math.min(100, numericPoints)));
-        await progressService.completeSet(
-          setId,
-          bestScore,
-          100
+    // Award XP for quiz completion
+    try {
+      const correct = parseInt(score || '0', 10);
+      const total = parseInt(totalQuestions || '0', 10);
+      const type = exerciseType || 'mcq'; // Default to MCQ if not specified
+      
+      if (total > 0) {
+        const result = await ProgressService.recordExerciseCompletion(
+          type,
+          correct,
+          total,
+          0 // Time tracking can be added later
         );
-        console.log('Score saved:', { setId, score: bestScore });
-      } catch (error) {
-        console.error('Failed to save score:', error);
+        
+        console.log(`[Quiz Results] XP Awarded: +${result.xpGained} XP (Level ${result.newLevel})`);
+        if (result.leveledUp) {
+          console.log(`🎉 Level Up! Now Level ${result.newLevel}`);
+        }
+        
+        // Refresh progress display
+        await loadProgress();
       }
+    } catch (error) {
+      console.error('Failed to award XP:', error);
     }
 
     // Go to Learn section for the same level; replace history to avoid back to results

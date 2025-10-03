@@ -1,8 +1,8 @@
-# ProfileScreen
-File: app/profile.tsx
+# AuthCallback
+File: app/auth-callback.tsx
 
 ## Props
-- data
+- (none detected)
 
 ## Notes
 - (none)

@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Dimensions 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppStore } from '../lib/store';
 import { analyticsService } from '../services/AnalyticsService';
+import { ProgressService } from '../services/ProgressService';
 
 const QUESTION_TIME_MS = 5000;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -11,13 +12,14 @@ const SCREEN_HEIGHT = Dimensions.get('window').height;
 export default function WordSprint() {
   const router = useRouter();
   const { folderId, title } = useLocalSearchParams<{ folderId: string; title?: string }>();
-  const { words, loadWords } = useAppStore();
+  const { words, loadWords, loadProgress } = useAppStore();
   const [index, setIndex] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
   const [finished, setFinished] = useState(false);
   const [timeLeft, setTimeLeft] = useState(QUESTION_TIME_MS / 1000);
+  const [xpAwarded, setXpAwarded] = useState(false);
   const barAnim = useRef(new Animated.Value(0)).current;
   const timerRef = useRef<Animated.CompositeAnimation | null>(null);
   const advanceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -54,7 +56,27 @@ export default function WordSprint() {
   }, [barAnim]);
 
   useEffect(() => {
-    if (finished) {
+    if (finished && !xpAwarded) {
+      // Award XP for Word Sprint completion
+      (async () => {
+        try {
+          const result = await ProgressService.recordExerciseCompletion(
+            'sprint',
+            correctCount,
+            items.length,
+            0
+          );
+          console.log(`[Word Sprint] XP Awarded: +${result.xpGained} XP (Level ${result.newLevel})`);
+          if (result.leveledUp) {
+            console.log(`🎉 Level Up! Now Level ${result.newLevel}`);
+          }
+          await loadProgress();
+          setXpAwarded(true);
+        } catch (error) {
+          console.error('Failed to award XP:', error);
+        }
+      })();
+
       Animated.timing(resultAnim, {
         toValue: 1,
         duration: 320,
@@ -181,6 +203,7 @@ export default function WordSprint() {
     setIndex(0);
     setSelected(null);
     setRevealed(false);
+    setXpAwarded(false);
     revealedRef.current = false;
     setFinished(false);
     setTimeLeft(QUESTION_TIME_MS / 1000);
