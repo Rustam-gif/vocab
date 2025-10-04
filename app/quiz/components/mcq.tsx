@@ -125,22 +125,22 @@ const generateDistractor = (correctDef: string, type: string): string => {
   
   const distractors = {
     opposite: [
-      'Go to sleep and rest quietly',
-      'Fall asleep and start dreaming',
-      'Lie down and close your eyes',
-      'Rest in bed without moving'
+      'A place you visit for a short time only',
+      'Things that make you sick and very tired',
+      'A person you do not know or like',
+      'When people fight and are not happy together'
     ],
     similar: [
-      'Start the day feeling refreshed',
-      'Rise from sleep and get ready',
-      'Open your eyes and become alert',
-      'Get out of bed feeling awake'
+      'A building where many people live and work together',
+      'Someone you know and talk to every single day',
+      'People who live near you and help you always',
+      'Things you need to be happy and feel good'
     ],
     unrelated: [
-      'Prepare breakfast in the morning',
-      'Exercise outside with your friends',
-      'Study for your upcoming exam',
-      'Watch movies on the television'
+      'Things you do when you play games outside',
+      'Books and teachers that help you learn new things',
+      'Cars and buses that take you to many places',
+      'Computers and phones that let you talk to people'
     ]
   };
 

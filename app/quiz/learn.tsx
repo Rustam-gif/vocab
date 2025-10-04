@@ -7,6 +7,7 @@ import SetCard from './components/SetCard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { ProgressService } from '../../services/ProgressService';
+import { SetProgressService } from '../../services/SetProgressService';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 
@@ -39,34 +40,43 @@ export default function LearnScreen() {
     }, [loadStoredLevel])
   );
 
-  useEffect(() => {
-    const loadLevelWithProgress = async () => {
-      if (!activeLevelId) {
-        setCurrentLevel(null);
-        return;
-      }
-      
-      const level = levels.find(l => l.id === activeLevelId);
-      if (level) {
-        await ProgressService.initialize();
-        
-        const setsWithProgress = level.sets.map((set) => ({
+  const refreshLevel = useCallback(async () => {
+    if (!activeLevelId) {
+      setCurrentLevel(null);
+      return;
+    }
+
+    const level = levels.find(l => l.id === activeLevelId);
+    if (level) {
+      await Promise.all([ProgressService.initialize(), SetProgressService.initialize()]);
+
+      const setsWithProgress = level.sets.map((set) => {
+        // Overlay persisted status onto static level data
+        const flags = SetProgressService.getSetFlags(activeLevelId, set.id);
+        return {
           ...set,
-          completed: set.completed || false,
-          inProgress: set.inProgress || false,
-          score: set.score || 0
-        }));
-        
-        const levelWithProgress = { ...level, sets: setsWithProgress };
-        setCurrentLevel(levelWithProgress);
-        
-        const completed = setsWithProgress.filter(s => s.completed).length;
-        setProgress({ completed, total: setsWithProgress.length });
-      }
-    };
-    
-    loadLevelWithProgress();
+          completed: typeof flags.completed === 'boolean' ? flags.completed : !!set.completed,
+          inProgress: typeof flags.inProgress === 'boolean' ? flags.inProgress : !!set.inProgress,
+          score: typeof flags.score === 'number' ? flags.score : set.score,
+        };
+      });
+
+      const levelWithProgress = { ...level, sets: setsWithProgress };
+      setCurrentLevel(levelWithProgress);
+
+      const completed = setsWithProgress.filter(s => s.completed).length;
+      setProgress({ completed, total: setsWithProgress.length });
+    }
   }, [activeLevelId]);
+
+  useEffect(() => { refreshLevel(); }, [refreshLevel]);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Refresh when coming back to this screen (e.g., after finishing or exiting a set)
+      refreshLevel();
+    }, [refreshLevel])
+  );
 
   const handleSetPress = (set: Set) => {
     if (!activeLevelId) {
@@ -192,11 +202,12 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   title: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
     color: '#fff',
     flex: 1,
     textAlign: 'center',
+    fontFamily: 'Ubuntu_500Medium',
   },
   settingsButton: {
     padding: 8,
@@ -220,16 +231,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   levelName: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '600',
     color: '#fff',
     marginBottom: 6,
+    fontFamily: 'Ubuntu_500Medium',
   },
   levelCefr: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#F2935C',
     fontWeight: '600',
     letterSpacing: 0.5,
+    fontFamily: 'Ubuntu_500Medium',
   },
   changeButton: {
     backgroundColor: 'transparent',
@@ -254,8 +267,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   progressText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#D1D5DB',
+    fontFamily: 'Ubuntu_400Regular',
   },
   progressPercentage: {
     fontSize: 16,

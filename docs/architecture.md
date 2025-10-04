@@ -47,6 +47,7 @@ Directories and files discovered under configured roots:
   - AIService.ts
   - AnalyticsService.ts
   - ProgressService.ts
+  - SetProgressService.ts
   - StoryGenerator.ts
   - VaultService.ts
 

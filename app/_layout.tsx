@@ -1,26 +1,39 @@
 import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Text, TextInput } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
+import { useFonts } from 'expo-font';
+import {
+  Ubuntu_400Regular,
+  Ubuntu_500Medium,
+  Ubuntu_700Bold,
+} from '@expo-google-fonts/ubuntu';
 
 export default function RootLayout() {
-  // Apply a global font family across the app
-  useEffect(() => {
-    // Ensure all Text components default to Josefin Sans
-    Text.defaultProps = Text.defaultProps || {};
-    Text.defaultProps.style = [
-      // keep any existing default style
-      Text.defaultProps.style,
-      { fontFamily: 'Josefin Sans' },
-    ];
+  const [fontsLoaded] = useFonts({
+    Ubuntu_400Regular,
+    Ubuntu_500Medium,
+    Ubuntu_700Bold,
+  });
 
-    // And TextInput (so inputs match as well)
+  // Apply a global font family across the app after fonts load
+  useEffect(() => {
+    if (!fontsLoaded) return;
+    Text.defaultProps = Text.defaultProps || {};
+    Text.defaultProps.style = [Text.defaultProps.style, { fontFamily: 'Ubuntu_400Regular' }];
+
     TextInput.defaultProps = TextInput.defaultProps || {};
-    TextInput.defaultProps.style = [
-      TextInput.defaultProps.style,
-      { fontFamily: 'Josefin Sans' },
-    ];
-  }, []);
+    TextInput.defaultProps.style = [TextInput.defaultProps.style, { fontFamily: 'Ubuntu_400Regular' }];
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return (
+      <>
+        <StatusBar style="light" />
+        <View />
+      </>
+    );
+  }
 
   return (
     <>

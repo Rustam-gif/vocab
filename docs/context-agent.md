@@ -34,6 +34,15 @@
 - Story Exercise Modal Redesign (2025-09-28T20:46:26.122Z)
 - Made exercise names clickable (2025-01-27T10:30:00.000Z)
 - Added exercise name touch targets (2025-01-27T10:31:00.000Z)
+- Replaced Basic Needs & Family word set (2025-01-27T11:00:00.000Z)
+- Updated MCQ distractors for topic relevance (2025-01-27T11:05:00.000Z)
+- Updated sentence usage exercises (2025-01-27T11:10:00.000Z)
+- Updated synonym exercises (2025-01-27T11:15:00.000Z)
+- Simplified words to A1 beginner level (2025-01-27T11:30:00.000Z)
+- Updated all exercises for A1 level (2025-01-27T11:35:00.000Z)
+- Created A1 words for Education & Work (2025-01-27T11:45:00.000Z)
+- Created 10 new A1 beginner word sets (2025-01-27T12:00:00.000Z)
+- Updated SetCard icon mapping for new topics (2025-01-27T12:05:00.000Z)
 
 ## Style Guidance
 - AI instructions maintenance: Update .github/copilot-instructions.md when architectural patterns or critical rules change to keep AI agents current

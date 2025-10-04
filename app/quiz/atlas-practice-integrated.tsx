@@ -17,6 +17,7 @@ import SentenceUsageComponent from './components/sentence-usage';
 import MissingLetters from './components/missing-letters';
 import { levels } from './data/levels';
 import { analyticsService } from '../../services/AnalyticsService';
+import { SetProgressService } from '../../services/SetProgressService';
 
 const ACCENT = '#F2935C';
 const TAB_WIDTH = 88;
@@ -85,6 +86,13 @@ export default function AtlasPracticeIntegrated() {
   };
 
   const navigateToResults = (finalCorrect: number, finalQuestions: number) => {
+    // Persist completion + score for the set so Learn shows "Review" with score
+    try {
+      if (levelId && setId) {
+        const points = Math.max(0, totalScore);
+        SetProgressService.markCompleted(String(levelId), String(setId), points);
+      }
+    } catch {}
     router.push({
       pathname: '/quiz/atlas-results',
       params: {
@@ -113,6 +121,31 @@ export default function AtlasPracticeIntegrated() {
       useNativeDriver: true,
     }).start();
   }, [currentPhase, animatedIndex]);
+
+  // Initialize progress/resume and mark in-progress while user is inside
+  useEffect(() => {
+    (async () => {
+      try {
+        await SetProgressService.initialize();
+        if (levelId && setId) {
+          const saved = SetProgressService.get(String(levelId), String(setId));
+          if (saved?.status === 'in_progress' && typeof saved.lastPhase === 'number') {
+            // Resume where left off
+            setCurrentPhase(Math.min(saved.lastPhase, phases.length - 1));
+          }
+          // Mark as in progress at entry
+          await SetProgressService.markInProgress(String(levelId), String(setId), currentPhase);
+        }
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist in-progress phase as the user advances (do not override completed)
+  useEffect(() => {
+    if (!levelId || !setId) return;
+    SetProgressService.markInProgress(String(levelId), String(setId), currentPhase).catch(() => {});
+  }, [currentPhase, levelId, setId]);
 
   const getCurrentPhaseComponent = () => {
     const phase = phases[currentPhase];
@@ -211,7 +244,13 @@ export default function AtlasPracticeIntegrated() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={async () => {
+            // Save in-progress on manual exit
+            if (levelId && setId) {
+              try { await SetProgressService.markInProgress(String(levelId), String(setId), currentPhase); } catch {}
+            }
+            router.back();
+          }}
         >
           <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>

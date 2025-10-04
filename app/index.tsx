@@ -108,11 +108,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Engniter Vocabulary</Text>
-          <Text style={styles.subtitle}>Master English with AI-powered exercises</Text>
-        </View>
+        {/* Header removed per request */}
 
         {/* Sections */}
         {sections.map((section, sectionIndex) => (
@@ -181,15 +177,17 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   title: {
-    fontSize: 32,
+    fontSize: 37,
     fontWeight: 'bold',
     color: '#FFFFFF',
     marginBottom: 8,
+    fontFamily: 'Ubuntu_700Bold',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#9CA3AF',
     lineHeight: 24,
+    fontFamily: 'Ubuntu_400Regular',
   },
   section: {
     marginBottom: 24,
@@ -202,6 +200,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 12,
     marginHorizontal: 12,
+    fontFamily: 'Ubuntu_500Medium',
   },
   card: {
     backgroundColor: '#2C2C2C',
@@ -245,15 +244,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: '#FFFFFF',
     marginBottom: 2,
+    fontFamily: 'Ubuntu_700Bold',
   },
   cardSubtitle: {
     fontSize: 13,
     color: '#9CA3AF',
     lineHeight: 18,
+    fontFamily: 'Ubuntu_400Regular',
   },
   bottomSpacing: {
     height: 64,

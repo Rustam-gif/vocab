@@ -158,6 +158,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     flex: 1,
     textAlign: 'center',
+    fontFamily: 'Ubuntu_500Medium',
   },
   placeholder: {
     width: 40,
@@ -204,20 +205,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   levelName: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '600',
     color: '#fff',
     marginBottom: 4,
+    fontFamily: 'Ubuntu_500Medium',
   },
   levelDescription: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#9CA3AF',
     marginBottom: 2,
+    fontFamily: 'Ubuntu_400Regular',
   },
   levelCefr: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#F2935C',
     fontWeight: '500',
+    fontFamily: 'Ubuntu_500Medium',
   },
   checkContainer: {
     width: 32,

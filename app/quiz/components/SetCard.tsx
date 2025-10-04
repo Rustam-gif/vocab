@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import { CheckCircle, Play } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { CheckCircle } from 'lucide-react-native';
 
 interface SetCardProps {
   set: {
@@ -27,11 +28,19 @@ export default function SetCard({ set, onPress }: SetCardProps) {
   const getIconSource = () => {
     const t = (set.title || '').toLowerCase();
     if (set.type === 'quiz') return require('../../../assets/wordset_icons/quiz.png');
-    if (t.includes('daily') || t.includes('habit')) return require('../../../assets/wordset_icons/daily-routines-habits.png');
+    if (t.includes('daily') || t.includes('habit') || t.includes('routine')) return require('../../../assets/wordset_icons/daily-routines-habits.png');
     if (t.includes('basic') || t.includes('family') || t.includes('need')) return require('../../../assets/wordset_icons/basic-needs.png');
     if (t.includes('education') || t.includes('work')) return require('../../../assets/wordset_icons/education-work.png');
-    if (t.includes('fitness') || t.includes('health')) return require('../../../assets/wordset_icons/fitness-health.png');
-    if (t.includes('travel')) return require('../../../assets/wordset_icons/travel.png');
+    if (t.includes('food') || t.includes('cook')) return require('../../../assets/wordset_icons/food-cooking.png');
+    if (t.includes('free time') || t.includes('hobbi')) return require('../../../assets/wordset_icons/free-time-hobbies.png');
+    if (t.includes('technology') || t.includes('internet')) return require('../../../assets/wordset_icons/technology-internet.png');
+    if (t.includes('shopping') || t.includes('money')) return require('../../../assets/wordset_icons/shopping-money.png');
+    if (t.includes('health') || t.includes('body')) return require('../../../assets/wordset_icons/health-body.png');
+    if (t.includes('weather') || t.includes('nature')) return require('../../../assets/wordset_icons/weather-nature.png');
+    if (t.includes('emotion') || t.includes('personality')) return require('../../../assets/wordset_icons/emotions-personality.png');
+    if (t.includes('transportation') || t.includes('travel')) return require('../../../assets/wordset_icons/transportation-travel.png');
+    if (t.includes('home') || t.includes('furniture')) return require('../../../assets/wordset_icons/home-furniture.png');
+    if (t.includes('culture') || t.includes('entertainment')) return require('../../../assets/wordset_icons/culture-entertainment.png');
     return require('../../../assets/wordset_icons/basic-needs.png');
   };
 
@@ -42,13 +51,13 @@ export default function SetCard({ set, onPress }: SetCardProps) {
   };
 
   const getButtonColor = () => {
-    if (isCompleted) return accent; // Review
-    if (isInProgress) return '#FFDE69'; // Continue
-    return '#187486'; // Start
+    if (isCompleted) return 'rgba(230, 138, 74, 0.35)'; // Review - 35% opacity burnt orange
+    if (isInProgress) return '#d79a35'; // Continue - amber with depth
+    return '#3cb4ac'; // Start (teal, used only for fallback)
   };
 
   const getButtonTextColor = () => {
-    if (isInProgress) return '#3A3A3A'; // Dark grey for Continue
+    // All states use white text now (Continue/Start/Review)
     return '#fff';
   };
 
@@ -70,25 +79,39 @@ export default function SetCard({ set, onPress }: SetCardProps) {
             </Text>
           )}
         </View>
-        {isCompleted && (
-          <View style={styles.statusPill}>
-            <CheckCircle size={16} color={success} />
-            <Text style={styles.statusText}>
-              {typeof set.score === 'number' ? `Score ${Math.round(set.score)}` : 'Completed'}
-            </Text>
-          </View>
-        )}
+        {/* Button moved to absolute overlay for vertical centering */}
       </View>
 
       <View style={styles.content} />
 
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: getButtonColor() }]}
-          onPress={onPress}
-        >
-          <Text style={[styles.actionButtonText, { color: getButtonTextColor() }]}>{getButtonText()}</Text>
-          <Play size={16} color="#fff" style={styles.playIcon} />
+        {isCompleted && (
+          <View style={styles.statusPill}>
+            <CheckCircle size={16} color={success} />
+            <Text style={styles.statusText}>
+              {typeof set.score === 'number' ? `${Math.round(set.score)}` : '✓'}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Absolute action button overlay (vertically centered on the right) */}
+      <View style={styles.actionOverlay}>
+        <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
+          {(!isCompleted && !isInProgress) ? (
+            <LinearGradient
+              colors={['#1a8d87', '#3cb4ac']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.actionButton, styles.startButton]}
+            >
+              <Text style={[styles.actionButtonText, { color: '#fff' }]}>{getButtonText()}</Text>
+            </LinearGradient>
+          ) : (
+            <View style={[styles.actionButton, { backgroundColor: getButtonColor() }]}>
+              <Text style={[styles.actionButtonText, { color: getButtonTextColor() }]}>{getButtonText()}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -101,6 +124,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 5,
     marginBottom: 6,
+    position: 'relative',
   },
   headerRow: {
     flexDirection: 'row',
@@ -118,10 +142,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#fff',
     lineHeight: 18,
+    fontFamily: 'Ubuntu_700Bold',
   },
   wordsMeta: {
     fontSize: 12,
@@ -132,13 +157,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: 'rgba(67, 127, 118, 0.12)',
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
   },
   statusText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     color: '#437F76',
     letterSpacing: 0.2,
@@ -157,14 +182,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(67, 127, 118, 0.3)',
   },
   scoreLabel: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#9CA3AF',
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   scoreValue: {
-    fontSize: 14,
+    fontSize: 17,
     fontWeight: '700',
     color: '#437F76',
   },
@@ -180,7 +205,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   quizDescription: {
-    fontSize: 14,
+    fontSize: 17,
     color: '#B3B3B3',
     marginLeft: 10,
     flex: 1,
@@ -196,40 +221,58 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   wordsCount: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#9CA3AF',
     fontWeight: '600',
   },
   wordsPreview: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#B3B3B3',
     lineHeight: 16,
   },
   wordsPreviewInline: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#9CA3AF',
     marginTop: 1,
+    fontFamily: 'Ubuntu_400Regular',
   },
   footer: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-    minWidth: 84,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 9,
+    minWidth: 80,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
     shadowRadius: 1,
     elevation: 1,
   },
+  startButton: {
+    shadowColor: '#1a8d87',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  headerButton: {
+    alignSelf: 'flex-start',
+  },
+  actionOverlay: {
+    position: 'absolute',
+    right: 8,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+  },
   actionButtonText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: '#fff',
   },

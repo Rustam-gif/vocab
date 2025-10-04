@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#fff',
   },
@@ -534,7 +534,7 @@ const styles = StyleSheet.create({
   },
   newFolderText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
   },
   folderRow: {
@@ -547,12 +547,12 @@ const styles = StyleSheet.create({
   },
   folderTitle: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
   },
   folderSubtitle: {
     color: '#a0a0a0',
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 2,
   },
 });

@@ -13,12 +13,15 @@
     "postinstall": "node -e \"try{require('fs').unlinkSync('node_modules/expo-router/ios/ExpoHead.podspec')}catch(e){}\""
   },
   "dependencies": {
+    "@expo-google-fonts/josefin-sans": "^0.4.2",
+    "@expo-google-fonts/ubuntu": "^0.4.1",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@supabase/supabase-js": "^2.58.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "expo": "~54.0.10",
     "expo-auth-session": "~7.0.8",
+    "expo-font": "^14.0.8",
     "expo-haptics": "^15.0.7",
     "expo-linear-gradient": "^15.0.7",
     "expo-linking": "^8.0.8",

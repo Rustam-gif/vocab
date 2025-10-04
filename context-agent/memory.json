@@ -134,6 +134,51 @@
       "title": "Added exercise name touch targets",
       "detail": "Created exerciseNameTouchable style with paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 for better touch targets and user experience",
       "when": "2025-01-27T10:31:00.000Z"
+    },
+    {
+      "title": "Replaced Basic Needs & Family word set",
+      "detail": "Updated all 5 words in levels.ts with new comprehensive vocabulary: shelter, nourishment, sibling, relative, companion - each with detailed definitions, natural examples, phonetics, and synonyms",
+      "when": "2025-01-27T11:00:00.000Z"
+    },
+    {
+      "title": "Updated MCQ distractors for topic relevance",
+      "detail": "Replaced generic MCQ incorrect options with family/needs-themed distractors in mcq.tsx: danger/illness/absence/conflict (opposite), building/trust/connected/healthy (similar), activities/education/transportation/technology (unrelated) - all with similar word counts",
+      "when": "2025-01-27T11:05:00.000Z"
+    },
+    {
+      "title": "Updated sentence usage exercises",
+      "detail": "Replaced all 5 sentence-usage items in sentence-usage.tsx with new words: shelter, nourishment, sibling, relative, companion - each with 4 contextually appropriate sentences (1 correct, 3 incorrect with similar structure)",
+      "when": "2025-01-27T11:10:00.000Z"
+    },
+    {
+      "title": "Updated synonym exercises",
+      "detail": "Replaced all 5 synonym items in synonym.tsx with new words and topic-relevant options: shelter (protection/housing/refuge vs danger/exposure), nourishment (nutrition/sustenance vs hunger/illness), sibling/relative/companion with family-themed correct and incorrect pools",
+      "when": "2025-01-27T11:15:00.000Z"
+    },
+    {
+      "title": "Simplified words to A1 beginner level",
+      "detail": "Replaced all 5 words in Basic Needs & Family with simpler A1 vocabulary: home, food, brother, family, friend - using simple definitions (7-9 words), natural examples with basic grammar, and everyday synonyms suitable for absolute beginners",
+      "when": "2025-01-27T11:30:00.000Z"
+    },
+    {
+      "title": "Updated all exercises for A1 level",
+      "detail": "Simplified MCQ distractors, sentence-usage items, and synonym pools in all components to use basic A1 vocabulary and simple sentence structures that absolute beginners can understand",
+      "when": "2025-01-27T11:35:00.000Z"
+    },
+    {
+      "title": "Created A1 words for Education & Work",
+      "detail": "Added 5 new A1 beginner level words in levels.ts for set 3: teacher, book, job, write, help - with simple definitions (8-10 words), natural examples using basic grammar, phonetics, and everyday synonyms suitable for absolute beginners",
+      "when": "2025-01-27T11:45:00.000Z"
+    },
+    {
+      "title": "Created 10 new A1 beginner word sets",
+      "detail": "Added 50 A1 level words across 10 new topics in levels.ts: Food & Cooking (cook, eat, drink, taste, hungry), Free Time & Hobbies (play, music, watch, read, dance), Technology & Internet (computer, phone, internet, video, game), Shopping & Money (buy, money, shop, price, pay), Health & Body (doctor, sick, body, pain, healthy), Weather & Nature (sun, rain, tree, cold, hot), Emotions & Personality (happy, sad, angry, kind, smart), Transportation & Travel (car, bus, walk, travel, ticket), Home & Furniture (room, table, chair, bed, door), Culture & Entertainment (movie, song, party, art, story)",
+      "when": "2025-01-27T12:00:00.000Z"
+    },
+    {
+      "title": "Updated SetCard icon mapping for new topics",
+      "detail": "Added icon recognition in SetCard.tsx for all 10 new topics: food-cooking.png, free-time-hobbies.png, technology-internet.png, shopping-money.png, health-body.png, weather-nature.png, emotions-personality.png, transportation-travel.png, home-furniture.png, culture-entertainment.png",
+      "when": "2025-01-27T12:05:00.000Z"
     }
   ],
   "goals": [],
