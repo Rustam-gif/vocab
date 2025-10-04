@@ -48,11 +48,8 @@ export default function LearnScreen() {
       
       const level = levels.find(l => l.id === activeLevelId);
       if (level) {
-        // Initialize ProgressService and get progress data
         await ProgressService.initialize();
         
-        // Simply use the level sets as-is
-        // Progress tracking is now handled by the new XP system
         const setsWithProgress = level.sets.map((set) => ({
           ...set,
           completed: set.completed || false,
@@ -79,10 +76,8 @@ export default function LearnScreen() {
     console.log('LearnScreen - handleSetPress:', { setId: set.id, levelId: activeLevelId, setType: set.type });
 
     if (set.type === 'quiz') {
-      // Navigate to quiz screen
       router.push(`/quiz/quiz-screen?setId=${set.id}&level=${activeLevelId}`);
     } else {
-      // Navigate directly to practice session
       const url = `/quiz/atlas-practice-integrated?setId=${set.id}&levelId=${activeLevelId}`;
       console.log('LearnScreen - Navigating to:', url);
       router.push(url);
@@ -112,11 +107,10 @@ export default function LearnScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.replace('/')}
+          onPress={() => router.back()}
         >
           <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>
@@ -129,13 +123,12 @@ export default function LearnScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Level Info */}
       <View style={styles.levelInfo}>
         <View style={styles.levelHeader}>
           <Text style={styles.levelIcon}>{currentLevel.icon}</Text>
           <View style={styles.levelDetails}>
             <Text style={styles.levelName}>{currentLevel.name}</Text>
-          <Text style={[styles.levelCefr, { color: accent }]}>CEFR {currentLevel.cefr}</Text>
+            <Text style={[styles.levelCefr, { color: accent }]}>CEFR {currentLevel.cefr}</Text>
           </View>
           <TouchableOpacity style={styles.changeButton} onPress={handleChangeLevel}>
             <Text style={styles.changeButtonText}>Change</Text>
@@ -143,7 +136,6 @@ export default function LearnScreen() {
         </View>
       </View>
 
-      {/* Progress */}
       <View style={styles.progressContainer}>
         <View style={styles.progressHeader}>
           <Text style={styles.progressText}>
@@ -161,7 +153,6 @@ export default function LearnScreen() {
         </View>
       </View>
 
-      {/* Sets List */}
       <FlatList
         data={currentLevel.sets}
         renderItem={renderSetItem}
@@ -238,41 +229,39 @@ const styles = StyleSheet.create({
   changeButtonText: {
     color: '#F2935C',
     fontSize: 12,
-    fontWeight: '500',
   },
   progressContainer: {
-    marginHorizontal: 20,
-    marginBottom: 20,
+    paddingHorizontal: 20,
+    marginBottom: 12,
   },
   progressHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
   progressText: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: '#D1D5DB',
   },
   progressPercentage: {
-    fontSize: 14,
-    color: '#F2935C',
+    fontSize: 16,
     fontWeight: '600',
   },
   progressBar: {
-    height: 6,
-    backgroundColor: '#2C2C2C',
-    borderRadius: 3,
+    height: 8,
+    backgroundColor: 'rgba(242, 147, 92, 0.16)',
+    borderRadius: 8,
     overflow: 'hidden',
   },
   progressFill: {
-    height: '100%',
-    backgroundColor: '#F2935C',
-    borderRadius: 3,
+    height: 8,
+    borderRadius: 8,
   },
   listContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 32,
+    paddingTop: 12,
   },
   loadingContainer: {
     flex: 1,
@@ -281,6 +270,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: '#9CA3AF',
+    color: '#fff',
   },
 });

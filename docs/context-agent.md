@@ -32,6 +32,8 @@
 - Moved letter boxes much higher (2025-09-28T12:33:15.643Z)
 - Moved clue text lower (2025-09-28T12:37:03.199Z)
 - Story Exercise Modal Redesign (2025-09-28T20:46:26.122Z)
+- Made exercise names clickable (2025-01-27T10:30:00.000Z)
+- Added exercise name touch targets (2025-01-27T10:31:00.000Z)
 
 ## Style Guidance
 - AI instructions maintenance: Update .github/copilot-instructions.md when architectural patterns or critical rules change to keep AI agents current

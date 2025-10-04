@@ -120,30 +120,51 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
   };
 
 const generateDistractor = (correctDef: string, type: string): string => {
+  // Count words in correct definition to match length
+  const wordCount = correctDef.trim().split(/\s+/).length;
+  
   const distractors = {
     opposite: [
-      'Stay in bed all day',
-      'Close your eyes and dream',
-      'Stop moving and rest',
-      'Sleep through the morning'
+      'Go to sleep and rest quietly',
+      'Fall asleep and start dreaming',
+      'Lie down and close your eyes',
+      'Rest in bed without moving'
     ],
     similar: [
-      'Begin your morning routine',
-      'Start your daily activities',
-      'Become alert and active',
-      'Get ready for the day'
+      'Start the day feeling refreshed',
+      'Rise from sleep and get ready',
+      'Open your eyes and become alert',
+      'Get out of bed feeling awake'
     ],
     unrelated: [
-      'Prepare a warm meal',
-      'Read a quiet book',
-      'Play outside with friends',
-      'Watch television for fun'
+      'Prepare breakfast in the morning',
+      'Exercise outside with your friends',
+      'Study for your upcoming exam',
+      'Watch movies on the television'
     ]
   };
 
-    const typeDistractors = distractors[type as keyof typeof distractors] || distractors.unrelated;
-    return typeDistractors[Math.floor(Math.random() * typeDistractors.length)];
-  };
+  const typeDistractors = distractors[type as keyof typeof distractors] || distractors.unrelated;
+  let selected = typeDistractors[Math.floor(Math.random() * typeDistractors.length)];
+  
+  // Adjust length to be similar to correct answer (within 1-2 words)
+  const selectedWordCount = selected.trim().split(/\s+/).length;
+  const diff = Math.abs(wordCount - selectedWordCount);
+  
+  // If too different, try to match better by adding/removing words
+  if (diff > 2) {
+    // Try another option from the same category
+    const alternates = typeDistractors.filter(d => {
+      const wc = d.trim().split(/\s+/).length;
+      return Math.abs(wordCount - wc) <= 2;
+    });
+    if (alternates.length > 0) {
+      selected = alternates[Math.floor(Math.random() * alternates.length)];
+    }
+  }
+  
+  return selected;
+};
 
   const handleAnswerSelect = (answerIndex: number) => {
     if (isAnswered) return; // Prevent multiple selections

@@ -43,9 +43,9 @@ const ITEMS: UsageItem[] = [
     ipa: '/weɪk ʌp/',
     sentences: [
       { text: 'She … in the morning feeling tired.', isCorrect: true },
-      { text: 'My son … beautiful pasta.', isCorrect: false },
-      { text: 'Her friend … milk with coffee.', isCorrect: false },
-      { text: 'They … a new phone yesterday.', isCorrect: false },
+      { text: 'She … to school by bus today.', isCorrect: false },
+      { text: 'She … her homework after class.', isCorrect: false },
+      { text: 'She … breakfast with her family.', isCorrect: false },
     ],
   },
   {
@@ -54,9 +54,9 @@ const ITEMS: UsageItem[] = [
     ipa: '/iːt/',
     sentences: [
       { text: 'They … breakfast together every morning.', isCorrect: true },
-      { text: 'She … the bus to school.', isCorrect: false },
-      { text: 'We … the homework at the library.', isCorrect: false },
-      { text: 'He … the violin after dinner.', isCorrect: false },
+      { text: 'They … their homework at the library.', isCorrect: false },
+      { text: 'They … the violin before school.', isCorrect: false },
+      { text: 'They … television after work.', isCorrect: false },
     ],
   },
   {
@@ -65,9 +65,9 @@ const ITEMS: UsageItem[] = [
     ipa: '/ˈstʌdi/',
     sentences: [
       { text: 'She likes to … English in the evening.', isCorrect: true },
-      { text: 'They … a movie every night.', isCorrect: false },
-      { text: 'He … the ball with his foot.', isCorrect: false },
-      { text: 'We … dinner at 8 p.m.', isCorrect: false },
+      { text: 'She likes to … movies on weekends.', isCorrect: false },
+      { text: 'She likes to … dinner with friends.', isCorrect: false },
+      { text: 'She likes to … basketball after class.', isCorrect: false },
     ],
   },
   {
@@ -76,9 +76,9 @@ const ITEMS: UsageItem[] = [
     ipa: '/ˈeksərsaɪz/',
     sentences: [
       { text: 'He goes to the gym to … regularly.', isCorrect: true },
-      { text: 'They … on the sofa after school.', isCorrect: false },
-      { text: 'She … medicine for a sore throat.', isCorrect: false },
-      { text: 'We … a cake for the party.', isCorrect: false },
+      { text: 'He goes to the gym to … television.', isCorrect: false },
+      { text: 'He goes to the gym to … breakfast.', isCorrect: false },
+      { text: 'He goes to the gym to … friends.', isCorrect: false },
     ],
   },
   {
@@ -87,9 +87,9 @@ const ITEMS: UsageItem[] = [
     ipa: '/sliːp/',
     sentences: [
       { text: 'Babies need to … for many hours a day.', isCorrect: true },
-      { text: 'He … a sandwich every morning.', isCorrect: false },
-      { text: 'They … to music with headphones.', isCorrect: false },
-      { text: 'She … the dishes after lunch.', isCorrect: false },
+      { text: 'Babies need to … outside with their toys.', isCorrect: false },
+      { text: 'Babies need to … healthy food every day.', isCorrect: false },
+      { text: 'Babies need to … warm clothes in winter.', isCorrect: false },
     ],
   },
 ];

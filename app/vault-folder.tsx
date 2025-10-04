@@ -42,19 +42,19 @@ export default function VaultFolderScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.title}>{title || 'Folder'}</Text>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{title || 'Folder'}</Text>
+        <View style={styles.practiceActions}>
           <TouchableOpacity
             style={styles.practiceButton}
             onPress={() => router.push({ pathname: '/flashcards', params: { folderId: id, title: title || 'Flashcards' } })}
           >
-            <Text style={styles.practiceText}>Flashcards</Text>
+            <Text style={styles.practiceButtonText}>Flashcards</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.practiceButton}
             onPress={() => router.push({ pathname: '/word-sprint', params: { folderId: id, title: title || 'Word Sprint' } })}
           >
-            <Text style={styles.practiceText}>Word Sprint</Text>
+            <Text style={styles.practiceButtonText}>Word Sprint</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -79,7 +79,7 @@ export default function VaultFolderScreen() {
                 <Text style={styles.definitionText}>{word.definition}</Text>
                 <Text style={styles.exampleText}>"{word.example}"</Text>
                 <View style={styles.wordFooter}>
-                  <Text style={styles.practiceText}>Practiced {word.practiceCount} times</Text>
+                  <Text style={styles.practiceMeta}>Practiced {word.practiceCount} times</Text>
                   <View style={styles.dateInfo}>
                     <Calendar size={14} color="#a0a0a0" />
                     <Text style={styles.dateText}>{formatDate(word.savedAt)}</Text>
@@ -115,15 +115,33 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#fff',
+    flex: 1,
+    marginRight: 12,
+  },
+  practiceActions: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
   },
   practiceButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: '#e28743',
-    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    backgroundColor: '#E28743',
+    borderRadius: 999,
+    minWidth: 110,
   },
-  practiceText: {
-    color: '#fff',
+  practiceButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 13,
+    letterSpacing: 0.2,
+  },
+  practiceMeta: {
+    color: '#a0a0a0',
+    fontSize: 12,
     fontWeight: '600',
   },
   content: {
@@ -206,5 +224,3 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
 });
-
-

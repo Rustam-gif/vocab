@@ -124,6 +124,16 @@
       "title": "Story Exercise Modal Redesign",
       "detail": "Completely redesigned customize story modal with centered layout, reduced padding/margins, smaller option pills (12px/6px padding, 16px borderRadius), and compact 380px maxWidth for better UX",
       "when": "2025-09-28T20:46:26.122Z"
+    },
+    {
+      "title": "Made exercise names clickable",
+      "detail": "Added TouchableOpacity wrapper around exercise names in atlas-practice-integrated.tsx with onPress handler to setCurrentPhase(index) for direct navigation to any exercise",
+      "when": "2025-01-27T10:30:00.000Z"
+    },
+    {
+      "title": "Added exercise name touch targets",
+      "detail": "Created exerciseNameTouchable style with paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 for better touch targets and user experience",
+      "when": "2025-01-27T10:31:00.000Z"
     }
   ],
   "goals": [],

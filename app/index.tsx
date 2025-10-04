@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   bottomSpacing: {
-    height: 100,
+    height: 64,
   },
   fab: {
     position: 'absolute',

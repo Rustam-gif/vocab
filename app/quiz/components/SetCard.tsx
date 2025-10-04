@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { CheckCircle, Play, BookOpen, Calendar, Coffee, Briefcase, Users, Globe, Heart, Home, Compass, Sparkles } from 'lucide-react-native';
+import { CheckCircle, Play, BookOpen } from 'lucide-react-native';
 
 interface SetCardProps {
   set: {
@@ -72,7 +72,7 @@ export default function SetCard({ set, onPress }: SetCardProps) {
       </View>
 
       <View style={styles.footer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: getButtonColor() }]}
           onPress={onPress}
         >

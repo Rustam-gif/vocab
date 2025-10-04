@@ -129,7 +129,7 @@ export default function StoryExerciseScreen() {
   const { words: vaultWords, loadWords } = useAppStore();
   const hasStory = Boolean(story);
   const headerTitle = story?.title ?? 'Story Exercise';
-  const headerSubtitle = story?.subtitle ?? 'Generate a tailored story using five words from your vault.';
+  const headerSubtitle = story?.subtitle ?? null;
 
   useEffect(() => {
     loadWords();
@@ -603,7 +603,9 @@ const buildStoryFromContent = (
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle}>{headerTitle}</Text>
-            <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
+            {headerSubtitle ? (
+              <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
+            ) : null}
           </View>
           <TouchableOpacity style={styles.closeButton}>
             <X size={24} color="#FFFFFF" />
