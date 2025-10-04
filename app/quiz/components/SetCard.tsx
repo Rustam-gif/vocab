@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { CheckCircle, Play, BookOpen } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { CheckCircle, Play } from 'lucide-react-native';
 
 interface SetCardProps {
   set: {
@@ -24,6 +24,17 @@ export default function SetCard({ set, onPress }: SetCardProps) {
   const accent = '#F2935C';
   const success = '#437F76';
 
+  const getIconSource = () => {
+    const t = (set.title || '').toLowerCase();
+    if (set.type === 'quiz') return require('../../../assets/wordset_icons/quiz.png');
+    if (t.includes('daily') || t.includes('habit')) return require('../../../assets/wordset_icons/daily-routines-habits.png');
+    if (t.includes('basic') || t.includes('family') || t.includes('need')) return require('../../../assets/wordset_icons/basic-needs.png');
+    if (t.includes('education') || t.includes('work')) return require('../../../assets/wordset_icons/education-work.png');
+    if (t.includes('fitness') || t.includes('health')) return require('../../../assets/wordset_icons/fitness-health.png');
+    if (t.includes('travel')) return require('../../../assets/wordset_icons/travel.png');
+    return require('../../../assets/wordset_icons/basic-needs.png');
+  };
+
   const getButtonText = () => {
     if (isCompleted) return 'Review';
     if (isInProgress) return 'Continue';
@@ -31,52 +42,52 @@ export default function SetCard({ set, onPress }: SetCardProps) {
   };
 
   const getButtonColor = () => {
-    if (isCompleted) return accent;
-    if (isInProgress) return '#F2AB27';
-    return '#F2AB27';
+    if (isCompleted) return accent; // Review
+    if (isInProgress) return '#FFDE69'; // Continue
+    return '#187486'; // Start
+  };
+
+  const getButtonTextColor = () => {
+    if (isInProgress) return '#3A3A3A'; // Dark grey for Continue
+    return '#fff';
   };
 
   return (
     <TouchableOpacity style={styles.container} onPress={onPress}>
-      <View style={styles.header}>
-        <View style={styles.titleRow}>
+      <View style={styles.headerRow}>
+        <Image source={getIconSource()} style={styles.setIcon} resizeMode="contain" />
+        <View style={styles.headerTextArea}>
           <Text style={styles.title}>{set.title}</Text>
-          {isCompleted && (
-            <View style={styles.statusPill}>
-              <CheckCircle size={16} color={success} />
-              <Text style={styles.statusText}>
-                {typeof set.score === 'number' ? `Score ${Math.round(set.score)}` : 'Completed'}
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      <View style={styles.content}>
-        {isQuiz ? (
-          <View style={styles.quizInfo}>
-            <BookOpen size={16} color="#9CA3AF" />
-            <Text style={styles.quizDescription}>{set.description}</Text>
-          </View>
-        ) : (
-          <View style={styles.wordsInfo}>
-            <Text style={styles.wordsCount}>
-              {set.words?.length || 0} words
-            </Text>
-            <Text style={styles.wordsPreview}>
+          {!isQuiz && (
+            <Text style={styles.wordsPreviewInline} numberOfLines={1}>
               {set.words?.slice(0, 3).map(w => w.word).join(', ')}
               {set.words && set.words.length > 3 && '...'}
+            </Text>
+          )}
+          {isQuiz && !!set.description && (
+            <Text style={styles.quizPreviewInline} numberOfLines={1}>
+              {set.description}
+            </Text>
+          )}
+        </View>
+        {isCompleted && (
+          <View style={styles.statusPill}>
+            <CheckCircle size={16} color={success} />
+            <Text style={styles.statusText}>
+              {typeof set.score === 'number' ? `Score ${Math.round(set.score)}` : 'Completed'}
             </Text>
           </View>
         )}
       </View>
+
+      <View style={styles.content} />
 
       <View style={styles.footer}>
         <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: getButtonColor() }]}
           onPress={onPress}
         >
-          <Text style={styles.actionButtonText}>{getButtonText()}</Text>
+          <Text style={[styles.actionButtonText, { color: getButtonTextColor() }]}>{getButtonText()}</Text>
           <Play size={16} color="#fff" style={styles.playIcon} />
         </TouchableOpacity>
       </View>
@@ -88,23 +99,34 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#2C2C2C',
     borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
+    padding: 5,
+    marginBottom: 6,
   },
-  header: {
-    marginBottom: 8,
-  },
-  titleRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 4,
+    marginBottom: 2,
+  },
+  setIcon: {
+    width: 72,
+    height: 72,
+    marginRight: 6,
+  },
+  headerTextArea: {
+    flex: 1,
   },
   title: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '600',
     color: '#fff',
-    lineHeight: 22,
+    lineHeight: 18,
+  },
+  wordsMeta: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 2,
   },
   statusPill: {
     flexDirection: 'row',
@@ -147,8 +169,8 @@ const styles = StyleSheet.create({
     color: '#437F76',
   },
   content: {
-    marginBottom: 8,
-    minHeight: 16,
+    marginBottom: 2,
+    minHeight: 6,
   },
   quizInfo: {
     flexDirection: 'row',
@@ -164,6 +186,11 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 20,
   },
+  quizPreviewInline: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
   wordsInfo: {
     flexDirection: 'column',
     gap: 8,
@@ -178,6 +205,11 @@ const styles = StyleSheet.create({
     color: '#B3B3B3',
     lineHeight: 16,
   },
+  wordsPreviewInline: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 1,
+  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -186,18 +218,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 16,
-    minWidth: 100,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    minWidth: 84,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 1,
+    elevation: 1,
   },
   actionButtonText: {
     fontSize: 12,

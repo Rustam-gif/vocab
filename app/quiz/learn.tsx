@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Image } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Settings } from 'lucide-react-native';
 import { levels, Level, Set } from './data/levels';
@@ -125,10 +125,22 @@ export default function LearnScreen() {
 
       <View style={styles.levelInfo}>
         <View style={styles.levelHeader}>
-          <Text style={styles.levelIcon}>{currentLevel.icon}</Text>
+          <Image
+            source={
+              currentLevel.id === 'beginner'
+                ? require('../../assets/levelicons/beginner.png')
+                : currentLevel.id === 'intermediate'
+                ? require('../../assets/levelicons/intermediate.png')
+                : currentLevel.id === 'advanced'
+                ? require('../../assets/levelicons/advanced-mountain.png')
+                : require('../../assets/levelicons/advanced-plus.png')
+            }
+            style={styles.levelImage}
+            resizeMode="contain"
+          />
           <View style={styles.levelDetails}>
             <Text style={styles.levelName}>{currentLevel.name}</Text>
-            <Text style={[styles.levelCefr, { color: accent }]}>CEFR {currentLevel.cefr}</Text>
+          <Text style={[styles.levelCefr, { color: accent }]}>CEFR {currentLevel.cefr}</Text>
           </View>
           <TouchableOpacity style={styles.changeButton} onPress={handleChangeLevel}>
             <Text style={styles.changeButtonText}>Change</Text>
@@ -199,8 +211,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  levelIcon: {
-    fontSize: 40,
+  levelImage: {
+    width: 40,
+    height: 40,
     marginRight: 20,
   },
   levelDetails: {
@@ -224,10 +237,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#F2935C',
+    borderColor: '#187486',
   },
   changeButtonText: {
-    color: '#F2935C',
+    color: '#187486',
     fontSize: 12,
   },
   progressContainer: {

@@ -8,10 +8,11 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Plus, Search, BookOpen, Folder, FolderOpen, FolderPlus, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Plus, Search, BookOpen, Trash2 } from 'lucide-react-native';
 import { useAppStore } from '../lib/store';
 import { Word } from '../types';
 import { aiService } from '../services/AIService';
@@ -141,7 +142,7 @@ export default function VaultScreen() {
         ) : (
           <View style={styles.wordsList}>
             <TouchableOpacity style={styles.newFolderRow} onPress={() => setShowFolderCreate(true)}>
-              <FolderPlus size={18} color="#fff" />
+              <Image source={require('../assets/foldericons/add_folder.png')} style={styles.folderIconSmall} />
               <Text style={styles.newFolderText}>New Folder</Text>
             </TouchableOpacity>
             {foldersToShow.map((f) => {
@@ -151,7 +152,7 @@ export default function VaultScreen() {
               
               return (
                 <TouchableOpacity key={f.id} style={styles.folderRow} onPress={() => router.push({ pathname: '/vault-folder', params: { id: f.id, title: f.title } })}>
-                  <Folder size={20} color="#e28743" />
+                  <Image source={require('../assets/foldericons/foldericon.png')} style={styles.folderIcon} />
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.folderTitle}>{f.title}</Text>
                     <Text style={styles.folderSubtitle}>{count} {count === 1 ? 'word' : 'words'}</Text>
@@ -522,6 +523,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     marginBottom: 8,
+  },
+  folderIcon: {
+    width: 40,
+    height: 40,
+  },
+  folderIconSmall: {
+    width: 36,
+    height: 36,
   },
   newFolderText: {
     color: '#fff',
