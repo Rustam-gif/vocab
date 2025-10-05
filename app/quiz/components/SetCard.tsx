@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { CheckCircle } from 'lucide-react-native';
+import { CheckCircle, Lock } from 'lucide-react-native';
 
 interface SetCardProps {
   set: {
@@ -13,6 +13,7 @@ interface SetCardProps {
     completed: boolean;
     inProgress?: boolean;
     score?: number;
+    locked?: boolean;
   };
   onPress: () => void;
 }
@@ -21,6 +22,7 @@ export default function SetCard({ set, onPress }: SetCardProps) {
   const isQuiz = set.type === 'quiz';
   const isCompleted = set.completed;
   const isInProgress = set.inProgress;
+  const isLocked = set.locked;
 
   const accent = '#F2935C';
   const success = '#437F76';
@@ -28,6 +30,30 @@ export default function SetCard({ set, onPress }: SetCardProps) {
   const getIconSource = () => {
     const t = (set.title || '').toLowerCase();
     if (set.type === 'quiz') return require('../../../assets/wordset_icons/quiz.png');
+    
+    // IELTS topics
+    if (t.includes('academic')) return require('../../../assets/wordset_icons/IELTS_words/academic-life.png');
+    if (t.includes('environment') || t.includes('climate')) return require('../../../assets/wordset_icons/IELTS_words/environment-climate.png');
+    if (t.includes('technology') && t.includes('innovation')) return require('../../../assets/wordset_icons/IELTS_words/technology-innovation.png');
+    if (t.includes('health') && t.includes('medicine')) return require('../../../assets/wordset_icons/IELTS_words/health-medicine.png');
+    if (t.includes('business') || t.includes('economics')) return require('../../../assets/wordset_icons/IELTS_words/business-economics.png');
+    if (t.includes('government') || t.includes('politics')) return require('../../../assets/wordset_icons/IELTS_words/government-politics.png');
+    if (t.includes('media') || t.includes('communication')) return require('../../../assets/wordset_icons/IELTS_words/media-communication.png');
+    if (t.includes('social') && t.includes('issue')) return require('../../../assets/wordset_icons/IELTS_words/social-issues.png');
+    if (t.includes('food') && t.includes('agriculture')) return require('../../../assets/wordset_icons/IELTS_words/food-agriculture.png');
+    if (t.includes('arts') || t.includes('culture')) return require('../../../assets/wordset_icons/IELTS_words/arts-culture.png');
+    if (t.includes('science') || t.includes('research')) return require('../../../assets/wordset_icons/IELTS_words/science-research.png');
+    if (t.includes('travel') && t.includes('tourism')) return require('../../../assets/wordset_icons/IELTS_words/travel-tourism.png');
+    if (t.includes('urban') || t.includes('development')) return require('../../../assets/wordset_icons/IELTS_words/urban-development.png');
+    if (t.includes('education') && t.includes('system')) return require('../../../assets/wordset_icons/IELTS_words/education-system.png');
+    if (t.includes('crime') || t.includes('law')) return require('../../../assets/wordset_icons/IELTS_words/crime-law.png');
+    if (t.includes('psychology') || t.includes('behavior')) return require('../../../assets/wordset_icons/IELTS_words/psychology-behavior.png');
+    if (t.includes('global') && t.includes('issue')) return require('../../../assets/wordset_icons/IELTS_words/global-issues.png');
+    if (t.includes('sports') || t.includes('fitness')) return require('../../../assets/wordset_icons/IELTS_words/sports-fitness.png');
+    if (t.includes('finance') || t.includes('banking')) return require('../../../assets/wordset_icons/IELTS_words/finance-banking.png');
+    if (t.includes('employment') || t.includes('career')) return require('../../../assets/wordset_icons/IELTS_words/employment-career.png');
+    
+    // Beginner topics
     if (t.includes('daily') || t.includes('habit') || t.includes('routine')) return require('../../../assets/wordset_icons/daily-routines-habits.png');
     if (t.includes('basic') || t.includes('family') || t.includes('need')) return require('../../../assets/wordset_icons/basic-needs.png');
     if (t.includes('education') || t.includes('work')) return require('../../../assets/wordset_icons/education-work.png');
@@ -41,40 +67,53 @@ export default function SetCard({ set, onPress }: SetCardProps) {
     if (t.includes('transportation') || t.includes('travel')) return require('../../../assets/wordset_icons/transportation-travel.png');
     if (t.includes('home') || t.includes('furniture')) return require('../../../assets/wordset_icons/home-furniture.png');
     if (t.includes('culture') || t.includes('entertainment')) return require('../../../assets/wordset_icons/culture-entertainment.png');
+    
     return require('../../../assets/wordset_icons/basic-needs.png');
   };
 
   const getButtonText = () => {
+    if (isLocked) return 'Locked';
     if (isCompleted) return 'Review';
     if (isInProgress) return 'Continue';
     return 'Start';
   };
 
   const getButtonColor = () => {
+    if (isLocked) return 'rgba(100, 100, 100, 0.4)'; // Locked - gray
     if (isCompleted) return 'rgba(230, 138, 74, 0.35)'; // Review - 35% opacity burnt orange
     if (isInProgress) return '#d79a35'; // Continue - amber with depth
     return '#3cb4ac'; // Start (teal, used only for fallback)
   };
 
   const getButtonTextColor = () => {
-    // All states use white text now (Continue/Start/Review)
+    if (isLocked) return '#888'; // Gray text for locked
+    // All other states use white text now (Continue/Start/Review)
     return '#fff';
   };
 
   return (
-    <TouchableOpacity style={styles.container} onPress={onPress}>
+    <TouchableOpacity 
+      style={[styles.container, isLocked && styles.lockedContainer]} 
+      onPress={onPress}
+      disabled={isLocked}
+      activeOpacity={isLocked ? 1 : 0.7}
+    >
       <View style={styles.headerRow}>
-        <Image source={getIconSource()} style={styles.setIcon} resizeMode="contain" />
+        <Image 
+          source={getIconSource()} 
+          style={[styles.setIcon, isLocked && styles.lockedIcon]} 
+          resizeMode="contain" 
+        />
         <View style={styles.headerTextArea}>
-          <Text style={styles.title}>{set.title}</Text>
+          <Text style={[styles.title, isLocked && styles.lockedText]}>{set.title}</Text>
           {!isQuiz && (
-            <Text style={styles.wordsPreviewInline} numberOfLines={1}>
+            <Text style={[styles.wordsPreviewInline, isLocked && styles.lockedText]} numberOfLines={1}>
               {set.words?.slice(0, 3).map(w => w.word).join(', ')}
               {set.words && set.words.length > 3 && '...'}
             </Text>
           )}
           {isQuiz && !!set.description && (
-            <Text style={styles.quizPreviewInline} numberOfLines={1}>
+            <Text style={[styles.quizPreviewInline, isLocked && styles.lockedText]} numberOfLines={1}>
               {set.description}
             </Text>
           )}
@@ -85,7 +124,7 @@ export default function SetCard({ set, onPress }: SetCardProps) {
       <View style={styles.content} />
 
       <View style={styles.footer}>
-        {isCompleted && (
+        {isCompleted && !isLocked && (
           <View style={styles.statusPill}>
             <CheckCircle size={16} color={success} />
             <Text style={styles.statusText}>
@@ -93,12 +132,18 @@ export default function SetCard({ set, onPress }: SetCardProps) {
             </Text>
           </View>
         )}
+        {isLocked && (
+          <View style={styles.lockedPill}>
+            <Lock size={14} color="#888" />
+            <Text style={styles.lockedPillText}>Complete previous set first</Text>
+          </View>
+        )}
       </View>
 
       {/* Absolute action button overlay (vertically centered on the right) */}
       <View style={styles.actionOverlay}>
-        <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
-          {(!isCompleted && !isInProgress) ? (
+        <TouchableOpacity onPress={onPress} activeOpacity={0.85} disabled={isLocked}>
+          {(!isCompleted && !isInProgress && !isLocked) ? (
             <LinearGradient
               colors={['#1a8d87', '#3cb4ac']}
               start={{ x: 0, y: 0 }}
@@ -109,6 +154,7 @@ export default function SetCard({ set, onPress }: SetCardProps) {
             </LinearGradient>
           ) : (
             <View style={[styles.actionButton, { backgroundColor: getButtonColor() }]}>
+              {isLocked && <Lock size={14} color="#888" style={{ marginRight: 4 }} />}
               <Text style={[styles.actionButtonText, { color: getButtonTextColor() }]}>{getButtonText()}</Text>
             </View>
           )}
@@ -278,5 +324,27 @@ const styles = StyleSheet.create({
   },
   playIcon: {
     marginLeft: 4,
+  },
+  lockedContainer: {
+    opacity: 0.85,
+    backgroundColor: '#252525',
+  },
+  lockedIcon: {
+    opacity: 0.6,
+  },
+  lockedText: {
+    color: '#A0A0A0',
+  },
+  lockedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
+  lockedPillText: {
+    fontSize: 12,
+    color: '#A0A0A0',
+    fontWeight: '500',
   },
 });

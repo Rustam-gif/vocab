@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Vibration } from 'react-native';
 import { analyticsService } from '../../../services/AnalyticsService';
+import { levels } from '../data/levels';
 
 interface SynonymProps {
   setId: string;
@@ -19,6 +20,7 @@ interface SynonymProps {
   onPhaseComplete: (score: number, totalQuestions: number) => void;
   sharedScore: number;
   onScoreShare: (newScore: number) => void;
+  wordRange?: { start: number; end: number };
 }
 
 interface WordEntry {
@@ -29,6 +31,36 @@ interface WordEntry {
 }
 
 const WORDS: WordEntry[] = [
+  {
+    word: 'wake up',
+    ipa: '/weɪk ʌp/',
+    correct: ['get up', 'arise', 'awaken'],
+    incorrectPool: ['sleep', 'rest', 'nap', 'slumber'],
+  },
+  {
+    word: 'eat',
+    ipa: '/iːt/',
+    correct: ['consume', 'have a meal', 'dine'],
+    incorrectPool: ['drink', 'cook', 'buy', 'sip'],
+  },
+  {
+    word: 'study',
+    ipa: '/ˈstʌdi/',
+    correct: ['learn', 'practice', 'review'],
+    incorrectPool: ['play', 'relax', 'sleep', 'watch'],
+  },
+  {
+    word: 'exercise',
+    ipa: '/ˈeksərsaɪz/',
+    correct: ['work out', 'train', 'keep fit'],
+    incorrectPool: ['rest', 'eat', 'sleep', 'sit'],
+  },
+  {
+    word: 'sleep',
+    ipa: '/sliːp/',
+    correct: ['rest', 'slumber', 'doze'],
+    incorrectPool: ['eat', 'play', 'talk', 'run'],
+  },
   {
     word: 'home',
     ipa: '/hoʊm/',
@@ -65,7 +97,28 @@ const CORRECT_COLOR = '#437F76';
 const INCORRECT_COLOR = '#924646';
 const ACCENT_COLOR = '#F2935C';
 
-export default function SynonymComponent({ onPhaseComplete, sharedScore, onScoreShare }: SynonymProps) {
+export default function SynonymComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange }: SynonymProps) {
+  // Get words from levels data
+  const wordsData = useMemo(() => {
+    const level = levels.find(l => l.id === levelId);
+    if (!level) return [];
+    const set = level.sets.find(s => s.id.toString() === setId);
+    if (!set || !set.words) return [];
+    
+    let words = set.words;
+    if (wordRange) {
+      words = words.slice(wordRange.start, wordRange.end);
+    }
+    
+    // Convert to WordEntry format
+    return words.map(w => ({
+      word: w.word,
+      ipa: w.phonetic,
+      correct: w.synonyms || [],
+      incorrectPool: WORDS.find(entry => entry.word === w.word)?.incorrectPool || ['other', 'different', 'alternative']
+    }));
+  }, [setId, levelId, wordRange]);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
   const [revealed, setRevealed] = useState(false);
@@ -75,19 +128,20 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
   const deductionAnim = useRef(new Animated.Value(0)).current;
   const itemStartRef = useRef<number>(Date.now());
 
-  const currentWord = useMemo(() => WORDS[currentIndex], [currentIndex]);
-  const requiredCount = currentWord.correct.length;
+  const currentWord = useMemo(() => wordsData[currentIndex], [wordsData, currentIndex]);
+  const requiredCount = 3; // Always require 3 correct synonyms
 
   const [options] = useState(() =>
-    WORDS.map(entry => {
-      const incorrectNeeded = entry.correct.length;
+    wordsData.map(entry => {
+      // Always use 3 correct and 3 incorrect options
+      const correctOptions = entry.correct.slice(0, 3);
       const shuffledIncorrect = [...entry.incorrectPool]
         .map(option => ({ option, sort: Math.random() }))
         .sort((a, b) => a.sort - b.sort)
-        .slice(0, incorrectNeeded)
+        .slice(0, 3)
         .map(({ option }) => option);
 
-      const combined = [...entry.correct, ...shuffledIncorrect];
+      const combined = [...correctOptions, ...shuffledIncorrect];
 
       return combined
         .map(option => ({ option, sort: Math.random() }))
@@ -172,8 +226,8 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
   const handleNext = () => {
     if (!revealed) return;
 
-    if (currentIndex === WORDS.length - 1) {
-      onPhaseComplete(phaseCorrect, WORDS.length);
+    if (currentIndex === wordsData.length - 1) {
+      onPhaseComplete(phaseCorrect, wordsData.length);
     } else {
       setCurrentIndex(prev => prev + 1);
       itemStartRef.current = Date.now();
@@ -190,7 +244,7 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
     }).start();
   };
 
-  const progress = currentIndex / WORDS.length;
+  const progress = currentIndex / wordsData.length;
   const deductionOpacity = deductionAnim.interpolate({
     inputRange: [0, 0.2, 1],
     outputRange: [0, 1, 0],
@@ -200,7 +254,7 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
     outputRange: [0, -35],
   });
 
-  const isLastWord = currentIndex === WORDS.length - 1;
+  const isLastWord = currentIndex === wordsData.length - 1;
   const handlePrimary = () => {
     if (!revealed) {
       if (nextDisabled) return;
@@ -218,7 +272,7 @@ export default function SynonymComponent({ onPhaseComplete, sharedScore, onScore
         <View style={styles.topRow}>
         <View style={styles.progressContainer}>
           <Text style={styles.progressText}>
-            Word {currentIndex + 1} of {WORDS.length}
+            Word {currentIndex + 1} of {wordsData.length}
           </Text>
           <View style={styles.scoreWrapper}>
             <Animated.Text

@@ -17,6 +17,7 @@ interface MCQProps {
   onPhaseComplete: (score: number, totalQuestions: number) => void;
   sharedScore: number;
   onScoreShare: (newScore: number) => void;
+  wordRange?: { start: number; end: number };
 }
 
 interface Question {
@@ -40,7 +41,7 @@ const shortenPhrase = (phrase: string): string => {
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 };
 
-export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare }: MCQProps) {
+export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange }: MCQProps) {
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [displayScore, setDisplayScore] = useState(sharedScore);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -77,7 +78,7 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
   }, [displayScore, onScoreShare, sharedScore]);
 
   const generateQuestions = () => {
-    console.log('MCQComponent - generateQuestions called with:', { setId, levelId });
+    console.log('MCQComponent - generateQuestions called with:', { setId, levelId, wordRange });
     
     const level = levels.find(l => l.id === levelId);
     console.log('MCQComponent - Found level:', level?.name);
@@ -87,7 +88,14 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
     console.log('MCQComponent - Found set:', set?.title);
     if (!set || !set.words) return;
 
-    const generatedQuestions: Question[] = set.words.map(word => {
+    // Apply word range if specified
+    let words = set.words;
+    if (wordRange) {
+      words = words.slice(wordRange.start, wordRange.end);
+      console.log('MCQComponent - Using word range:', wordRange, 'Words:', words.length);
+    }
+
+    const generatedQuestions: Question[] = words.map(word => {
       const shortDefinition = shortenPhrase(word.definition);
       const options = [
         shortDefinition,

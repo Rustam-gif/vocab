@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Vibration } from 'react-native';
 import { analyticsService } from '../../../services/AnalyticsService';
+import { levels } from '../data/levels';
 
 const ACCENT_COLOR = '#F2935C';
 const CORRECT_COLOR = '#437F76';
@@ -22,6 +23,7 @@ interface SentenceUsageProps {
   onPhaseComplete: (score: number, totalQuestions: number) => void;
   sharedScore: number;
   onScoreShare: (score: number) => void;
+  wordRange?: { start: number; end: number };
 }
 
 interface UsageSentence {
@@ -37,6 +39,61 @@ interface UsageItem {
 }
 
 const ITEMS: UsageItem[] = [
+  {
+    id: 'wake-up',
+    word: 'wake up',
+    ipa: '/weɪk ʌp/',
+    sentences: [
+      { text: 'I … at seven o clock every morning.', isCorrect: true },
+      { text: 'I … to school by bus every day.', isCorrect: false },
+      { text: 'I … my homework after dinner today.', isCorrect: false },
+      { text: 'I … breakfast with my family now.', isCorrect: false },
+    ],
+  },
+  {
+    id: 'eat',
+    word: 'eat',
+    ipa: '/iːt/',
+    sentences: [
+      { text: 'They … breakfast together every morning.', isCorrect: true },
+      { text: 'They … their homework at the library.', isCorrect: false },
+      { text: 'They … the violin before school today.', isCorrect: false },
+      { text: 'They … television after work every day.', isCorrect: false },
+    ],
+  },
+  {
+    id: 'study',
+    word: 'study',
+    ipa: '/ˈstʌdi/',
+    sentences: [
+      { text: 'She likes to … English in the evening.', isCorrect: true },
+      { text: 'She likes to … movies on weekends.', isCorrect: false },
+      { text: 'She likes to … dinner with friends.', isCorrect: false },
+      { text: 'She likes to … basketball after class.', isCorrect: false },
+    ],
+  },
+  {
+    id: 'exercise',
+    word: 'exercise',
+    ipa: '/ˈeksərsaɪz/',
+    sentences: [
+      { text: 'He goes to the gym to … regularly.', isCorrect: true },
+      { text: 'He goes to the gym to … television.', isCorrect: false },
+      { text: 'He goes to the gym to … breakfast.', isCorrect: false },
+      { text: 'He goes to the gym to … friends.', isCorrect: false },
+    ],
+  },
+  {
+    id: 'sleep',
+    word: 'sleep',
+    ipa: '/sliːp/',
+    sentences: [
+      { text: 'Children need to … for many hours daily.', isCorrect: true },
+      { text: 'Children need to … outside with their toys.', isCorrect: false },
+      { text: 'Children need to … healthy food every day.', isCorrect: false },
+      { text: 'Children need to … warm clothes in winter.', isCorrect: false },
+    ],
+  },
   {
     id: 'home',
     word: 'home',
@@ -100,7 +157,36 @@ interface OptionRow {
   key: string;
 }
 
-export default function SentenceUsageComponent({ onPhaseComplete, sharedScore, onScoreShare }: SentenceUsageProps) {
+export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange }: SentenceUsageProps) {
+  // Get words from levels data
+  const itemsData = useMemo(() => {
+    const level = levels.find(l => l.id === levelId);
+    if (!level) return [];
+    const set = level.sets.find(s => s.id.toString() === setId);
+    if (!set || !set.words) return [];
+    
+    let words = set.words;
+    if (wordRange) {
+      words = words.slice(wordRange.start, wordRange.end);
+    }
+    
+    // Convert to UsageItem format - use the example from the word as the correct sentence
+    return words.map(w => {
+      const matchingItem = ITEMS.find(item => item.word === w.word);
+      return {
+        id: w.word,
+        word: w.word,
+        ipa: w.phonetic,
+        sentences: matchingItem?.sentences || [
+          { text: w.example, isCorrect: true },
+          { text: 'I go to my … when I want to buy food.', isCorrect: false },
+          { text: 'I go to my … to learn English and math.', isCorrect: false },
+          { text: 'I go to my … to play with other children.', isCorrect: false },
+        ]
+      };
+    });
+  }, [setId, levelId, wordRange]);
+
   const [index, setIndex] = useState(0);
   const [options, setOptions] = useState<OptionRow[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
@@ -111,7 +197,7 @@ export default function SentenceUsageComponent({ onPhaseComplete, sharedScore, o
   const deductionAnim = useRef(new Animated.Value(0)).current;
   const itemStartRef = useRef<number>(Date.now());
 
-  const item = useMemo(() => ITEMS[index], [index]);
+  const item = useMemo(() => itemsData[index], [itemsData, index]);
 
   useEffect(() => {
     const shuffled = item.sentences
@@ -138,7 +224,7 @@ export default function SentenceUsageComponent({ onPhaseComplete, sharedScore, o
     }
   }, [displayScore, onScoreShare, sharedScore]);
 
-  const progress = index / ITEMS.length;
+  const progress = index / itemsData.length;
 
   const handleSelect = (idx: number) => {
     if (revealed) return;
@@ -184,8 +270,8 @@ export default function SentenceUsageComponent({ onPhaseComplete, sharedScore, o
   const handleNext = () => {
     if (!revealed) return;
 
-    if (index === ITEMS.length - 1) {
-      onPhaseComplete(correctCount, ITEMS.length);
+    if (index === itemsData.length - 1) {
+      onPhaseComplete(correctCount, itemsData.length);
     } else {
       setIndex(prev => prev + 1);
       itemStartRef.current = Date.now();
@@ -214,7 +300,7 @@ export default function SentenceUsageComponent({ onPhaseComplete, sharedScore, o
   return (
     <View style={styles.container}>
       <View style={styles.progressContainer}>
-        <Text style={styles.progressText}>Word {index + 1} of {ITEMS.length}</Text>
+        <Text style={styles.progressText}>Word {index + 1} of {itemsData.length}</Text>
         <View style={styles.scoreWrapper}>
           <Animated.Text
             style={[
@@ -290,7 +376,7 @@ export default function SentenceUsageComponent({ onPhaseComplete, sharedScore, o
         ) : (
           <TouchableOpacity style={styles.primaryButton} onPress={handleNext}>
             <Text style={styles.primaryButtonText}>
-              {index === ITEMS.length - 1 ? 'Finish' : 'Next'}
+              {index === itemsData.length - 1 ? 'Finish' : 'Next'}
             </Text>
           </TouchableOpacity>
         )}

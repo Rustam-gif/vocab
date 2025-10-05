@@ -60,6 +60,8 @@ export default function LevelSelectScreen() {
     switch (id) {
       case 'beginner':
         return require('../../assets/levelicons/beginner.png');
+      case 'ielts':
+        return require('../../assets/levelicons/ielts-topics.png');
       case 'intermediate':
         return require('../../assets/levelicons/intermediate.png');
       case 'upper-intermediate':
@@ -153,7 +155,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   title: {
-    fontSize: 18,
+    fontSize: 16, // reduced ~10%
     fontWeight: '600',
     color: '#fff',
     flex: 1,
@@ -205,20 +207,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   levelName: {
-    fontSize: 22,
+    fontSize: 20, // reduced ~10%
     fontWeight: '600',
     color: '#fff',
     marginBottom: 4,
     fontFamily: 'Ubuntu_500Medium',
   },
   levelDescription: {
-    fontSize: 15,
+    fontSize: 14, // reduced ~10%
     color: '#9CA3AF',
     marginBottom: 2,
     fontFamily: 'Ubuntu_400Regular',
   },
   levelCefr: {
-    fontSize: 13,
+    fontSize: 12, // reduced ~10%
     color: '#F2935C',
     fontWeight: '500',
     fontFamily: 'Ubuntu_500Medium',
@@ -249,7 +251,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   continueButtonText: {
-    fontSize: 16,
+    fontSize: 14, // reduced ~10%
     fontWeight: '600',
     color: '#fff',
   },
@@ -259,7 +261,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   errorText: {
-    fontSize: 16,
+    fontSize: 14, // reduced ~10%
     color: '#9CA3AF',
   },
 });

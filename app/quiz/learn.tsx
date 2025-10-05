@@ -50,15 +50,29 @@ export default function LearnScreen() {
     if (level) {
       await Promise.all([ProgressService.initialize(), SetProgressService.initialize()]);
 
-      const setsWithProgress = level.sets.map((set) => {
+      const setsWithProgress = level.sets.map((set, index) => {
         // Overlay persisted status onto static level data
         const flags = SetProgressService.getSetFlags(activeLevelId, set.id);
-        return {
+        const baseSet = {
           ...set,
           completed: typeof flags.completed === 'boolean' ? flags.completed : !!set.completed,
           inProgress: typeof flags.inProgress === 'boolean' ? flags.inProgress : !!set.inProgress,
           score: typeof flags.score === 'number' ? flags.score : set.score,
         };
+
+        // First set is always unlocked
+        if (index === 0) {
+          return baseSet;
+        }
+
+        // For all other sets (including quizzes), check if previous set is completed
+        const prevSet = level.sets[index - 1];
+        const prevFlags = SetProgressService.getSetFlags(activeLevelId, prevSet.id);
+        const prevCompleted = typeof prevFlags.completed === 'boolean' ? prevFlags.completed : !!prevSet.completed;
+        
+        // Set is locked if the previous set is not completed
+        const isLocked = !prevCompleted;
+        return { ...baseSet, locked: isLocked };
       });
 
       const levelWithProgress = { ...level, sets: setsWithProgress };
@@ -78,20 +92,24 @@ export default function LearnScreen() {
     }, [refreshLevel])
   );
 
-  const handleSetPress = (set: Set) => {
+  const handleSetPress = (set: Set & { locked?: boolean }) => {
     if (!activeLevelId) {
       router.push('/quiz/level-select');
       return;
     }
+
+    // Don't allow navigation if the set is locked
+    if (set.locked) {
+      console.log('LearnScreen - Set is locked:', set.id);
+      return;
+    }
+
     console.log('LearnScreen - handleSetPress:', { setId: set.id, levelId: activeLevelId, setType: set.type });
 
-    if (set.type === 'quiz') {
-      router.push(`/quiz/quiz-screen?setId=${set.id}&level=${activeLevelId}`);
-    } else {
-      const url = `/quiz/atlas-practice-integrated?setId=${set.id}&levelId=${activeLevelId}`;
-      console.log('LearnScreen - Navigating to:', url);
-      router.push(url);
-    }
+    // Both quiz and regular sets use atlas-practice-integrated
+    const url = `/quiz/atlas-practice-integrated?setId=${set.id}&levelId=${activeLevelId}`;
+    console.log('LearnScreen - Navigating to:', url);
+    router.push(url);
   };
 
   const handleChangeLevel = () => {
@@ -120,7 +138,7 @@ export default function LearnScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => router.replace('/')}
         >
           <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>
@@ -139,6 +157,8 @@ export default function LearnScreen() {
             source={
               currentLevel.id === 'beginner'
                 ? require('../../assets/levelicons/beginner.png')
+                : currentLevel.id === 'ielts'
+                ? require('../../assets/levelicons/ielts-topics.png')
                 : currentLevel.id === 'intermediate'
                 ? require('../../assets/levelicons/intermediate.png')
                 : currentLevel.id === 'advanced'

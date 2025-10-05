@@ -179,6 +179,91 @@
       "title": "Updated SetCard icon mapping for new topics",
       "detail": "Added icon recognition in SetCard.tsx for all 10 new topics: food-cooking.png, free-time-hobbies.png, technology-internet.png, shopping-money.png, health-body.png, weather-nature.png, emotions-personality.png, transportation-travel.png, home-furniture.png, culture-entertainment.png",
       "when": "2025-01-27T12:05:00.000Z"
+    },
+    {
+      "title": "Built Quiz 1 with 10 words",
+      "detail": "Added 10 A1 words to Quiz 1 in levels.ts from sets 2 & 3: home, food, brother, family, friend (from Basic Needs & Family) + teacher, book, job, write, help (from Education & Work). Quiz now has full word content for exercises",
+      "when": "2025-01-27T12:20:00.000Z"
+    },
+    {
+      "title": "Implemented custom quiz exercise flow",
+      "detail": "Modified atlas-practice-integrated.tsx to detect quiz type (type: 'quiz') and use custom phase structure: no Intro, only MCQ -> Synonym -> Usage -> Letters (4 phases instead of 5). Used useMemo to detect quiz type and conditionally set phases array",
+      "when": "2025-01-27T12:25:00.000Z"
+    },
+    {
+      "title": "Fixed quiz navigation",
+      "detail": "Updated learn.tsx to route quiz sets to atlas-practice-integrated instead of quiz-screen. Removed the conditional check for set.type === 'quiz' so both regular sets and quizzes use the same integrated practice component which now handles both cases",
+      "when": "2025-01-27T12:30:00.000Z"
+    },
+    {
+      "title": "Implemented word range splitting for quizzes",
+      "detail": "Added wordRange prop { start, end } to MCQ, Synonym, and Usage components. In atlas-practice-integrated.tsx, quizzes now split 10 words: MCQ & Synonym get words 0-4 (first 5), Usage & Letters get words 5-9 (next 5). Updated MCQ and Synonym to dynamically pull words from levels.ts and apply wordRange filter",
+      "when": "2025-01-27T12:40:00.000Z"
+    },
+    {
+      "title": "Fixed Sentence Usage to use dynamic words",
+      "detail": "Made sentence-usage.tsx pull words from levels.ts instead of hardcoded ITEMS. Now applies wordRange filter so Usage exercise shows correct word set (words 5-9 for quizzes). Updated all ITEMS.length references to itemsData.length",
+      "when": "2025-01-27T12:50:00.000Z"
+    },
+    {
+      "title": "Fixed Synonym to show 6 options with 3 correct",
+      "detail": "Updated synonym.tsx to always show 6 options: 3 correct synonyms and 3 incorrect options. Changed requiredCount from dynamic (entry.correct.length) to fixed value of 3. Modified options generation to slice first 3 correct and 3 incorrect options",
+      "when": "2025-01-27T12:55:00.000Z"
+    },
+    {
+      "title": "Added 3rd synonym to all Quiz 1 words",
+      "detail": "Updated all 10 words in Quiz 1 (levels.ts) to have 3 synonyms each instead of 2: home (where you live), food (lunch), brother (boy in family), family (mom and dad), friend (someone you like), teacher (tutor), book (novel), job (career), write (pen), help (aid)",
+      "when": "2025-01-27T13:00:00.000Z"
+    },
+    {
+      "title": "Added synonym data for words 6-10",
+      "detail": "Extended WORDS array in synonym.tsx to include teacher, book, job, write, help with their correct synonyms and incorrect options. This ensures the second set of 5 words (used in quiz) has proper synonym data for the exercise",
+      "when": "2025-01-27T13:05:00.000Z"
+    },
+    {
+      "title": "Fixed Quiz 1 to use words from Sets 1 & 2",
+      "detail": "Replaced Quiz 1 words in levels.ts to use 5 from Set 1 (Daily Routines: wake up, eat, study, exercise, sleep) and 5 from Set 2 (Basic Needs & Family: home, food, brother, family, friend). Updated description to 'A quick recap of sets 1 & 2'. Added 3rd synonym to all words",
+      "when": "2025-01-27T13:15:00.000Z"
+    },
+    {
+      "title": "Updated synonym and usage components for new quiz words",
+      "detail": "Updated WORDS array in synonym.tsx to include Set 1 words (wake up, eat, study, exercise, sleep) with 3 synonyms and incorrect options each. Updated ITEMS array in sentence-usage.tsx to include all 10 quiz words with appropriate sentence examples",
+      "when": "2025-01-27T13:20:00.000Z"
+    },
+    {
+      "title": "Added Quiz 2, 3, 4, and 5",
+      "detail": "Created 4 new quizzes following the same pattern: Quiz 2 (sets 3&4: teacher,book,job,write,help,cook,eat,drink,taste,hungry), Quiz 3 (sets 5&6: play,music,watch,read,dance,computer,phone,internet,video,game), Quiz 4 (sets 7&8: buy,money,shop,price,pay,doctor,sick,body,pain,healthy), Quiz 5 (sets 9&10: sun,rain,tree,cold,hot,happy,sad,angry,kind,smart). All with 3 synonyms each for the synonym exercise",
+      "when": "2025-01-27T13:30:00.000Z"
+    },
+    {
+      "title": "Reorganized quizzes to appear after every 2 sets",
+      "detail": "Restructured levels.ts so quizzes appear immediately after their corresponding sets: Set1,Set2,Quiz1,Set3,Set4,Quiz2,Set5,Set6,Quiz3,Set7,Set8,Quiz4,Set9,Set10,Quiz5,Set11,Set12,Set13. This provides natural progression and review points for learners",
+      "when": "2025-01-27T14:00:00.000Z"
+    },
+    {
+      "title": "Implemented quiz locking mechanism",
+      "detail": "Added logic to lock quizzes until the previous 2 sets are completed. Modified learn.tsx to check completion status of previous sets and add 'locked' property to quiz sets. Updated SetCard.tsx to display locked state with gray styling, lock icon, disabled interaction, and 'Complete previous sets' message. Users cannot start a quiz until they finish the 2 sets before it",
+      "when": "2025-01-27T14:30:00.000Z"
+    },
+    {
+      "title": "Extended locking to all sets (sequential progression)",
+      "detail": "Updated learn.tsx to lock ALL sets (not just quizzes) until the previous set is completed. First set is always unlocked. Each subsequent set requires completion of the immediately previous set. Changed message to 'Complete previous set first'. This creates a linear learning path where users must complete sets in order",
+      "when": "2025-01-27T14:45:00.000Z"
+    },
+    {
+      "title": "Added 3rd synonym to all regular sets",
+      "detail": "Updated all 13 regular sets in levels.ts to have 3 synonyms per word instead of 2. This ensures the synonym exercise shows 6 options (3 correct + 3 incorrect) for both regular sets and quizzes. Sets updated: Daily Routines, Basic Needs & Family, Education & Work, Food & Cooking, Free Time & Hobbies, Technology & Internet, Shopping & Money, Health & Body, Weather & Nature, Emotions & Personality, Transportation & Travel, Home & Furniture, Culture & Entertainment",
+      "when": "2025-01-27T15:00:00.000Z"
+    },
+    {
+      "title": "Created IELTS Vocabulary level",
+      "detail": "Added complete IELTS level with 20 sets covering essential IELTS topics: Academic Life, Environment & Climate, Technology & Innovation, Health & Medicine, Business & Economics, Government & Politics, Media & Communication, Social Issues, Arts & Culture, Science & Research, Travel & Tourism, Food & Agriculture, Urban Development, Education System, Crime & Law, Psychology & Behavior, Global Issues, Sports & Fitness, Finance & Banking, Employment & Career. Each set contains 5 words (100 total) at B2-C1 CEFR level with academic definitions, example sentences, phonetics, and 3 synonyms each",
+      "when": "2025-01-27T15:30:00.000Z"
+    },
+    {
+      "title": "Added IELTS topic icon recognition",
+      "detail": "Updated SetCard.tsx to recognize and display appropriate icons for all 20 IELTS topics. Icon mapping includes academic-life.png, environment-climate.png, technology-innovation.png, health-medicine.png, business-economics.png, government-politics.png, media-communication.png, social-issues.png, culture.png, science-research.png, travel-tourism.png, food-agriculture.png, urban-development.png, education-system.png, crime-law.png, psychology-behavior.png, global-issues.png, sports-fitness.png, finance-banking.png, employment-career.png",
+      "when": "2025-01-27T15:35:00.000Z"
     }
   ],
   "goals": [],

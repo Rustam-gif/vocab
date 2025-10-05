@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Animated,
   Easing,
+  Dimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
@@ -38,14 +39,28 @@ export default function AtlasPracticeIntegrated() {
   // Debug logging
   console.log('AtlasPracticeIntegrated - Received params:', { setId, levelId });
   
+  // Check if this is a quiz type
+  const level = useMemo(() => levels.find(l => l.id === levelId), [levelId]);
+  const set = useMemo(() => level?.sets.find(s => s.id.toString() === setId), [level, setId]);
+  const isQuiz = set?.type === 'quiz';
+  
   const [currentPhase, setCurrentPhase] = useState(0);
-  const [phases, setPhases] = useState<Phase[]>([
-    { id: 'intro', name: 'Intro', component: WordIntroComponent, completed: false },
-    { id: 'mcq', name: 'MCQ', component: MCQComponent, completed: false },
-    { id: 'synonym', name: 'Synonym', component: SynonymComponent, completed: false },
-    { id: 'usage', name: 'Usage', component: SentenceUsageComponent, completed: false },
-    { id: 'letters', name: 'Letters', component: MissingLetters, completed: false },
-  ]);
+  const [phases, setPhases] = useState<Phase[]>(
+    isQuiz
+      ? [
+          { id: 'mcq', name: 'MCQ', component: MCQComponent, completed: false },
+          { id: 'synonym', name: 'Synonym', component: SynonymComponent, completed: false },
+          { id: 'usage', name: 'Usage', component: SentenceUsageComponent, completed: false },
+          { id: 'letters', name: 'Letters', component: MissingLetters, completed: false },
+        ]
+      : [
+          { id: 'intro', name: 'Intro', component: WordIntroComponent, completed: false },
+          { id: 'mcq', name: 'MCQ', component: MCQComponent, completed: false },
+          { id: 'synonym', name: 'Synonym', component: SynonymComponent, completed: false },
+          { id: 'usage', name: 'Usage', component: SentenceUsageComponent, completed: false },
+          { id: 'letters', name: 'Letters', component: MissingLetters, completed: false },
+        ]
+  );
   const [totalScore, setTotalScore] = useState(100);
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
@@ -153,6 +168,17 @@ export default function AtlasPracticeIntegrated() {
 
     const Component = phase.component;
     
+    // Determine word range for quiz mode
+    // For quizzes: MCQ & Synonym use words 0-4, Usage & Letters use words 5-9
+    let wordRange: { start: number; end: number } | undefined;
+    if (isQuiz) {
+      if (phase.id === 'mcq' || phase.id === 'synonym') {
+        wordRange = { start: 0, end: 5 }; // First 5 words
+      } else if (phase.id === 'usage' || phase.id === 'letters') {
+        wordRange = { start: 5, end: 10 }; // Next 5 words
+      }
+    }
+    
     // Handle Word Intro component differently
     if (phase.id === 'intro') {
       return (
@@ -160,6 +186,7 @@ export default function AtlasPracticeIntegrated() {
           setId={setId || ''}
           levelId={levelId || ''}
           onComplete={() => handlePhaseComplete(0, 0)}
+          wordRange={wordRange}
         />
       );
     }
@@ -168,7 +195,13 @@ export default function AtlasPracticeIntegrated() {
     if (phase.id === 'letters') {
       const level = levels.find(l => l.id === (levelId || ''));
       const currentSet = level?.sets.find(s => s.id.toString() === String(setId));
-      const words = currentSet?.words ?? [];
+      let words = currentSet?.words ?? [];
+      
+      // Apply word range if specified
+      if (wordRange) {
+        words = words.slice(wordRange.start, wordRange.end);
+      }
+      
       if (!words.length) {
         return (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -224,6 +257,7 @@ export default function AtlasPracticeIntegrated() {
         onPhaseComplete={handlePhaseComplete}
         sharedScore={totalScore}
         onScoreShare={setTotalScore}
+        wordRange={wordRange}
       />
     );
   };
