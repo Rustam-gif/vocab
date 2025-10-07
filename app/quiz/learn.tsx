@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Image } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Image, Animated, Easing } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import { ArrowLeft, Settings } from 'lucide-react-native';
 import { levels, Level, Set } from './data/levels';
 import SetCard from './components/SetCard';
@@ -8,15 +9,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { ProgressService } from '../../services/ProgressService';
 import { SetProgressService } from '../../services/SetProgressService';
+import { useAppStore } from '../../lib/store';
+import { getTheme } from '../../lib/theme';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 
 export default function LearnScreen() {
   const router = useRouter();
+  const navigation = useNavigation<any>();
+  const theme = useAppStore(s => s.theme);
+  const colors = getTheme(theme);
   const { level: levelId } = useLocalSearchParams<{ level: string }>();
   const [currentLevel, setCurrentLevel] = useState<Level | null>(null);
   const [progress, setProgress] = useState({ completed: 0, total: 0 });
   const [activeLevelId, setActiveLevelId] = useState<string | null>(levelId ?? null);
+  const animatedValues = React.useRef<Animated.Value[]>([]);
+  const [animSeed, setAnimSeed] = useState(0);
 
   const loadStoredLevel = useCallback(async () => {
     if (levelId) {
@@ -76,6 +84,8 @@ export default function LearnScreen() {
       });
 
       const levelWithProgress = { ...level, sets: setsWithProgress };
+      // Pre-create animated values at 0 before rendering to prevent initial flash
+      animatedValues.current = setsWithProgress.map(() => new Animated.Value(0));
       setCurrentLevel(levelWithProgress);
 
       const completed = setsWithProgress.filter(s => s.completed).length;
@@ -87,10 +97,29 @@ export default function LearnScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // Refresh when coming back to this screen (e.g., after finishing or exiting a set)
+      // Refresh data when returning, but do not replay the entrance animation
       refreshLevel();
     }, [refreshLevel])
   );
+
+  // Prepare and run "bubble" entrance animation for cards
+  useEffect(() => {
+    if (!currentLevel?.sets) return;
+    // Ensure we have one animated value per item, initialized to 0
+    if (animatedValues.current.length !== currentLevel.sets.length) {
+      animatedValues.current = currentLevel.sets.map(() => new Animated.Value(0));
+    }
+    const animations = animatedValues.current.map((v, i) =>
+      Animated.timing(v, {
+        toValue: 1,
+        duration: 420,
+        delay: i * 70,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      })
+    );
+    Animated.stagger(50, animations).start();
+  }, [currentLevel?.sets?.length, animSeed]);
 
   const handleSetPress = (set: Set & { locked?: boolean }) => {
     if (!activeLevelId) {
@@ -116,9 +145,17 @@ export default function LearnScreen() {
     router.push('/quiz/level-select');
   };
 
-  const renderSetItem = ({ item }: { item: Set }) => (
-    <SetCard set={item} onPress={() => handleSetPress(item)} />
-  );
+  const renderSetItem = ({ item, index }: { item: Set; index: number }) => {
+    const v = animatedValues.current[index] || new Animated.Value(0);
+    const scale = v.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.96, 1, 1] });
+    const opacity = v.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+    const translateY = v.interpolate({ inputRange: [0, 1], outputRange: [10, 0] });
+    return (
+      <Animated.View style={{ width: '100%', transform: [{ translateY }, { scale }], opacity }}>
+        <SetCard set={item} onPress={() => handleSetPress(item)} />
+      </Animated.View>
+    );
+  };
 
   if (!currentLevel) {
     return (
@@ -134,11 +171,21 @@ export default function LearnScreen() {
   const progressPercentage = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.replace('/')}
+          onPress={() => {
+            try {
+              if (navigation?.canGoBack && navigation.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/');
+              }
+            } catch {
+              router.replace('/');
+            }
+          }}
         >
           <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>

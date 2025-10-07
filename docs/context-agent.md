@@ -60,6 +60,17 @@
 - Added 3rd synonym to all regular sets (2025-01-27T15:00:00.000Z)
 - Created IELTS Vocabulary level (2025-01-27T15:30:00.000Z)
 - Added IELTS topic icon recognition (2025-01-27T15:35:00.000Z)
+- Fixed icon conflict for Food & Agriculture (2025-01-27T15:40:00.000Z)
+- Improved locked set visibility (2025-01-27T15:50:00.000Z)
+- Implemented topic-based MCQ distractors (2025-01-27T16:00:00.000Z)
+- Added comprehensive synonym incorrect pools (2025-01-27T16:05:00.000Z)
+- Added IELTS topic-based MCQ distractors (2025-01-27T16:10:00.000Z)
+- Added IELTS synonym incorrect pools (2025-01-27T16:15:00.000Z)
+- Story Exercise redesign (2025-10-06T18:58:25.249Z)
+- Word picker and SRS-aware improvements (2025-10-06T18:58:25.286Z)
+- Placement Test flow (2025-10-06T18:58:25.315Z)
+- Analytics depth and sync (2025-10-06T18:58:25.346Z)
+- UI polish (2025-10-06T18:58:25.377Z)
 
 ## Style Guidance
 - AI instructions maintenance: Update .github/copilot-instructions.md when architectural patterns or critical rules change to keep AI agents current

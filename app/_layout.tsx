@@ -8,6 +8,8 @@ import {
   Ubuntu_500Medium,
   Ubuntu_700Bold,
 } from '@expo-google-fonts/ubuntu';
+import { useAppStore } from '../lib/store';
+import { getTheme } from '../lib/theme';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -15,6 +17,7 @@ export default function RootLayout() {
     Ubuntu_500Medium,
     Ubuntu_700Bold,
   });
+  const themeName = useAppStore(s => s.theme);
 
   // Apply a global font family across the app after fonts load
   useEffect(() => {
@@ -37,17 +40,21 @@ export default function RootLayout() {
 
   return (
     <>
-      <StatusBar style="light" />
+      {/* Theme-aware status bar */}
+      <StatusBar style={themeName === 'light' ? 'dark' : 'light'} />
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: '#1E1E1E' },
+          contentStyle: { backgroundColor: getTheme(themeName).background },
+          animation: 'simple_push',
+          animationTypeForReplace: 'pop',
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="vault" options={{ title: 'Vault' }} />
         <Stack.Screen name="quiz" options={{ headerShown: false }} />
         <Stack.Screen name="story" options={{ headerShown: false }} />
+        <Stack.Screen name="placement" options={{ headerShown: false }} />
         <Stack.Screen name="story-exercise" options={{ title: 'Story Exercise' }} />
         <Stack.Screen name="journal" options={{ title: 'Journal' }} />
         <Stack.Screen name="stats" options={{ title: 'Progress' }} />

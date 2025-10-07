@@ -13,6 +13,10 @@ Directories and files discovered under configured roots:
   - vault-folder.tsx
   - vault.tsx
   - word-sprint.tsx
+- app/placement
+  - index.tsx
+  - result.tsx
+  - test.tsx
 - app/quiz
   - _layout.tsx
   - atlas-practice-integrated.tsx
@@ -43,9 +47,11 @@ Directories and files discovered under configured roots:
 - lib
   - store.ts
   - supabase.ts
+  - theme.ts
 - services
   - AIService.ts
   - AnalyticsService.ts
+  - PlacementService.ts
   - ProgressService.ts
   - SetProgressService.ts
   - StoryGenerator.ts

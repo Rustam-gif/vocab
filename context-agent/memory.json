@@ -264,6 +264,61 @@
       "title": "Added IELTS topic icon recognition",
       "detail": "Updated SetCard.tsx to recognize and display appropriate icons for all 20 IELTS topics. Icon mapping includes academic-life.png, environment-climate.png, technology-innovation.png, health-medicine.png, business-economics.png, government-politics.png, media-communication.png, social-issues.png, culture.png, science-research.png, travel-tourism.png, food-agriculture.png, urban-development.png, education-system.png, crime-law.png, psychology-behavior.png, global-issues.png, sports-fitness.png, finance-banking.png, employment-career.png",
       "when": "2025-01-27T15:35:00.000Z"
+    },
+    {
+      "title": "Fixed icon conflict for Food & Agriculture",
+      "detail": "Reordered icon mapping logic in SetCard.tsx to check for 'food && agriculture' before 'arts || culture' to prevent Food & Agriculture from incorrectly displaying the Arts & Culture icon",
+      "when": "2025-01-27T15:40:00.000Z"
+    },
+    {
+      "title": "Improved locked set visibility",
+      "detail": "Enhanced styling for locked sets in SetCard.tsx: increased container opacity from 0.6 to 0.85, lightened background from #1F1F1F to #252525, increased icon opacity from 0.4 to 0.6, and changed text color from #888 to #A0A0A0 for better readability while maintaining locked appearance",
+      "when": "2025-01-27T15:50:00.000Z"
+    },
+    {
+      "title": "Implemented topic-based MCQ distractors",
+      "detail": "Created comprehensive getTopicDistracts() function in mcq.tsx with topic-specific incorrect options for all 13 beginner sets (Daily Routines, Family, Education, Food, Hobbies, Technology, Shopping, Health, Weather, Emotions, Transportation, Home, Culture). Each topic has 3-5 opposite, similar, and unrelated distractors that are contextually relevant to the topic, making questions more challenging and natural. Generic fallback provided for unlisted topics",
+      "when": "2025-01-27T16:00:00.000Z"
+    },
+    {
+      "title": "Added comprehensive synonym incorrect pools",
+      "detail": "Expanded WORDS array in synonym.tsx from 10 to 65 words covering all 13 regular sets (325 words total with 5 per set). Each word now has 5-6 topic-related incorrect options that are contextually appropriate, making the synonym matching exercise more challenging and realistic. Incorrect options are semantically related but clearly wrong (e.g., for 'wake up': sleep, rest, nap, slumber, doze)",
+      "when": "2025-01-27T16:05:00.000Z"
+    },
+    {
+      "title": "Added IELTS topic-based MCQ distractors",
+      "detail": "Extended getTopicDistracts() function in mcq.tsx to include all 20 IELTS topics with academic-level distractors: Academic Life, Environment & Climate, Technology & Innovation, Health & Medicine, Business & Economics, Government & Politics, Media & Communication, Social Issues, Arts & Culture, Science & Research, Travel & Tourism, Food & Agriculture, Urban Development, Education System, Crime & Law, Psychology & Behavior, Global Issues, Sports & Fitness, Finance & Banking, Employment & Career. Each has topic-specific opposite, similar, and unrelated options at B2-C1 level",
+      "when": "2025-01-27T16:10:00.000Z"
+    },
+    {
+      "title": "Added IELTS synonym incorrect pools",
+      "detail": "Extended WORDS array in synonym.tsx from 65 to 165 words by adding all 100 IELTS vocabulary words across 20 sets. Each word has 5-6 academically appropriate incorrect options that are contextually related to the topic (e.g., for 'pollution': purification, cleanliness, freshness, purity, sanitation). Incorrect options use B2-C1 level vocabulary to match the IELTS standard and provide challenging but fair distractors",
+      "when": "2025-01-27T16:15:00.000Z"
+    },
+    {
+      "title": "Story Exercise redesign",
+      "detail": "Paper-style reading card with serif typography and larger text; compact Tools dock with gear toggle; light/dark theme toggle works correctly.",
+      "when": "2025-10-06T18:58:25.249Z"
+    },
+    {
+      "title": "Word picker and SRS-aware improvements",
+      "detail": "Full-screen picker modal with shorter instructions and tighter chips; Auto-pick 5 aligns on same row and wraps; Added Recommended/Due/Weak/All filters and Auto-pick prioritizes due/weak/recent.",
+      "when": "2025-10-06T18:58:25.286Z"
+    },
+    {
+      "title": "Placement Test flow",
+      "detail": "30-question adaptive flow (A1→B2 every 5), early stop after 3 mistakes, result page ties into Learn; diversified question bank (definition/synonym/antonym) with better distractors and optional context; results saved to analytics and recommended level set automatically.",
+      "when": "2025-10-06T18:58:25.315Z"
+    },
+    {
+      "title": "Analytics depth and sync",
+      "detail": "Added SRS health snapshot, weak words, topic breakdown, time-of-day accuracy, recommendations; analytics tied to Supabase for cross-device sync.",
+      "when": "2025-10-06T18:58:25.346Z"
+    },
+    {
+      "title": "UI polish",
+      "detail": "Story blanks match body size; Tools dock spacing adjusted; panel margins tuned to avoid header overlap.",
+      "when": "2025-10-06T18:58:25.377Z"
     }
   ],
   "goals": [],

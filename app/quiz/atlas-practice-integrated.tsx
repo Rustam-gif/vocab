@@ -108,7 +108,7 @@ export default function AtlasPracticeIntegrated() {
         SetProgressService.markCompleted(String(levelId), String(setId), points);
       }
     } catch {}
-    router.push({
+    router.replace({
       pathname: '/quiz/atlas-results',
       params: {
         score: Math.max(0, finalCorrect).toString(),

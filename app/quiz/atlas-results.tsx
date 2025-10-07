@@ -178,10 +178,11 @@ export default function AtlasResults() {
       )
     );
     
-    // Navigate to story exercise with words as query params
+    // Navigate to story exercise with words as query params.
+    // Pass source so Back from Story goes Home instead of returning to Results.
     router.push({
       pathname: '/story/StoryExercise',
-      params: { words: wordsToUse.join(',') }
+      params: { words: wordsToUse.join(','), from: 'results' }
     });
   };
 

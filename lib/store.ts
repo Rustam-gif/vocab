@@ -1,4 +1,7 @@
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Appearance } from 'react-native';
+import { getTheme, ThemeName } from './theme';
 import { Word, User, Story, ExerciseResult, NewWordPayload } from '../types';
 import { vaultService } from '../services/VaultService';
 import { analyticsService } from '../services/AnalyticsService';
@@ -46,6 +49,11 @@ interface AppState {
   userProgress: any;
   loadProgress: () => Promise<void>;
   updateProgress: (xp: number, exercisesCompleted?: number) => Promise<void>;
+  
+  // Theme
+  theme: ThemeName;
+  setTheme: (t: ThemeName) => Promise<void>;
+  toggleTheme: () => Promise<void>;
   
   // Initialize app
   initialize: () => Promise<void>;
@@ -235,6 +243,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   
+  // Theme
+  theme: 'dark',
+  setTheme: async (t: ThemeName) => {
+    try {
+      await AsyncStorage.setItem('@engniter.theme', t);
+    } catch {}
+    set({ theme: t });
+  },
+  toggleTheme: async () => {
+    const next = get().theme === 'dark' ? 'light' : 'dark';
+    try {
+      await AsyncStorage.setItem('@engniter.theme', next);
+    } catch {}
+    set({ theme: next });
+  },
+  
   // Initialize app
   initialize: async () => {
     try {
@@ -247,8 +271,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       const words = vaultService.getAllWords();
       const analytics = analyticsService.getAnalyticsData();
       const userProgress = await ProgressService.getProgress();
+      // Load theme preference
+      let themePref: ThemeName | null = null;
+      try {
+        const stored = await AsyncStorage.getItem('@engniter.theme');
+        if (stored === 'light' || stored === 'dark') themePref = stored;
+      } catch {}
+      if (!themePref) {
+        const sys = Appearance.getColorScheme();
+        themePref = sys === 'light' ? 'light' : 'dark';
+      }
       
-      set({ words, analytics, userProgress });
+      set({ words, analytics, userProgress, theme: themePref });
     } catch (error) {
       console.error('Failed to initialize app:', error);
     }

@@ -22,6 +22,7 @@ import {
   Check,
 } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
+import { analyticsService } from '../services/AnalyticsService';
 import { useAppStore } from '../lib/store';
 
 // Avatar images
@@ -105,6 +106,8 @@ export default function ProfileScreen() {
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         setUser(mapSupabaseUser(session.user, userProgress));
+        // Merge local analytics into account analytics on sign-in
+        analyticsService.initialize().catch(() => {});
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
       }

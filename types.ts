@@ -74,6 +74,19 @@ export interface AnalyticsData {
   streak: number;
   personalBest: number;
   timeTrend?: Array<{ date: string; seconds: number }>;
+  // Extended insights
+  weakWords?: Array<{ word: string; accuracy: number; attempts: number }>;
+  tagStats?: Array<{ tag: string; accuracy: number; attempts: number }>;
+  timeOfDayAccuracy?: Record<string, number>; // morning/afternoon/evening/night
+  dayOfWeekAccuracy?: Record<string, number>; // Sun..Sat
+  srsHealth?: {
+    overdueBuckets: Record<string, number>; // e.g., today, 1-3d, 4-7d, 8+d
+    avgEaseFactor: number;
+    avgInterval: number; // days
+    stageDistribution: Record<string, number>; // rep0, rep1, rep2, rep3-5, rep6+
+    topLapses: Array<{ word: string; lapses: number }>;
+  };
+  recommendations?: Array<{ kind: string; text: string }>;
 }
 
 export interface ExercisePerformance {

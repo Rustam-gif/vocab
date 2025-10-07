@@ -12,7 +12,7 @@ export default function StoryLayout() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: '#1E1E1E' },
-        animation: 'slide_from_right',
+          animation: 'simple_push',
       }}
     >
       <Stack.Screen 

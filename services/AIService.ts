@@ -209,9 +209,9 @@ class AIService {
     const length = customization?.length ?? 'short';
 
     const lengthDescription = {
-      short: 'EXACTLY 100-120 words total (strictly enforce this limit) across two paragraphs',
-      medium: 'roughly one hundred and eighty words across three paragraphs',
-      long: 'roughly two hundred and ten words across three to four paragraphs',
+      short: 'STRICTLY 70-90 words total across two paragraphs (hard cap)',
+      medium: 'STRICTLY 90-120 words total across two to three paragraphs (hard cap)',
+      long: 'STRICTLY 120-150 words total across three paragraphs (hard cap)',
     }[length];
 
     const difficultyDescription = {
@@ -257,6 +257,9 @@ class AIService {
 
     const userPrompt = `Vocabulary to include:\n${vocabularyList}\n\nDifficulty guidance: ${difficultyDescription}\nTone: ${tone}.\nGenre cues: ${genre}. Include world-specific flavor and conflict resolution.\n\n⚠️ QUALITY REQUIREMENTS:\n- Each sentence must be grammatically correct and unique\n- NO repetition of any sentence or phrase\n- Ensure logical flow and coherent story progression\n- Proofread carefully for errors before responding\n\n🚫🚫🚫 CRITICAL SENTENCE PLACEMENT RULES - YOUR RESPONSE WILL BE REJECTED IF VIOLATED:\n\n1. FIRST SENTENCE of the story = NO VOCABULARY WORDS (must be plain narrative)\n2. LAST SENTENCE of the story = NO VOCABULARY WORDS (must be plain narrative)\n3. The story MUST end with at least 15-20 words of regular text AFTER the final vocabulary word\n4. Vocabulary words can appear anywhere EXCEPT the first and last sentences\n5. Separate each vocabulary word with 2-3 complete sentences\n\nBEFORE responding, verify:\n✓ First sentence has NO ** wrapped words\n✓ Last sentence has NO ** wrapped words  \n✓ Story ends with at least 15 words of regular narrative\n✓ At least 15-20 words after the last ** wrapped word\n\nWrite the story now.`;
 
+    // Constrain token budget based on requested length to encourage shorter outputs
+    const maxTokens = length === 'short' ? 550 : length === 'medium' ? 800 : 1100;
+
     try {
       const response = await this.callOpenAI({
         messages: [
@@ -267,7 +270,7 @@ class AIService {
         top_p: 0.95,
         presence_penalty: 0.6,
         frequency_penalty: 0.8,
-        max_tokens: 1600,
+        max_tokens: maxTokens,
       });
 
       const parsed = JSON.parse(response);

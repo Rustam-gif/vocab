@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, BarChart3, TrendingUp, CalendarDays, Award } from 'lucide-react-native';
+import { ArrowLeft, BarChart3, TrendingUp, CalendarDays, Award, CheckCircle2, AlertTriangle, Clock3 } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAppStore } from '../lib/store';
 import { analyticsService } from '../services/AnalyticsService';
 
@@ -34,23 +35,22 @@ export default function StatsScreen() {
     const maxAccuracy = Math.max(...Object.values(analytics.accuracyByType).map(v => Number(v)));
 
     return (
-      <View style={styles.chartContainer}>
-        <Text style={styles.chartTitle}>Accuracy by Exercise Type</Text>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Accuracy by Exercise</Text>
         <View style={styles.barChart}>
           {exerciseTypes.map((type, index) => {
             const accuracy = analytics.accuracyByType[type];
-            const height = (accuracy / maxAccuracy) * 120;
-            const color = accuracy >= 80 ? '#4CAF50' : accuracy >= 60 ? '#FF9800' : '#F44336';
+            const height = Math.max(6, (accuracy / (maxAccuracy || 1)) * 120);
+            const gradient = accuracy >= 80
+              ? ['#2e7d32', '#4CAF50']
+              : accuracy >= 60
+              ? ['#b36b00', '#F2AB27']
+              : ['#c62828', '#F87171'];
 
             return (
               <View key={type} style={styles.barContainer}>
                 <View style={styles.barWrapper}>
-                  <View
-                    style={[
-                      styles.bar,
-                      { height, backgroundColor: color },
-                    ]}
-                  />
+                  <LinearGradient colors={gradient} start={{x:0,y:0}} end={{x:0,y:1}} style={[styles.bar, { height }]} />
                 </View>
                 <Text style={styles.barLabel}>{type.toUpperCase()}</Text>
                 <Text style={styles.barValue}>{accuracy}%</Text>
@@ -58,6 +58,26 @@ export default function StatsScreen() {
             );
           })}
         </View>
+      </View>
+    );
+  };
+
+  const renderRecommendations = () => {
+    if (!analytics?.recommendations || analytics.recommendations.length === 0) return null;
+    const items = analytics.recommendations.slice(0, 3);
+    const iconFor = (k: string) => k === 'srs' ? <Clock3 size={16} color="#FFFFFF" /> : k === 'weak' ? <AlertTriangle size={16} color="#FFFFFF" /> : <CheckCircle2 size={16} color="#FFFFFF" />;
+    const bgFor = (k: string) => k === 'srs' ? '#187486' : k === 'weak' ? '#F2AB27' : '#4CAF50';
+    return (
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Recommendations</Text>
+        {items.map((r, idx) => (
+          <View key={`${r.kind}-${idx}`} style={styles.recoRow}>
+            <View style={[styles.recoIcon, { backgroundColor: bgFor(r.kind) }]}>
+              {iconFor(r.kind)}
+            </View>
+            <Text style={styles.recoText}>{r.text}</Text>
+          </View>
+        ))}
       </View>
     );
   };
@@ -102,6 +122,34 @@ export default function StatsScreen() {
     );
   };
 
+  const renderSrsHealth = () => {
+    const srs = analytics?.srsHealth;
+    if (!srs) return null;
+    const ob = srs.overdueBuckets || ({} as any);
+    const overdueTotal = (ob.today || 0) + (ob['1-3d'] || 0) + (ob['4-7d'] || 0) + (ob['8+d'] || 0);
+    const hasData = overdueTotal > 0 || (srs.avgEaseFactor || 0) > 0 || (srs.avgInterval || 0) > 0 || (srs.topLapses?.length || 0) > 0;
+    if (!hasData) return null; // hide if everything is zero/empty
+
+    const overdueOther = (ob['1-3d'] || 0) + (ob['4-7d'] || 0) + (ob['8+d'] || 0);
+    return (
+      <View style={styles.card}>
+        <Text style={styles.chartTitle}>SRS Health</Text>
+        <View style={styles.row}><Text style={styles.rowLeft}>Due now</Text><Text style={styles.rowRight}>{ob.today || 0}</Text></View>
+        <View style={styles.row}><Text style={styles.rowLeft}>Overdue</Text><Text style={[styles.rowRight, { color: overdueOther > 0 ? '#F2AB27' : '#9CA3AF' }]}>{overdueOther}</Text></View>
+        <View style={styles.row}><Text style={styles.rowLeft}>Avg EF</Text><Text style={styles.rowRight}>{srs.avgEaseFactor}</Text></View>
+        <View style={styles.row}><Text style={styles.rowLeft}>Avg Interval</Text><Text style={styles.rowRight}>{srs.avgInterval} d</Text></View>
+        {srs.topLapses?.length ? (
+          <View style={[styles.row, { paddingTop: 8 }]}>
+            <Text style={styles.rowLeft}>Most lapses</Text>
+            <Text style={[styles.rowRight, { color: '#F87171' }]}>
+              {srs.topLapses.slice(0, 3).map(w => w.word).join(', ')}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
   const renderDonutChart = () => {
     if (!analytics) return null;
 
@@ -136,6 +184,72 @@ export default function StatsScreen() {
             )}
           </View>
         </View>
+      </View>
+    );
+  };
+
+  const renderWeakWords = () => {
+    if (!analytics?.weakWords || analytics.weakWords.length === 0) return null;
+    return (
+      <View style={styles.card}>
+        <Text style={styles.chartTitle}>Weakest Words</Text>
+        {analytics.weakWords.slice(0, 8).map((w: any, idx: number) => (
+          <View key={`${w.word}-${idx}`} style={styles.row}>
+            <Text style={styles.rowLeft}>{w.word}</Text>
+            <Text style={[styles.rowRight, { color: w.accuracy < 50 ? '#F87171' : '#F2AB27' }]}>{w.accuracy}% • {w.attempts}x</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  const renderTagBreakdown = () => {
+    if (!analytics?.tagStats || analytics.tagStats.length === 0) return null;
+    // Take top 5 weakest and top 5 strongest
+    const sorted = analytics.tagStats as any[];
+    const weakest = sorted.slice(0, 5);
+    const strongest = [...sorted].reverse().slice(0, 5);
+    return (
+      <View style={styles.card}>
+        <Text style={styles.chartTitle}>Skill by Topic</Text>
+        <View style={styles.splitRow}>
+          <View style={styles.splitCol}>
+            <Text style={styles.subheading}>Weak</Text>
+            {weakest.map((t, idx) => (
+              <View key={`w-${t.tag}-${idx}`} style={styles.row}>
+                <Text style={styles.rowLeft}>{t.tag}</Text>
+                <Text style={[styles.rowRight, { color: '#F87171' }]}>{t.accuracy}% • {t.attempts}x</Text>
+              </View>
+            ))}
+          </View>
+          <View style={styles.splitCol}>
+            <Text style={styles.subheading}>Strong</Text>
+            {strongest.map((t, idx) => (
+              <View key={`s-${t.tag}-${idx}`} style={styles.row}>
+                <Text style={styles.rowLeft}>{t.tag}</Text>
+                <Text style={[styles.rowRight, { color: '#4CAF50' }]}>{t.accuracy}% • {t.attempts}x</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderTimeBuckets = () => {
+    if (!analytics?.timeOfDayAccuracy) return null;
+    const items = Object.entries(analytics.timeOfDayAccuracy);
+    const sum = items.reduce((acc, [, v]) => acc + (v || 0), 0);
+    if (sum === 0) return null; // hide if no signal yet
+    return (
+      <View style={styles.card}>
+        <Text style={styles.chartTitle}>Time of Day Performance</Text>
+        {items.map(([k, v]) => (
+          <View key={k} style={styles.row}>
+            <Text style={styles.rowLeft}>{k[0].toUpperCase() + k.slice(1)}</Text>
+            <Text style={styles.rowRight}>{v}%</Text>
+          </View>
+        ))}
       </View>
     );
   };
@@ -228,8 +342,13 @@ export default function StatsScreen() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {renderSummaryCards()}
         {renderDonutChart()}
+        {renderRecommendations()}
         {renderAccuracyChart()}
         {renderTrendChart()}
+        {renderSrsHealth()}
+        {renderWeakWords()}
+        {renderTagBreakdown()}
+        {renderTimeBuckets()}
       </ScrollView>
     </SafeAreaView>
   );
@@ -319,6 +438,28 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 20,
   },
+  card: { backgroundColor: '#2C2C2C', borderRadius: 12, padding: 16, marginBottom: 20 },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: '#fff', marginBottom: 12 },
+  recoRow: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 6 },
+  recoIcon: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  recoText: { color: '#E5E7EB', fontSize: 14, flex: 1 },
+  card: {
+    backgroundColor: '#2c2f2f',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  rowLeft: { color: '#E5E7EB', fontSize: 14, fontWeight: '600' },
+  rowRight: { color: '#9CA3AF', fontSize: 14, fontWeight: '600' },
+  splitRow: { flexDirection: 'row', gap: 16 },
+  splitCol: { flex: 1 },
+  subheading: { color: '#9CA3AF', fontSize: 13, fontWeight: '700', marginBottom: 6 },
   chartTitle: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -342,8 +483,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   bar: {
-    width: 30,
-    borderRadius: 4,
+    width: 28,
+    borderRadius: 6,
     minHeight: 4,
   },
   barLabel: {

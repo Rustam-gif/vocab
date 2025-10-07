@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ExerciseResult, AnalyticsData } from '../types';
+import { vaultService } from './VaultService';
+import { supabase } from '../lib/supabase';
 
 const ANALYTICS_KEY = 'vocab_analytics';
 
@@ -8,9 +10,21 @@ class AnalyticsService {
 
   async initialize() {
     try {
+      // Load local first
       const stored = await AsyncStorage.getItem(ANALYTICS_KEY);
-      if (stored) {
-        this.results = JSON.parse(stored);
+      const local: ExerciseResult[] = stored ? this.normalize(JSON.parse(stored)) : [];
+
+      // Try to load from Supabase if logged in and merge
+      const { data: { user } } = await supabase.auth.getUser();
+      const remote: ExerciseResult[] = (user?.user_metadata?.analytics ? this.normalize(user.user_metadata.analytics) : []) as ExerciseResult[];
+
+      const merged = this.mergeResults(local, remote);
+      this.results = merged;
+
+      // Persist back to both stores if we added anything new
+      await AsyncStorage.setItem(ANALYTICS_KEY, JSON.stringify(this.results));
+      if (user) {
+        await supabase.auth.updateUser({ data: { analytics: this.results } });
       }
     } catch (error) {
       console.error('Failed to initialize analytics:', error);
@@ -21,6 +35,11 @@ class AnalyticsService {
   private async saveResults() {
     try {
       await AsyncStorage.setItem(ANALYTICS_KEY, JSON.stringify(this.results));
+      // Also persist to Supabase per-account storage when logged in
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.auth.updateUser({ data: { analytics: this.results } });
+      }
     } catch (error) {
       console.error('Failed to save analytics:', error);
     }
@@ -170,6 +189,119 @@ class AnalyticsService {
 
     const personalBest = Math.max(...Object.values(dailyAccuracy), 0);
 
+    // --- Extended insights ---
+    // Per-word performance
+    const perWordMap = new Map<string, { attempts: number; correct: number }>();
+    recentResults.forEach(r => {
+      const key = (r.wordId || '').toString().toLowerCase();
+      if (!key) return;
+      const s = perWordMap.get(key) || { attempts: 0, correct: 0 };
+      s.attempts += 1;
+      if (r.correct) s.correct += 1;
+      perWordMap.set(key, s);
+    });
+    const weakWords = Array.from(perWordMap.entries())
+      .map(([word, s]) => ({ word, attempts: s.attempts, accuracy: s.attempts ? Math.round((s.correct / s.attempts) * 100) : 0 }))
+      .filter(w => w.attempts >= 2)
+      .sort((a, b) => a.accuracy - b.accuracy)
+      .slice(0, 10);
+
+    // Tag stats (using vault metadata)
+    let tagStats: Array<{ tag: string; attempts: number; correct: number }> = [];
+    try {
+      // Ensure vault is initialized if not
+      const words = vaultService.getAllWords();
+      const byWord = new Map<string, string[]>(); // word -> tags
+      words.forEach(w => byWord.set(w.word.toLowerCase(), Array.isArray(w.tags) ? w.tags : []));
+      const tagMap = new Map<string, { attempts: number; correct: number }>();
+      recentResults.forEach(r => {
+        const w = (r.wordId || '').toString().toLowerCase();
+        const tags = byWord.get(w) || [];
+        tags.forEach(tag => {
+          const s = tagMap.get(tag) || { attempts: 0, correct: 0 };
+          s.attempts += 1;
+          if (r.correct) s.correct += 1;
+          tagMap.set(tag, s);
+        });
+      });
+      tagStats = Array.from(tagMap.entries()).map(([tag, s]) => ({ tag, attempts: s.attempts, correct: s.correct }));
+    } catch {}
+    const tagStatsOut = tagStats
+      .map(t => ({ tag: t.tag, attempts: t.attempts, accuracy: t.attempts ? Math.round((t.correct / t.attempts) * 100) : 0 }))
+      .sort((a, b) => a.accuracy - b.accuracy);
+
+    // Time-of-day and day-of-week accuracy
+    const buckets: Record<string, { a: number; c: number }> = {
+      morning: { a: 0, c: 0 }, // 6-12
+      afternoon: { a: 0, c: 0 }, // 12-17
+      evening: { a: 0, c: 0 }, // 17-22
+      night: { a: 0, c: 0 }, // 22-6
+    };
+    const dow: Record<string, { a: number; c: number }> = { Sun:{a:0,c:0}, Mon:{a:0,c:0}, Tue:{a:0,c:0}, Wed:{a:0,c:0}, Thu:{a:0,c:0}, Fri:{a:0,c:0}, Sat:{a:0,c:0} };
+    recentResults.forEach(r => {
+      const d = new Date(r.timestamp);
+      const h = d.getHours();
+      const b = h >= 6 && h < 12 ? 'morning' : h >= 12 && h < 17 ? 'afternoon' : h >= 17 && h < 22 ? 'evening' : 'night';
+      buckets[b].a += 1; if (r.correct) buckets[b].c += 1;
+      const day = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+      dow[day].a += 1; if (r.correct) dow[day].c += 1;
+    });
+    const timeOfDayAccuracy = Object.fromEntries(Object.entries(buckets).map(([k,v]) => [k, v.a ? Math.round((v.c/v.a)*100) : 0]));
+    const dayOfWeekAccuracy = Object.fromEntries(Object.entries(dow).map(([k,v]) => [k, v.a ? Math.round((v.c/v.a)*100) : 0]));
+
+    // --- SRS health from vault ---
+    let srsHealth: AnalyticsData['srsHealth'] | undefined = undefined;
+    try {
+      const words = vaultService.getAllWords();
+      const now = new Date();
+      const overdueBuckets: Record<string, number> = { today: 0, '1-3d': 0, '4-7d': 0, '8+d': 0 };
+      let efSum = 0, efCount = 0;
+      let intervalSum = 0, intervalCount = 0;
+      const stages: Record<string, number> = { rep0: 0, rep1: 0, rep2: 0, 'rep3-5': 0, 'rep6+': 0 };
+      const lapsesList: Array<{ word: string; lapses: number }> = [];
+      words.forEach(w => {
+        const s = w.srs;
+        if (!s) return;
+        // Overdue bucket
+        const dueAt = s.dueAt ? new Date(s.dueAt) : now;
+        const deltaDays = Math.floor((now.getTime() - dueAt.getTime()) / (1000 * 60 * 60 * 24));
+        if (deltaDays <= 0) overdueBuckets.today += 1;
+        else if (deltaDays <= 3) overdueBuckets['1-3d'] += 1;
+        else if (deltaDays <= 7) overdueBuckets['4-7d'] += 1;
+        else overdueBuckets['8+d'] += 1;
+
+        // Ease factor & interval
+        if (s.easeFactor) { efSum += s.easeFactor; efCount += 1; }
+        if (typeof s.interval === 'number') { intervalSum += s.interval; intervalCount += 1; }
+
+        // Stage distribution by repetition count
+        const r = s.repetition ?? 0;
+        if (r <= 0) stages.rep0 += 1;
+        else if (r === 1) stages.rep1 += 1;
+        else if (r === 2) stages.rep2 += 1;
+        else if (r <= 5) stages['rep3-5'] += 1;
+        else stages['rep6+'] += 1;
+
+        // Lapses list
+        lapsesList.push({ word: w.word, lapses: s.lapses ?? 0 });
+      });
+      lapsesList.sort((a, b) => b.lapses - a.lapses);
+      srsHealth = {
+        overdueBuckets,
+        avgEaseFactor: efCount ? Math.round((efSum / efCount) * 100) / 100 : 0,
+        avgInterval: intervalCount ? Math.round((intervalSum / intervalCount) * 10) / 10 : 0,
+        stageDistribution: stages,
+        topLapses: lapsesList.filter(x => x.lapses > 0).slice(0, 10),
+      };
+    } catch {}
+
+    // Recommendations
+    const recommendations: Array<{ kind: string; text: string }> = [];
+    const overdueTotal = srsHealth ? Object.values(srsHealth.overdueBuckets).reduce((a, b) => a + b, 0) : 0;
+    if (overdueTotal > 0) recommendations.push({ kind: 'srs', text: `Review ${overdueTotal} due words now to reduce backlog.` });
+    if ((weakWords?.length || 0) > 0) recommendations.push({ kind: 'weak', text: `Drill weakest words: ${weakWords!.slice(0,3).map(w=>w.word).join(', ')}.` });
+    if ((tagStatsOut?.length || 0) > 0) recommendations.push({ kind: 'topic', text: `Focus on topic: ${tagStatsOut[0].tag} (lowest accuracy).` });
+
     return {
       accuracyByType,
       accuracyTrend,
@@ -177,6 +309,12 @@ class AnalyticsService {
       streak,
       personalBest,
       timeTrend,
+      weakWords,
+      tagStats: tagStatsOut,
+      timeOfDayAccuracy,
+      dayOfWeekAccuracy,
+      srsHealth,
+      recommendations,
     };
   }
 
@@ -197,6 +335,26 @@ class AnalyticsService {
   clearData() {
     this.results = [];
     return this.saveResults();
+  }
+
+  // --- helpers ---
+  private normalize(arr: any[]): ExerciseResult[] {
+    if (!Array.isArray(arr)) return [] as ExerciseResult[];
+    return arr.map((r) => ({
+      ...r,
+      timestamp: r.timestamp instanceof Date ? r.timestamp : new Date(r.timestamp),
+    }));
+  }
+
+  private mergeResults(a: ExerciseResult[], b: ExerciseResult[]): ExerciseResult[] {
+    const keyOf = (r: ExerciseResult) => `${r.wordId}|${r.exerciseType}|${new Date(r.timestamp).toISOString()}`;
+    const map = new Map<string, ExerciseResult>();
+    [...a, ...b].forEach((r) => {
+      const k = keyOf(r);
+      if (!map.has(k)) map.set(k, r);
+    });
+    // Sort by timestamp ascending for stable processing
+    return Array.from(map.values()).sort((x, y) => new Date(x.timestamp).getTime() - new Date(y.timestamp).getTime());
   }
 }
 

@@ -12,6 +12,7 @@ import {
   InteractionManager,
   Animated,
 } from 'react-native';
+import { Easing } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { TextInput as TextInputRef } from 'react-native';
 
@@ -126,6 +127,7 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
   const [displayScore, setDisplayScore] = useState(sharedScore);
   const prevScoreRef = useRef(sharedScore);
   const deductionAnim = useRef(new Animated.Value(0)).current;
+  const slotAnims = useRef<Animated.Value[]>([]);
 
   useEffect(() => {
     setSlots(initialSlots);
@@ -160,6 +162,22 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
     prevScoreRef.current = sharedScore;
     setDisplayScore(sharedScore);
   }, [sharedScore, deductionAnim]);
+
+  // Bubble-in animation for the letter slots on each word
+  useEffect(() => {
+    // Create one animated value per slot and animate in a stagger
+    slotAnims.current = initialSlots.map(() => new Animated.Value(0));
+    const anims = slotAnims.current.map((v, i) =>
+      Animated.timing(v, {
+        toValue: 1,
+        duration: 360,
+        delay: i * 35,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      })
+    );
+    if (anims.length) Animated.stagger(25, anims).start();
+  }, [wordIndex, initialSlots.length]);
 
   const editableFilled = useMemo(() => {
     const editable = slots.filter(s => s.isLetter && !s.isHint);
@@ -332,13 +350,17 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
           }
           const bg = s.status === 'wrong' ? COLORS.slotWrong : s.status === 'correct' || s.isHint ? COLORS.slotCorrect : COLORS.slotNeutral;
           const locked = s.isHint || completed;
+          const v = slotAnims.current[i] || new Animated.Value(1);
+          const scale = v.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.86, 1.06, 1] });
+          const opacity = v.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+          const translateY = v.interpolate({ inputRange: [0, 1], outputRange: [10, 0] });
           return (
-            <View
+            <Animated.View
               key={i}
               accessible
               accessibilityRole="text"
               accessibilityLabel={`letter ${i + 1} of ${slots.length}`}
-              style={[themeStyles.slot, { backgroundColor: bg }]}
+              style={[themeStyles.slot, { backgroundColor: bg, transform: [{ translateY }, { scale }], opacity }]}
             >
               <TextInput
                 ref={ref => {
@@ -357,7 +379,7 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
                 placeholder={s.isHint ? undefined : ''}
                 placeholderTextColor={COLORS.sub}
               />
-            </View>
+            </Animated.View>
           );
         })}
       </View>

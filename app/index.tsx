@@ -5,12 +5,16 @@ import { useRouter } from 'expo-router';
 import { Plus, ChevronRight } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+import { useAppStore } from '../lib/store';
+import { getTheme } from '../lib/theme';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 
 export default function HomeScreen() {
   const router = useRouter();
   const [storedLevel, setStoredLevel] = useState<string | null>(null);
+  const theme = useAppStore(s => s.theme);
+  const colors = getTheme(theme);
 
   useEffect(() => {
     AsyncStorage.getItem(SELECTED_LEVEL_KEY).then(level => {
@@ -39,7 +43,7 @@ export default function HomeScreen() {
 
   // Organized sections with softer colors
   const accent = '#187486';
-  const background = '#1E1E1E';
+  const background = colors.background;
 
   const sections = [
     {
@@ -148,6 +152,11 @@ export default function HomeScreen() {
         <View style={styles.bottomSpacing} />
       </ScrollView>
 
+      {/* TEMP: Placement Test button (remove later) */}
+      <TouchableOpacity style={styles.devBtn} onPress={() => router.push('/placement')}>
+        <Text style={styles.devBtnText}>Placement</Text>
+      </TouchableOpacity>
+
       {/* Floating Action Button */}
       <TouchableOpacity
         style={styles.fab}
@@ -165,6 +174,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1E1E1E',
   },
+  
   scrollView: {
     flex: 1,
   },
@@ -275,4 +285,16 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+  devBtn: {
+    position: 'absolute',
+    bottom: 24,
+    left: 24,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#374151',
+    borderWidth: 1,
+    borderColor: '#4B5563',
+  },
+  devBtnText: { color: '#E5E7EB', fontWeight: '700' },
 });
