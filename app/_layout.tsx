@@ -18,6 +18,7 @@ export default function RootLayout() {
     Ubuntu_700Bold,
   });
   const themeName = useAppStore(s => s.theme);
+  const initializeApp = useAppStore(s => s.initialize);
 
   // Apply a global font family across the app after fonts load
   useEffect(() => {
@@ -28,6 +29,11 @@ export default function RootLayout() {
     TextInput.defaultProps = TextInput.defaultProps || {};
     TextInput.defaultProps.style = [TextInput.defaultProps.style, { fontFamily: 'Ubuntu_400Regular' }];
   }, [fontsLoaded]);
+
+  // Initialize services (vault, analytics, progress) once on app start
+  useEffect(() => {
+    initializeApp().catch(() => {});
+  }, [initializeApp]);
 
   if (!fontsLoaded) {
     return (

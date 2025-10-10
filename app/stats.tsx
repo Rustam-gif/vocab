@@ -7,13 +7,17 @@ import {
   ScrollView,
   Dimensions,
   Alert,
+  LayoutAnimation,
+  UIManager,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, BarChart3, TrendingUp, CalendarDays, Award, CheckCircle2, AlertTriangle, Clock3 } from 'lucide-react-native';
+import { ArrowLeft, BarChart3, TrendingUp, CalendarDays, Award, CheckCircle2, AlertTriangle, Clock3, ChevronDown } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppStore } from '../lib/store';
 import { analyticsService } from '../services/AnalyticsService';
+import { vaultService } from '../services/VaultService';
 
 const { width } = Dimensions.get('window');
 
@@ -21,11 +25,24 @@ export default function StatsScreen() {
   const router = useRouter();
   const { analytics, loadAnalytics } = useAppStore();
   const [stats, setStats] = useState<any>(null);
+  const [deepOpen, setDeepOpen] = useState(false);
 
   useEffect(() => {
-    loadAnalytics();
-    const exerciseStats = analyticsService.getExerciseStats();
-    setStats(exerciseStats);
+    (async () => {
+      try {
+        await analyticsService.initialize();
+      } catch {}
+      await loadAnalytics();
+      const exerciseStats = analyticsService.getExerciseStats();
+      setStats(exerciseStats);
+    })();
+  }, []);
+
+  // Enable LayoutAnimation on Android
+  useEffect(() => {
+    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
   }, []);
 
   const renderAccuracyChart = () => {
@@ -151,37 +168,33 @@ export default function StatsScreen() {
   };
 
   const renderDonutChart = () => {
-    if (!analytics) return null;
-
-    const { overallAccuracy } = analytics;
-    const incorrect = 100 - overallAccuracy;
-    const inProgress = Math.max(0, 100 - overallAccuracy - incorrect);
+    // Replace accuracy card with "Words Learned"
+    const words = vaultService.getAllWords();
+    const total = words.length;
+    const learned = words.filter(w => (w.srs?.repetition ?? 0) >= 3).length; // learned = SRS rep >= 3
+    const remaining = Math.max(0, total - learned);
+    const percent = total ? Math.round((learned / total) * 100) : 0;
 
     return (
       <View style={styles.chartContainer}>
-        <Text style={styles.chartTitle}>Overall Accuracy</Text>
+        <Text style={styles.chartTitle}>Words Learned</Text>
         <View style={styles.donutChart}>
           <View style={styles.donutOuter}>
             <View style={styles.donutInner}>
-              <Text style={styles.donutValue}>{overallAccuracy}%</Text>
-              <Text style={styles.donutLabel}>Accuracy</Text>
+              <Text style={styles.donutValue}>{learned}</Text>
+              <Text style={styles.donutLabel}>of {total}</Text>
+              <Text style={[styles.donutLabel, { marginTop: 2 }]}>{percent}%</Text>
             </View>
           </View>
           <View style={styles.donutLegend}>
             <View style={styles.legendItem}>
               <View style={[styles.legendColor, { backgroundColor: '#4CAF50' }]} />
-              <Text style={styles.legendText}>Correct ({overallAccuracy}%)</Text>
+              <Text style={styles.legendText}>Learned ({learned})</Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendColor, { backgroundColor: '#F44336' }]} />
-              <Text style={styles.legendText}>Incorrect ({incorrect}%)</Text>
+              <View style={[styles.legendColor, { backgroundColor: '#6B7280' }]} />
+              <Text style={styles.legendText}>Remaining ({remaining})</Text>
             </View>
-            {inProgress > 0 && (
-              <View style={styles.legendItem}>
-                <View style={[styles.legendColor, { backgroundColor: '#FF9800' }]} />
-                <Text style={styles.legendText}>In Progress ({inProgress}%)</Text>
-              </View>
-            )}
           </View>
         </View>
       </View>
@@ -343,12 +356,31 @@ export default function StatsScreen() {
         {renderSummaryCards()}
         {renderDonutChart()}
         {renderRecommendations()}
-        {renderAccuracyChart()}
-        {renderTrendChart()}
-        {renderSrsHealth()}
-        {renderWeakWords()}
-        {renderTagBreakdown()}
-        {renderTimeBuckets()}
+        {/* Deep analytics toggle */}
+        <View style={styles.deepToggleRow}>
+          <TouchableOpacity
+            style={styles.deepToggle}
+            onPress={() => {
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setDeepOpen(o => !o);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.deepToggleText}>{deepOpen ? 'Hide Deep Analytics' : 'Show Deep Analytics'}</Text>
+            <View style={{ transform: [{ rotate: deepOpen ? '180deg' : '0deg' }] }}>
+              <ChevronDown size={16} color="#E5E7EB" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.deepContent, !deepOpen && styles.deepCollapsed]} pointerEvents={deepOpen ? 'auto' : 'none'}>
+          {renderAccuracyChart()}
+          {renderTrendChart()}
+          {renderSrsHealth()}
+          {renderWeakWords()}
+          {renderTagBreakdown()}
+          {renderTimeBuckets()}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -373,8 +405,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontWeight: 'bold',
     color: '#fff',
+    fontFamily: 'Ubuntu_700Bold',
   },
   placeholder: {
     width: 40,
@@ -389,7 +421,7 @@ const styles = StyleSheet.create({
   resetText: {
     color: '#e05f2a',
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: 'Ubuntu_500Medium',
   },
   content: {
     flex: 1,
@@ -424,13 +456,14 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     fontSize: 20,
-    fontWeight: 'bold',
     color: '#fff',
+    fontFamily: 'Ubuntu_700Bold',
   },
   summaryLabel: {
     fontSize: 12,
     color: '#a0a0a0',
     marginTop: 2,
+    fontFamily: 'Ubuntu_400Regular',
   },
   chartContainer: {
     backgroundColor: '#2c2f2f',
@@ -438,11 +471,39 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 20,
   },
+  deepToggleRow: {
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  deepToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    alignSelf: 'center',
+    backgroundColor: '#1f2a2b',
+    borderWidth: 1,
+    borderColor: '#334346',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  deepToggleText: {
+    color: '#E5E7EB',
+    fontSize: 13,
+    fontFamily: 'Ubuntu_700Bold',
+  },
+  deepContent: {
+    overflow: 'hidden',
+  },
+  deepCollapsed: {
+    height: 0,
+  },
   card: { backgroundColor: '#2C2C2C', borderRadius: 12, padding: 16, marginBottom: 20 },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: '#fff', marginBottom: 12 },
+  cardTitle: { fontSize: 16, color: '#fff', marginBottom: 12, fontFamily: 'Ubuntu_700Bold' },
   recoRow: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 6 },
   recoIcon: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  recoText: { color: '#E5E7EB', fontSize: 14, flex: 1 },
+  recoText: { color: '#E5E7EB', fontSize: 14, flex: 1, fontFamily: 'Ubuntu_400Regular' },
   card: {
     backgroundColor: '#2c2f2f',
     borderRadius: 12,
@@ -455,17 +516,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 6,
   },
-  rowLeft: { color: '#E5E7EB', fontSize: 14, fontWeight: '600' },
-  rowRight: { color: '#9CA3AF', fontSize: 14, fontWeight: '600' },
+  rowLeft: { color: '#E5E7EB', fontSize: 14, fontFamily: 'Ubuntu_500Medium' },
+  rowRight: { color: '#9CA3AF', fontSize: 14, fontFamily: 'Ubuntu_500Medium' },
   splitRow: { flexDirection: 'row', gap: 16 },
   splitCol: { flex: 1 },
-  subheading: { color: '#9CA3AF', fontSize: 13, fontWeight: '700', marginBottom: 6 },
+  subheading: { color: '#9CA3AF', fontSize: 13, marginBottom: 6, fontFamily: 'Ubuntu_700Bold' },
   chartTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
     color: '#fff',
     marginBottom: 16,
     textAlign: 'center',
+    fontFamily: 'Ubuntu_700Bold',
   },
   barChart: {
     flexDirection: 'row',
@@ -491,12 +552,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#a0a0a0',
     textAlign: 'center',
+    fontFamily: 'Ubuntu_400Regular',
   },
   barValue: {
     fontSize: 12,
     color: '#fff',
-    fontWeight: '600',
     marginTop: 4,
+    fontFamily: 'Ubuntu_700Bold',
   },
   trendChart: {
     height: 120,
@@ -539,6 +601,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#a0a0a0',
     textAlign: 'center',
+    fontFamily: 'Ubuntu_400Regular',
   },
   donutChart: {
     alignItems: 'center',
@@ -557,12 +620,13 @@ const styles = StyleSheet.create({
   },
   donutValue: {
     fontSize: 24,
-    fontWeight: 'bold',
     color: '#fff',
+    fontFamily: 'Ubuntu_700Bold',
   },
   donutLabel: {
     fontSize: 12,
     color: '#a0a0a0',
+    fontFamily: 'Ubuntu_400Regular',
   },
   donutLegend: {
     gap: 8,
@@ -580,5 +644,6 @@ const styles = StyleSheet.create({
   legendText: {
     fontSize: 14,
     color: '#e0e0e0',
+    fontFamily: 'Ubuntu_400Regular',
   },
 });

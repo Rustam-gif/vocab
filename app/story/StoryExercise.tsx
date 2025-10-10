@@ -147,6 +147,8 @@ export default function StoryExerciseScreen() {
   const iconRefs = useRef<{ [key: string]: Text | null }>({});
   const [showControls, setShowControls] = useState(true); // show panels initially; hide after generation
   const chevronAnim = useRef(new Animated.Value(1)).current; // 1=open, 0=closed
+  
+  // (Shine animation removed per request)
 
   // Glass effect removed per request; using solid dock styling
 
@@ -193,6 +195,10 @@ export default function StoryExerciseScreen() {
       }
     }
   }, [params.words]);
+
+  // (Pick button shine animation removed per request)
+
+  // (Quest progress UI removed per request)
 
   const generateStory = async (overrideWords?: string[]) => {
     const fallbackWords = story ? story.availableWords : currentVocabulary;
@@ -741,16 +747,6 @@ const buildStoryFromContent = (
       {!isFullscreen && (
         <View style={styles.panelContainer}>
           <View style={styles.toolsDock}>
-            {/* Theme */}
-            <TouchableOpacity
-              style={styles.dockItem}
-              onPress={() => setIsDarkMode(!isDarkMode)}
-              activeOpacity={0.85}
-            >
-              {isDarkMode ? <Sun size={12} color="#E5E7EB" /> : <Moon size={12} color="#E5E7EB" />}
-              <Text style={styles.dockText}>{isDarkMode ? 'Light' : 'Dark'}</Text>
-            </TouchableOpacity>
-
             {/* Pick */}
             <TouchableOpacity
               style={styles.dockItem}
@@ -789,6 +785,8 @@ const buildStoryFromContent = (
               <Text style={styles.dockText}>Save</Text>
             </TouchableOpacity>
           </View>
+          {/* Gamified quest progress */}
+          {/* Quest progress UI removed per request */}
         </View>
       )}
 
@@ -813,18 +811,7 @@ const buildStoryFromContent = (
               }
             </TouchableOpacity>
             
-            {/* Hide theme toggle in compact reading */}
-            {!hasStory && (
-              <TouchableOpacity 
-                style={styles.themeToggleButton}
-                onPress={() => setIsDarkMode(!isDarkMode)}
-              >
-                {isDarkMode ? 
-                  <Sun size={14} color="#F2935C" /> : 
-                  <Moon size={14} color="#6B7280" />
-                }
-              </TouchableOpacity>
-            )}
+            {/* Theme toggle removed */}
             
             <View style={[styles.storyText, !isDarkMode && styles.storyTextLight]}>
               {hasStory ? (

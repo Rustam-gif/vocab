@@ -1,6 +1,8 @@
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient } from '@supabase/supabase-js';
+// Use the React Native/browser-friendly ESM build explicitly to avoid Metro
+// resolving the Node CJS bundle (dist/main), which causes resolution errors.
+import { createClient } from '@supabase/supabase-js/dist/module/index.js';
 
 const supabaseUrl = 'https://auirkjgyattnvqaygmfo.supabase.co';
 const supabaseAnonKey = 'sb_publishable_rLA39DG5pwlN9VZcA5jerg_q-WTqd0m';

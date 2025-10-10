@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
+import AnimatedNextButton from './AnimatedNextButton';
 
 interface DialogueProps {
   setId: string;
@@ -119,11 +120,9 @@ export default function DialogueSimple({ onPhaseComplete, sharedScore, onScoreSh
       </View>
 
       {isAnswered && (
-        <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-          <Text style={styles.nextButtonText}>
-            {isLast ? 'Finish' : 'Next'}
-          </Text>
-        </TouchableOpacity>
+        <AnimatedNextButton
+          onPress={handleNext}
+        />
       )}
     </View>
   );

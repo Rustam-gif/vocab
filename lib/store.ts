@@ -211,6 +211,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   analytics: null,
   loadAnalytics: async () => {
     try {
+      // Ensure analytics are initialized (idempotent)
+      await analyticsService.initialize();
       const analytics = analyticsService.getAnalyticsData();
       set({ analytics });
     } catch (error) {
@@ -271,17 +273,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       const words = vaultService.getAllWords();
       const analytics = analyticsService.getAnalyticsData();
       const userProgress = await ProgressService.getProgress();
-      // Load theme preference
-      let themePref: ThemeName | null = null;
-      try {
-        const stored = await AsyncStorage.getItem('@engniter.theme');
-        if (stored === 'light' || stored === 'dark') themePref = stored;
-      } catch {}
-      if (!themePref) {
-        const sys = Appearance.getColorScheme();
-        themePref = sys === 'light' ? 'light' : 'dark';
-      }
-      
+      // Theme preference
+      // Note: We previously experimented with a light mode. To avoid the app
+      // unintentionally staying in light mode due to a persisted preference,
+      // we now default and persist to dark on init. This overrides any stale
+      // '@engniter.theme' value once at startup.
+      const themePref: ThemeName = 'dark';
+      try { await AsyncStorage.setItem('@engniter.theme', themePref); } catch {}
+
       set({ words, analytics, userProgress, theme: themePref });
     } catch (error) {
       console.error('Failed to initialize app:', error);

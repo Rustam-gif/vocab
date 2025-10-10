@@ -53,6 +53,28 @@ export default function SetCard({ set, onPress }: SetCardProps) {
     if (t.includes('finance') || t.includes('banking')) return require('../../../assets/wordset_icons/IELTS_words/finance-banking.png');
     if (t.includes('employment') || t.includes('career')) return require('../../../assets/wordset_icons/IELTS_words/employment-career.png');
     
+    // Office Communication topics
+    if (t.includes('meeting') || t.includes('discussion')) return require('../../../assets/wordset_icons/OFFICE_communications/meetings-discussions.png');
+    if (t.includes('email') || t.includes('correspondence')) return require('../../../assets/wordset_icons/OFFICE_communications/email-correspondence.png');
+    if (t.includes('project') && t.includes('management')) return require('../../../assets/wordset_icons/OFFICE_communications/project-management.png');
+    if (t.includes('report') || t.includes('documentation')) return require('../../../assets/wordset_icons/OFFICE_communications/reports-documentation.png');
+    if (t.includes('presentation') || t.includes('speaking')) return require('../../../assets/wordset_icons/OFFICE_communications/presentations-speaking.png');
+    if (t.includes('team') && t.includes('collaboration')) return require('../../../assets/wordset_icons/OFFICE_communications/team-collaboration.png');
+    if (t.includes('time') && t.includes('management')) return require('../../../assets/wordset_icons/OFFICE_communications/time-management.png');
+    if (t.includes('client') && t.includes('relation')) return require('../../../assets/wordset_icons/OFFICE_communications/client-relations.png');
+    if (t.includes('performance') || t.includes('feedback')) return require('../../../assets/wordset_icons/OFFICE_communications/performance-feedback.png');
+    if (t.includes('office') && t.includes('technology')) return require('../../../assets/wordset_icons/OFFICE_communications/office-technology.png');
+    if (t.includes('business') && t.includes('strategy')) return require('../../../assets/wordset_icons/OFFICE_communications/business-strategy.png');
+    if (t.includes('workplace') && t.includes('polic')) return require('../../../assets/wordset_icons/OFFICE_communications/workplace-policies.png');
+    if (t.includes('professional') && t.includes('development')) return require('../../../assets/wordset_icons/OFFICE_communications/professional-development.png');
+    if (t.includes('financial') && t.includes('term')) return require('../../../assets/wordset_icons/OFFICE_communications/financial-terms.png');
+    if (t.includes('human') && t.includes('resource')) return require('../../../assets/wordset_icons/OFFICE_communications/human-resources.png');
+    if (t.includes('marketing') || t.includes('sales')) return require('../../../assets/wordset_icons/OFFICE_communications/marketing-sales.png');
+    if (t.includes('customer') && t.includes('service')) return require('../../../assets/wordset_icons/OFFICE_communications/customer-service.png');
+    if (t.includes('quality') || t.includes('standard')) return require('../../../assets/wordset_icons/OFFICE_communications/quality-standards.png');
+    if (t.includes('remote') && t.includes('work')) return require('../../../assets/wordset_icons/OFFICE_communications/remote-work.png');
+    if (t.includes('leadership') || t.includes('management')) return require('../../../assets/wordset_icons/OFFICE_communications/leadership-management.png');
+    
     // Beginner topics
     if (t.includes('daily') || t.includes('habit') || t.includes('routine')) return require('../../../assets/wordset_icons/daily-routines-habits.png');
     if (t.includes('basic') || t.includes('family') || t.includes('need')) return require('../../../assets/wordset_icons/basic-needs.png');

@@ -245,7 +245,7 @@ export default function LearnScreen() {
       <FlatList
         data={currentLevel.sets}
         renderItem={renderSetItem}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item, index) => `${activeLevelId || 'level'}-${String(item.id)}-${index}`}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
       />

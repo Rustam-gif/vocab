@@ -15,6 +15,7 @@ import {
 import { Easing } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { TextInput as TextInputRef } from 'react-native';
+import AnimatedNextButton from './AnimatedNextButton';
 
 export type MissingLettersResult = {
   isCorrect: boolean;
@@ -385,9 +386,11 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
       </View>
 
       {completed && (
-        <TouchableOpacity onPress={onNext} style={[themeStyles.button, themeStyles.continueButton]}> 
-          <Text style={themeStyles.buttonText}>Continue</Text>
-        </TouchableOpacity>
+        <View style={{ marginTop: 'auto', paddingBottom: 20 }}>
+          <AnimatedNextButton
+            onPress={onNext}
+          />
+        </View>
       )}
     </View>
   );

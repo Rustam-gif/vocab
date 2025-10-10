@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Vibration } from 'react-native';
 import { analyticsService } from '../../../services/AnalyticsService';
+import AnimatedNextButton from './AnimatedNextButton';
 import { levels } from '../data/levels';
 
 interface SynonymProps {
@@ -263,6 +264,151 @@ const WORDS: WordEntry[] = [
   { word: 'colleague', ipa: '/ˈkɑːliːɡ/', correct: ['coworker', 'associate', 'teammate'], incorrectPool: ['rival', 'competitor', 'opponent', 'enemy', 'adversary'] },
 ];
 
+// Exact synonym overrides per level/set/word
+// Use to lock options to the content owner's choices
+const SYN_OVERRIDES: Record<string, Record<string, Record<string, { correct: string[]; incorrect: string[]; ipa?: string }>>> = {
+  intermediate: {
+    '1': {
+      agenda: {
+        correct: ['schedule', 'program', 'docket'],
+        incorrect: ['minutes', 'memo', 'deadline'],
+      },
+      deadline: {
+        correct: ['due date', 'cutoff', 'time limit'],
+        incorrect: ['milestone', 'schedule', 'estimate'],
+      },
+      escalate: {
+        correct: ['elevate', 'raise', 'refer'],
+        incorrect: ['schedule', 'approve', 'finalize'],
+      },
+      consensus: {
+        correct: ['agreement', 'accord', 'unanimity'],
+        incorrect: ['approval', 'contract', 'quorum'],
+      },
+      clarify: {
+        correct: ['explain', 'simplify', 'elucidate'],
+        incorrect: ['confirm', 'approve', 'escalate'],
+      },
+    },
+  },
+  'upper-intermediate': {
+    '1': {
+      fragile: {
+        correct: ['delicate', 'breakable', 'brittle'],
+        incorrect: ['charitable', 'loath', 'archaic'],
+      },
+      generous: {
+        correct: ['charitable', 'big-hearted', 'giving'],
+        incorrect: ['brittle', 'damp', 'ancient'],
+      },
+      reluctant: {
+        correct: ['hesitant', 'unwilling', 'averse'],
+        incorrect: ['generous', 'damp', 'ancient'],
+      },
+      damp: {
+        correct: ['moist', 'clammy', 'dank'],
+        incorrect: ['fragile', 'liberal', 'averse'],
+      },
+      ancient: {
+        correct: ['archaic', 'age-old', 'old'],
+        incorrect: ['generous', 'damp', 'delicate'],
+      },
+    },
+    '2': {
+      predict: {
+        correct: ['anticipate', 'foresee', 'expect'],
+        incorrect: ['avoid', 'improve', 'complain'],
+      },
+      avoid: {
+        correct: ['evade', 'dodge', 'shun'],
+        incorrect: ['predict', 'improve', 'encourage'],
+      },
+      improve: {
+        correct: ['enhance', 'better', 'upgrade'],
+        incorrect: ['avoid', 'complain', 'encourage'],
+      },
+      encourage: {
+        correct: ['motivate', 'inspire', 'spur'],
+        incorrect: ['avoid', 'improve', 'complain'],
+      },
+      complain: {
+        correct: ['grumble', 'protest', 'object'],
+        incorrect: ['encourage', 'avoid', 'predict'],
+      },
+    },
+    '4': {
+      borrow: { correct: ['take on loan', 'use temporarily', 'get on loan'], incorrect: ['arrange', 'explain', 'compare'] },
+      lend: { correct: ['loan', 'give temporarily', 'advance'], incorrect: ['compare', 'arrange', 'explain'] },
+      compare: { correct: ['contrast', 'match up', 'evaluate differences'], incorrect: ['lend', 'explain', 'arrange'] },
+      explain: { correct: ['clarify', 'describe', 'make clear'], incorrect: ['borrow', 'arrange', 'compare'] },
+      arrange: { correct: ['organize', 'schedule', 'plan'], incorrect: ['lend', 'explain', 'compare'] },
+    },
+    '5': {
+      mitigate: { correct: ['lessen', 'alleviate', 'reduce'], incorrect: ['allocate', 'implement', 'justify'] },
+      allocate: { correct: ['assign', 'apportion', 'distribute'], incorrect: ['mitigate', 'justify', 'implement'] },
+      justify: { correct: ['defend', 'warrant', 'substantiate'], incorrect: ['allocate', 'mitigate', 'implement'] },
+      compromise: { correct: ['negotiate', 'settle', 'conciliate'], incorrect: ['allocate', 'justify', 'implement'] },
+      implement: { correct: ['execute', 'carry out', 'apply'], incorrect: ['mitigate', 'allocate', 'justify'] },
+    },
+    '6': {
+      assess: { correct: ['evaluate', 'appraise', 'gauge'], incorrect: ['interpret', 'articulate', 'reconcile'] },
+      interpret: { correct: ['explain', 'construe', 'decipher'], incorrect: ['assess', 'infer', 'articulate'] },
+      infer: { correct: ['deduce', 'conclude', 'derive'], incorrect: ['assess', 'interpret', 'reconcile'] },
+      articulate: { correct: ['express', 'voice', 'put into words'], incorrect: ['assess', 'interpret', 'reconcile'] },
+      reconcile: { correct: ['resolve', 'harmonize', 'settle'], incorrect: ['assess', 'infer', 'articulate'] },
+    },
+    '7': {
+      scrutinize: { correct: ['inspect', 'examine', 'analyze'], incorrect: ['advocate', 'synthesize', 'undermine'] },
+      advocate: { correct: ['support', 'champion', 'endorse'], incorrect: ['scrutinize', 'synthesize', 'adhere'] },
+      synthesize: { correct: ['combine', 'integrate', 'fuse'], incorrect: ['advocate', 'undermine', 'adhere'] },
+      undermine: { correct: ['weaken', 'erode', 'undercut'], incorrect: ['advocate', 'adhere', 'synthesize'] },
+      adhere: { correct: ['stick', 'comply', 'follow'], incorrect: ['advocate', 'scrutinize', 'synthesize'] },
+    },
+    '8': {
+      assert: { correct: ['maintain', 'claim', 'affirm'], incorrect: ['summarize', 'analyze', 'describe'] },
+      concede: { correct: ['admit', 'acknowledge', 'grant'], incorrect: ['defend', 'insist', 'summarize'] },
+      imply: { correct: ['suggest', 'hint', 'indicate'], incorrect: ['declare', 'summarize', 'calculate'] },
+      refute: { correct: ['disprove', 'rebut', 'invalidate'], incorrect: ['support', 'summarize', 'outline'] },
+      outline: { correct: ['summarize', 'sketch', 'delineate'], incorrect: ['argue', 'assert', 'predict'] },
+    },
+    '9': {
+      contrast: { correct: ['differ', 'distinguish', 'juxtapose'], incorrect: ['hypothesize', 'constrain', 'corroborate'] },
+      corroborate: { correct: ['confirm', 'substantiate', 'validate'], incorrect: ['contrast', 'hypothesize', 'deviate'] },
+      hypothesize: { correct: ['suppose', 'posit', 'theorize'], incorrect: ['corroborate', 'constrain', 'contrast'] },
+      constrain: { correct: ['restrict', 'limit', 'curb'], incorrect: ['corroborate', 'hypothesize', 'deviate'] },
+      deviate: { correct: ['stray', 'diverge', 'depart'], incorrect: ['corroborate', 'constrain', 'contrast'] },
+    },
+    '10': {
+      correlate: { correct: ['connect', 'relate', 'link'], incorrect: ['estimate', 'calculate', 'record'] },
+      validate: { correct: ['confirm', 'verify', 'authenticate'], incorrect: ['estimate', 'analyze', 'compile'] },
+      compile: { correct: ['collect', 'gather', 'assemble'], incorrect: ['estimate', 'categorize', 'review'] },
+      elucidate: { correct: ['clarify', 'explain', 'illuminate'], incorrect: ['compare', 'categorize', 'calculate'] },
+      benchmark: { correct: ['evaluate', 'compare', 'measure'], incorrect: ['estimate', 'analyze', 'record'] },
+    },
+    '11': {
+      prioritize: { correct: ['rank', 'order', 'sequence'], incorrect: ['negotiate', 'revise', 'forecast'] },
+      negotiate: { correct: ['bargain', 'discuss terms', 'broker'], incorrect: ['prioritize', 'forecast', 'coordinate'] },
+      revise: { correct: ['edit', 'update', 'amend'], incorrect: ['negotiate', 'coordinate', 'forecast'] },
+      forecast: { correct: ['predict', 'project', 'estimate'], incorrect: ['revise', 'negotiate', 'coordinate'] },
+      coordinate: { correct: ['organize', 'align', 'orchestrate'], incorrect: ['prioritize', 'estimate', 'amend'] },
+    },
+    '12': {
+      enforce: { correct: ['impose', 'apply', 'implement'], incorrect: ['comply', 'amend', 'disclose'] },
+      comply: { correct: ['obey', 'conform', 'adhere'], incorrect: ['enforce', 'amend', 'disclose'] },
+      violate: { correct: ['breach', 'infringe', 'contravene'], incorrect: ['comply', 'disclose', 'amend'] },
+      amend: { correct: ['revise', 'modify', 'alter'], incorrect: ['disclose', 'enforce', 'comply'] },
+      disclose: { correct: ['reveal', 'expose', 'divulge'], incorrect: ['comply', 'amend', 'enforce'] },
+    },
+    '13': {
+      curtail: { correct: ['reduce', 'limit', 'restrict'], incorrect: ['amplify', 'commence', 'conclude'] },
+      amplify: { correct: ['increase', 'boost', 'intensify'], incorrect: ['curtail', 'conclude', 'rectify'] },
+      rectify: { correct: ['correct', 'fix', 'amend'], incorrect: ['commence', 'conclude', 'amplify'] },
+      commence: { correct: ['begin', 'start', 'initiate'], incorrect: ['conclude', 'curtail', 'rectify'] },
+      conclude: { correct: ['finish', 'end', 'decide'], incorrect: ['commence', 'amplify', 'rectify'] },
+    },
+  },
+};
+
 const CORRECT_COLOR = '#437F76';
 const INCORRECT_COLOR = '#924646';
 const ACCENT_COLOR = '#F2935C';
@@ -281,12 +427,23 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
     }
     
     // Convert to WordEntry format
-    return words.map(w => ({
-      word: w.word,
-      ipa: w.phonetic,
-      correct: w.synonyms || [],
-      incorrectPool: WORDS.find(entry => entry.word === w.word)?.incorrectPool || ['other', 'different', 'alternative']
-    }));
+    return words.map(w => {
+      const override = SYN_OVERRIDES[levelId || '']?.[String(set.id)]?.[w.word.toLowerCase()];
+      if (override) {
+        return {
+          word: w.word,
+          ipa: w.phonetic,
+          correct: override.correct,
+          incorrectPool: override.incorrect,
+        } as WordEntry;
+      }
+      return {
+        word: w.word,
+        ipa: w.phonetic,
+        correct: (w.synonyms || []).slice(0, 3),
+        incorrectPool: WORDS.find(entry => entry.word === w.word)?.incorrectPool || ['other', 'different', 'alternative'],
+      } as WordEntry;
+    });
   }, [setId, levelId, wordRange]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -304,15 +461,18 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
 
   const [options] = useState(() =>
     wordsData.map(entry => {
-      // Always use 3 correct and 3 incorrect options
-      const correctOptions = entry.correct.slice(0, 3);
-      const shuffledIncorrect = [...entry.incorrectPool]
+      // If this entry has an exact override, use it as-is
+      const exactThree = entry.correct.length === 3 && entry.incorrectPool.length === 3;
+      const correctOptions = exactThree ? entry.correct : entry.correct.slice(0, 3);
+      const incorrectOptions = exactThree
+        ? entry.incorrectPool
+        : [...entry.incorrectPool]
         .map(option => ({ option, sort: Math.random() }))
         .sort((a, b) => a.sort - b.sort)
-        .slice(0, 3)
+            .slice(0, 3)
         .map(({ option }) => option);
 
-      const combined = [...correctOptions, ...shuffledIncorrect];
+      const combined = [...correctOptions, ...incorrectOptions];
 
       return combined
         .map(option => ({ option, sort: Math.random() }))
@@ -363,7 +523,15 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
       return;
     }
 
-    setSelected(prev => [...prev, choice]);
+    const newSelected = [...selected, choice];
+    setSelected(newSelected);
+    
+    // Auto-check when 3 synonyms are selected
+    if (newSelected.length === requiredCount) {
+      setTimeout(() => {
+        handleSubmit();
+      }, 300);
+    }
   };
 
   const pluralised = requiredCount === 1 ? 'synonym' : 'synonyms';
@@ -518,10 +686,10 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
                 }}
               >
                 <TouchableWithoutFeedback onPress={() => toggleSelection(choice)}>
-                  <View style={buttonStyles}>
-                    <Text style={styles.optionText}>{choice}</Text>
-                  </View>
-                </TouchableWithoutFeedback>
+                <View style={buttonStyles}>
+                  <Text style={styles.optionText}>{choice}</Text>
+                </View>
+              </TouchableWithoutFeedback>
               </Animated.View>
             );
           })}
@@ -529,13 +697,10 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
       </View>
 
       <View style={styles.footerButtons}>
-        <TouchableOpacity
-          style={[styles.primaryButton, primaryDisabled && styles.buttonDisabled]}
-          disabled={primaryDisabled}
+        <AnimatedNextButton
           onPress={handlePrimary}
-        >
-          <Text style={styles.primaryButtonText}>{primaryLabel}</Text>
-        </TouchableOpacity>
+          disabled={primaryDisabled}
+        />
       </View>
     </View>
   );

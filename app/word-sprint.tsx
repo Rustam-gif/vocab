@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Dimensions } from 'react-native';
+import LottieView from 'lottie-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppStore } from '../lib/store';
 import { analyticsService } from '../services/AnalyticsService';
 import { ProgressService } from '../services/ProgressService';
 
-const QUESTION_TIME_MS = 5000;
+const QUESTION_TIME_MS = 10000; // 10 seconds per question
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 export default function WordSprint() {
@@ -25,6 +26,7 @@ export default function WordSprint() {
   const advanceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const revealedRef = useRef(false);
   const resultAnim = useRef(new Animated.Value(0)).current;
+  const clockAnimRef = useRef<LottieView>(null);
 
   useEffect(() => {
     (async () => { await loadWords(); })();
@@ -165,6 +167,11 @@ export default function WordSprint() {
     barAnim.stopAnimation();
     barAnim.setValue(0);
     setTimeLeft(QUESTION_TIME_MS / 1000);
+    
+    // Restart clock animation from beginning
+    clockAnimRef.current?.reset();
+    clockAnimRef.current?.play();
+    
     const anim = Animated.timing(barAnim, {
       toValue: 1,
       duration: QUESTION_TIME_MS,
@@ -252,6 +259,16 @@ export default function WordSprint() {
               );
             })}
           </View>
+          {/* Timer animation below the card */}
+          <View style={styles.mascotWrap}>
+            <LottieView
+              ref={clockAnimRef}
+              source={require('../assets/lottie/10_Second_Timer.json')}
+              autoPlay={false}
+              loop={false}
+              style={styles.rive}
+            />
+          </View>
         </View>
         <View style={styles.footer}>
           <Text style={styles.footerText}>Correct: {correctCount}</Text>
@@ -295,14 +312,16 @@ const styles = StyleSheet.create({
   timerText: { color: '#f4f6f8', fontSize: 13, fontWeight: '600' },
   counter: { color: '#9CA3AF', fontSize: 12, fontWeight: '600' },
   body: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
+  mascotWrap: { marginTop: 18, alignItems: 'center', justifyContent: 'center' },
+  rive: { width: 180, height: 180 },
   progressBackdrop: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', alignItems: 'stretch', zIndex: 0, backgroundColor: 'rgba(226,135,67,0.06)' },
   progressColumn: { backgroundColor: 'rgba(226,135,67,0.32)', borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.12)', shadowColor: '#e28743', shadowOpacity: 0.25, shadowRadius: 24, shadowOffset: { width: 0, height: -6 } },
   card: { width: '100%', backgroundColor: 'rgba(44,47,47,0.88)', borderRadius: 16, padding: 24, borderWidth: StyleSheet.hairlineWidth, borderColor: '#3d474b', shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 12 }, elevation: 8 },
   definition: { color: '#e0e0e0', fontSize: 16, lineHeight: 22, textAlign: 'center' },
   option: { backgroundColor: 'rgba(62,70,74,0.88)', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 12, marginTop: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#4b555a' },
   optionText: { color: '#f4f6f8', fontSize: 16, fontWeight: '600', textAlign: 'center' },
-  correct: { backgroundColor: 'rgba(46,201,141,0.28)', borderColor: '#2ec98d' },
-  wrong: { backgroundColor: 'rgba(239,68,68,0.32)', borderColor: '#ef4444' },
+  correct: { backgroundColor: '#437F76', borderColor: '#437F76' },
+  wrong: { backgroundColor: '#924646', borderColor: '#924646' },
   footer: { alignItems: 'center', paddingBottom: 20 },
   footerText: { color: '#9CA3AF', fontSize: 12 },
   resultOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24, backgroundColor: 'rgba(18,20,21,0.8)', zIndex: 5 },

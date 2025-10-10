@@ -27,6 +27,7 @@ Directories and files discovered under configured roots:
   - quiz-screen.tsx
   - word-intro.tsx
 - app/quiz/components
+  - AnimatedNextButton.tsx
   - SetCard.tsx
   - SuccessCelebration.tsx
   - WordIntro.tsx
@@ -40,7 +41,10 @@ Directories and files discovered under configured roots:
   - word-intro.tsx
 - app/quiz/data
   - levels.ts
+  - mcq-answers.ts
   - sentence-best.ts
+  - synonyms-answers.ts
+  - usage-answers.ts
 - app/story
   - StoryExercise.tsx
   - _layout.tsx

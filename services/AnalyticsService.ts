@@ -4,36 +4,82 @@ import { vaultService } from './VaultService';
 import { supabase } from '../lib/supabase';
 
 const ANALYTICS_KEY = 'vocab_analytics';
+const ANALYTICS_BACKUP_KEY = 'vocab_analytics_backup';
 
 class AnalyticsService {
   private results: ExerciseResult[] = [];
+  private initInFlight: boolean = false;
+  private inited: boolean = false;
 
   async initialize() {
+    if (this.inited || this.initInFlight) return;
+    this.initInFlight = true;
+    // Always prefer local data; treat network as best‑effort
+    let local: ExerciseResult[] = [];
     try {
-      // Load local first
       const stored = await AsyncStorage.getItem(ANALYTICS_KEY);
-      const local: ExerciseResult[] = stored ? this.normalize(JSON.parse(stored)) : [];
-
-      // Try to load from Supabase if logged in and merge
-      const { data: { user } } = await supabase.auth.getUser();
-      const remote: ExerciseResult[] = (user?.user_metadata?.analytics ? this.normalize(user.user_metadata.analytics) : []) as ExerciseResult[];
-
-      const merged = this.mergeResults(local, remote);
-      this.results = merged;
-
-      // Persist back to both stores if we added anything new
-      await AsyncStorage.setItem(ANALYTICS_KEY, JSON.stringify(this.results));
-      if (user) {
-        await supabase.auth.updateUser({ data: { analytics: this.results } });
+      local = stored ? this.normalize(JSON.parse(stored)) : [];
+      if (!local.length) {
+        const backup = await AsyncStorage.getItem(ANALYTICS_BACKUP_KEY);
+        const backupArr = backup ? this.normalize(JSON.parse(backup)) : [];
+        if (backupArr.length) {
+          console.warn('Analytics: recovered from backup store');
+          local = backupArr;
+          await AsyncStorage.setItem(ANALYTICS_KEY, JSON.stringify(local));
+        }
       }
-    } catch (error) {
-      console.error('Failed to initialize analytics:', error);
-      this.results = [];
+    } catch (e) {
+      console.error('Analytics: failed to read local cache', e);
+      local = [];
     }
+
+    let user: any = null;
+    let remote: ExerciseResult[] = [];
+    try {
+      const resp = await supabase.auth.getUser();
+      user = resp?.data?.user ?? null;
+      remote = (user?.user_metadata?.analytics ? this.normalize(user.user_metadata.analytics) : []) as ExerciseResult[];
+    } catch (e) {
+      // Do not wipe local data if network/auth fails
+      console.warn('Analytics: skipped remote merge (offline or auth issue)');
+      remote = [];
+    }
+
+    const merged = this.mergeResults(local, remote);
+    this.results = merged.length === 0 && local.length > 0 ? local : merged;
+
+    // Persist back to local; remote update is best‑effort
+    try {
+      const json = JSON.stringify(this.results);
+      await AsyncStorage.setItem(ANALYTICS_KEY, json);
+      // keep synchronized backup to guard against accidental clears across updates
+      await AsyncStorage.setItem(ANALYTICS_BACKUP_KEY, json);
+    } catch (e) {
+      console.error('Analytics: failed to write local cache', e);
+    }
+    if (user) {
+      try {
+        await supabase.auth.updateUser({ data: { analytics: this.results } });
+      } catch (e) {
+        // Ignore; keep local copy
+        console.warn('Analytics: failed to sync to remote, kept local');
+      }
+    }
+    this.inited = true;
+    this.initInFlight = false;
   }
 
-  private async saveResults() {
+  private async saveResults(force = false) {
     try {
+      if (!force) {
+        // Do not overwrite non-empty local history with empty results by accident
+        const existingRaw = await AsyncStorage.getItem(ANALYTICS_KEY);
+        const existing: ExerciseResult[] = existingRaw ? this.normalize(JSON.parse(existingRaw)) : [];
+        if (existing.length > 0 && this.results.length === 0) {
+          console.warn('Analytics: skipped writing empty history over existing data');
+          return;
+        }
+      }
       await AsyncStorage.setItem(ANALYTICS_KEY, JSON.stringify(this.results));
       // Also persist to Supabase per-account storage when logged in
       const { data: { user } } = await supabase.auth.getUser();
@@ -334,7 +380,7 @@ class AnalyticsService {
 
   clearData() {
     this.results = [];
-    return this.saveResults();
+    return this.saveResults(true);
   }
 
   // --- helpers ---

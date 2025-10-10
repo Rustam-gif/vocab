@@ -319,6 +319,71 @@
       "title": "UI polish",
       "detail": "Story blanks match body size; Tools dock spacing adjusted; panel margins tuned to avoid header overlap.",
       "when": "2025-10-06T18:58:25.377Z"
+    },
+    {
+      "title": "Decreased word introduction card font sizes by 10%",
+      "detail": "Reduced all font sizes in word-intro.tsx by 10% for better readability: wordText (36→32), phoneticText (18→16), sectionTitle (16→14), definitionText (18→16), exampleText (16→14), synonymText (14→13), saveButtonText (16→14), title (24→22), subtitle (16→14), ctaTitle (24→22), ctaText (16→14), loadingText (16→14). Also adjusted line heights proportionally for better text flow.",
+      "when": "2025-10-06T19:25:00.000Z"
+    },
+    {
+      "title": "Fixed IELTS MCQ distractors for consistent word counts",
+      "detail": "Updated all 20 IELTS topic distractors in mcq.tsx to have consistent 6-8 word counts while maintaining topic relevance. Previously distractors had varying lengths (2-5 words) making correct answers too easy to identify. Now all distractors are properly balanced: Academic Life, Environment & Climate, Technology & Innovation, Health & Medicine, Business & Economics, Government & Politics, Media & Communication, Social Issues, Arts & Culture, Science & Research, Travel & Tourism, Food & Agriculture, Urban Development, Education System, Crime & Law, Psychology & Behavior, Global Issues, Sports & Fitness, Finance & Banking, Employment & Career. Each topic maintains 3 categories: opposite (contrary meanings), similar (related concepts), and unrelated (different topics) - all with 6-8 words for fair difficulty.",
+      "when": "2025-10-06T19:45:00.000Z"
+    },
+    {
+      "title": "Fixed IELTS distractors to be grammatically complete sentences",
+      "detail": "Updated all IELTS distractors in mcq.tsx to be grammatically complete sentences that make sense. Previously some distractors were incomplete phrases like 'A formal talk given to teach people about' which didn't make grammatical sense. Now all distractors are complete, coherent sentences with proper articles (a/an/the) and complete thoughts. Each distractor is unique and non-repetitive while remaining topic-related but clearly incorrect. Examples: 'An informal chat without any structure or purpose', 'The contamination of air by harmful substances', 'A sports competition between rival teams'. This ensures students can't guess based on incomplete grammar and all options are equally plausible grammatically.",
+      "when": "2025-10-06T20:00:00.000Z"
+    },
+    {
+      "title": "Fixed IELTS distractors being cut off in UI buttons",
+      "detail": "Shortened all IELTS distractors in mcq.tsx to prevent text truncation in UI buttons. Previously distractors were too long (6-8 words) causing sentences to be cut off like 'A piece of work given to someone as' which appeared incomplete. Now all distractors are concise (3-5 words) while remaining grammatically complete and topic-related. Examples: 'An informal chat without structure', 'The contamination of air by substances', 'A sports competition between teams'. This ensures all text fits properly in button containers without truncation while maintaining educational value and topic relevance.",
+      "when": "2025-10-06T20:15:00.000Z"
+    },
+    {
+      "title": "Created Office Communication vocabulary level",
+      "detail": "Added comprehensive Office Communication level with 20 sets (100 words) for workplace vocabulary at B2-C1 level. Topics include: Meetings & Discussions, Email & Correspondence, Project Management, Reports & Documentation, Presentations & Public Speaking, Team Collaboration, Time Management, Client Relations, Performance & Feedback, Office Technology, Business Strategy, Workplace Policies, Professional Development, Financial Terms, Human Resources, Marketing & Sales, Customer Service, Quality & Standards, Remote Work, Leadership & Management. Each word includes definition, example sentence, phonetic pronunciation, and 3 synonyms. Added icon mapping to SetCard.tsx for all 20 office topics and added topic-specific distractors to mcq.tsx ensuring all distractors are unique, grammatically correct, and have similar word counts to correct answers.",
+      "when": "2025-10-06T20:30:00.000Z"
+    },
+    {
+      "title": "Fixed Office Communication MCQ distractors to 7-10 words",
+      "detail": "Updated all Office Communication distractors in mcq.tsx to have consistent 7-10 word lengths matching correct answer lengths. Previously distractors were 3-5 words which didn't match the definition lengths. Now all distractors are complete sentences with 7-10 words ensuring they appear similar in length to correct answers in MCQ and Usage exercises. Examples: 'Random informal chat without any structure or purpose' (8 words), 'The person who receives a message or email' (8 words), 'Medical treatment provided for patients at the hospital' (8 words). This prevents students from guessing based on length differences and maintains professional business English quality.",
+      "when": "2025-10-06T20:45:00.000Z"
+    },
+    {
+      "title": "Fixed Office Communication correct answer definitions to 7-10 words",
+      "detail": "Updated Office Communication word definitions in levels.ts that were too short (under 6 words) to ensure consistent 7-10 word lengths for all correct answers. Fixed definitions: 1) 'terminate' changed from 'To end someone's employment' (4 words) to 'To formally end someone employment at the company' (8 words), 2) 'benefits' changed from 'Additional advantages provided to employees' (5 words) to 'Additional advantages and perks provided to company employees' (8 words), 3) 'compliance' changed from 'Following rules, regulations, or standards' (5 words) to 'The act of following rules regulations or standards' (8 words), and 'Following established rules and regulations' (5 words) to 'The act of following established rules and regulations' (8 words). All 100 Office Communication definitions now have 7-10 words matching distractor lengths.",
+      "when": "2025-10-06T21:00:00.000Z"
+    },
+    {
+      "title": "Rewrote all 100 Office Communication definitions to prevent UI truncation",
+      "detail": "Completely rewrote all Office Communication word definitions to be front-loaded, ensuring key information appears first so definitions make sense even if truncated by UI. Changed from sentence structures like 'A list of items to be discussed in a meeting' (which shows as 'A list of items to be discussed in' when cut off) to concise structures like 'List of meeting topics to discuss' (5 words, no dangling prepositions). Examples: 'agenda' changed from 9-word sentence to 5-word front-loaded phrase, 'recipient' from 8 words to 6 words, 'milestone' from 8 words to 5 words. All 100 definitions now use noun-first or verb-first structures without trailing articles, prepositions, or conjunctions that would appear incomplete when truncated. This ensures students always see meaningful information regardless of button width constraints.",
+      "when": "2025-10-06T21:15:00.000Z"
+    },
+    {
+      "title": "Fixed Usage exercise to eliminate repetitive and unnatural sentences",
+      "detail": "Completely rewrote sentence-usage.tsx to remove artificial filler text and repetitive phrases that were added to ensure uniqueness. Previous implementation added prefixes like 'In many cases, in many cases, ' resulting in unnatural text. New implementation: 1) Uses actual example sentences from levels.ts directly without modification, 2) Blanks out the target word intelligently by finding it in the sentence, 3) Gets 3 distractors naturally from other words' examples in the same topic set (ensuring topic relevance), 4) Shuffles other words for variety, 5) Only uses generic fallbacks if absolutely necessary. All sentences now sound natural, fluent, and human-like without repetition. Distractors are close in grammatical structure and length to correct answers but semantically wrong, as they come from the same topic set.",
+      "when": "2025-10-06T21:30:00.000Z"
+    },
+    {
+      "title": "Began comprehensive MCQ distractor quality improvement",
+      "detail": "Started rewriting all MCQ distractors in mcq.tsx to ensure natural, complete definitions with consistent 5-7 word lengths. Previous distractors were poorly written fragments like 'A teacher at school', 'Food you eat', 'Cars you drive' which were awkward and obvious. New approach: each distractor must be a complete, natural definition that sounds like a real dictionary entry. Rewrote 13 beginner topics (Daily Routines, Family, Education, Food, Free Time, Technology, Shopping, Health, Weather, Emotions, Transportation, Home, Culture) with high-quality distractors. Examples: Changed 'A teacher at school' to 'Professional who instructs students daily' (5 words), 'Food you eat' to 'Meals consumed for nutrition energy' (5 words). Remaining work: Need to rewrite 20 IELTS topics and 20 Office Communication topics (total ~40 topics, ~480 distractors) to maintain same quality standard. All distractors must have similar word counts to correct answers to prevent visual guessing.",
+      "when": "2025-10-06T22:00:00.000Z"
+    },
+    {
+      "title": "Fixed critical MCQ duplicate answer bug",
+      "detail": "Fixed bug in mcq.tsx where MCQ questions could show duplicate answer options (e.g., 'Written record of what was said in meeting' appearing twice). Previous implementation called generateDistractor() three times without checking for uniqueness, allowing the random selection to pick the same distractor multiple times. New implementation: 1) Uses a Set to track all used options including the correct answer, 2) Generates distractors in a loop with uniqueness check, 3) Only adds distractor if not already used, 4) Has maxAttempts limit to prevent infinite loops, 5) Falls back to generic unique distractors if needed. This ensures all 4 MCQ options are always unique and distinct from each other.",
+      "when": "2025-10-06T22:30:00.000Z"
+    },
+    {
+      "title": "Fixed Office Communication definition word counts to match MCQ distractors",
+      "detail": "Expanded Office Communication word definitions in levels.ts from 4-6 words to 7-8 words to match MCQ distractor lengths and prevent visual guessing. User reported that correct answers like 'List of meeting topics to discuss' (6 words) were noticeably shorter than distractors with 8-10 words, making them easy to identify visually. Fixed 30 words across Sets 1-6 (Meetings, Email, Project Management, Reports, Presentations, Team Collaboration). Examples: 'List of meeting topics to discuss' → 'Detailed schedule listing all meeting topics discussed' (7 words), 'Person who receives message or email' → 'Person who receives a message or email' (8 words). Remaining: Sets 7-20 (70 words) still need expansion to 7-8 words. All definitions must match distractor word counts (7-8 words) to ensure fair MCQ difficulty.",
+      "when": "2025-10-06T22:35:00.000Z"
+    },
+    {
+      "title": "Completed all 70 remaining Office Communication definitions to 7-8 words",
+      "detail": "Fixed all remaining Office Communication word definitions in Sets 7-20 (70 words) to have consistent 7-8 word lengths matching MCQ distractor lengths. Previously these definitions were only 5 words making correct answers too easy to identify visually. Updated all 14 sets: Time Management (prioritize, schedule, postpone, allocate, streamline), Client Relations (negotiate, proposal, quotation, rapport, retention), Performance & Feedback (evaluate, constructive, appraisal, benchmark, excel), Office Technology (platform, software, interface, integrate, troubleshoot), Business Strategy (objective, initiative, forecast, competitive, leverage), Workplace Policies (protocol, compliance, confidential, authorization, procedure), Professional Development (mentor, seminar, certification, upskill, networking), Financial Terms (invoice, expense, reimbursement, overhead, reconcile), Human Resources (recruit, onboard, terminate, benefits, grievance), Marketing & Sales (campaign, prospect, conversion, outreach, branding), Customer Service (inquiry, complaint, resolution, escalate, courtesy), Quality & Standards (compliance, audit, defect, specification, consistency), Remote Work (virtual, bandwidth, asynchronous, connectivity, timezone), Leadership & Management (accountability, empower, transparent, vision, inspire). All 100 Office Communication definitions now have 7-8 words ensuring fair MCQ difficulty without visual length cues.",
+      "when": "2025-10-06T23:00:00.000Z"
     }
   ],
   "goals": [],

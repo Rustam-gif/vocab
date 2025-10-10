@@ -19,11 +19,11 @@ const dark: Theme = {
 };
 
 const light: Theme = {
-  background: '#F4EFE9',
+  background: '#F7F8FA',
   surface: '#FFFFFF',
   text: '#111827',
   subtext: '#4B5563',
-  border: '#ECE7DF',
+  border: '#E5E7EB',
   accent: '#F2935C',
 };
 
