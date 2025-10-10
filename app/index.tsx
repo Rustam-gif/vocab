@@ -1,16 +1,20 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { BookOpen, BarChart3, FileText, User, Plus, Brain, ChevronRight } from 'lucide-react-native';
+import { Plus, ChevronRight } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+import { useAppStore } from '../lib/store';
+import { getTheme } from '../lib/theme';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 
 export default function HomeScreen() {
   const router = useRouter();
   const [storedLevel, setStoredLevel] = useState<string | null>(null);
+  const theme = useAppStore(s => s.theme);
+  const colors = getTheme(theme);
 
   useEffect(() => {
     AsyncStorage.getItem(SELECTED_LEVEL_KEY).then(level => {
@@ -38,8 +42,8 @@ export default function HomeScreen() {
   );
 
   // Organized sections with softer colors
-  const accent = '#F2935C';
-  const background = '#1E1E1E';
+  const accent = '#187486';
+  const background = colors.background;
 
   const sections = [
     {
@@ -48,21 +52,21 @@ export default function HomeScreen() {
         {
           title: 'Vault',
           subtitle: 'Manage your vocabulary',
-          icon: BookOpen,
+          icon: require('../assets/homepageicons/vault.png'),
           color: accent,
           onPress: () => router.push('/vault'),
         },
         {
           title: 'Quiz Session',
           subtitle: '5-word practice session',
-          icon: Brain,
+          icon: require('../assets/homepageicons/quiz-session.png'),
           color: accent,
           onPress: handleQuizSession,
         },
         {
           title: 'Story Exercise',
           subtitle: 'Fill-in-the-blanks with pill UI',
-          icon: FileText,
+          icon: require('../assets/homepageicons/story-exercise.png'),
           color: accent,
           onPress: () => router.push('/story/StoryExercise'),
         },
@@ -74,14 +78,14 @@ export default function HomeScreen() {
         {
           title: 'Journal',
           subtitle: 'Track your learning journey',
-          icon: FileText,
+          icon: require('../assets/homepageicons/journal.png'),
           color: accent,
           onPress: () => router.push('/journal'),
         },
         {
           title: 'Analytics',
           subtitle: 'View your progress',
-          icon: BarChart3,
+          icon: require('../assets/homepageicons/analytics.png'),
           color: accent,
           onPress: () => router.push('/stats'),
         },
@@ -93,7 +97,7 @@ export default function HomeScreen() {
         {
           title: 'Profile',
           subtitle: 'Manage your account',
-          icon: User,
+          icon: require('../assets/homepageicons/profile.png'),
           color: accent,
           onPress: () => router.push('/profile'),
         },
@@ -108,18 +112,13 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Engniter Vocabulary</Text>
-          <Text style={styles.subtitle}>Master English with AI-powered exercises</Text>
-        </View>
+        {/* Header removed per request */}
 
         {/* Sections */}
         {sections.map((section, sectionIndex) => (
           <View key={sectionIndex} style={styles.section}>
             <Text style={styles.sectionTitle}>{section.title}</Text>
             {section.items.map((item, itemIndex) => {
-              const IconComponent = item.icon;
               return (
                 <TouchableOpacity
                   key={itemIndex}
@@ -129,15 +128,19 @@ export default function HomeScreen() {
                 >
                   <View style={styles.cardContent}>
                     <View style={styles.cardLeft}>
-                      <View style={[styles.iconContainer, { backgroundColor: item.color + '20' }]}>
-                        <IconComponent size={24} color={item.color} />
+                      <View style={styles.iconContainer}>
+                        <Image
+                          source={item.icon}
+                          style={styles.homeIcon}
+                          resizeMode="contain"
+                        />
                       </View>
                       <View style={styles.cardText}>
                         <Text style={styles.cardTitle}>{item.title}</Text>
                         <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
                       </View>
                     </View>
-                    <ChevronRight size={20} color="#6B7280" />
+                    <ChevronRight size={20} color="#187486" />
                   </View>
                 </TouchableOpacity>
               );
@@ -148,6 +151,11 @@ export default function HomeScreen() {
         {/* Bottom spacing for FAB */}
         <View style={styles.bottomSpacing} />
       </ScrollView>
+
+      {/* TEMP: Placement Test button (remove later) */}
+      <TouchableOpacity style={styles.devBtn} onPress={() => router.push('/placement')}>
+        <Text style={styles.devBtnText}>Placement</Text>
+      </TouchableOpacity>
 
       {/* Floating Action Button */}
       <TouchableOpacity
@@ -166,6 +174,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1E1E1E',
   },
+  
   scrollView: {
     flex: 1,
   },
@@ -173,23 +182,25 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   header: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     paddingTop: 32,
     paddingBottom: 24,
   },
   title: {
-    fontSize: 32,
+    fontSize: 37,
     fontWeight: 'bold',
     color: '#FFFFFF',
     marginBottom: 8,
+    fontFamily: 'Ubuntu_700Bold',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#9CA3AF',
     lineHeight: 24,
+    fontFamily: 'Ubuntu_400Regular',
   },
   section: {
-    marginBottom: 32,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 14,
@@ -197,27 +208,28 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 16,
-    marginHorizontal: 24,
+    marginBottom: 12,
+    marginHorizontal: 12,
+    fontFamily: 'Ubuntu_500Medium',
   },
   card: {
     backgroundColor: '#2C2C2C',
-    marginHorizontal: 24,
-    marginBottom: 12,
-    borderRadius: 16,
+    marginHorizontal: 12,
+    marginBottom: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#333',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   cardContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 20,
+    padding: 10,
   },
   cardLeft: {
     flexDirection: 'row',
@@ -225,29 +237,37 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 72,
+    height: 72,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
+    marginRight: 6,
+    marginLeft: 0,
+  },
+  homeIcon: {
+    width: 64,
+    height: 64,
+    alignSelf: 'center',
   },
   cardText: {
     flex: 1,
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 4,
+    marginBottom: 2,
+    fontFamily: 'Ubuntu_700Bold',
   },
   cardSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#9CA3AF',
-    lineHeight: 20,
+    lineHeight: 18,
+    fontFamily: 'Ubuntu_400Regular',
   },
   bottomSpacing: {
-    height: 100,
+    height: 64,
   },
   fab: {
     position: 'absolute',
@@ -256,7 +276,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#F2935C',
+    backgroundColor: '#187486',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -265,4 +285,16 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+  devBtn: {
+    position: 'absolute',
+    bottom: 24,
+    left: 24,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#374151',
+    borderWidth: 1,
+    borderColor: '#4B5563',
+  },
+  devBtnText: { color: '#E5E7EB', fontWeight: '700' },
 });

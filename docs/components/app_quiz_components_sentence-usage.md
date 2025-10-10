@@ -7,6 +7,7 @@ File: app/quiz/components/sentence-usage.tsx
 - onPhaseComplete
 - sharedScore
 - onScoreShare
+- wordRange
 
 ## Notes
 - (none)

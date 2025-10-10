@@ -16,9 +16,13 @@ import {
   Alert,
   Modal,
   Animated,
+  TextInput,
+  Platform,
+  KeyboardAvoidingView,
+  BackHandler,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, X, Settings, Maximize2, Minimize2, Sun, Moon, Check, AlertCircle } from 'lucide-react-native';
+import { ArrowLeft, X, Settings, Maximize2, Minimize2, Sun, Moon, Check, AlertCircle, ChevronDown, Search, Bookmark } from 'lucide-react-native';
 import { aiService } from '../../services/AIService';
 import { useAppStore } from '../../lib/store';
 import { Word } from '../../types';
@@ -67,6 +71,22 @@ const sanitizeWords = (words: string[]): string[] => {
 // Inline one-shot dots animation for blanks (slower, visible jump; plays once)
 const InlineDotsOnce: React.FC<{ style?: any }> = ({ style }) => {
   const dots = [0, 1, 2, 3, 4, 5, 6].map(() => useRef(new Animated.Value(0)).current);
+  // Derive tint color from passed style if provided
+  const tintColor = (() => {
+    try {
+      if (!style) return '#FFB380';
+      if (Array.isArray(style)) {
+        for (const s of style) {
+          if (s && typeof s === 'object' && 'color' in s && (s as any).color) {
+            return (s as any).color as string;
+          }
+        }
+      } else if (typeof style === 'object' && 'color' in style && (style as any).color) {
+        return (style as any).color as string;
+      }
+    } catch {}
+    return '#FFB380';
+  })();
 
   useEffect(() => {
     const sequences = dots.map((v) =>
@@ -84,7 +104,7 @@ const InlineDotsOnce: React.FC<{ style?: any }> = ({ style }) => {
     <Animated.Text
       key={idx}
       style={{
-        color: '#FFB380', // Pale orange
+        color: tintColor, // inherits from style override when provided
         opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }),
         transform: [
           // Higher jump: increase upward travel
@@ -102,7 +122,7 @@ const InlineDotsOnce: React.FC<{ style?: any }> = ({ style }) => {
 
 export default function StoryExerciseScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ words?: string }>();
+  const params = useLocalSearchParams<{ words?: string; from?: string }>();
   const [loading, setLoading] = useState(false);
   const [score, setScore] = useState(100);
   const [selectedWords, setSelectedWords] = useState<Set<string>>(new Set());
@@ -125,15 +145,44 @@ export default function StoryExerciseScreen() {
   const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null);
   const [answersChecked, setAnswersChecked] = useState(false);
   const iconRefs = useRef<{ [key: string]: Text | null }>({});
+  const [showControls, setShowControls] = useState(true); // show panels initially; hide after generation
+  const chevronAnim = useRef(new Animated.Value(1)).current; // 1=open, 0=closed
+  
+  // (Shine animation removed per request)
 
-  const { words: vaultWords, loadWords } = useAppStore();
+  // Glass effect removed per request; using solid dock styling
+
+  const { words: vaultWords, loadWords, getDueWords, gradeWordSrs } = useAppStore();
   const hasStory = Boolean(story);
   const headerTitle = story?.title ?? 'Story Exercise';
-  const headerSubtitle = story?.subtitle ?? 'Generate a tailored story using five words from your vault.';
+  const headerSubtitle = story?.subtitle ?? null;
+  
+  // SRS-aware picker UI state
+  const [pickerQuery, setPickerQuery] = useState('');
+  const [pickerFilter, setPickerFilter] = useState<'recommended' | 'due' | 'weak' | 'all'>('recommended');
+  // SRS feedback banner
+  const [showSrsBanner, setShowSrsBanner] = useState(false);
+  const srsBannerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     loadWords();
   }, []);
+
+  // Android hardware back: if navigated from results, go Home; also exit fullscreen first.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (isFullscreen) {
+        setIsFullscreen(false);
+        return true; // handled
+      }
+      if (params.from === 'results') {
+        router.replace('/');
+        return true; // handled
+      }
+      return false; // default behavior
+    });
+    return () => sub.remove();
+  }, [router, params.from, isFullscreen]);
 
   // Auto-generate story if words are passed via params
   useEffect(() => {
@@ -146,6 +195,10 @@ export default function StoryExerciseScreen() {
       }
     }
   }, [params.words]);
+
+  // (Pick button shine animation removed per request)
+
+  // (Quest progress UI removed per request)
 
   const generateStory = async (overrideWords?: string[]) => {
     const fallbackWords = story ? story.availableWords : currentVocabulary;
@@ -182,6 +235,8 @@ export default function StoryExerciseScreen() {
       setSelectedWords(new Set());
       setScore(100);
       setIsNormalMode(false);
+      setShowControls(false); // compact reading mode by default after generation
+      chevronAnim.setValue(0);
     } catch (error) {
       console.error('Error generating story:', error);
       Alert.alert('Error', 'Failed to generate story. Please try again.');
@@ -314,6 +369,39 @@ export default function StoryExerciseScreen() {
     setStory({ ...story, sentences: updatedSentences });
     setScore(Math.round((correctCount / total) * 100));
     setAnswersChecked(true); // Mark that answers have been checked
+
+    // SRS grading for each vocabulary word based on correctness
+    try {
+      const perWord: Record<string, { total: number; correct: number }> = {};
+      updatedSentences.forEach(s => {
+        const add = (b?: StoryBlank) => {
+          if (!b) return;
+          const key = b.correctWord;
+          perWord[key] = perWord[key] || { total: 0, correct: 0 };
+          perWord[key].total += 1;
+          perWord[key].correct += b.isCorrect ? 1 : 0;
+        };
+        add(s.blank);
+        add(s.secondBlank);
+      });
+      const tasks = Object.entries(perWord).map(async ([w, stats]) => {
+        const match = vaultWords.find(v => v.word.toLowerCase() === w.toLowerCase());
+        if (!match) return;
+        const quality = stats.correct >= stats.total ? 5 : (stats.correct > 0 ? 3 : 2);
+        await gradeWordSrs(match.id, quality);
+      });
+      Promise.all(tasks).then(() => {
+        setShowSrsBanner(true);
+        srsBannerAnim.setValue(0);
+        Animated.timing(srsBannerAnim, { toValue: 1, duration: 220, useNativeDriver: true }).start(() => {
+          setTimeout(() => {
+            Animated.timing(srsBannerAnim, { toValue: 0, duration: 260, useNativeDriver: true }).start(() => setShowSrsBanner(false));
+          }, 1200);
+        });
+      }).catch(() => {});
+    } catch (e) {
+      console.warn('SRS grading failed:', e);
+    }
   };
 
   const handleSaveToJournal = () => {
@@ -389,6 +477,8 @@ export default function StoryExerciseScreen() {
               showCorrectness && blank.isCorrect ? styles.blankTextCorrect : 
               showCorrectness && !blank.isCorrect ? styles.blankTextIncorrect :
               styles.blankTextFilled,
+              // In light mode, make filled blanks a bit darker for better contrast
+              !isDarkMode && !showCorrectness ? styles.blankTextFilledLight : null,
             ]}
           >
             {blank.userAnswer}
@@ -421,7 +511,7 @@ export default function StoryExerciseScreen() {
 
     return (
       <Text onPress={() => handleBlankPress(blank.id)}>
-        <InlineDotsOnce />
+        <InlineDotsOnce style={!isDarkMode ? styles.emptyBlankInlineLight : undefined} />
       </Text>
     );
   };
@@ -552,19 +642,30 @@ const buildStoryFromContent = (
     });
   }
 
-  // VALIDATION: Check if the last sentence has a blank word at the end or very close to the end
+  // VALIDATION & FIXUP: Ensure the last vocabulary word is NOT at the end
   if (sentences.length > 0) {
     const lastSentence = sentences[sentences.length - 1];
     const textAfterLastBlank = lastSentence.afterBlank?.trim() || '';
-    
     // Count words after the last blank
     const wordsAfter = textAfterLastBlank.split(/\s+/).filter(w => w.length > 0);
-    
-    if (wordsAfter.length < 5) {
-      console.error('❌ VALIDATION FAILED: Last vocabulary word is too close to the end of the story');
-      console.error(`Words after last blank: ${wordsAfter.length} (minimum required: 5)`);
-      console.error(`Text after last blank: "${textAfterLastBlank}"`);
-      console.error('The AI did not follow the placement rules. This story should be regenerated.');
+
+    // Require a generous safety margin after the final vocabulary word
+    const MIN_AFTER_WORDS = 15; // target at least ~15 words of trailing narrative
+    if (wordsAfter.length < MIN_AFTER_WORDS) {
+      console.warn('⚠️ Story tail too short; appending neutral closing sentence to keep blanks away from the end.');
+      const closers = [
+        'As evening approached, they packed up and headed home, already planning what to try next.',
+        'With the day winding down, they took a deep breath and looked forward to tomorrow.',
+        'They smiled at the small victory, tidied up, and made their way back through the quiet streets.',
+      ];
+      const tail = ' ' + closers[Math.floor(Math.random() * closers.length)];
+      if (lastSentence.afterSecondBlank && lastSentence.afterSecondBlank.trim().length > 0) {
+        lastSentence.afterSecondBlank = (lastSentence.afterSecondBlank + (/[.!?]$/.test(lastSentence.afterSecondBlank.trim()) ? '' : '.') + tail).replace(/\s+/g, ' ').trim();
+      } else if (lastSentence.afterBlank) {
+        lastSentence.afterBlank = (lastSentence.afterBlank + (/[.!?]$/.test(lastSentence.afterBlank.trim()) ? '' : '.') + tail).replace(/\s+/g, ' ').trim();
+      } else {
+        lastSentence.afterBlank = tail.trim();
+      }
     }
   }
 
@@ -598,21 +699,35 @@ const buildStoryFromContent = (
       {/* Header - Hidden in fullscreen */}
       {!isFullscreen && (
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => {
+            if (params.from === 'results') {
+              router.replace('/');
+            } else {
+              router.back();
+            }
+          }} style={styles.backButton}>
             <ArrowLeft size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle}>{headerTitle}</Text>
-            <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
+            {headerSubtitle ? (
+              <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
+            ) : null}
           </View>
-          <TouchableOpacity style={styles.closeButton}>
+          <TouchableOpacity style={styles.closeButton} onPress={() => {
+            if (params.from === 'results') {
+              router.replace('/');
+            } else {
+              router.back();
+            }
+          }}>
             <X size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Mode Toggle - Hidden in fullscreen */}
-      {!isFullscreen && hasStory && (
+      {/* Mode Toggle - compact toggle only when user expands controls */}
+      {!isFullscreen && hasStory && showControls && false && (
         <View style={styles.toggleContainer}>
           <TouchableOpacity 
             style={styles.toggleButton}
@@ -628,42 +743,51 @@ const buildStoryFromContent = (
         </View>
       )}
 
-      {/* Word Bank - Only shown in Fill-in-the-blanks mode and not fullscreen */}
-      {!isNormalMode && !isFullscreen && (
-      <View style={styles.wordBankContainer}>
-          <View style={styles.wordBankButtonRow}>
-          <TouchableOpacity
-            style={styles.pickWordsButton}
-            onPress={() => {
-              if (!vaultWords.length) {
-                Alert.alert('Vault Empty', 'Add words to your vault to build a custom story.');
-                return;
-              }
-              setTempSelection(story ? [...story.availableWords] : [...currentVocabulary]);
-              setWordPickerOpen(true);
-            }}
-          >
-            <Text style={styles.pickWordsText}>
-              {`Pick words (${story ? story.availableWords.length : currentVocabulary.length}/${MAX_BLANKS})`}
-            </Text>
-          </TouchableOpacity>
+      {/* Tools Dock - grouped controls in one place */}
+      {!isFullscreen && (
+        <View style={styles.panelContainer}>
+          <View style={styles.toolsDock}>
+            {/* Pick */}
+            <TouchableOpacity
+              style={styles.dockItem}
+              onPress={() => {
+                if (!vaultWords.length) {
+                  Alert.alert('Vault Empty', 'Add words to your vault to build a custom story.');
+                  return;
+                }
+                setTempSelection(story ? [...story.availableWords] : [...currentVocabulary]);
+                setWordPickerOpen(true);
+              }}
+              activeOpacity={0.85}
+            >
+              <Search size={12} color="#E5E7EB" />
+              <Text style={styles.dockText}>Pick</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.wordBankActionButton}
-            onPress={() => setShowCustomizeModal(true)}
-          >
-            <Text style={styles.wordBankActionText}>Customize</Text>
-          </TouchableOpacity>
+            {/* Customize */}
+            <TouchableOpacity
+              style={styles.dockItem}
+              onPress={() => setShowCustomizeModal(true)}
+              activeOpacity={0.85}
+            >
+              <Settings size={12} color="#E5E7EB" />
+              <Text style={styles.dockText}>Customize</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.wordBankActionButton, !hasStory && styles.wordBankActionButtonDisabled]}
-            onPress={handleSaveToJournal}
-            disabled={!hasStory}
-          >
-            <Text style={styles.wordBankActionText}>Save to Journal</Text>
-          </TouchableOpacity>
+            {/* Save */}
+            <TouchableOpacity
+              style={[styles.dockItem, !hasStory && styles.dockItemDisabled]}
+              onPress={handleSaveToJournal}
+              disabled={!hasStory}
+              activeOpacity={0.85}
+            >
+              <Bookmark size={12} color="#E5E7EB" />
+              <Text style={styles.dockText}>Save</Text>
+            </TouchableOpacity>
+          </View>
+          {/* Gamified quest progress */}
+          {/* Quest progress UI removed per request */}
         </View>
-      </View>
       )}
 
       {/* Story Content */}
@@ -672,7 +796,11 @@ const buildStoryFromContent = (
           style={[styles.content, isFullscreen && styles.contentFullscreen]} 
           showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.storyContentCard, !isDarkMode && styles.storyContentCardLight]}>
+          {/* Paper-like reading card when a story is present */}
+          <>
+          <View style={isDarkMode ? styles.storyContentCard : styles.storyPaperCard}>
+            {/* Controls toggle */}
+            {/* Card-level icons removed to reduce clutter; everything is in the dock above */}
             <TouchableOpacity 
               style={styles.fullscreenButton}
               onPress={() => setIsFullscreen(!isFullscreen)}
@@ -683,19 +811,11 @@ const buildStoryFromContent = (
               }
             </TouchableOpacity>
             
-            <TouchableOpacity 
-              style={styles.themeToggleButton}
-              onPress={() => setIsDarkMode(!isDarkMode)}
-            >
-              {isDarkMode ? 
-                <Sun size={14} color="#F2935C" /> : 
-                <Moon size={14} color="#6B7280" />
-              }
-            </TouchableOpacity>
+            {/* Theme toggle removed */}
             
             <View style={[styles.storyText, !isDarkMode && styles.storyTextLight]}>
               {hasStory ? (
-                <Text style={[styles.sentenceText, !isDarkMode && styles.sentenceTextLight]}>
+                <Text style={isDarkMode ? styles.sentenceText : styles.sentenceTextPaper}>
                   {(story?.sentences ?? []).map(renderSentence)}
                 </Text>
               ) : (
@@ -721,8 +841,8 @@ const buildStoryFromContent = (
               )}
             </View>
           </View>
-          
           <View style={styles.bottomSpacing} />
+          </>
         </ScrollView>
       </View>
 
@@ -745,6 +865,22 @@ const buildStoryFromContent = (
             <Text style={styles.checkButtonText}>Check Answers</Text>
           </TouchableOpacity>
         </View>
+      )}
+
+      {/* SRS feedback banner */}
+      {showSrsBanner && (
+        <Animated.View
+          style={[
+            styles.srsBanner,
+            {
+              opacity: srsBannerAnim,
+              transform: [{ translateY: srsBannerAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }],
+            },
+          ]}
+        >
+          <Check size={16} color="#FFFFFF" />
+          <Text style={styles.srsBannerText}>Practice saved to review schedule</Text>
+        </Animated.View>
       )}
 
       {/* Customize Modal */}
@@ -850,12 +986,15 @@ const buildStoryFromContent = (
 
       <Modal
         visible={wordPickerOpen}
-        transparent={true}
+        transparent={false}
         animationType="slide"
         onRequestClose={() => setWordPickerOpen(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.wordPickerContent}>
+        <SafeAreaView style={styles.wordPickerOverlay}>
+          <KeyboardAvoidingView
+            style={styles.wordPickerContent}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
             <View style={styles.wordPickerHeader}>
               <Text style={styles.modalTitle}>Select Words</Text>
               <TouchableOpacity onPress={() => setWordPickerOpen(false)}>
@@ -863,12 +1002,137 @@ const buildStoryFromContent = (
               </TouchableOpacity>
             </View>
             <Text style={styles.wordPickerSubtitle}>
-              Choose exactly five words from your vault to weave into the story.
+              Pick 5 words from your vault.
             </Text>
-            <ScrollView style={styles.wordPickerList} showsVerticalScrollIndicator={false}>
-              {vaultWords.map((word: Word) => {
+            {/* SRS filters + search */}
+            <View style={styles.wordPickerControls}>
+              <View style={styles.filterChipsRow}>
+                {([
+                  { key: 'recommended', label: 'Recommended' },
+                  { key: 'due', label: 'Due' },
+                  { key: 'weak', label: 'Weak' },
+                  { key: 'all', label: 'All' },
+                ] as const).map(({ key, label }) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[styles.filterChip, pickerFilter === key && styles.filterChipActive]}
+                    onPress={() => setPickerFilter(key)}
+                  >
+                    <Text style={[styles.filterChipText, pickerFilter === key && styles.filterChipTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity
+                  style={styles.autoPickButton}
+                  onPress={() => {
+                    const now = new Date();
+                    // Rank due/overdue with a weight so it doesn't just take the first 5
+                    const dueRaw = (getDueWords ? getDueWords(9999) : []) as Word[];
+                    const rankDue = (w: Word) => {
+                      const dueAt = w.srs?.dueAt ? new Date(w.srs.dueAt) : new Date(0);
+                      const overdueDays = Math.max(0, Math.floor((now.getTime() - dueAt.getTime()) / (1000 * 60 * 60 * 24)));
+                      const lapses = w.srs?.lapses ?? 0;
+                      const weakBoost = w.isWeak ? 15 : 0;
+                      // Higher is better; tiny noise breaks ties
+                      return 100 + overdueDays * 3 + lapses * 4 + weakBoost + Math.random();
+                    };
+                    const due = [...dueRaw].sort((a, b) => rankDue(b) - rankDue(a));
+                    const pickedIds = new Set<string>();
+                    const picks: Word[] = [];
+                    const take = (arr: Word[]) => {
+                      for (const w of arr) {
+                        if (picks.length >= MAX_BLANKS) break;
+                        if (pickedIds.has(w.id)) continue;
+                        pickedIds.add(w.id);
+                        picks.push(w);
+                      }
+                    };
+                    // Start with top-ranked due/overdue
+                    take(due);
+                    // Then weak by lapses desc
+                    if (picks.length < MAX_BLANKS) {
+                      const weak = vaultWords
+                        .filter(w => w.isWeak && !pickedIds.has(w.id))
+                        .sort((a, b) => (b.srs?.lapses ?? 0) - (a.srs?.lapses ?? 0));
+                      take(weak);
+                    }
+                    // Then recent (randomized within top 20 to avoid always-first)
+                    if (picks.length < MAX_BLANKS) {
+                      const recent = vaultWords
+                        .filter(w => !pickedIds.has(w.id))
+                        .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+                      const top = recent.slice(0, 20).sort(() => Math.random() - 0.5);
+                      take(top);
+                      if (picks.length < MAX_BLANKS) take(recent); // fallback
+                    }
+                    setTempSelection(picks.slice(0, MAX_BLANKS).map(w => w.word));
+                    setPickerFilter('recommended');
+                  }}
+                >
+                  <Text style={styles.autoPickButtonText}>Auto-pick 5</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.searchInputWrap}>
+                <TextInput
+                  placeholder="Search word or definition"
+                  placeholderTextColor="#6B7280"
+                  value={pickerQuery}
+                  onChangeText={setPickerQuery}
+                  style={styles.searchInput}
+                />
+              </View>
+            </View>
+
+            <ScrollView
+              style={styles.wordPickerList}
+              contentContainerStyle={styles.wordPickerListContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {(() => {
+                const now = new Date();
+                const query = pickerQuery.trim().toLowerCase();
+                let base: Word[] = [];
+                if (pickerFilter === 'recommended') {
+                  const dueRaw = (getDueWords ? getDueWords(9999) : []) as Word[];
+                  const rankDue = (w: Word) => {
+                    const dueAt = w.srs?.dueAt ? new Date(w.srs.dueAt) : new Date(0);
+                    const overdueDays = Math.max(0, Math.floor((now.getTime() - dueAt.getTime()) / (1000 * 60 * 60 * 24)));
+                    const lapses = w.srs?.lapses ?? 0;
+                    const weakBoost = w.isWeak ? 15 : 0;
+                    return 100 + overdueDays * 3 + lapses * 4 + weakBoost + Math.random();
+                  };
+                  const due = [...dueRaw].sort((a, b) => rankDue(b) - rankDue(a));
+                  const dueIds = new Set(due.map(d => d.id));
+                  const weak = vaultWords
+                    .filter(w => w.isWeak && !dueIds.has(w.id))
+                    .sort((a, b) => (b.srs?.lapses ?? 0) - (a.srs?.lapses ?? 0));
+                  const rest = vaultWords
+                    .filter(w => !dueIds.has(w.id) && !weak.some(ww => ww.id === w.id))
+                    .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+                  base = [...due, ...weak, ...rest];
+                } else if (pickerFilter === 'due') {
+                  base = (getDueWords ? getDueWords(9999) : []) as Word[];
+                } else if (pickerFilter === 'weak') {
+                  base = vaultWords.filter(w => w.isWeak);
+                } else {
+                  base = [...vaultWords];
+                }
+                if (query) {
+                  base = base.filter(w =>
+                    w.word.toLowerCase().includes(query) ||
+                    w.definition.toLowerCase().includes(query) ||
+                    (w.example || '').toLowerCase().includes(query)
+                  );
+                }
+                return base;
+              })().map((word: Word) => {
                 const selected = tempSelection.includes(word.word);
                 const disabled = !selected && tempSelection.length >= MAX_BLANKS;
+                const dueAt = word.srs?.dueAt ? new Date(word.srs.dueAt) : null;
+                const now = new Date();
+                const isDue = dueAt ? dueAt <= now : true;
+                const daysUntil = dueAt ? Math.ceil((dueAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                const statusLabel = isDue ? (dueAt && dueAt < now ? 'Overdue' : 'Due') : `In ${daysUntil}d`;
                 return (
                   <TouchableOpacity
                     key={word.id}
@@ -888,6 +1152,16 @@ const buildStoryFromContent = (
                   >
                     <View style={styles.wordPickerItemHeader}>
                       <Text style={styles.wordPickerWord}>{word.word}</Text>
+                      <View style={styles.wordBadgeRow}>
+                        {word.isWeak ? (
+                          <View style={[styles.statusPill, { backgroundColor: 'rgba(242,147,92,0.15)', borderColor: 'rgba(242,147,92,0.35)' }]}>
+                            <Text style={[styles.statusPillText, { color: '#F2935C' }]}>Weak</Text>
+                          </View>
+                        ) : null}
+                        <View style={[styles.statusPill, isDue ? styles.duePill : styles.futurePill]}>
+                          <Text style={[styles.statusPillText, isDue ? styles.duePillText : styles.futurePillText]}>{statusLabel}</Text>
+                        </View>
+                      </View>
                       {selected && <Check size={16} color="#437F76" />}
                     </View>
                     <Text style={styles.wordPickerDefinition}>{word.definition}</Text>
@@ -910,29 +1184,38 @@ const buildStoryFromContent = (
               <Text style={styles.wordPickerCount}>
                 {tempSelection.length} / {MAX_BLANKS} selected
               </Text>
-              <TouchableOpacity
-                style={[styles.modalPrimary, tempSelection.length !== MAX_BLANKS && styles.modalPrimaryDisabled]}
-                onPress={() => {
-                  if (tempSelection.length !== MAX_BLANKS) {
-                    Alert.alert('Choose five words', 'Select exactly five words for the story.');
-                    return;
-                  }
-                  setWordPickerOpen(false);
-                  const sanitized = sanitizeWords(tempSelection);
-                  setCurrentVocabulary(sanitized);
-                  generateStory(sanitized);
-                }}
-                disabled={tempSelection.length !== MAX_BLANKS || loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#1E1E1E" />
-                ) : (
-                  <Text style={styles.modalPrimaryText}>Use Words</Text>
-                )}
-              </TouchableOpacity>
+              <View style={styles.footerActions}>
+                <TouchableOpacity
+                  style={[styles.modalReset, tempSelection.length === 0 && styles.modalResetDisabled]}
+                  onPress={() => setTempSelection([])}
+                  disabled={tempSelection.length === 0}
+                >
+                  <Text style={styles.modalResetText}>Reset</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalPrimary, tempSelection.length !== MAX_BLANKS && styles.modalPrimaryDisabled]}
+                  onPress={() => {
+                    if (tempSelection.length !== MAX_BLANKS) {
+                      Alert.alert('Choose five words', 'Select exactly five words for the story.');
+                      return;
+                    }
+                    setWordPickerOpen(false);
+                    const sanitized = sanitizeWords(tempSelection);
+                    setCurrentVocabulary(sanitized);
+                    generateStory(sanitized);
+                  }}
+                  disabled={tempSelection.length !== MAX_BLANKS || loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#1E1E1E" />
+                  ) : (
+                    <Text style={styles.modalPrimaryText}>Use Words</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
       </Modal>
       
       {/* Word Selection Modal */}
@@ -1066,6 +1349,71 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 20,
   },
+  panelContainer: {
+    paddingHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  modeSegment: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    borderRadius: 12,
+    backgroundColor: '#2A2F30',
+    borderWidth: 1,
+    borderColor: '#374151',
+    overflow: 'hidden',
+  },
+  modeSeg: { paddingVertical: 6, paddingHorizontal: 12 },
+  modeSegLeft: { borderRightWidth: 1, borderRightColor: '#374151' },
+  modeSegRight: {},
+  modeSegActive: { backgroundColor: '#187486' },
+  modeSegText: { color: '#9CA3AF', fontWeight: '700', fontSize: 12 },
+  modeSegTextActive: { color: '#FFFFFF' },
+  toolbarGrid: {
+    display: 'none',
+  },
+  toolItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  toolItemDisabled: { opacity: 0.5 },
+  toolIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#2C4D52',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toolText: { color: '#E5E7EB', fontWeight: '700', fontSize: 12 },
+  toolsDock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    backgroundColor: '#1F2A2B',
+    borderWidth: 1,
+    borderColor: '#2E3A3C',
+    borderRadius: 18,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  dockItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  dockItemDisabled: { opacity: 0.5 },
+  dockText: { color: '#E5E7EB', fontSize: 12, fontWeight: '700' },
   wordBank: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1163,6 +1511,15 @@ const styles = StyleSheet.create({
     minHeight: 300, // Much smaller minimum height (was 600)
     // Removed borderWidth and borderColor
   },
+  storyPaperCard: {
+    backgroundColor: '#F6F1EA',
+    borderRadius: 22,
+    paddingTop: 24,
+    paddingBottom: 28,
+    paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: '#EDE6DB',
+  },
   storyContentCardLight: {
     backgroundColor: '#F8F9FA',
   },
@@ -1189,12 +1546,85 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sentenceText: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 22,
+    lineHeight: 32,
     color: '#FFFFFF',
     flexDirection: 'row',
     flexWrap: 'wrap',
+    // Prefer Seravek on iOS; use sans-serif on Android; System elsewhere
+    fontFamily: Platform.select({ ios: 'Seravek', android: 'sans-serif', default: 'System' }) as any,
+    letterSpacing: 0.2,
   },
+  sentenceTextPaper: {
+    color: '#2B2B2B',
+    fontSize: 22,
+    lineHeight: 32,
+    fontFamily: Platform.select({ ios: 'Seravek', android: 'sans-serif', default: 'System' }) as any,
+    letterSpacing: 0.2,
+  },
+  controlsToggleWrap: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#187486',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  controlsToggleText: { fontSize: 12, fontWeight: '800', color: '#FFFFFF' },
+  cardChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  toolsIconBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 40,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(24,116,134,0.9)',
+  },
+  themeIconBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 66,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  themeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  themeChipDark: {
+    backgroundColor: '#E6F2F5',
+    borderColor: '#C7E3E9',
+  },
+  themeChipLight: {
+    backgroundColor: '#2D3537',
+    borderColor: '#3B4547',
+  },
+  themeChipText: { fontSize: 12, fontWeight: '800' },
   sentenceTextLight: {
     color: '#1F2937',
   },
@@ -1223,7 +1653,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#924646',
   },
   blankText: {
-    fontSize: 14,
+    fontSize: 22,
     fontWeight: '600',
   },
   blankTextCorrect: {
@@ -1234,6 +1664,10 @@ const styles = StyleSheet.create({
   },
   blankTextFilled: {
     color: '#FFB380', // Pale orange for filled but not checked
+  },
+  // Darker variant used in light mode for better contrast
+  blankTextFilledLight: {
+    color: '#D17A45',
   },
   emptyBlank: {
     paddingHorizontal: 8,
@@ -1263,7 +1697,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingVertical: 0,
     borderRadius: 0,
-    fontSize: 16,
+    fontSize: 22,
     fontWeight: '600',
     textAlign: 'center',
     marginHorizontal: 0,
@@ -1289,6 +1723,10 @@ const styles = StyleSheet.create({
     marginBottom: -6,
     transform: [{ translateY: 4 }],
     marginHorizontal: 4,
+  },
+  // Darker dots for light mode (inline placeholder)
+  emptyBlankInlineLight: {
+    color: '#C06E38',
   },
   footer: {
     flexDirection: 'row',
@@ -1328,18 +1766,42 @@ const styles = StyleSheet.create({
   },
   checkButton: {
     flex: 1,
-    backgroundColor: '#374151',
+    backgroundColor: '#187486',
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
   },
   checkButtonDisabled: {
-    opacity: 0.5,
+    // Keep the button bright even when disabled so it doesn't look dimmed
+    opacity: 1,
+    backgroundColor: '#187486',
   },
   checkButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  srsBanner: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    bottom: 96,
+    backgroundColor: '#187486',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  srsBannerText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,
@@ -1547,12 +2009,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   // Word Picker (Choose exactly five words) Styles
-  wordPickerContent: {
+  wordPickerOverlay: {
+    flex: 1,
     backgroundColor: '#1E1E1E',
-    borderRadius: 16,
-    padding: 20,
+    justifyContent: 'flex-start',
+    alignItems: 'stretch',
+  },
+  wordPickerContent: {
+    flex: 1,
+    backgroundColor: '#1E1E1E',
+    borderRadius: 0,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 12,
     width: '100%',
-    maxWidth: 420,
   },
   wordPickerHeader: {
     flexDirection: 'row',
@@ -1565,8 +2035,57 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginBottom: 12,
   },
+  wordPickerControls: {
+    gap: 10,
+    marginBottom: 8,
+  },
+  filterChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#374151',
+    backgroundColor: '#2D2D2D',
+  },
+  filterChipActive: {
+    borderColor: '#F2935C',
+    backgroundColor: 'rgba(242,147,92,0.15)'
+  },
+  filterChipText: { color: '#9CA3AF', fontSize: 12, fontWeight: '600' },
+  filterChipTextActive: { color: '#F2935C' },
+  autoPickButton: {
+    backgroundColor: '#187486',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-end',
+    marginTop: 6,
+    marginLeft: 'auto',
+  },
+  autoPickButtonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 12 },
+  searchInputWrap: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#374151',
+    backgroundColor: '#2D2D2D',
+    paddingHorizontal: 10,
+  },
+  searchInput: {
+    height: 36,
+    color: '#E5E7EB',
+  },
   wordPickerList: {
-    maxHeight: 360,
+    flex: 1,
+  },
+  wordPickerListContent: {
+    paddingBottom: 20,
   },
   wordPickerItem: {
     backgroundColor: '#2D2D2D',
@@ -1585,10 +2104,30 @@ const styles = StyleSheet.create({
   },
   wordPickerItemHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 6,
   },
+  wordBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 8,
+    marginRight: 'auto',
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  statusPillText: { fontSize: 11, fontWeight: '700' },
+  duePill: { backgroundColor: 'rgba(24,116,134,0.18)', borderColor: 'rgba(24,116,134,0.45)' },
+  futurePill: { backgroundColor: 'rgba(147,197,253,0.12)', borderColor: 'rgba(147,197,253,0.4)' },
+  duePillText: { color: '#187486' },
+  futurePillText: { color: '#93C5FD' },
   wordPickerWord: {
     fontSize: 16,
     fontWeight: '600',
@@ -1624,6 +2163,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  footerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalReset: {
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: '#374151',
+    backgroundColor: '#2D2D2D',
+  },
+  modalResetDisabled: {
+    opacity: 0.5,
+  },
+  modalResetText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#E5E7EB',
   },
   wordPickerCount: {
     fontSize: 12,

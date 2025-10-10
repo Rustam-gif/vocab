@@ -3,6 +3,7 @@
 Directories and files discovered under configured roots:
 - app
   - _layout.tsx
+  - auth-callback.tsx
   - flashcards.tsx
   - index.tsx
   - journal.tsx
@@ -12,6 +13,10 @@ Directories and files discovered under configured roots:
   - vault-folder.tsx
   - vault.tsx
   - word-sprint.tsx
+- app/placement
+  - index.tsx
+  - result.tsx
+  - test.tsx
 - app/quiz
   - _layout.tsx
   - atlas-practice-integrated.tsx
@@ -22,6 +27,7 @@ Directories and files discovered under configured roots:
   - quiz-screen.tsx
   - word-intro.tsx
 - app/quiz/components
+  - AnimatedNextButton.tsx
   - SetCard.tsx
   - SuccessCelebration.tsx
   - WordIntro.tsx
@@ -35,16 +41,23 @@ Directories and files discovered under configured roots:
   - word-intro.tsx
 - app/quiz/data
   - levels.ts
+  - mcq-answers.ts
   - sentence-best.ts
+  - synonyms-answers.ts
+  - usage-answers.ts
 - app/story
   - StoryExercise.tsx
   - _layout.tsx
 - lib
   - store.ts
+  - supabase.ts
+  - theme.ts
 - services
   - AIService.ts
   - AnalyticsService.ts
+  - PlacementService.ts
   - ProgressService.ts
+  - SetProgressService.ts
   - StoryGenerator.ts
   - VaultService.ts
 

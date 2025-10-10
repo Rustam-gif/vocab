@@ -8,9 +8,11 @@ import {
   Animated,
 } from 'react-native';
 import { ArrowLeft, ArrowRight, Volume2, Bookmark, Check, Sparkles } from 'lucide-react-native';
+import * as Speech from 'expo-speech';
 import { useRouter } from 'expo-router';
 import { useAppStore } from '../../../lib/store';
 import { levels } from '../data/levels';
+import AnimatedNextButton from './AnimatedNextButton';
 
 interface WordIntroProps {
   setId: string;
@@ -44,10 +46,27 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
 
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollerRef = useRef<any>(null);
+  const [speakingWord, setSpeakingWord] = useState<string | null>(null);
+  const voiceIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     loadWords();
   }, [setId, levelId]);
+
+  // Pick an American English voice if available; otherwise rely on language.
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const voices = await Speech.getAvailableVoicesAsync();
+        const us = voices?.find(v => (v as any)?.language?.toLowerCase?.().startsWith('en-us'));
+        if (mounted && us?.identifier) {
+          voiceIdRef.current = us.identifier;
+        }
+      } catch {}
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const loadWords = () => {
     const level = levels.find(l => l.id === levelId);
@@ -198,8 +217,34 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
                 {/* Word Header */}
                 <View style={styles.wordHeader}>
                   <Text style={styles.wordText}>{w.word}</Text>
-                  <TouchableOpacity style={styles.audioButton}>
-                    <Volume2 size={24} color="#F2935C" />
+                  <TouchableOpacity
+                    style={[styles.audioButton, speakingWord === w.word && { backgroundColor: '#3a2b23' }]}
+                    onPress={() => {
+                      try {
+                        // Toggle if the same word is already speaking
+                        if (speakingWord === w.word) {
+                          Speech.stop();
+                          setSpeakingWord(null);
+                          return;
+                        }
+                        // Stop any current speech, then speak this word in US English
+                        Speech.stop();
+                        setSpeakingWord(w.word);
+                        Speech.speak(w.word, {
+                          language: 'en-US',
+                          voice: voiceIdRef.current,
+                          rate: 0.98,
+                          pitch: 1.0,
+                          onDone: () => setSpeakingWord(prev => (prev === w.word ? null : prev)),
+                          onStopped: () => setSpeakingWord(prev => (prev === w.word ? null : prev)),
+                          onError: () => setSpeakingWord(prev => (prev === w.word ? null : prev)),
+                        });
+                      } catch {}
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Play American English pronunciation for ${w.word}`}
+                  >
+                    <Volume2 size={24} color={speakingWord === w.word ? '#F2935C' : '#F2935C'} />
                   </TouchableOpacity>
                 </View>
 
@@ -281,13 +326,9 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
             </View>
             <Text style={styles.ctaTitle}>You're ready!</Text>
             <Text style={styles.ctaText}>You've seen all {words.length} words. When you’re ready, start practicing.</Text>
-            <TouchableOpacity
-              style={styles.startPracticeButton}
+            <AnimatedNextButton
               onPress={handleStartPractice}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Text style={styles.startPracticeButtonText}>Start Practice</Text>
-            </TouchableOpacity>
+            />
           </View>
         </Animated.ScrollView>
       </View>
@@ -328,7 +369,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E1E1E',
   },
   loadingText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#9CA3AF',
   },
   header: {
@@ -338,13 +379,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#9CA3AF',
   },
   progressDots: {
@@ -427,7 +468,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   wordText: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#fff',
     flex: 1,
@@ -438,7 +479,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#333',
   },
   phoneticText: {
-    fontSize: 18,
+    fontSize: 16,
     color: '#9CA3AF',
     fontStyle: 'italic',
     marginBottom: 24,
@@ -453,20 +494,20 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#F2935C',
     marginBottom: 8,
   },
   definitionText: {
-    fontSize: 18,
-    color: '#fff',
-    lineHeight: 26,
-  },
-  exampleText: {
     fontSize: 16,
     color: '#fff',
-    lineHeight: 24,
+    lineHeight: 23,
+  },
+  exampleText: {
+    fontSize: 14,
+    color: '#fff',
+    lineHeight: 22,
     fontStyle: 'italic',
   },
   highlightedWord: {
@@ -485,7 +526,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   synonymText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#fff',
   },
   saveButton: {
@@ -502,7 +543,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#427F75',
   },
   saveButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#fff',
   },
@@ -542,19 +583,19 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   startPracticeButtonText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#fff',
   },
   ctaTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#fff',
     textAlign: 'center',
     marginBottom: 8,
   },
   ctaText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#9CA3AF',
     textAlign: 'center',
     marginBottom: 16,

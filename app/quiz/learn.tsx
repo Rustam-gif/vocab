@@ -1,21 +1,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Image, Animated, Easing } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import { ArrowLeft, Settings } from 'lucide-react-native';
 import { levels, Level, Set } from './data/levels';
 import SetCard from './components/SetCard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import ProgressService from '../../services/ProgressService';
+import { ProgressService } from '../../services/ProgressService';
+import { SetProgressService } from '../../services/SetProgressService';
+import { useAppStore } from '../../lib/store';
+import { getTheme } from '../../lib/theme';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 
 export default function LearnScreen() {
   const router = useRouter();
+  const navigation = useNavigation<any>();
+  const theme = useAppStore(s => s.theme);
+  const colors = getTheme(theme);
   const { level: levelId } = useLocalSearchParams<{ level: string }>();
   const [currentLevel, setCurrentLevel] = useState<Level | null>(null);
   const [progress, setProgress] = useState({ completed: 0, total: 0 });
   const [activeLevelId, setActiveLevelId] = useState<string | null>(levelId ?? null);
+  const animatedValues = React.useRef<Animated.Value[]>([]);
+  const [animSeed, setAnimSeed] = useState(0);
 
   const loadStoredLevel = useCallback(async () => {
     if (levelId) {
@@ -39,72 +48,114 @@ export default function LearnScreen() {
     }, [loadStoredLevel])
   );
 
-  useEffect(() => {
-    const loadLevelWithProgress = async () => {
-      if (!activeLevelId) {
-        setCurrentLevel(null);
-        return;
-      }
-      
-      const level = levels.find(l => l.id === activeLevelId);
-      if (level) {
-        // Initialize ProgressService and get progress data
-        const progressService = ProgressService.getInstance();
-        await progressService.initialize();
+  const refreshLevel = useCallback(async () => {
+    if (!activeLevelId) {
+      setCurrentLevel(null);
+      return;
+    }
+
+    const level = levels.find(l => l.id === activeLevelId);
+    if (level) {
+      await Promise.all([ProgressService.initialize(), SetProgressService.initialize()]);
+
+      const setsWithProgress = level.sets.map((set, index) => {
+        // Overlay persisted status onto static level data
+        const flags = SetProgressService.getSetFlags(activeLevelId, set.id);
+        const baseSet = {
+          ...set,
+          completed: typeof flags.completed === 'boolean' ? flags.completed : !!set.completed,
+          inProgress: typeof flags.inProgress === 'boolean' ? flags.inProgress : !!set.inProgress,
+          score: typeof flags.score === 'number' ? flags.score : set.score,
+        };
+
+        // First set is always unlocked
+        if (index === 0) {
+          return baseSet;
+        }
+
+        // For all other sets (including quizzes), check if previous set is completed
+        const prevSet = level.sets[index - 1];
+        const prevFlags = SetProgressService.getSetFlags(activeLevelId, prevSet.id);
+        const prevCompleted = typeof prevFlags.completed === 'boolean' ? prevFlags.completed : !!prevSet.completed;
         
-        // TEMPORARY: Clear test data - ALREADY RUN, COMMENTED OUT
-        // await AsyncStorage.removeItem('set_progress');
-        // await AsyncStorage.removeItem('user_progress');
-        
-        // Merge sets with progress data
-        const setsWithProgress = await Promise.all(
-          level.sets.map(async (set) => {
-            const setProgress = await progressService.getSetProgress(`${set.id}`);
-            return {
-              ...set,
-              completed: setProgress?.completed || set.completed,
-              inProgress: setProgress ? (!setProgress.completed && setProgress.attempts > 0) : set.inProgress,
-              score: setProgress?.bestScore || set.score
-            };
-          })
-        );
-        
-        const levelWithProgress = { ...level, sets: setsWithProgress };
-        setCurrentLevel(levelWithProgress);
-        
-        const completed = setsWithProgress.filter(s => s.completed).length;
-        setProgress({ completed, total: setsWithProgress.length });
-      }
-    };
-    
-    loadLevelWithProgress();
+        // Set is locked if the previous set is not completed
+        const isLocked = !prevCompleted;
+        return { ...baseSet, locked: isLocked };
+      });
+
+      const levelWithProgress = { ...level, sets: setsWithProgress };
+      // Pre-create animated values at 0 before rendering to prevent initial flash
+      animatedValues.current = setsWithProgress.map(() => new Animated.Value(0));
+      setCurrentLevel(levelWithProgress);
+
+      const completed = setsWithProgress.filter(s => s.completed).length;
+      setProgress({ completed, total: setsWithProgress.length });
+    }
   }, [activeLevelId]);
 
-  const handleSetPress = (set: Set) => {
+  useEffect(() => { refreshLevel(); }, [refreshLevel]);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Refresh data when returning, but do not replay the entrance animation
+      refreshLevel();
+    }, [refreshLevel])
+  );
+
+  // Prepare and run "bubble" entrance animation for cards
+  useEffect(() => {
+    if (!currentLevel?.sets) return;
+    // Ensure we have one animated value per item, initialized to 0
+    if (animatedValues.current.length !== currentLevel.sets.length) {
+      animatedValues.current = currentLevel.sets.map(() => new Animated.Value(0));
+    }
+    const animations = animatedValues.current.map((v, i) =>
+      Animated.timing(v, {
+        toValue: 1,
+        duration: 420,
+        delay: i * 70,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      })
+    );
+    Animated.stagger(50, animations).start();
+  }, [currentLevel?.sets?.length, animSeed]);
+
+  const handleSetPress = (set: Set & { locked?: boolean }) => {
     if (!activeLevelId) {
       router.push('/quiz/level-select');
       return;
     }
+
+    // Don't allow navigation if the set is locked
+    if (set.locked) {
+      console.log('LearnScreen - Set is locked:', set.id);
+      return;
+    }
+
     console.log('LearnScreen - handleSetPress:', { setId: set.id, levelId: activeLevelId, setType: set.type });
 
-    if (set.type === 'quiz') {
-      // Navigate to quiz screen
-      router.push(`/quiz/quiz-screen?setId=${set.id}&level=${activeLevelId}`);
-    } else {
-      // Navigate directly to practice session
-      const url = `/quiz/atlas-practice-integrated?setId=${set.id}&levelId=${activeLevelId}`;
-      console.log('LearnScreen - Navigating to:', url);
-      router.push(url);
-    }
+    // Both quiz and regular sets use atlas-practice-integrated
+    const url = `/quiz/atlas-practice-integrated?setId=${set.id}&levelId=${activeLevelId}`;
+    console.log('LearnScreen - Navigating to:', url);
+    router.push(url);
   };
 
   const handleChangeLevel = () => {
     router.push('/quiz/level-select');
   };
 
-  const renderSetItem = ({ item }: { item: Set }) => (
-    <SetCard set={item} onPress={() => handleSetPress(item)} />
-  );
+  const renderSetItem = ({ item, index }: { item: Set; index: number }) => {
+    const v = animatedValues.current[index] || new Animated.Value(0);
+    const scale = v.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.96, 1, 1] });
+    const opacity = v.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+    const translateY = v.interpolate({ inputRange: [0, 1], outputRange: [10, 0] });
+    return (
+      <Animated.View style={{ width: '100%', transform: [{ translateY }, { scale }], opacity }}>
+        <SetCard set={item} onPress={() => handleSetPress(item)} />
+      </Animated.View>
+    );
+  };
 
   if (!currentLevel) {
     return (
@@ -120,12 +171,21 @@ export default function LearnScreen() {
   const progressPercentage = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.replace('/')}
+          onPress={() => {
+            try {
+              if (navigation?.canGoBack && navigation.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/');
+              }
+            } catch {
+              router.replace('/');
+            }
+          }}
         >
           <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>
@@ -138,10 +198,23 @@ export default function LearnScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Level Info */}
       <View style={styles.levelInfo}>
         <View style={styles.levelHeader}>
-          <Text style={styles.levelIcon}>{currentLevel.icon}</Text>
+          <Image
+            source={
+              currentLevel.id === 'beginner'
+                ? require('../../assets/levelicons/beginner.png')
+                : currentLevel.id === 'ielts'
+                ? require('../../assets/levelicons/ielts-topics.png')
+                : currentLevel.id === 'intermediate'
+                ? require('../../assets/levelicons/intermediate.png')
+                : currentLevel.id === 'advanced'
+                ? require('../../assets/levelicons/advanced-mountain.png')
+                : require('../../assets/levelicons/advanced-plus.png')
+            }
+            style={styles.levelImage}
+            resizeMode="contain"
+          />
           <View style={styles.levelDetails}>
             <Text style={styles.levelName}>{currentLevel.name}</Text>
           <Text style={[styles.levelCefr, { color: accent }]}>CEFR {currentLevel.cefr}</Text>
@@ -152,7 +225,6 @@ export default function LearnScreen() {
         </View>
       </View>
 
-      {/* Progress */}
       <View style={styles.progressContainer}>
         <View style={styles.progressHeader}>
           <Text style={styles.progressText}>
@@ -170,11 +242,10 @@ export default function LearnScreen() {
         </View>
       </View>
 
-      {/* Sets List */}
       <FlatList
         data={currentLevel.sets}
         renderItem={renderSetItem}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item, index) => `${activeLevelId || 'level'}-${String(item.id)}-${index}`}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
       />
@@ -198,11 +269,12 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   title: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
     color: '#fff',
     flex: 1,
     textAlign: 'center',
+    fontFamily: 'Ubuntu_500Medium',
   },
   settingsButton: {
     padding: 8,
@@ -217,24 +289,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  levelIcon: {
-    fontSize: 40,
+  levelImage: {
+    width: 40,
+    height: 40,
     marginRight: 20,
   },
   levelDetails: {
     flex: 1,
   },
   levelName: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '600',
     color: '#fff',
     marginBottom: 6,
+    fontFamily: 'Ubuntu_500Medium',
   },
   levelCefr: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#F2935C',
     fontWeight: '600',
     letterSpacing: 0.5,
+    fontFamily: 'Ubuntu_500Medium',
   },
   changeButton: {
     backgroundColor: 'transparent',
@@ -242,46 +317,45 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#F2935C',
+    borderColor: '#187486',
   },
   changeButtonText: {
-    color: '#F2935C',
+    color: '#187486',
     fontSize: 12,
-    fontWeight: '500',
   },
   progressContainer: {
-    marginHorizontal: 20,
-    marginBottom: 20,
+    paddingHorizontal: 20,
+    marginBottom: 12,
   },
   progressHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
   progressText: {
-    fontSize: 14,
-    color: '#9CA3AF',
+    fontSize: 16,
+    color: '#D1D5DB',
+    fontFamily: 'Ubuntu_400Regular',
   },
   progressPercentage: {
-    fontSize: 14,
-    color: '#F2935C',
+    fontSize: 16,
     fontWeight: '600',
   },
   progressBar: {
-    height: 6,
-    backgroundColor: '#2C2C2C',
-    borderRadius: 3,
+    height: 8,
+    backgroundColor: 'rgba(242, 147, 92, 0.16)',
+    borderRadius: 8,
     overflow: 'hidden',
   },
   progressFill: {
-    height: '100%',
-    backgroundColor: '#F2935C',
-    borderRadius: 3,
+    height: 8,
+    borderRadius: 8,
   },
   listContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 32,
+    paddingTop: 12,
   },
   loadingContainer: {
     flex: 1,
@@ -290,6 +364,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: '#9CA3AF',
+    color: '#fff',
   },
 });

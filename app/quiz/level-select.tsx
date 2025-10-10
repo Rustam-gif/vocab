@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Check } from 'lucide-react-native';
 import { levels, Level } from './data/levels';
@@ -56,6 +56,27 @@ export default function LevelSelectScreen() {
 
   const accent = '#F2935C';
 
+  const getLevelIcon = (id: string) => {
+    switch (id) {
+      case 'beginner':
+        return require('../../assets/levelicons/beginner.png');
+      case 'ielts':
+        return require('../../assets/levelicons/ielts-topics.png');
+      case 'intermediate':
+        return require('../../assets/levelicons/intermediate.png');
+      case 'upper-intermediate':
+        return require('../../assets/levelicons/upper-intermediate.png');
+      case 'advanced':
+        return require('../../assets/levelicons/advanced-mountain.png');
+      case 'advanced-plus':
+        return require('../../assets/levelicons/advanced-plus.png');
+      case 'proficient':
+        return require('../../assets/levelicons/proficient.png');
+      default:
+        return require('../../assets/levelicons/beginner.png');
+    }
+  };
+
   const renderLevelItem = ({ item }: { item: Level }) => {
     const isSelected = selectedLevel === item.id;
     
@@ -66,18 +87,14 @@ export default function LevelSelectScreen() {
       >
         <View style={styles.levelHeader}>
           <View style={styles.levelInfo}>
-            <Text style={styles.levelIcon}>{item.icon}</Text>
+            <Image source={getLevelIcon(item.id)} style={styles.levelImage} resizeMode="contain" />
             <View style={styles.levelDetails}>
               <Text style={styles.levelName}>{item.name}</Text>
               <Text style={styles.levelDescription}>{item.description}</Text>
               <Text style={[styles.levelCefr, { color: accent }]}>CEFR {item.cefr}</Text>
             </View>
           </View>
-          {isSelected && (
-            <View style={styles.checkContainer}>
-              <Check size={24} color={accent} />
-            </View>
-          )}
+          {isSelected && <Check size={20} color={accent} />}
         </View>
       </TouchableOpacity>
     );
@@ -138,11 +155,12 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   title: {
-    fontSize: 18,
+    fontSize: 16, // reduced ~10%
     fontWeight: '600',
     color: '#fff',
     flex: 1,
     textAlign: 'center',
+    fontFamily: 'Ubuntu_500Medium',
   },
   placeholder: {
     width: 40,
@@ -180,28 +198,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
-  levelIcon: {
-    fontSize: 32,
+  levelImage: {
+    width: 56,
+    height: 56,
     marginRight: 16,
   },
   levelDetails: {
     flex: 1,
   },
   levelName: {
-    fontSize: 20,
+    fontSize: 20, // reduced ~10%
     fontWeight: '600',
     color: '#fff',
     marginBottom: 4,
+    fontFamily: 'Ubuntu_500Medium',
   },
   levelDescription: {
-    fontSize: 14,
+    fontSize: 14, // reduced ~10%
     color: '#9CA3AF',
     marginBottom: 2,
+    fontFamily: 'Ubuntu_400Regular',
   },
   levelCefr: {
-    fontSize: 12,
+    fontSize: 12, // reduced ~10%
     color: '#F2935C',
     fontWeight: '500',
+    fontFamily: 'Ubuntu_500Medium',
   },
   checkContainer: {
     width: 32,
@@ -229,7 +251,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   continueButtonText: {
-    fontSize: 16,
+    fontSize: 14, // reduced ~10%
     fontWeight: '600',
     color: '#fff',
   },
@@ -239,7 +261,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   errorText: {
-    fontSize: 16,
+    fontSize: 14, // reduced ~10%
     color: '#9CA3AF',
   },
 });

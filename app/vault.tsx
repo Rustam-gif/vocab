@@ -8,10 +8,11 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Plus, Search, BookOpen, Folder, FolderOpen, FolderPlus, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Plus, Search, BookOpen, Trash2 } from 'lucide-react-native';
 import { useAppStore } from '../lib/store';
 import { Word } from '../types';
 import { aiService } from '../services/AIService';
@@ -141,31 +142,35 @@ export default function VaultScreen() {
         ) : (
           <View style={styles.wordsList}>
             <TouchableOpacity style={styles.newFolderRow} onPress={() => setShowFolderCreate(true)}>
-              <FolderPlus size={18} color="#fff" />
+              <Image source={require('../assets/foldericons/add_folder.png')} style={styles.folderIconSmall} />
               <Text style={styles.newFolderText}>New Folder</Text>
             </TouchableOpacity>
             {foldersToShow.map((f) => {
               const count = words.filter(w => w.folderId === f.id).length;
+              // Check if this is a default folder (don't allow deletion)
+              const isDefaultFolder = ['folder-sets-default', 'folder-user-default', 'folder-phrasal-default', 'folder-daily-default'].includes(f.id);
+              
               return (
                 <TouchableOpacity key={f.id} style={styles.folderRow} onPress={() => router.push({ pathname: '/vault-folder', params: { id: f.id, title: f.title } })}>
-                  <Folder size={20} color="#e28743" />
+                  <Image source={require('../assets/foldericons/foldericon.png')} style={styles.folderIcon} />
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.folderTitle}>{f.title}</Text>
                     <Text style={styles.folderSubtitle}>{count} {count === 1 ? 'word' : 'words'}</Text>
                   </View>
-                  <TouchableOpacity
-                    onPress={async (e) => {
-                      e.stopPropagation();
-                      // Prevent deleting default folders
-                      const ok = await deleteFolder(f.id);
-                      if (ok) {
-                        setFolders(getFolders());
-                      }
-                    }}
-                    style={{ padding: 6 }}
-                  >
-                    <Trash2 size={18} color="#a0a0a0" />
-                  </TouchableOpacity>
+                  {!isDefaultFolder && (
+                    <TouchableOpacity
+                      onPress={async (e) => {
+                        e.stopPropagation();
+                        const ok = await deleteFolder(f.id);
+                        if (ok) {
+                          setFolders(getFolders());
+                        }
+                      }}
+                      style={{ padding: 6 }}
+                    >
+                      <Trash2 size={18} color="#a0a0a0" />
+                    </TouchableOpacity>
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -296,7 +301,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#fff',
   },
@@ -519,9 +524,17 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 8,
   },
+  folderIcon: {
+    width: 40,
+    height: 40,
+  },
+  folderIconSmall: {
+    width: 36,
+    height: 36,
+  },
   newFolderText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
   },
   folderRow: {
@@ -534,12 +547,12 @@ const styles = StyleSheet.create({
   },
   folderTitle: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
   },
   folderSubtitle: {
     color: '#a0a0a0',
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 2,
   },
 });

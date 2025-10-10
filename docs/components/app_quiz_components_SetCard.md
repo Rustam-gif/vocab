@@ -11,6 +11,7 @@ File: app/quiz/components/SetCard.tsx
 - completed
 - inProgress
 - score
+- locked
 - onPress
 
 ## Notes

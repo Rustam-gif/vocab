@@ -7,9 +7,13 @@ import {
   FlatList,
   Dimensions,
 } from 'react-native';
+import { Volume2 } from 'lucide-react-native';
+import * as Speech from 'expo-speech';
+import LottieView from 'lottie-react-native';
 import { levels } from '../data/levels';
 import { useAppStore } from '../../../lib/store';
 import type { NewWordPayload } from '../../../types';
+import AnimatedNextButton from './AnimatedNextButton';
 
 const ACCENT_COLOR = '#F2935C';
 const SYNONYM_BG = '#3A3A3A';
@@ -95,6 +99,9 @@ export default function WordIntro({
   const { addWord, words: savedWords } = useAppStore(state => ({ addWord: state.addWord, words: state.words }));
   const [savedMap, setSavedMap] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+  // Lottie refs keyed per word so the bookmark can animate on tap
+  const bookmarkRefs = useRef<Record<string, LottieView | null>>({});
+  const [speakingFor, setSpeakingFor] = useState<string | null>(null);
 
   useEffect(() => {
     const existing = new Set(savedWords.map(w => w.word.toLowerCase()));
@@ -134,6 +141,12 @@ export default function WordIntro({
   const handleSave = useCallback(async (word: IntroWord) => {
     const key = word.word.toLowerCase();
     if (savedMap[key] || saving) return;
+    // Play the bookmark animation once on tap
+    try {
+      const ref = bookmarkRefs.current[key];
+      ref?.reset?.();
+      ref?.play?.();
+    } catch {}
     setSaving(true);
     try {
       const payload: NewWordPayload = {
@@ -180,6 +193,32 @@ export default function WordIntro({
     const isSaved = savedMap[key];
     return (
       <View style={[styles.slide, { width: SCREEN_WIDTH - 40 }]}> 
+        {/* Pronunciation button */}
+        <TouchableOpacity
+          style={[styles.speakerBtn, speakingFor === item.word && styles.speakerBtnActive]}
+          onPress={() => {
+            try {
+              if (speakingFor) {
+                Speech.stop();
+                setSpeakingFor(null);
+              }
+              const toSpeak = item.word;
+              setSpeakingFor(toSpeak);
+              Speech.speak(toSpeak, {
+                language: 'en-US',
+                rate: 1.0,
+                pitch: 1.0,
+                onDone: () => setSpeakingFor(prev => (prev === toSpeak ? null : prev)),
+                onStopped: () => setSpeakingFor(prev => (prev === toSpeak ? null : prev)),
+                onError: () => setSpeakingFor(prev => (prev === toSpeak ? null : prev)),
+              });
+            } catch {}
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`Play pronunciation for ${item.word}`}
+        >
+          <Volume2 size={18} color={speakingFor === item.word ? ACCENT_COLOR : TEXT_MUTED} />
+        </TouchableOpacity>
         <View style={styles.wordSection}>
           <Text style={styles.wordLabel}>{item.word}</Text>
           {item.ipa ? <Text style={styles.wordIpa}>{item.ipa}</Text> : null}
@@ -198,9 +237,20 @@ export default function WordIntro({
           disabled={isSaved || saving}
           accessibilityRole="button"
         >
-          <Text style={[styles.saveButtonText, isSaved && styles.saveButtonTextSaved]}>
-            {isSaved ? 'Saved' : 'Save to Vault'}
-          </Text>
+          <View style={styles.saveButtonContent}>
+            {!isSaved && (
+              <LottieView
+                ref={(r) => { bookmarkRefs.current[key] = r; }}
+                source={require('../../../assets/lottie/Bookmark.json')}
+                autoPlay={false}
+                loop={false}
+                style={styles.saveIcon}
+              />
+            )}
+            <Text style={[styles.saveButtonText, isSaved && styles.saveButtonTextSaved]}>
+              {isSaved ? 'Saved' : 'Save to Vault'}
+            </Text>
+          </View>
         </TouchableOpacity>
       </View>
     );
@@ -210,9 +260,9 @@ export default function WordIntro({
     return (
       <View style={styles.emptyContainer}>
         <Text style={styles.emptyText}>No words to review.</Text>
-        <TouchableOpacity style={styles.startButton} onPress={() => onPhaseComplete(0, 0)}>
-          <Text style={styles.startButtonText}>Start Practice</Text>
-        </TouchableOpacity>
+        <AnimatedNextButton
+          onPress={() => onPhaseComplete(0, 0)}
+        />
       </View>
     );
   }
@@ -242,15 +292,9 @@ export default function WordIntro({
       />
 
       <View style={styles.actionsRow}>
-        <TouchableOpacity
-          style={[styles.startButton, styles.nextButton]}
+        <AnimatedNextButton
           onPress={handleNext}
-          accessibilityRole="button"
-        >
-          <Text style={styles.startButtonText}>
-            {currentIndex === wordsData.length - 1 ? 'Start Practice' : 'Next'}
-          </Text>
-        </TouchableOpacity>
+        />
       </View>
     </View>
   );
@@ -286,29 +330,47 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 24,
     marginRight: 20,
+    position: 'relative',
+  },
+  speakerBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  speakerBtnActive: {
+    backgroundColor: 'rgba(242,147,92,0.12)',
+    borderColor: 'rgba(242,147,92,0.35)',
   },
   wordSection: {
     alignItems: 'center',
     marginBottom: 24,
   },
   wordLabel: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: '700',
     color: TEXT_PRIMARY,
     textTransform: 'capitalize',
   },
   wordIpa: {
-    fontSize: 16,
+    fontSize: 14,
     color: TEXT_MUTED,
     fontStyle: 'italic',
     marginTop: 6,
   },
   wordDefinition: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#E5E7EB',
     textAlign: 'center',
     marginTop: 16,
-    lineHeight: 24,
+    lineHeight: 22,
   },
   exampleCard: {
     marginBottom: 20,
@@ -317,8 +379,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#1f1f1f',
   },
   exampleText: {
-    fontSize: 15,
-    lineHeight: 24,
+    fontSize: 14,
+    lineHeight: 22,
     color: '#E5E7EB',
   },
   exampleHighlight: {
@@ -338,7 +400,7 @@ const styles = StyleSheet.create({
     backgroundColor: SYNONYM_BG,
   },
   synonymText: {
-    fontSize: 12,
+    fontSize: 11,
     color: SYNONYM_TEXT,
     textTransform: 'capitalize',
   },
@@ -349,12 +411,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
+  saveButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  saveIcon: {
+    width: 22,
+    height: 22,
+  },
   saveButtonSaved: {
     backgroundColor: BUTTON_SAVED_BG,
   },
   saveButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   saveButtonTextSaved: {
@@ -375,7 +446,7 @@ const styles = StyleSheet.create({
   },
   startButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   emptyContainer: {

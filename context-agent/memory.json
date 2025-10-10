@@ -124,6 +124,266 @@
       "title": "Story Exercise Modal Redesign",
       "detail": "Completely redesigned customize story modal with centered layout, reduced padding/margins, smaller option pills (12px/6px padding, 16px borderRadius), and compact 380px maxWidth for better UX",
       "when": "2025-09-28T20:46:26.122Z"
+    },
+    {
+      "title": "Made exercise names clickable",
+      "detail": "Added TouchableOpacity wrapper around exercise names in atlas-practice-integrated.tsx with onPress handler to setCurrentPhase(index) for direct navigation to any exercise",
+      "when": "2025-01-27T10:30:00.000Z"
+    },
+    {
+      "title": "Added exercise name touch targets",
+      "detail": "Created exerciseNameTouchable style with paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 for better touch targets and user experience",
+      "when": "2025-01-27T10:31:00.000Z"
+    },
+    {
+      "title": "Replaced Basic Needs & Family word set",
+      "detail": "Updated all 5 words in levels.ts with new comprehensive vocabulary: shelter, nourishment, sibling, relative, companion - each with detailed definitions, natural examples, phonetics, and synonyms",
+      "when": "2025-01-27T11:00:00.000Z"
+    },
+    {
+      "title": "Updated MCQ distractors for topic relevance",
+      "detail": "Replaced generic MCQ incorrect options with family/needs-themed distractors in mcq.tsx: danger/illness/absence/conflict (opposite), building/trust/connected/healthy (similar), activities/education/transportation/technology (unrelated) - all with similar word counts",
+      "when": "2025-01-27T11:05:00.000Z"
+    },
+    {
+      "title": "Updated sentence usage exercises",
+      "detail": "Replaced all 5 sentence-usage items in sentence-usage.tsx with new words: shelter, nourishment, sibling, relative, companion - each with 4 contextually appropriate sentences (1 correct, 3 incorrect with similar structure)",
+      "when": "2025-01-27T11:10:00.000Z"
+    },
+    {
+      "title": "Updated synonym exercises",
+      "detail": "Replaced all 5 synonym items in synonym.tsx with new words and topic-relevant options: shelter (protection/housing/refuge vs danger/exposure), nourishment (nutrition/sustenance vs hunger/illness), sibling/relative/companion with family-themed correct and incorrect pools",
+      "when": "2025-01-27T11:15:00.000Z"
+    },
+    {
+      "title": "Simplified words to A1 beginner level",
+      "detail": "Replaced all 5 words in Basic Needs & Family with simpler A1 vocabulary: home, food, brother, family, friend - using simple definitions (7-9 words), natural examples with basic grammar, and everyday synonyms suitable for absolute beginners",
+      "when": "2025-01-27T11:30:00.000Z"
+    },
+    {
+      "title": "Updated all exercises for A1 level",
+      "detail": "Simplified MCQ distractors, sentence-usage items, and synonym pools in all components to use basic A1 vocabulary and simple sentence structures that absolute beginners can understand",
+      "when": "2025-01-27T11:35:00.000Z"
+    },
+    {
+      "title": "Created A1 words for Education & Work",
+      "detail": "Added 5 new A1 beginner level words in levels.ts for set 3: teacher, book, job, write, help - with simple definitions (8-10 words), natural examples using basic grammar, phonetics, and everyday synonyms suitable for absolute beginners",
+      "when": "2025-01-27T11:45:00.000Z"
+    },
+    {
+      "title": "Created 10 new A1 beginner word sets",
+      "detail": "Added 50 A1 level words across 10 new topics in levels.ts: Food & Cooking (cook, eat, drink, taste, hungry), Free Time & Hobbies (play, music, watch, read, dance), Technology & Internet (computer, phone, internet, video, game), Shopping & Money (buy, money, shop, price, pay), Health & Body (doctor, sick, body, pain, healthy), Weather & Nature (sun, rain, tree, cold, hot), Emotions & Personality (happy, sad, angry, kind, smart), Transportation & Travel (car, bus, walk, travel, ticket), Home & Furniture (room, table, chair, bed, door), Culture & Entertainment (movie, song, party, art, story)",
+      "when": "2025-01-27T12:00:00.000Z"
+    },
+    {
+      "title": "Updated SetCard icon mapping for new topics",
+      "detail": "Added icon recognition in SetCard.tsx for all 10 new topics: food-cooking.png, free-time-hobbies.png, technology-internet.png, shopping-money.png, health-body.png, weather-nature.png, emotions-personality.png, transportation-travel.png, home-furniture.png, culture-entertainment.png",
+      "when": "2025-01-27T12:05:00.000Z"
+    },
+    {
+      "title": "Built Quiz 1 with 10 words",
+      "detail": "Added 10 A1 words to Quiz 1 in levels.ts from sets 2 & 3: home, food, brother, family, friend (from Basic Needs & Family) + teacher, book, job, write, help (from Education & Work). Quiz now has full word content for exercises",
+      "when": "2025-01-27T12:20:00.000Z"
+    },
+    {
+      "title": "Implemented custom quiz exercise flow",
+      "detail": "Modified atlas-practice-integrated.tsx to detect quiz type (type: 'quiz') and use custom phase structure: no Intro, only MCQ -> Synonym -> Usage -> Letters (4 phases instead of 5). Used useMemo to detect quiz type and conditionally set phases array",
+      "when": "2025-01-27T12:25:00.000Z"
+    },
+    {
+      "title": "Fixed quiz navigation",
+      "detail": "Updated learn.tsx to route quiz sets to atlas-practice-integrated instead of quiz-screen. Removed the conditional check for set.type === 'quiz' so both regular sets and quizzes use the same integrated practice component which now handles both cases",
+      "when": "2025-01-27T12:30:00.000Z"
+    },
+    {
+      "title": "Implemented word range splitting for quizzes",
+      "detail": "Added wordRange prop { start, end } to MCQ, Synonym, and Usage components. In atlas-practice-integrated.tsx, quizzes now split 10 words: MCQ & Synonym get words 0-4 (first 5), Usage & Letters get words 5-9 (next 5). Updated MCQ and Synonym to dynamically pull words from levels.ts and apply wordRange filter",
+      "when": "2025-01-27T12:40:00.000Z"
+    },
+    {
+      "title": "Fixed Sentence Usage to use dynamic words",
+      "detail": "Made sentence-usage.tsx pull words from levels.ts instead of hardcoded ITEMS. Now applies wordRange filter so Usage exercise shows correct word set (words 5-9 for quizzes). Updated all ITEMS.length references to itemsData.length",
+      "when": "2025-01-27T12:50:00.000Z"
+    },
+    {
+      "title": "Fixed Synonym to show 6 options with 3 correct",
+      "detail": "Updated synonym.tsx to always show 6 options: 3 correct synonyms and 3 incorrect options. Changed requiredCount from dynamic (entry.correct.length) to fixed value of 3. Modified options generation to slice first 3 correct and 3 incorrect options",
+      "when": "2025-01-27T12:55:00.000Z"
+    },
+    {
+      "title": "Added 3rd synonym to all Quiz 1 words",
+      "detail": "Updated all 10 words in Quiz 1 (levels.ts) to have 3 synonyms each instead of 2: home (where you live), food (lunch), brother (boy in family), family (mom and dad), friend (someone you like), teacher (tutor), book (novel), job (career), write (pen), help (aid)",
+      "when": "2025-01-27T13:00:00.000Z"
+    },
+    {
+      "title": "Added synonym data for words 6-10",
+      "detail": "Extended WORDS array in synonym.tsx to include teacher, book, job, write, help with their correct synonyms and incorrect options. This ensures the second set of 5 words (used in quiz) has proper synonym data for the exercise",
+      "when": "2025-01-27T13:05:00.000Z"
+    },
+    {
+      "title": "Fixed Quiz 1 to use words from Sets 1 & 2",
+      "detail": "Replaced Quiz 1 words in levels.ts to use 5 from Set 1 (Daily Routines: wake up, eat, study, exercise, sleep) and 5 from Set 2 (Basic Needs & Family: home, food, brother, family, friend). Updated description to 'A quick recap of sets 1 & 2'. Added 3rd synonym to all words",
+      "when": "2025-01-27T13:15:00.000Z"
+    },
+    {
+      "title": "Updated synonym and usage components for new quiz words",
+      "detail": "Updated WORDS array in synonym.tsx to include Set 1 words (wake up, eat, study, exercise, sleep) with 3 synonyms and incorrect options each. Updated ITEMS array in sentence-usage.tsx to include all 10 quiz words with appropriate sentence examples",
+      "when": "2025-01-27T13:20:00.000Z"
+    },
+    {
+      "title": "Added Quiz 2, 3, 4, and 5",
+      "detail": "Created 4 new quizzes following the same pattern: Quiz 2 (sets 3&4: teacher,book,job,write,help,cook,eat,drink,taste,hungry), Quiz 3 (sets 5&6: play,music,watch,read,dance,computer,phone,internet,video,game), Quiz 4 (sets 7&8: buy,money,shop,price,pay,doctor,sick,body,pain,healthy), Quiz 5 (sets 9&10: sun,rain,tree,cold,hot,happy,sad,angry,kind,smart). All with 3 synonyms each for the synonym exercise",
+      "when": "2025-01-27T13:30:00.000Z"
+    },
+    {
+      "title": "Reorganized quizzes to appear after every 2 sets",
+      "detail": "Restructured levels.ts so quizzes appear immediately after their corresponding sets: Set1,Set2,Quiz1,Set3,Set4,Quiz2,Set5,Set6,Quiz3,Set7,Set8,Quiz4,Set9,Set10,Quiz5,Set11,Set12,Set13. This provides natural progression and review points for learners",
+      "when": "2025-01-27T14:00:00.000Z"
+    },
+    {
+      "title": "Implemented quiz locking mechanism",
+      "detail": "Added logic to lock quizzes until the previous 2 sets are completed. Modified learn.tsx to check completion status of previous sets and add 'locked' property to quiz sets. Updated SetCard.tsx to display locked state with gray styling, lock icon, disabled interaction, and 'Complete previous sets' message. Users cannot start a quiz until they finish the 2 sets before it",
+      "when": "2025-01-27T14:30:00.000Z"
+    },
+    {
+      "title": "Extended locking to all sets (sequential progression)",
+      "detail": "Updated learn.tsx to lock ALL sets (not just quizzes) until the previous set is completed. First set is always unlocked. Each subsequent set requires completion of the immediately previous set. Changed message to 'Complete previous set first'. This creates a linear learning path where users must complete sets in order",
+      "when": "2025-01-27T14:45:00.000Z"
+    },
+    {
+      "title": "Added 3rd synonym to all regular sets",
+      "detail": "Updated all 13 regular sets in levels.ts to have 3 synonyms per word instead of 2. This ensures the synonym exercise shows 6 options (3 correct + 3 incorrect) for both regular sets and quizzes. Sets updated: Daily Routines, Basic Needs & Family, Education & Work, Food & Cooking, Free Time & Hobbies, Technology & Internet, Shopping & Money, Health & Body, Weather & Nature, Emotions & Personality, Transportation & Travel, Home & Furniture, Culture & Entertainment",
+      "when": "2025-01-27T15:00:00.000Z"
+    },
+    {
+      "title": "Created IELTS Vocabulary level",
+      "detail": "Added complete IELTS level with 20 sets covering essential IELTS topics: Academic Life, Environment & Climate, Technology & Innovation, Health & Medicine, Business & Economics, Government & Politics, Media & Communication, Social Issues, Arts & Culture, Science & Research, Travel & Tourism, Food & Agriculture, Urban Development, Education System, Crime & Law, Psychology & Behavior, Global Issues, Sports & Fitness, Finance & Banking, Employment & Career. Each set contains 5 words (100 total) at B2-C1 CEFR level with academic definitions, example sentences, phonetics, and 3 synonyms each",
+      "when": "2025-01-27T15:30:00.000Z"
+    },
+    {
+      "title": "Added IELTS topic icon recognition",
+      "detail": "Updated SetCard.tsx to recognize and display appropriate icons for all 20 IELTS topics. Icon mapping includes academic-life.png, environment-climate.png, technology-innovation.png, health-medicine.png, business-economics.png, government-politics.png, media-communication.png, social-issues.png, culture.png, science-research.png, travel-tourism.png, food-agriculture.png, urban-development.png, education-system.png, crime-law.png, psychology-behavior.png, global-issues.png, sports-fitness.png, finance-banking.png, employment-career.png",
+      "when": "2025-01-27T15:35:00.000Z"
+    },
+    {
+      "title": "Fixed icon conflict for Food & Agriculture",
+      "detail": "Reordered icon mapping logic in SetCard.tsx to check for 'food && agriculture' before 'arts || culture' to prevent Food & Agriculture from incorrectly displaying the Arts & Culture icon",
+      "when": "2025-01-27T15:40:00.000Z"
+    },
+    {
+      "title": "Improved locked set visibility",
+      "detail": "Enhanced styling for locked sets in SetCard.tsx: increased container opacity from 0.6 to 0.85, lightened background from #1F1F1F to #252525, increased icon opacity from 0.4 to 0.6, and changed text color from #888 to #A0A0A0 for better readability while maintaining locked appearance",
+      "when": "2025-01-27T15:50:00.000Z"
+    },
+    {
+      "title": "Implemented topic-based MCQ distractors",
+      "detail": "Created comprehensive getTopicDistracts() function in mcq.tsx with topic-specific incorrect options for all 13 beginner sets (Daily Routines, Family, Education, Food, Hobbies, Technology, Shopping, Health, Weather, Emotions, Transportation, Home, Culture). Each topic has 3-5 opposite, similar, and unrelated distractors that are contextually relevant to the topic, making questions more challenging and natural. Generic fallback provided for unlisted topics",
+      "when": "2025-01-27T16:00:00.000Z"
+    },
+    {
+      "title": "Added comprehensive synonym incorrect pools",
+      "detail": "Expanded WORDS array in synonym.tsx from 10 to 65 words covering all 13 regular sets (325 words total with 5 per set). Each word now has 5-6 topic-related incorrect options that are contextually appropriate, making the synonym matching exercise more challenging and realistic. Incorrect options are semantically related but clearly wrong (e.g., for 'wake up': sleep, rest, nap, slumber, doze)",
+      "when": "2025-01-27T16:05:00.000Z"
+    },
+    {
+      "title": "Added IELTS topic-based MCQ distractors",
+      "detail": "Extended getTopicDistracts() function in mcq.tsx to include all 20 IELTS topics with academic-level distractors: Academic Life, Environment & Climate, Technology & Innovation, Health & Medicine, Business & Economics, Government & Politics, Media & Communication, Social Issues, Arts & Culture, Science & Research, Travel & Tourism, Food & Agriculture, Urban Development, Education System, Crime & Law, Psychology & Behavior, Global Issues, Sports & Fitness, Finance & Banking, Employment & Career. Each has topic-specific opposite, similar, and unrelated options at B2-C1 level",
+      "when": "2025-01-27T16:10:00.000Z"
+    },
+    {
+      "title": "Added IELTS synonym incorrect pools",
+      "detail": "Extended WORDS array in synonym.tsx from 65 to 165 words by adding all 100 IELTS vocabulary words across 20 sets. Each word has 5-6 academically appropriate incorrect options that are contextually related to the topic (e.g., for 'pollution': purification, cleanliness, freshness, purity, sanitation). Incorrect options use B2-C1 level vocabulary to match the IELTS standard and provide challenging but fair distractors",
+      "when": "2025-01-27T16:15:00.000Z"
+    },
+    {
+      "title": "Story Exercise redesign",
+      "detail": "Paper-style reading card with serif typography and larger text; compact Tools dock with gear toggle; light/dark theme toggle works correctly.",
+      "when": "2025-10-06T18:58:25.249Z"
+    },
+    {
+      "title": "Word picker and SRS-aware improvements",
+      "detail": "Full-screen picker modal with shorter instructions and tighter chips; Auto-pick 5 aligns on same row and wraps; Added Recommended/Due/Weak/All filters and Auto-pick prioritizes due/weak/recent.",
+      "when": "2025-10-06T18:58:25.286Z"
+    },
+    {
+      "title": "Placement Test flow",
+      "detail": "30-question adaptive flow (A1→B2 every 5), early stop after 3 mistakes, result page ties into Learn; diversified question bank (definition/synonym/antonym) with better distractors and optional context; results saved to analytics and recommended level set automatically.",
+      "when": "2025-10-06T18:58:25.315Z"
+    },
+    {
+      "title": "Analytics depth and sync",
+      "detail": "Added SRS health snapshot, weak words, topic breakdown, time-of-day accuracy, recommendations; analytics tied to Supabase for cross-device sync.",
+      "when": "2025-10-06T18:58:25.346Z"
+    },
+    {
+      "title": "UI polish",
+      "detail": "Story blanks match body size; Tools dock spacing adjusted; panel margins tuned to avoid header overlap.",
+      "when": "2025-10-06T18:58:25.377Z"
+    },
+    {
+      "title": "Decreased word introduction card font sizes by 10%",
+      "detail": "Reduced all font sizes in word-intro.tsx by 10% for better readability: wordText (36→32), phoneticText (18→16), sectionTitle (16→14), definitionText (18→16), exampleText (16→14), synonymText (14→13), saveButtonText (16→14), title (24→22), subtitle (16→14), ctaTitle (24→22), ctaText (16→14), loadingText (16→14). Also adjusted line heights proportionally for better text flow.",
+      "when": "2025-10-06T19:25:00.000Z"
+    },
+    {
+      "title": "Fixed IELTS MCQ distractors for consistent word counts",
+      "detail": "Updated all 20 IELTS topic distractors in mcq.tsx to have consistent 6-8 word counts while maintaining topic relevance. Previously distractors had varying lengths (2-5 words) making correct answers too easy to identify. Now all distractors are properly balanced: Academic Life, Environment & Climate, Technology & Innovation, Health & Medicine, Business & Economics, Government & Politics, Media & Communication, Social Issues, Arts & Culture, Science & Research, Travel & Tourism, Food & Agriculture, Urban Development, Education System, Crime & Law, Psychology & Behavior, Global Issues, Sports & Fitness, Finance & Banking, Employment & Career. Each topic maintains 3 categories: opposite (contrary meanings), similar (related concepts), and unrelated (different topics) - all with 6-8 words for fair difficulty.",
+      "when": "2025-10-06T19:45:00.000Z"
+    },
+    {
+      "title": "Fixed IELTS distractors to be grammatically complete sentences",
+      "detail": "Updated all IELTS distractors in mcq.tsx to be grammatically complete sentences that make sense. Previously some distractors were incomplete phrases like 'A formal talk given to teach people about' which didn't make grammatical sense. Now all distractors are complete, coherent sentences with proper articles (a/an/the) and complete thoughts. Each distractor is unique and non-repetitive while remaining topic-related but clearly incorrect. Examples: 'An informal chat without any structure or purpose', 'The contamination of air by harmful substances', 'A sports competition between rival teams'. This ensures students can't guess based on incomplete grammar and all options are equally plausible grammatically.",
+      "when": "2025-10-06T20:00:00.000Z"
+    },
+    {
+      "title": "Fixed IELTS distractors being cut off in UI buttons",
+      "detail": "Shortened all IELTS distractors in mcq.tsx to prevent text truncation in UI buttons. Previously distractors were too long (6-8 words) causing sentences to be cut off like 'A piece of work given to someone as' which appeared incomplete. Now all distractors are concise (3-5 words) while remaining grammatically complete and topic-related. Examples: 'An informal chat without structure', 'The contamination of air by substances', 'A sports competition between teams'. This ensures all text fits properly in button containers without truncation while maintaining educational value and topic relevance.",
+      "when": "2025-10-06T20:15:00.000Z"
+    },
+    {
+      "title": "Created Office Communication vocabulary level",
+      "detail": "Added comprehensive Office Communication level with 20 sets (100 words) for workplace vocabulary at B2-C1 level. Topics include: Meetings & Discussions, Email & Correspondence, Project Management, Reports & Documentation, Presentations & Public Speaking, Team Collaboration, Time Management, Client Relations, Performance & Feedback, Office Technology, Business Strategy, Workplace Policies, Professional Development, Financial Terms, Human Resources, Marketing & Sales, Customer Service, Quality & Standards, Remote Work, Leadership & Management. Each word includes definition, example sentence, phonetic pronunciation, and 3 synonyms. Added icon mapping to SetCard.tsx for all 20 office topics and added topic-specific distractors to mcq.tsx ensuring all distractors are unique, grammatically correct, and have similar word counts to correct answers.",
+      "when": "2025-10-06T20:30:00.000Z"
+    },
+    {
+      "title": "Fixed Office Communication MCQ distractors to 7-10 words",
+      "detail": "Updated all Office Communication distractors in mcq.tsx to have consistent 7-10 word lengths matching correct answer lengths. Previously distractors were 3-5 words which didn't match the definition lengths. Now all distractors are complete sentences with 7-10 words ensuring they appear similar in length to correct answers in MCQ and Usage exercises. Examples: 'Random informal chat without any structure or purpose' (8 words), 'The person who receives a message or email' (8 words), 'Medical treatment provided for patients at the hospital' (8 words). This prevents students from guessing based on length differences and maintains professional business English quality.",
+      "when": "2025-10-06T20:45:00.000Z"
+    },
+    {
+      "title": "Fixed Office Communication correct answer definitions to 7-10 words",
+      "detail": "Updated Office Communication word definitions in levels.ts that were too short (under 6 words) to ensure consistent 7-10 word lengths for all correct answers. Fixed definitions: 1) 'terminate' changed from 'To end someone's employment' (4 words) to 'To formally end someone employment at the company' (8 words), 2) 'benefits' changed from 'Additional advantages provided to employees' (5 words) to 'Additional advantages and perks provided to company employees' (8 words), 3) 'compliance' changed from 'Following rules, regulations, or standards' (5 words) to 'The act of following rules regulations or standards' (8 words), and 'Following established rules and regulations' (5 words) to 'The act of following established rules and regulations' (8 words). All 100 Office Communication definitions now have 7-10 words matching distractor lengths.",
+      "when": "2025-10-06T21:00:00.000Z"
+    },
+    {
+      "title": "Rewrote all 100 Office Communication definitions to prevent UI truncation",
+      "detail": "Completely rewrote all Office Communication word definitions to be front-loaded, ensuring key information appears first so definitions make sense even if truncated by UI. Changed from sentence structures like 'A list of items to be discussed in a meeting' (which shows as 'A list of items to be discussed in' when cut off) to concise structures like 'List of meeting topics to discuss' (5 words, no dangling prepositions). Examples: 'agenda' changed from 9-word sentence to 5-word front-loaded phrase, 'recipient' from 8 words to 6 words, 'milestone' from 8 words to 5 words. All 100 definitions now use noun-first or verb-first structures without trailing articles, prepositions, or conjunctions that would appear incomplete when truncated. This ensures students always see meaningful information regardless of button width constraints.",
+      "when": "2025-10-06T21:15:00.000Z"
+    },
+    {
+      "title": "Fixed Usage exercise to eliminate repetitive and unnatural sentences",
+      "detail": "Completely rewrote sentence-usage.tsx to remove artificial filler text and repetitive phrases that were added to ensure uniqueness. Previous implementation added prefixes like 'In many cases, in many cases, ' resulting in unnatural text. New implementation: 1) Uses actual example sentences from levels.ts directly without modification, 2) Blanks out the target word intelligently by finding it in the sentence, 3) Gets 3 distractors naturally from other words' examples in the same topic set (ensuring topic relevance), 4) Shuffles other words for variety, 5) Only uses generic fallbacks if absolutely necessary. All sentences now sound natural, fluent, and human-like without repetition. Distractors are close in grammatical structure and length to correct answers but semantically wrong, as they come from the same topic set.",
+      "when": "2025-10-06T21:30:00.000Z"
+    },
+    {
+      "title": "Began comprehensive MCQ distractor quality improvement",
+      "detail": "Started rewriting all MCQ distractors in mcq.tsx to ensure natural, complete definitions with consistent 5-7 word lengths. Previous distractors were poorly written fragments like 'A teacher at school', 'Food you eat', 'Cars you drive' which were awkward and obvious. New approach: each distractor must be a complete, natural definition that sounds like a real dictionary entry. Rewrote 13 beginner topics (Daily Routines, Family, Education, Food, Free Time, Technology, Shopping, Health, Weather, Emotions, Transportation, Home, Culture) with high-quality distractors. Examples: Changed 'A teacher at school' to 'Professional who instructs students daily' (5 words), 'Food you eat' to 'Meals consumed for nutrition energy' (5 words). Remaining work: Need to rewrite 20 IELTS topics and 20 Office Communication topics (total ~40 topics, ~480 distractors) to maintain same quality standard. All distractors must have similar word counts to correct answers to prevent visual guessing.",
+      "when": "2025-10-06T22:00:00.000Z"
+    },
+    {
+      "title": "Fixed critical MCQ duplicate answer bug",
+      "detail": "Fixed bug in mcq.tsx where MCQ questions could show duplicate answer options (e.g., 'Written record of what was said in meeting' appearing twice). Previous implementation called generateDistractor() three times without checking for uniqueness, allowing the random selection to pick the same distractor multiple times. New implementation: 1) Uses a Set to track all used options including the correct answer, 2) Generates distractors in a loop with uniqueness check, 3) Only adds distractor if not already used, 4) Has maxAttempts limit to prevent infinite loops, 5) Falls back to generic unique distractors if needed. This ensures all 4 MCQ options are always unique and distinct from each other.",
+      "when": "2025-10-06T22:30:00.000Z"
+    },
+    {
+      "title": "Fixed Office Communication definition word counts to match MCQ distractors",
+      "detail": "Expanded Office Communication word definitions in levels.ts from 4-6 words to 7-8 words to match MCQ distractor lengths and prevent visual guessing. User reported that correct answers like 'List of meeting topics to discuss' (6 words) were noticeably shorter than distractors with 8-10 words, making them easy to identify visually. Fixed 30 words across Sets 1-6 (Meetings, Email, Project Management, Reports, Presentations, Team Collaboration). Examples: 'List of meeting topics to discuss' → 'Detailed schedule listing all meeting topics discussed' (7 words), 'Person who receives message or email' → 'Person who receives a message or email' (8 words). Remaining: Sets 7-20 (70 words) still need expansion to 7-8 words. All definitions must match distractor word counts (7-8 words) to ensure fair MCQ difficulty.",
+      "when": "2025-10-06T22:35:00.000Z"
+    },
+    {
+      "title": "Completed all 70 remaining Office Communication definitions to 7-8 words",
+      "detail": "Fixed all remaining Office Communication word definitions in Sets 7-20 (70 words) to have consistent 7-8 word lengths matching MCQ distractor lengths. Previously these definitions were only 5 words making correct answers too easy to identify visually. Updated all 14 sets: Time Management (prioritize, schedule, postpone, allocate, streamline), Client Relations (negotiate, proposal, quotation, rapport, retention), Performance & Feedback (evaluate, constructive, appraisal, benchmark, excel), Office Technology (platform, software, interface, integrate, troubleshoot), Business Strategy (objective, initiative, forecast, competitive, leverage), Workplace Policies (protocol, compliance, confidential, authorization, procedure), Professional Development (mentor, seminar, certification, upskill, networking), Financial Terms (invoice, expense, reimbursement, overhead, reconcile), Human Resources (recruit, onboard, terminate, benefits, grievance), Marketing & Sales (campaign, prospect, conversion, outreach, branding), Customer Service (inquiry, complaint, resolution, escalate, courtesy), Quality & Standards (compliance, audit, defect, specification, consistency), Remote Work (virtual, bandwidth, asynchronous, connectivity, timezone), Leadership & Management (accountability, empower, transparent, vision, inspire). All 100 Office Communication definitions now have 7-8 words ensuring fair MCQ difficulty without visual length cues.",
+      "when": "2025-10-06T23:00:00.000Z"
     }
   ],
   "goals": [],

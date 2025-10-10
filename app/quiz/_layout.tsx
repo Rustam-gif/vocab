@@ -5,7 +5,9 @@ export default function QuizLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        animation: 'slide_from_right',
+        animation: 'simple_push',
+        // Ensure replace() uses a back/pop animation so it feels like navigating back
+        animationTypeForReplace: 'pop',
       }}
     />
   );

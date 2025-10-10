@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,65 +7,220 @@ import {
   ScrollView,
   Alert,
   Image,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { ArrowLeft, User, Mail, Star, Calendar, Award, LogOut } from 'lucide-react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import {
+  ArrowLeft,
+  User as UserIcon,
+  Mail,
+  Star,
+  Calendar,
+  Award,
+  LogOut,
+  Check,
+} from 'lucide-react-native';
+import { supabase } from '../lib/supabase';
+import { analyticsService } from '../services/AnalyticsService';
 import { useAppStore } from '../lib/store';
+
+// Avatar images
+const AVATAR_OPTIONS = [
+  { id: 1, source: require('../assets/prof-pictures/cartoon 1.png') },
+  { id: 2, source: require('../assets/prof-pictures/cartoon 2.png') },
+  { id: 3, source: require('../assets/prof-pictures/cartoon 3.png') },
+  { id: 4, source: require('../assets/prof-pictures/cartoon 4.png') },
+  { id: 5, source: require('../assets/prof-pictures/cartoon 5.png') },
+  { id: 6, source: require('../assets/prof-pictures/cartoon 6.png') },
+];
+
+const DEFAULT_AVATAR = 'https://ui-avatars.com/api/?name=Vocab+Learner';
+
+const mapSupabaseUser = (user: any, progress?: any) => {
+  const displayName = user?.user_metadata?.full_name ?? user?.email ?? 'Vocabulary Learner';
+  
+  // Get avatar from metadata or use default
+  let avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}`;
+  const avatarId = user?.user_metadata?.avatar_id;
+  if (avatarId && avatarId >= 1 && avatarId <= 6) {
+    // User selected a custom avatar - we'll use the ID to load it locally
+    avatar = `avatar_${avatarId}`;
+  } else if (user?.user_metadata?.avatar_url) {
+    avatar = user.user_metadata.avatar_url;
+  }
+
+  return {
+    id: user.id,
+    name: displayName,
+    email: user.email ?? undefined,
+    avatar,
+    avatarId, // Store avatar ID for local lookup
+    xp: progress?.xp ?? user?.user_metadata?.progress?.xp ?? 0,
+    streak: progress?.streak ?? user?.user_metadata?.progress?.streak ?? 0,
+    exercisesCompleted: progress?.exercisesCompleted ?? user?.user_metadata?.progress?.exercisesCompleted ?? 0,
+    createdAt: user.created_at ? new Date(user.created_at) : new Date(),
+  } as const;
+};
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, setUser } = useAppStore();
+  const params = useLocalSearchParams();
+  const { user, setUser, userProgress, loadProgress } = useAppStore();
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [showEmailAuth, setShowEmailAuth] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [isSignUp, setIsSignUp] = useState(true);
+  const [selectedAvatar, setSelectedAvatar] = useState<number>(1);
 
-  const handleGoogleSignIn = async () => {
+  useEffect(() => {
+    // Load progress on mount
+    loadProgress();
+  }, [loadProgress]);
+
+  useEffect(() => {
+    // Handle auth callback success/error messages
+    if (params.success) {
+      Alert.alert('Success', 'Successfully signed in!');
+    } else if (params.error) {
+      const errorMessages = {
+        auth_failed: 'Authentication failed. Please try again.',
+        session_failed: 'Failed to create session. Please try again.',
+        hash_failed: 'Failed to process authentication. Please try again.',
+        callback_failed: 'Authentication callback failed. Please try again.',
+      };
+      Alert.alert('Sign In Error', errorMessages[params.error as string] || 'An unknown error occurred.');
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user) {
+        setUser(mapSupabaseUser(data.session.user, userProgress));
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setUser(mapSupabaseUser(session.user, userProgress));
+        // Merge local analytics into account analytics on sign-in
+        analyticsService.initialize().catch(() => {});
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+      }
+      setIsSigningIn(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [setUser, params, userProgress]);
+
+  const handleEmailAuth = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter both email and password');
+      return;
+    }
+
+    if (isSignUp) {
+      if (!fullName) {
+        Alert.alert('Error', 'Please enter your full name');
+        return;
+      }
+      if (password !== confirmPassword) {
+        Alert.alert('Error', 'Passwords do not match');
+        return;
+      }
+      if (password.length < 6) {
+        Alert.alert('Error', 'Password must be at least 6 characters');
+        return;
+      }
+    }
+
     setIsSigningIn(true);
     try {
-      // Mock Google sign-in - in production, implement Firebase Auth
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const mockUser = {
-        id: '2',
-        name: 'John Doe',
-        email: 'john.doe@gmail.com',
-        avatar: 'https://via.placeholder.com/100',
-        xp: 2500,
-        streak: 15,
-        exercisesCompleted: 78,
-        createdAt: new Date(),
-      };
-      
-      setUser(mockUser);
-      Alert.alert('Success', 'Signed in with Google!');
+      if (isSignUp) {
+        // Get the selected avatar source
+        const selectedAvatarOption = AVATAR_OPTIONS.find(a => a.id === selectedAvatar);
+        const avatarUrl = selectedAvatarOption 
+          ? `avatar_${selectedAvatar}` // Store avatar ID reference
+          : undefined;
+
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+              avatar_id: selectedAvatar, // Store the avatar ID
+              avatar_url: avatarUrl,
+            },
+          },
+        });
+
+        if (error) {
+          Alert.alert('Sign Up Error', error.message);
+        } else if (data.user) {
+          Alert.alert('Success', 'Account created! Please check your email to verify your account.');
+          setEmail('');
+          setPassword('');
+          setConfirmPassword('');
+          setFullName('');
+          setSelectedAvatar(1);
+          setShowEmailAuth(false);
+        }
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          Alert.alert('Sign In Error', error.message);
+        } else if (data.user) {
+          await loadProgress();
+          setUser(mapSupabaseUser(data.user, userProgress));
+          setShowEmailAuth(false);
+        }
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to sign in with Google');
+      Alert.alert('Error', error instanceof Error ? error.message : 'Unknown error');
     } finally {
       setIsSigningIn(false);
     }
   };
 
-  const handleAppleSignIn = async () => {
-    Alert.alert('Coming Soon', 'Apple Sign-In will be available in a future update');
-  };
-
   const handleSignOut = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: () => {
-            setUser(null);
-          },
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          supabase.auth
+            .signOut()
+            .then(({ error }) => {
+              if (error) {
+                console.error('Sign out error', error);
+                Alert.alert('Error', 'Failed to sign out. Please try again.');
+                return;
+              }
+              setUser(null);
+            })
+            .catch(error => {
+              console.error('Sign out error', error);
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            });
         },
-      ]
-    );
+      },
+    ]);
   };
 
-  const formatDate = (date: Date) => {
+  const formatDate = (date?: Date) => {
+    if (!date) return 'Unknown';
     return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
@@ -73,15 +228,17 @@ export default function ProfileScreen() {
     });
   };
 
-  const getLevel = (xp: number) => {
-    return Math.floor(xp / 1000) + 1;
+  const getLevel = (xp?: number) => {
+    const safeXp = xp ?? 0;
+    return Math.floor(safeXp / 1000) + 1;
   };
 
-  const getXPProgress = (xp: number) => {
-    const currentLevel = getLevel(xp);
+  const getXPProgress = (xp?: number) => {
+    const safeXp = xp ?? 0;
+    const currentLevel = getLevel(safeXp);
     const currentLevelXP = (currentLevel - 1) * 1000;
     const nextLevelXP = currentLevel * 1000;
-    const progress = ((xp - currentLevelXP) / (nextLevelXP - currentLevelXP)) * 100;
+    const progress = ((safeXp - currentLevelXP) / (nextLevelXP - currentLevelXP)) * 100;
     return Math.min(100, Math.max(0, progress));
   };
 
@@ -89,10 +246,7 @@ export default function ProfileScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <ArrowLeft size={24} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.title}>Profile</Text>
@@ -100,55 +254,176 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.signInContainer}>
-          <View style={styles.signInContent}>
-            <User size={64} color="#a0a0a0" />
+          <ScrollView contentContainerStyle={styles.signInContent}>
+            <UserIcon size={64} color="#a0a0a0" />
             <Text style={styles.signInTitle}>Welcome to Engniter</Text>
             <Text style={styles.signInSubtitle}>
-              Sign in to sync your progress across devices
+              {showEmailAuth ? (isSignUp ? 'Create an account' : 'Sign in to your account') : 'Sign in to sync your progress across devices'}
             </Text>
 
-            <View style={styles.signInButtons}>
-              <TouchableOpacity
-                style={[styles.signInButton, styles.googleButton]}
-                onPress={handleGoogleSignIn}
-                disabled={isSigningIn}
-              >
-                <Text style={styles.signInButtonText}>
-                  {isSigningIn ? 'Signing in...' : 'Sign in with Google'}
+            {showEmailAuth ? (
+              <View style={styles.emailAuthForm}>
+                {isSignUp && (
+                  <>
+                    {/* Avatar Selection */}
+                    <View style={styles.avatarSection}>
+                      <Text style={styles.avatarSectionTitle}>Choose Your Avatar</Text>
+                      <View style={styles.avatarGrid}>
+                        {AVATAR_OPTIONS.map((avatarOption) => (
+                          <TouchableOpacity
+                            key={avatarOption.id}
+                            style={[
+                              styles.avatarOption,
+                              selectedAvatar === avatarOption.id && styles.avatarOptionSelected
+                            ]}
+                            onPress={() => setSelectedAvatar(avatarOption.id)}
+                          >
+                            <Image
+                              source={avatarOption.source}
+                              style={styles.avatarOptionImage}
+                            />
+                            {selectedAvatar === avatarOption.id && (
+                              <View style={styles.avatarCheckmark}>
+                                <Check size={16} color="#fff" />
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+
+                    <View style={styles.inputContainer}>
+                      <UserIcon size={20} color="#a0a0a0" style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Full Name"
+                        placeholderTextColor="#666"
+                        value={fullName}
+                        onChangeText={setFullName}
+                        autoCapitalize="words"
+                        autoCorrect={false}
+                      />
+                    </View>
+                  </>
+                )}
+
+                <View style={styles.inputContainer}>
+                  <Mail size={20} color="#a0a0a0" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Email"
+                    placeholderTextColor="#666"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputIcon}>🔒</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Password"
+                    placeholderTextColor="#666"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                {isSignUp && (
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputIcon}>🔒</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Confirm Password"
+                      placeholderTextColor="#666"
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      secureTextEntry
+                      autoCapitalize="none"
+                    />
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={styles.signInButton}
+                  onPress={handleEmailAuth}
+                  disabled={isSigningIn}
+                >
+                  <Text style={styles.signInButtonText}>
+                    {isSigningIn ? (isSignUp ? 'Creating Account...' : 'Signing In...') : (isSignUp ? 'Create Account' : 'Sign In')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => {
+                  setIsSignUp(!isSignUp);
+                  setConfirmPassword('');
+                  setFullName('');
+                  setSelectedAvatar(1);
+                }}>
+                  <Text style={styles.switchAuthText}>
+                    {isSignUp ? 'Already have an account? Sign In' : 'Don\'t have an account? Sign Up'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => {
+                  setShowEmailAuth(false);
+                  setEmail('');
+                  setPassword('');
+                  setConfirmPassword('');
+                  setFullName('');
+                  setSelectedAvatar(1);
+                }}>
+                  <Text style={styles.backText}>← Back to other options</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.signInButtons}>
+                <TouchableOpacity
+                  style={styles.signInButton}
+                  onPress={() => setShowEmailAuth(true)}
+                >
+                  <Mail size={20} color="#fff" />
+                  <Text style={styles.signInButtonText}>Sign in with Email</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.guestText}>
+                  You can continue as a guest, but your progress won't be saved
                 </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.signInButton, styles.appleButton]}
-                onPress={handleAppleSignIn}
-              >
-                <Text style={styles.signInButtonText}>Sign in with Apple</Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.guestText}>
-              You can continue as a guest, but your progress won't be saved
-            </Text>
-          </View>
+              </View>
+            )}
+          </ScrollView>
         </View>
       </SafeAreaView>
     );
   }
 
+  const userAvatar = user.avatar ?? DEFAULT_AVATAR;
+  const safeXp = userProgress?.xp ?? user.xp ?? 0;
+  const safeStreak = userProgress?.streak ?? user.streak ?? 0;
+  const safeExercises = userProgress?.exercisesCompleted ?? user.exercisesCompleted ?? 0;
+
+  // Get avatar source - either local image or remote URL
+  const getAvatarSource = () => {
+    if (user.avatarId && user.avatarId >= 1 && user.avatarId <= 6) {
+      const avatarOption = AVATAR_OPTIONS.find(a => a.id === user.avatarId);
+      return avatarOption ? avatarOption.source : { uri: DEFAULT_AVATAR };
+    }
+    return { uri: userAvatar };
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.title}>Profile</Text>
-        <TouchableOpacity
-          style={styles.signOutButton}
-          onPress={handleSignOut}
-        >
+        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
           <LogOut size={20} color="#a0a0a0" />
         </TouchableOpacity>
       </View>
@@ -156,32 +431,21 @@ export default function ProfileScreen() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.profileCard}>
           <View style={styles.avatarContainer}>
-            <Image
-              source={{ uri: user.avatar }}
-              style={styles.avatar}
-            />
+            <Image source={getAvatarSource()} style={styles.avatar} />
             <View style={styles.levelBadge}>
-              <Text style={styles.levelText}>Lv.{getLevel(user.xp)}</Text>
+              <Text style={styles.levelText}>Lv.{getLevel(safeXp)}</Text>
             </View>
           </View>
 
           <Text style={styles.userName}>{user.name}</Text>
-          {user.email && (
-            <Text style={styles.userEmail}>{user.email}</Text>
-          )}
 
           <View style={styles.xpContainer}>
             <Text style={styles.xpLabel}>XP Progress</Text>
             <View style={styles.xpBar}>
-              <View
-                style={[
-                  styles.xpProgress,
-                  { width: `${getXPProgress(user.xp)}%` },
-                ]}
-              />
+              <View style={[styles.xpProgress, { width: `${getXPProgress(safeXp)}%` }]} />
             </View>
             <Text style={styles.xpText}>
-              {user.xp} XP • Level {getLevel(user.xp)}
+              {safeXp} XP • Level {getLevel(safeXp)}
             </Text>
           </View>
         </View>
@@ -191,93 +455,37 @@ export default function ProfileScreen() {
             <View style={styles.statIcon}>
               <Star size={24} color="#F2AB27" />
             </View>
-            <View style={styles.statContent}>
-              <Text style={styles.statValue}>{user.xp}</Text>
-              <Text style={styles.statLabel}>Total XP</Text>
-            </View>
+            <Text style={styles.statValue}>{safeXp}</Text>
+            <Text style={styles.statLabel}>Total XP</Text>
           </View>
 
           <View style={styles.statCard}>
             <View style={styles.statIcon}>
-              <Calendar size={24} color="#4CAF50" />
+              <Award size={24} color="#4F8EF7" />
             </View>
-            <View style={styles.statContent}>
-              <Text style={styles.statValue}>{user.streak}</Text>
-              <Text style={styles.statLabel}>Day Streak</Text>
-            </View>
+            <Text style={styles.statValue}>{safeExercises}</Text>
+            <Text style={styles.statLabel}>Exercises</Text>
           </View>
 
           <View style={styles.statCard}>
             <View style={styles.statIcon}>
-              <Award size={24} color="#e28743" />
+              <Calendar size={24} color="#6CC24A" />
             </View>
-            <View style={styles.statContent}>
-              <Text style={styles.statValue}>{user.exercisesCompleted}</Text>
-              <Text style={styles.statLabel}>Exercises</Text>
-            </View>
+            <Text style={styles.statValue}>{safeStreak}</Text>
+            <Text style={styles.statLabel}>Day Streak</Text>
           </View>
         </View>
 
-        <View style={styles.infoContainer}>
-          <View style={styles.infoCard}>
-            <Text style={styles.infoTitle}>Account Information</Text>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Member since</Text>
-              <Text style={styles.infoValue}>
-                {formatDate(user.createdAt)}
-              </Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Current Level</Text>
-              <Text style={styles.infoValue}>Level {getLevel(user.xp)}</Text>
-            </View>
-            <View style={styles.infoItem}>
-              <Text style={styles.infoLabel}>Next Level</Text>
-              <Text style={styles.infoValue}>
-                {getLevel(user.xp) * 1000 - user.xp} XP needed
-              </Text>
-            </View>
+        <View style={styles.infoCard}>
+          <View style={styles.infoRow}>
+            <Mail size={18} color="#8a8a8a" />
+            <Text style={styles.infoLabel}>Email</Text>
+            <Text style={styles.infoValue}>{user.email ?? 'Not provided'}</Text>
           </View>
-        </View>
-
-        <View style={styles.achievementsContainer}>
-          <Text style={styles.achievementsTitle}>Achievements</Text>
-          <View style={styles.achievementsList}>
-            <View style={styles.achievementItem}>
-              <View style={[styles.achievementIcon, { backgroundColor: '#4CAF50' }]}>
-                <Star size={20} color="#fff" />
-              </View>
-              <View style={styles.achievementContent}>
-                <Text style={styles.achievementTitle}>First Steps</Text>
-                <Text style={styles.achievementDescription}>
-                  Complete your first exercise
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.achievementItem}>
-              <View style={[styles.achievementIcon, { backgroundColor: '#F2AB27' }]}>
-                <Calendar size={20} color="#fff" />
-              </View>
-              <View style={styles.achievementContent}>
-                <Text style={styles.achievementTitle}>Streak Master</Text>
-                <Text style={styles.achievementDescription}>
-                  Maintain a 7-day streak
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.achievementItem}>
-              <View style={[styles.achievementIcon, { backgroundColor: '#e28743' }]}>
-                <Award size={20} color="#fff" />
-              </View>
-              <View style={styles.achievementContent}>
-                <Text style={styles.achievementTitle}>Vocabulary Builder</Text>
-                <Text style={styles.achievementDescription}>
-                  Complete 50 exercises
-                </Text>
-              </View>
-            </View>
+          <View style={styles.infoRow}>
+            <Calendar size={18} color="#8a8a8a" />
+            <Text style={styles.infoLabel}>Joined</Text>
+            <Text style={styles.infoValue}>{formatDate(user.createdAt)}</Text>
           </View>
         </View>
       </ScrollView>
@@ -286,253 +494,218 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#252525',
-  },
+  container: { flex: 1, backgroundColor: '#121315' },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2c2f2f',
+    paddingTop: 16,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
+  title: { color: '#fff', fontSize: 20, fontWeight: '700' },
   backButton: {
-    padding: 8,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  placeholder: {
-    width: 40,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   signOutButton: {
-    padding: 8,
-  },
-  signInContainer: {
-    flex: 1,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
     justifyContent: 'center',
-    padding: 20,
-  },
-  signInContent: {
     alignItems: 'center',
   },
-  signInTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  signInSubtitle: {
-    fontSize: 16,
-    color: '#a0a0a0',
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  signInButtons: {
-    width: '100%',
-    gap: 12,
+  placeholder: { width: 44, height: 44 },
+  content: { flex: 1, paddingHorizontal: 20 },
+  profileCard: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
     marginBottom: 24,
   },
-  signInButton: {
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  googleButton: {
-    backgroundColor: '#4285F4',
-  },
-  appleButton: {
-    backgroundColor: '#000',
-  },
-  signInButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  guestText: {
-    fontSize: 14,
-    color: '#a0a0a0',
-    textAlign: 'center',
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-  },
-  profileCard: {
-    backgroundColor: '#2c2f2f',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
   avatarContainer: {
-    position: 'relative',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    overflow: 'hidden',
     marginBottom: 16,
+    position: 'relative',
   },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
+  avatar: { width: '100%', height: '100%' },
   levelBadge: {
     position: 'absolute',
     bottom: -4,
     right: -4,
-    backgroundColor: '#e28743',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    backgroundColor: '#f59f46',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    shadowColor: '#f59f46',
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
-  levelText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 16,
-    color: '#a0a0a0',
-    marginBottom: 20,
-  },
-  xpContainer: {
-    width: '100%',
-  },
-  xpLabel: {
-    fontSize: 14,
-    color: '#a0a0a0',
-    marginBottom: 8,
-  },
+  levelText: { color: '#121315', fontWeight: '700', fontSize: 12 },
+  userName: { color: '#fff', fontSize: 22, fontWeight: '700' },
+  userEmail: { color: '#9CA3AF', marginTop: 4 },
+  xpContainer: { marginTop: 20, width: '100%' },
+  xpLabel: { color: '#9CA3AF', fontSize: 12, marginBottom: 6 },
   xpBar: {
-    height: 8,
-    backgroundColor: '#3A3A3A',
-    borderRadius: 4,
+    height: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 6,
     overflow: 'hidden',
-    marginBottom: 8,
   },
-  xpProgress: {
-    height: '100%',
-    backgroundColor: '#e28743',
-    borderRadius: 4,
-  },
-  xpText: {
-    fontSize: 12,
-    color: '#a0a0a0',
-    textAlign: 'center',
-  },
+  xpProgress: { height: '100%', backgroundColor: '#4F8EF7' },
+  xpText: { color: '#9CA3AF', marginTop: 6, fontSize: 12 },
   statsContainer: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
+    justifyContent: 'space-between',
+    marginBottom: 24,
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#2c2f2f',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 18,
     padding: 16,
-    flexDirection: 'row',
+    marginHorizontal: 6,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   statIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#3A3A3A',
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginBottom: 8,
   },
-  statContent: {
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#a0a0a0',
-    marginTop: 2,
-  },
-  infoContainer: {
-    marginBottom: 20,
-  },
+  statContent: { flex: 1 },
+  statValue: { color: '#fff', fontWeight: '700', fontSize: 18, textAlign: 'center', marginTop: 4 },
+  statLabel: { color: '#9CA3AF', fontSize: 11, marginTop: 4, textAlign: 'center' },
   infoCard: {
-    backgroundColor: '#2c2f2f',
-    borderRadius: 12,
-    padding: 20,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 40,
   },
-  infoTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 16,
-  },
-  infoItem: {
+  infoRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
+    marginBottom: 12,
   },
-  infoLabel: {
-    fontSize: 14,
-    color: '#a0a0a0',
+  infoLabel: { color: '#9CA3AF', marginLeft: 10, fontSize: 12, width: 60 },
+  infoValue: { color: '#fff', flex: 1, textAlign: 'right' },
+  signInContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'stretch',
+    paddingHorizontal: 20,
   },
-  infoValue: {
-    fontSize: 14,
+  signInContent: {
+    width: '100%',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 28,
+    paddingVertical: 40,
+    borderRadius: 20,
+  },
+  signInTitle: { color: '#fff', fontSize: 20, fontWeight: '700', marginTop: 16 },
+  signInSubtitle: { color: '#9CA3AF', textAlign: 'center', marginTop: 8 },
+  signInButtons: { width: '100%', marginTop: 20 },
+  signInButton: {
+    backgroundColor: '#e28743',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  googleButton: { backgroundColor: '#4F8EF7' },
+  appleButton: { backgroundColor: '#1C1C1E' },
+  signInButtonText: { color: '#fff', fontWeight: '600' },
+  guestText: { color: '#6B7280', textAlign: 'center', marginTop: 16, fontSize: 12 },
+  emailAuthForm: { width: '100%', marginTop: 20 },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    marginBottom: 16,
+    paddingHorizontal: 12,
+  },
+  inputIcon: { marginRight: 8 },
+  input: {
+    flex: 1,
     color: '#fff',
-    fontWeight: '600',
+    paddingVertical: 14,
+    fontSize: 16,
   },
-  achievementsContainer: {
+  switchAuthText: {
+    color: '#e28743',
+    textAlign: 'center',
+    marginTop: 16,
+    fontSize: 14,
+  },
+  backText: {
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginTop: 12,
+    fontSize: 14,
+  },
+  avatarSection: {
+    width: '100%',
     marginBottom: 20,
   },
-  achievementsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  avatarSectionTitle: {
     color: '#fff',
-    marginBottom: 16,
-  },
-  achievementsList: {
-    gap: 12,
-  },
-  achievementItem: {
-    backgroundColor: '#2c2f2f',
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  achievementIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  achievementContent: {
-    flex: 1,
-  },
-  achievementTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
-    marginBottom: 2,
+    marginBottom: 16,
+    textAlign: 'center',
   },
-  achievementDescription: {
-    fontSize: 14,
-    color: '#a0a0a0',
+  avatarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  avatarOption: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  avatarOptionSelected: {
+    borderColor: '#e28743',
+    borderWidth: 3,
+  },
+  avatarOptionImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  avatarCheckmark: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: '#e28743',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

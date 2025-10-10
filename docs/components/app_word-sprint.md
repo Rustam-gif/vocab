@@ -2,7 +2,7 @@
 File: app/word-sprint.tsx
 
 ## Props
-- finished
+- value
 
 ## Notes
 - (none)

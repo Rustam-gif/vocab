@@ -2,7 +2,7 @@
 File: app/profile.tsx
 
 ## Props
-- (none detected)
+- data
 
 ## Notes
 - (none)

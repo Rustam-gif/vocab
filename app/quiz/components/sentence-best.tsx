@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Vibration } from 'react-native';
 import { SENTENCE_BEST_ITEMS } from '../data/sentence-best';
+import AnimatedNextButton from './AnimatedNextButton';
 
 interface SentenceBestProps {
   setId: string;
@@ -137,26 +138,11 @@ export default function SentenceBestComponent({ onPhaseComplete }: SentenceBestP
       </View>
 
       <View style={styles.footer}>
-        {!revealed ? (
-          <TouchableOpacity
-            style={[styles.primaryButton, (selectedIndex === null) && styles.disabledButton]}
-            disabled={selectedIndex === null}
-            onPress={handleSubmit}
-            accessibilityRole="button"
-          >
-            <Text style={styles.primaryButtonText}>Reveal</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={handleNext}
-            accessibilityRole="button"
-          >
-            <Text style={styles.primaryButtonText}>
-              {currentIndex === SENTENCE_BEST_ITEMS.length - 1 ? 'Finish' : 'Next'}
-            </Text>
-          </TouchableOpacity>
-        )}
+        <AnimatedNextButton
+          onPress={!revealed ? handleSubmit : handleNext}
+          disabled={!revealed && selectedIndex === null}
+          label={revealed ? 'NEXT' : 'REVEAL'}
+        />
       </View>
     </View>
   );

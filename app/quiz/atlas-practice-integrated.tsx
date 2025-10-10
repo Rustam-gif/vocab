@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Animated,
   Easing,
+  Dimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
@@ -17,7 +18,10 @@ import SentenceUsageComponent from './components/sentence-usage';
 import MissingLetters from './components/missing-letters';
 import { levels } from './data/levels';
 import { analyticsService } from '../../services/AnalyticsService';
+import { SetProgressService } from '../../services/SetProgressService';
+
 const ACCENT = '#F2935C';
+const TAB_WIDTH = 88;
 
 interface Phase {
   id: string;
@@ -35,27 +39,34 @@ export default function AtlasPracticeIntegrated() {
   // Debug logging
   console.log('AtlasPracticeIntegrated - Received params:', { setId, levelId });
   
+  // Check if this is a quiz type
+  const level = useMemo(() => levels.find(l => l.id === levelId), [levelId]);
+  const set = useMemo(() => level?.sets.find(s => s.id.toString() === setId), [level, setId]);
+  const isQuiz = set?.type === 'quiz';
+  
   const [currentPhase, setCurrentPhase] = useState(0);
-  const [phases, setPhases] = useState<Phase[]>([
-    { id: 'intro', name: 'Intro', component: WordIntroComponent, completed: false },
-    { id: 'mcq', name: 'MCQ', component: MCQComponent, completed: false },
-    { id: 'synonym', name: 'Synonym', component: SynonymComponent, completed: false },
-    { id: 'usage', name: 'Usage', component: SentenceUsageComponent, completed: false },
-    { id: 'letters', name: 'Letters', component: MissingLetters, completed: false },
-  ]);
+  const [phases, setPhases] = useState<Phase[]>(
+    isQuiz
+      ? [
+          { id: 'mcq', name: 'MCQ', component: MCQComponent, completed: false },
+          { id: 'synonym', name: 'Synonym', component: SynonymComponent, completed: false },
+          { id: 'usage', name: 'Usage', component: SentenceUsageComponent, completed: false },
+          { id: 'letters', name: 'Letters', component: MissingLetters, completed: false },
+        ]
+      : [
+          { id: 'intro', name: 'Intro', component: WordIntroComponent, completed: false },
+          { id: 'mcq', name: 'MCQ', component: MCQComponent, completed: false },
+          { id: 'synonym', name: 'Synonym', component: SynonymComponent, completed: false },
+          { id: 'usage', name: 'Usage', component: SentenceUsageComponent, completed: false },
+          { id: 'letters', name: 'Letters', component: MissingLetters, completed: false },
+        ]
+  );
   const [totalScore, setTotalScore] = useState(100);
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [mlIndex, setMlIndex] = useState(0);
   const animatedIndex = useRef(new Animated.Value(0)).current;
-  const indicatorX = useRef(new Animated.Value(0)).current;
-  const indicatorWidth = useRef(new Animated.Value(0)).current;
-  const tabLayouts = useRef<Record<number, { x: number; width: number }>>({});
-  const indicatorAnimatedStyle = {
-    width: indicatorWidth,
-    transform: [{ translateX: indicatorX }],
-    opacity: indicatorWidth.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: 'clamp' }),
-  } as const;
+  const [tabsWidth, setTabsWidth] = useState(0);
 
   const handlePhaseComplete = (score: number = 0, questions: number = 0) => {
     const phase = phases[currentPhase];
@@ -90,7 +101,14 @@ export default function AtlasPracticeIntegrated() {
   };
 
   const navigateToResults = (finalCorrect: number, finalQuestions: number) => {
-    router.push({
+    // Persist completion + score for the set so Learn shows "Review" with score
+    try {
+      if (levelId && setId) {
+        const points = Math.max(0, totalScore);
+        SetProgressService.markCompleted(String(levelId), String(setId), points);
+      }
+    } catch {}
+    router.replace({
       pathname: '/quiz/atlas-results',
       params: {
         score: Math.max(0, finalCorrect).toString(),
@@ -111,34 +129,55 @@ export default function AtlasPracticeIntegrated() {
   }, [currentPhase, setId, levelId]);
 
   useEffect(() => {
-    Animated.timing(animatedIndex, {
+    Animated.spring(animatedIndex, {
       toValue: currentPhase,
-      duration: 350,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
+      tension: 40,
+      friction: 20,
+      useNativeDriver: true,
     }).start();
-    const layout = tabLayouts.current[currentPhase];
-    if (layout) {
-      Animated.timing(indicatorWidth, {
-        toValue: layout.width,
-        duration: 350,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start();
-      Animated.timing(indicatorX, {
-        toValue: layout.x,
-        duration: 350,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
-      }).start();
-    }
-  }, [currentPhase, animatedIndex, indicatorWidth, indicatorX]);
+  }, [currentPhase, animatedIndex]);
+
+  // Initialize progress/resume and mark in-progress while user is inside
+  useEffect(() => {
+    (async () => {
+      try {
+        await SetProgressService.initialize();
+        if (levelId && setId) {
+          const saved = SetProgressService.get(String(levelId), String(setId));
+          if (saved?.status === 'in_progress' && typeof saved.lastPhase === 'number') {
+            // Resume where left off
+            setCurrentPhase(Math.min(saved.lastPhase, phases.length - 1));
+          }
+          // Mark as in progress at entry
+          await SetProgressService.markInProgress(String(levelId), String(setId), currentPhase);
+        }
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist in-progress phase as the user advances (do not override completed)
+  useEffect(() => {
+    if (!levelId || !setId) return;
+    SetProgressService.markInProgress(String(levelId), String(setId), currentPhase).catch(() => {});
+  }, [currentPhase, levelId, setId]);
 
   const getCurrentPhaseComponent = () => {
     const phase = phases[currentPhase];
     if (!phase) return null;
 
     const Component = phase.component;
+    
+    // Determine word range for quiz mode
+    // For quizzes: MCQ & Synonym use words 0-4, Usage & Letters use words 5-9
+    let wordRange: { start: number; end: number } | undefined;
+    if (isQuiz) {
+      if (phase.id === 'mcq' || phase.id === 'synonym') {
+        wordRange = { start: 0, end: 5 }; // First 5 words
+      } else if (phase.id === 'usage' || phase.id === 'letters') {
+        wordRange = { start: 5, end: 10 }; // Next 5 words
+      }
+    }
     
     // Handle Word Intro component differently
     if (phase.id === 'intro') {
@@ -147,6 +186,7 @@ export default function AtlasPracticeIntegrated() {
           setId={setId || ''}
           levelId={levelId || ''}
           onComplete={() => handlePhaseComplete(0, 0)}
+          wordRange={wordRange}
         />
       );
     }
@@ -155,7 +195,13 @@ export default function AtlasPracticeIntegrated() {
     if (phase.id === 'letters') {
       const level = levels.find(l => l.id === (levelId || ''));
       const currentSet = level?.sets.find(s => s.id.toString() === String(setId));
-      const words = currentSet?.words ?? [];
+      let words = currentSet?.words ?? [];
+      
+      // Apply word range if specified
+      if (wordRange) {
+        words = words.slice(wordRange.start, wordRange.end);
+      }
+      
       if (!words.length) {
         return (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -211,6 +257,7 @@ export default function AtlasPracticeIntegrated() {
         onPhaseComplete={handlePhaseComplete}
         sharedScore={totalScore}
         onScoreShare={setTotalScore}
+        wordRange={wordRange}
       />
     );
   };
@@ -231,35 +278,55 @@ export default function AtlasPracticeIntegrated() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={async () => {
+            // Save in-progress on manual exit
+            if (levelId && setId) {
+              try { await SetProgressService.markInProgress(String(levelId), String(setId), currentPhase); } catch {}
+            }
+            router.back();
+          }}
         >
           <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.title}>
-          {phases[currentPhase]?.name || 'Practice'}
-        </Text>
-        <View style={styles.placeholder} />
-      </View>
 
-      {/* Phase Progress */}
-      <View style={styles.phaseTabs}>
-        {phases.map((phase, index) => (
-          <PhaseTab
-            key={phase.id}
-            index={index}
-            title={phase.name}
-            onPress={() => setCurrentPhase(index)}
-            onLayout={(layout) => {
-              tabLayouts.current[index] = layout;
-              if (index === currentPhase && tabLayouts.current[index]) {
-                indicatorWidth.setValue(layout.width);
-                indicatorX.setValue(layout.x);
-              }
-            }}
-            animatedIndex={animatedIndex}
-          />
-        ))}
-        <Animated.View style={[styles.tabIndicator, indicatorAnimatedStyle]} />
+        <View
+          style={styles.exerciseTabsWrapper}
+          onLayout={event => setTabsWidth(event.nativeEvent.layout.width)}
+        >
+          <Animated.View
+            style={[
+              styles.exerciseNamesContainer,
+              tabsWidth > 0 && {
+                transform: [{
+                  translateX: animatedIndex.interpolate({
+                    inputRange: phases.map((_, i) => i),
+                    outputRange: phases.map((_, i) => ((tabsWidth - TAB_WIDTH) / 2) - i * TAB_WIDTH),
+                  }),
+                }],
+              },
+            ]}
+          >
+            {phases.map((phase, index) => (
+              <TouchableOpacity
+                key={phase.id}
+                onPress={() => setCurrentPhase(index)}
+                style={styles.exerciseNameTouchable}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.exerciseName,
+                    currentPhase === index && styles.exerciseNameActive,
+                  ]}
+                >
+                  {phase.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </Animated.View>
+        </View>
+
+        <View style={styles.headerSpacer} />
       </View>
 
       {/* Current Phase Component */}
@@ -273,15 +340,35 @@ export default function AtlasPracticeIntegrated() {
 type PhaseTabProps = {
   index: number;
   title: string;
+  currentIndex: number;
   onPress: () => void;
-  onLayout: (layout: { x: number; width: number }) => void;
   animatedIndex: Animated.Value;
 };
 
-function PhaseTab({ index, title, onPress, onLayout, animatedIndex }: PhaseTabProps) {
+function PhaseTab({ index, title, currentIndex, onPress, animatedIndex }: PhaseTabProps) {
+  const isActive = currentIndex === index;
+  
+  const scale = animatedIndex.interpolate({
+    inputRange: [index - 1, index, index + 1],
+    outputRange: [0.92, 1, 0.92],
+    extrapolate: 'clamp',
+  });
+  
   const color = animatedIndex.interpolate({
     inputRange: [index - 1, index, index + 1],
-    outputRange: ['#9CA3AF', ACCENT, '#9CA3AF'],
+    outputRange: ['#6B7280', '#F2935C', '#6B7280'],
+    extrapolate: 'clamp',
+  });
+  
+  const opacity = animatedIndex.interpolate({
+    inputRange: [index - 1.5, index - 1, index, index + 1, index + 1.5],
+    outputRange: [0.4, 0.6, 1, 0.6, 0.4],
+    extrapolate: 'clamp',
+  });
+  
+  const bubbleOpacity = animatedIndex.interpolate({
+    inputRange: [index - 0.5, index, index + 0.5],
+    outputRange: [0, 1, 0],
     extrapolate: 'clamp',
   });
 
@@ -289,13 +376,24 @@ function PhaseTab({ index, title, onPress, onLayout, animatedIndex }: PhaseTabPr
     <TouchableOpacity
       style={styles.tabItem}
       onPress={onPress}
-      activeOpacity={0.85}
-      onLayout={(event) => {
-        const { x, width } = event.nativeEvent.layout;
-        onLayout({ x, width });
-      }}
+      activeOpacity={0.7}
     >
-      <Animated.Text style={[styles.tabLabel, { color }]}>{title}</Animated.Text>
+      <Animated.View style={{ opacity }}>
+        <Animated.View style={[
+          styles.tabDot,
+          { 
+            transform: [{ scale }],
+            backgroundColor: color,
+          }
+        ]}>
+          <Animated.View style={[
+            styles.tabDotGlow,
+            {
+              opacity: bubbleOpacity,
+            }
+          ]} />
+        </Animated.View>
+      </Animated.View>
     </TouchableOpacity>
   );
 }
@@ -308,50 +406,42 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
   },
   backButton: {
     padding: 8,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
+  exerciseTabsWrapper: {
     flex: 1,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  exerciseNamesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 0,
+  },
+  exerciseNameTouchable: {
+    width: TAB_WIDTH,
+    paddingVertical: 6,
+    alignItems: 'center',
+  },
+  exerciseName: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6B7280',
+    letterSpacing: 0.2,
     textAlign: 'center',
   },
-  placeholder: {
-    width: 40,
+  exerciseNameActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
-  phaseTabs: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  tabItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  tabLabel: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    fontWeight: '500',
-  },
-  tabLabelActive: {
-    fontSize: 13,
-    color: '#F2935C',
-    fontWeight: '600',
-  },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: ACCENT,
+  headerSpacer: {
+    width: 32,
   },
   phaseContainer: {
     flex: 1,

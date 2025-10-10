@@ -1,12 +1,14 @@
 {
   "expo": {
+    "owner": "rustikkarim",
     "name": "vocab-working",
     "slug": "vocab-working",
+    "scheme": "vocabworking",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -30,6 +32,13 @@
     },
     "extra": {
       "API_BASE_URL": "http://localhost:4000"
+    },
+    "plugins": [
+      "expo-web-browser",
+      "expo-asset"
+    ],
+    "experiments": {
+      "typedRoutes": true
     }
   }
 }

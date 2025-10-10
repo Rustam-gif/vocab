@@ -4,8 +4,8 @@ File: app/quiz/atlas-practice-integrated.tsx
 ## Props
 - index
 - title
+- currentIndex
 - onPress
-- onLayout
 - animatedIndex
 
 ## Notes

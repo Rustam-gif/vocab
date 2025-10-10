@@ -7,6 +7,7 @@ File: app/quiz/components/mcq.tsx
 - onPhaseComplete
 - sharedScore
 - onScoreShare
+- wordRange
 
 ## Notes
 - (none)
