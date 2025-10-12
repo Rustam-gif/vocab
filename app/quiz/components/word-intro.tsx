@@ -8,7 +8,11 @@ import {
   Animated,
 } from 'react-native';
 import { ArrowLeft, ArrowRight, Volume2, Bookmark, Check, Sparkles } from 'lucide-react-native';
-import * as Speech from 'expo-speech';
+let Speech: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  Speech = require('expo-speech');
+} catch {}
 import { useRouter } from 'expo-router';
 import { useAppStore } from '../../../lib/store';
 import { levels } from '../data/levels';
@@ -223,14 +227,14 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
                       try {
                         // Toggle if the same word is already speaking
                         if (speakingWord === w.word) {
-                          Speech.stop();
+                          Speech?.stop?.();
                           setSpeakingWord(null);
                           return;
                         }
                         // Stop any current speech, then speak this word in US English
-                        Speech.stop();
+                        Speech?.stop?.();
                         setSpeakingWord(w.word);
-                        Speech.speak(w.word, {
+                        Speech?.speak?.(w.word, {
                           language: 'en-US',
                           voice: voiceIdRef.current,
                           rate: 0.98,

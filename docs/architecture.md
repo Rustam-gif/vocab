@@ -28,6 +28,7 @@ Directories and files discovered under configured roots:
   - word-intro.tsx
 - app/quiz/components
   - AnimatedNextButton.tsx
+  - ErrorBoundary.tsx
   - SetCard.tsx
   - SuccessCelebration.tsx
   - WordIntro.tsx

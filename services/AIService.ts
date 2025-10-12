@@ -10,10 +10,29 @@ const API_PORT =
 const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 const OPENAI_MODEL = 'gpt-4o-mini';
 
+function sanitizeBase(base: string | null): string | null {
+  if (!base) return null;
+  try {
+    const u = new URL(base);
+    const host = u.hostname;
+    // Physical devices cannot reach localhost/127.0.0.1 of the dev machine
+    if (Constants.isDevice && (host === 'localhost' || host === '127.0.0.1')) {
+      return null; // force fallback (direct API or other configured host)
+    }
+    // Android emulator uses 10.0.2.2 to reach host's localhost
+    if (!Constants.isDevice && Platform.OS === 'android' && (host === 'localhost' || host === '127.0.0.1')) {
+      return base.replace(host, '10.0.2.2');
+    }
+    return base;
+  } catch {
+    return base;
+  }
+}
+
 function getApiBaseUrl(): string | null {
   // 1) Prefer public env var (baked at build time)
   const fromEnv = (process.env.EXPO_PUBLIC_API_BASE_URL as string | undefined) || null;
-  if (fromEnv) return fromEnv.replace(/\/$/, '');
+  if (fromEnv) return sanitizeBase(fromEnv.replace(/\/$/, ''));
 
   // 2) Try to infer a LAN host from Expo fields (works better for physical devices)
   const anyC: any = Constants as any;
@@ -46,19 +65,19 @@ function getApiBaseUrl(): string | null {
   for (const cand of candidates) {
     if (typeof cand === 'string' && cand.length) {
       const host = parseHost(cand);
-      if (host) return `http://${host}:${API_PORT}`;
+      if (host) return sanitizeBase(`http://${host}:${API_PORT}`);
     }
   }
 
   // 3) Prefer expo extra config (often localhost; best for simulators)
   const extra = (Constants?.expoConfig?.extra as Record<string, string> | undefined) || undefined;
   const fromExtra = extra?.API_BASE_URL || null;
-  if (fromExtra) return fromExtra.replace(/\/$/, '');
+  if (fromExtra) return sanitizeBase(fromExtra.replace(/\/$/, ''));
 
   // 4) Simulator-friendly fallback; avoid on real devices
   if (__DEV__ && !Constants.isDevice) {
     const simulatorHost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
-    return `http://${simulatorHost}:${API_PORT}`;
+    return sanitizeBase(`http://${simulatorHost}:${API_PORT}`);
   }
 
   return null;

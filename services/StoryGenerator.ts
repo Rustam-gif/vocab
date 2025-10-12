@@ -24,9 +24,28 @@ const API_PORT =
   ((Constants as any)?.expoConfig?.extra?.API_PORT as string | undefined) ||
   DEFAULT_PORT;
 
+function sanitizeBase(base: string | null): string | null {
+  if (!base) return null;
+  try {
+    const u = new URL(base);
+    const host = u.hostname;
+    // On physical devices, localhost is the device itself (not the dev machine)
+    if (Constants.isDevice && (host === 'localhost' || host === '127.0.0.1')) {
+      return null;
+    }
+    // Android emulator needs 10.0.2.2 to access host machine
+    if (!Constants.isDevice && Platform.OS === 'android' && (host === 'localhost' || host === '127.0.0.1')) {
+      return base.replace(host, '10.0.2.2');
+    }
+    return base;
+  } catch {
+    return base;
+  }
+}
+
 function getApiBaseUrl(): string | null {
   const fromEnv = (process.env.EXPO_PUBLIC_API_BASE_URL as string | undefined) || null;
-  if (fromEnv) return fromEnv.replace(/\/$/, '');
+  if (fromEnv) return sanitizeBase(fromEnv.replace(/\/$/, ''));
 
   const anyC: any = Constants as any;
   const candidates: Array<string | undefined> = [
@@ -56,17 +75,17 @@ function getApiBaseUrl(): string | null {
   for (const cand of candidates) {
     if (typeof cand === 'string' && cand.length) {
       const host = parseHost(cand);
-      if (host) return `http://${host}:${API_PORT}`;
+      if (host) return sanitizeBase(`http://${host}:${API_PORT}`);
     }
   }
 
   const extra = (Constants?.expoConfig?.extra as Record<string, string> | undefined) || undefined;
   const fromExtra = extra?.API_BASE_URL || null;
-  if (fromExtra) return fromExtra.replace(/\/$/, '');
+  if (fromExtra) return sanitizeBase(fromExtra.replace(/\/$/, ''));
 
   if (__DEV__ && !Constants.isDevice) {
     const simulatorHost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
-    return `http://${simulatorHost}:${API_PORT}`;
+    return sanitizeBase(`http://${simulatorHost}:${API_PORT}`);
   }
 
   return null;

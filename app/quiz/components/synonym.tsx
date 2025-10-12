@@ -23,6 +23,7 @@ interface SynonymProps {
   sharedScore: number;
   onScoreShare: (newScore: number) => void;
   wordRange?: { start: number; end: number };
+  wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
 }
 
 interface WordEntry {
@@ -267,6 +268,23 @@ const WORDS: WordEntry[] = [
 // Exact synonym overrides per level/set/word
 // Use to lock options to the content owner's choices
 const SYN_OVERRIDES: Record<string, Record<string, Record<string, { correct: string[]; incorrect: string[]; ipa?: string }>>> = {
+  // IELTS curated synonym options (exact 3+3) per set/word
+  ielts: {
+    '1': {
+      fluctuate: { correct: ['vary', 'oscillate', 'shift'], incorrect: ['steady', 'drop', 'spike'] },
+      stabilize: { correct: ['steady', 'level out', 'firm up'], incorrect: ['vary', 'spike', 'decline'] },
+      decline: { correct: ['decrease', 'drop', 'diminish'], incorrect: ['spike', 'level out', 'steady'] },
+      surge: { correct: ['spike', 'soar', 'jump'], incorrect: ['drop', 'vary', 'level out'] },
+      plateau: { correct: ['level off', 'flatten', 'hold steady'], incorrect: ['spike', 'drop', 'vary'] },
+    },
+    '2': {
+      investigate: { correct: ['examine', 'probe', 'look into'], incorrect: ['evaluate', 'defend', 'execute'] },
+      assess: { correct: ['evaluate', 'appraise', 'gauge'], incorrect: ['probe', 'execute', 'defend'] },
+      justify: { correct: ['defend', 'substantiate', 'warrant'], incorrect: ['evaluate', 'execute', 'amend'] },
+      implement: { correct: ['execute', 'carry out', 'apply'], incorrect: ['defend', 'gauge', 'amend'] },
+      revise: { correct: ['amend', 'edit', 'update'], incorrect: ['execute', 'evaluate', 'defend'] },
+    },
+  },
   intermediate: {
     '1': {
       agenda: {
@@ -289,6 +307,76 @@ const SYN_OVERRIDES: Record<string, Record<string, Record<string, { correct: str
         correct: ['explain', 'simplify', 'elucidate'],
         incorrect: ['confirm', 'approve', 'escalate'],
       },
+    },
+    '11': {
+      warn: { correct: ['caution', 'alert', 'notify'], incorrect: ['allow', 'ban', 'suggest'] },
+      permit: { correct: ['allow', 'authorize', 'let'], incorrect: ['ban', 'suggest', 'ask'] },
+      forbid: { correct: ['ban', 'prohibit', 'bar'], incorrect: ['allow', 'suggest', 'notify'] },
+      advise: { correct: ['recommend', 'counsel', 'suggest'], incorrect: ['ban', 'notify', 'allow'] },
+      request: { correct: ['ask', 'seek', 'solicit'], incorrect: ['allow', 'ban', 'counsel'] },
+    },
+    '12': {
+      charge: { correct: ['bill', 'invoice', 'levy'], incorrect: ['repay', 'send', 'follow'] },
+      refund: { correct: ['repay', 'reimburse', 'return'], incorrect: ['bill', 'replace', 'dispatch'] },
+      replace: { correct: ['substitute', 'swap', 'change'], incorrect: ['track', 'refund', 'mail'] },
+      ship: { correct: ['send', 'dispatch', 'mail'], incorrect: ['bill', 'follow', 'reimburse'] },
+      track: { correct: ['follow', 'monitor', 'trace'], incorrect: ['mail', 'substitute', 'invoice'] },
+    },
+    '13': {
+      persuade: { correct: ['convince', 'sway', 'win over'], incorrect: ['dispute', 'respond', 'cut in'] },
+      argue: { correct: ['dispute', 'contend', 'disagree'], incorrect: ['convince', 'reply', 'apologize'] },
+      reply: { correct: ['answer', 'respond', 'write back'], incorrect: ['dispute', 'say sorry', 'cut in'] },
+      interrupt: { correct: ['cut in', 'interject', 'break in'], incorrect: ['apologize', 'respond', 'convince'] },
+      apologize: { correct: ['say sorry', 'make amends', 'atone'], incorrect: ['respond', 'cut in', 'convince'] },
+    },
+    '14': {
+      reserve: { correct: ['book', 'secure', 'hold'], incorrect: ['prolong', 'upgrade', 'cancel'] },
+      extend: { correct: ['lengthen', 'prolong', 'stretch'], incorrect: ['upgrade', 'cancel', 'hold'] },
+      upgrade: { correct: ['improve', 'update', 'advance'], incorrect: ['cancel', 'lengthen', 'hold'] },
+      cancel: { correct: ['call off', 'scrap', 'abort'], incorrect: ['upgrade', 'hold', 'prolong'] },
+      reschedule: { correct: ['rearrange', 'postpone', 'move'], incorrect: ['cancel', 'lengthen', 'advance'] },
+    },
+    '15': {
+      assemble: { correct: ['build', 'put together', 'construct'], incorrect: ['modify', 'link', 'fasten'] },
+      adjust: { correct: ['modify', 'alter', 'tweak'], incorrect: ['build', 'fasten', 'link'] },
+      connect: { correct: ['link', 'join', 'attach'], incorrect: ['build', 'fasten', 'tweak'] },
+      secure: { correct: ['fasten', 'fix', 'tie'], incorrect: ['link', 'build', 'alter'] },
+      polish: { correct: ['shine', 'buff', 'rub'], incorrect: ['link', 'tie', 'construct'] },
+    },
+    '16': {
+      order: { correct: ['request', 'purchase', 'place order'], incorrect: ['give', 'slice', 'mix'] },
+      serve: { correct: ['give', 'hand out', 'present'], incorrect: ['request', 'dice', 'whisk'] },
+      taste: { correct: ['sample', 'try', 'savor'], incorrect: ['mix', 'cut', 'present'] },
+      chop: { correct: ['cut', 'dice', 'slice'], incorrect: ['sample', 'blend', 'present'] },
+      stir: { correct: ['mix', 'blend', 'whisk'], incorrect: ['slice', 'request', 'present'] },
+    },
+    '17': {
+      worry: { correct: ['fret', 'be anxious', 'stress'], incorrect: ['applaud', 'pardon', 'uplift'] },
+      cheer: { correct: ['encourage', 'hearten', 'brighten'], incorrect: ['fret', 'pardon', 'commend'] },
+      forgive: { correct: ['pardon', 'excuse', 'let go'], incorrect: ['applaud', 'brighten', 'fret'] },
+      praise: { correct: ['compliment', 'applaud', 'commend'], incorrect: ['encourage', 'let go', 'lament'] },
+      regret: { correct: ['be sorry', 'lament', 'rue'], incorrect: ['applaud', 'excuse', 'brighten'] },
+    },
+    '18': {
+      heat: { correct: ['warm', 'heat up', 'warm up'], incorrect: ['chill', 'press', 'bend'] },
+      cool: { correct: ['chill', 'cool down', 'lower'], incorrect: ['warm', 'press', 'bend'] },
+      dry: { correct: ['dry out', 'air dry', 'dehydrate'], incorrect: ['warm', 'fold', 'press'] },
+      fold: { correct: ['bend', 'crease', 'double'], incorrect: ['warm', 'dehydrate', 'chill'] },
+      iron: { correct: ['press', 'smooth', 'flatten'], incorrect: ['warm', 'chill', 'double'] },
+    },
+    '19': {
+      paint: { correct: ['color', 'decorate', 'coat'], incorrect: ['sketch', 'trek', 'paddle'] },
+      draw: { correct: ['sketch', 'outline', 'illustrate'], incorrect: ['color', 'trek', 'pitch tents'] },
+      camp: { correct: ['pitch tents', 'sleep outdoors', 'stay in tents'], incorrect: ['sketch', 'paddle', 'trek'] },
+      hike: { correct: ['trek', 'ramble', 'walk far'], incorrect: ['color', 'pitch tents', 'paddle'] },
+      swim: { correct: ['paddle', 'do laps', 'bathe'], incorrect: ['sketch', 'trek', 'pitch tents'] },
+    },
+    '20': {
+      'fill in': { correct: ['complete', 'write in', 'enter details'], incorrect: ['turn in', 'produce', 'archive'] },
+      submit: { correct: ['send in', 'hand in', 'turn in'], incorrect: ['complete', 'produce', 'archive'] },
+      print: { correct: ['produce', 'make copy', 'output'], incorrect: ['hand in', 'archive', 'enter details'] },
+      sign: { correct: ['write name', 'autograph', 'sign off'], incorrect: ['output', 'archive', 'turn in'] },
+      file: { correct: ['archive', 'store', 'put away'], incorrect: ['turn in', 'write name', 'make copy'] },
     },
   },
   'upper-intermediate': {
@@ -385,6 +473,230 @@ const SYN_OVERRIDES: Record<string, Record<string, Record<string, { correct: str
       elucidate: { correct: ['clarify', 'explain', 'illuminate'], incorrect: ['compare', 'categorize', 'calculate'] },
       benchmark: { correct: ['evaluate', 'compare', 'measure'], incorrect: ['estimate', 'analyze', 'record'] },
     },
+    '14': {
+      contemplate: {
+        correct: ['consider', 'ponder', 'deliberate'],
+        incorrect: ['strengthen', 'minimize', 'oppose'],
+      },
+      bolster: {
+        correct: ['strengthen', 'support', 'reinforce'],
+        incorrect: ['consider', 'understate', 'refute'],
+      },
+      downplay: {
+        correct: ['minimize', 'understate', 'play down'],
+        incorrect: ['reinforce', 'ponder', 'refute'],
+      },
+      counter: {
+        correct: ['oppose', 'rebut', 'refute'],
+        incorrect: ['support', 'consider', 'minimize'],
+      },
+      elicit: {
+        correct: ['evoke', 'draw out', 'prompt'],
+        incorrect: ['reinforce', 'understate', 'ponder'],
+      },
+    },
+    '15': {
+      fluctuate: {
+        correct: ['vary', 'oscillate', 'swing'],
+        incorrect: ['stabilize', 'accelerate', 'plateau'],
+      },
+      stabilize: {
+        correct: ['steady', 'normalize', 'balance'],
+        incorrect: ['fluctuate', 'accelerate', 'deteriorate'],
+      },
+      accelerate: {
+        correct: ['speed up', 'quicken', 'hasten'],
+        incorrect: ['stabilize', 'plateau', 'fluctuate'],
+      },
+      deteriorate: {
+        correct: ['worsen', 'decline', 'degrade'],
+        incorrect: ['stabilize', 'plateau', 'accelerate'],
+      },
+      plateau: {
+        correct: ['level off', 'flatten', 'stabilize'],
+        incorrect: ['accelerate', 'fluctuate', 'deteriorate'],
+      },
+    },
+    '16': {
+      verify: {
+        correct: ['confirm', 'validate', 'authenticate'],
+        incorrect: ['question', 'ignore', 'estimate'],
+      },
+      refine: {
+        correct: ['improve', 'polish', 'hone'],
+        incorrect: ['delay', 'complicate', 'replace'],
+      },
+      formulate: {
+        correct: ['devise', 'frame', 'articulate'],
+        incorrect: ['copy', 'delay', 'simplify'],
+      },
+      illustrate: {
+        correct: ['explain', 'demonstrate', 'exemplify'],
+        incorrect: ['obscure', 'confuse', 'generalize'],
+      },
+      navigate: {
+        correct: ['find way', 'steer', 'maneuver'],
+        incorrect: ['hesitate', 'drift', 'postpone'],
+      },
+    },
+    '17': {
+      alleviate: { correct: ['lessen', 'ease', 'mitigate'], incorrect: ['worsen', 'outline', 'arbitrate'] },
+      exacerbate: { correct: ['worsen', 'aggravate', 'intensify'], incorrect: ['lessen', 'outline', 'reconcile'] },
+      ascertain: { correct: ['determine', 'find out', 'establish'], incorrect: ['describe', 'worsen', 'arbitrate'] },
+      delineate: { correct: ['outline', 'describe', 'define'], incorrect: ['verify', 'worsen', 'arbitrate'] },
+      mediate: { correct: ['arbitrate', 'negotiate', 'reconcile'], incorrect: ['outline', 'worsen', 'determine'] },
+    },
+    '18': {
+      emphasize: {
+        correct: ['stress', 'highlight', 'underscore'],
+        incorrect: ['summarize', 'mention', 'record'],
+      },
+      acknowledge: {
+        correct: ['admit', 'accept', 'recognize'],
+        incorrect: ['announce', 'describe', 'draft'],
+      },
+      adapt: {
+        correct: ['adjust', 'modify', 'tailor'],
+        incorrect: ['copy', 'translate', 'store'],
+      },
+      compensate: {
+        correct: ['offset', 'make up for', 'recompense'],
+        incorrect: ['compare', 'budget', 'collect'],
+      },
+      question: {
+        correct: ['doubt', 'challenge', 'query'],
+        incorrect: ['explain', 'confirm', 'summarize'],
+      },
+    },
+    '19': {
+      expedite: {
+        correct: ['accelerate', 'hasten', 'fast-track'],
+        incorrect: ['hamper', 'uphold', 'contend'],
+      },
+      hamper: {
+        correct: ['hinder', 'impede', 'obstruct'],
+        incorrect: ['expedite', 'uphold', 'dispel'],
+      },
+      contend: {
+        correct: ['argue', 'claim', 'maintain'],
+        incorrect: ['expedite', 'dispel', 'hamper'],
+      },
+      dispel: {
+        correct: ['dissipate', 'banish', 'drive away'],
+        incorrect: ['uphold', 'contend', 'expedite'],
+      },
+      uphold: {
+        correct: ['maintain', 'support', 'sustain'],
+        incorrect: ['contend', 'dispel', 'hamper'],
+      },
+    },
+    '20': {
+      evaluate: {
+        correct: ['assess', 'appraise', 'judge'],
+        incorrect: ['depict', 'endorse', 'omit'],
+      },
+      depict: {
+        correct: ['portray', 'represent', 'illustrate'],
+        incorrect: ['evaluate', 'omit', 'endorse'],
+      },
+      omit: {
+        correct: ['leave out', 'exclude', 'drop'],
+        incorrect: ['endorse', 'depict', 'oppose'],
+      },
+      oppose: {
+        correct: ['resist', 'contest', 'object to'],
+        incorrect: ['endorse', 'depict', 'evaluate'],
+      },
+      endorse: {
+        correct: ['approve', 'back', 'support'],
+        incorrect: ['oppose', 'omit', 'evaluate'],
+      },
+    },
+    '21': {
+      allege: {
+        correct: ['claim', 'assert', 'contend'],
+        incorrect: ['cite', 'deter', 'diversify'],
+      },
+      cite: {
+        correct: ['quote', 'mention', 'refer to'],
+        incorrect: ['allege', 'foster', 'deter'],
+      },
+      foster: {
+        correct: ['encourage', 'promote', 'nurture'],
+        incorrect: ['deter', 'allege', 'cite'],
+      },
+      deter: {
+        correct: ['discourage', 'dissuade', 'prevent'],
+        incorrect: ['foster', 'diversify', 'cite'],
+      },
+      diversify: {
+        correct: ['vary', 'broaden', 'expand'],
+        incorrect: ['deter', 'allege', 'foster'],
+      },
+    },
+    '22': {
+      investigate: { correct: ['examine', 'look into', 'explore'], incorrect: ['infer', 'theorize', 'canvass'] },
+      deduce: { correct: ['infer', 'conclude', 'derive'], incorrect: ['examine', 'theorize', 'canvass'] },
+      speculate: { correct: ['theorize', 'suppose', 'hypothesize'], incorrect: ['infer', 'canvass', 'explore'] },
+      probe: { correct: ['delve', 'examine', 'explore'], incorrect: ['infer', 'theorize', 'canvass'] },
+      survey: { correct: ['poll', 'canvass', 'sample'], incorrect: ['explore', 'infer', 'examine'] },
+    },
+    '23': {
+      streamline: { correct: ['simplify', 'rationalize', 'optimize'], incorrect: ['mechanize', 'merge', 'normalize'] },
+      automate: { correct: ['mechanize', 'computerize', 'systematize'], incorrect: ['merge', 'normalize', 'refine'] },
+      consolidate: { correct: ['merge', 'unify', 'integrate'], incorrect: ['simplify', 'normalize', 'computerize'] },
+      standardize: { correct: ['normalize', 'regularize', 'codify'], incorrect: ['merge', 'mechanize', 'refine'] },
+      iterate: { correct: ['repeat', 'refine', 'cycle'], incorrect: ['merge', 'normalize', 'mechanize'] },
+    },
+    '24': {
+      paraphrase: { correct: ['reword', 'restate', 'rephrase'], incorrect: ['outline', 'expand', 'hint'] },
+      summarize: { correct: ['outline', 'recap', 'condense'], incorrect: ['rephrase', 'repeat', 'hint'] },
+      elaborate: { correct: ['expand', 'develop', 'detail'], incorrect: ['rephrase', 'outline', 'repeat'] },
+      allude: { correct: ['hint', 'imply', 'suggest'], incorrect: ['rephrase', 'recap', 'repeat'] },
+      reiterate: { correct: ['repeat', 'restate', 'say again'], incorrect: ['hint', 'outline', 'rephrase'] },
+    },
+    '25': {
+      authorize: { correct: ['permit', 'approve', 'sanction'], incorrect: ['forbid', 'require', 'forgo'] },
+      prohibit: { correct: ['forbid', 'ban', 'bar'], incorrect: ['permit', 'require', 'forgo'] },
+      mandate: { correct: ['require', 'order', 'decree'], incorrect: ['permit', 'ban', 'forgo'] },
+      exempt: { correct: ['excuse', 'free', 'absolve'], incorrect: ['permit', 'require', 'ban'] },
+      waive: { correct: ['forgo', 'relinquish', 'set aside'], incorrect: ['permit', 'require', 'ban'] },
+    },
+    '26': {
+      invest: { correct: ['fund', 'finance', 'stake'], incorrect: ['sell off', 'obtain', 'repay'] },
+      divest: { correct: ['sell off', 'dispose of', 'shed'], incorrect: ['finance', 'offset risk', 'acquire'] },
+      procure: { correct: ['obtain', 'acquire', 'secure'], incorrect: ['repay', 'sell off', 'offset risk'] },
+      reimburse: { correct: ['repay', 'refund', 'compensate'], incorrect: ['obtain', 'finance', 'offset risk'] },
+      hedge: { correct: ['offset risk', 'protect', 'insure'], incorrect: ['fund', 'sell off', 'obtain'] },
+    },
+    '27': {
+      deploy: { correct: ['launch', 'roll out', 'implement'], incorrect: ['configure', 'troubleshoot', 'restore'] },
+      configure: { correct: ['set up', 'arrange', 'tune'], incorrect: ['deploy', 'restore', 'synchronize'] },
+      troubleshoot: { correct: ['debug', 'diagnose', 'resolve'], incorrect: ['deploy', 'configure', 'restore'] },
+      restore: { correct: ['recover', 'reinstate', 'revert'], incorrect: ['configure', 'deploy', 'troubleshoot'] },
+      synchronize: { correct: ['sync', 'align', 'coordinate'], incorrect: ['deploy', 'configure', 'troubleshoot'] },
+    },
+    '28': {
+      conserve: { correct: ['save', 'preserve', 'protect'], incorrect: ['regulate', 'restrict', 'subsidize'] },
+      regulate: { correct: ['control', 'govern', 'oversee'], incorrect: ['conserve', 'restrict', 'subsidize'] },
+      subsidize: { correct: ['fund', 'finance', 'underwrite'], incorrect: ['regulate', 'incentivize', 'restrict'] },
+      incentivize: { correct: ['motivate', 'encourage', 'spur'], incorrect: ['restrict', 'subsidize', 'conserve'] },
+      restrict: { correct: ['limit', 'curb', 'constrain'], incorrect: ['conserve', 'subsidize', 'incentivize'] },
+    },
+    '29': {
+      reassure: { correct: ['comfort', 'soothe', 'calm'], incorrect: ['confront', 'empathize', 'discourage'] },
+      empathize: { correct: ['understand', 'relate', 'sympathize'], incorrect: ['confront', 'discourage', 'reassure'] },
+      discourage: { correct: ['deter', 'dishearten', 'put off'], incorrect: ['reassure', 'empathize', 'admire'] },
+      confront: { correct: ['face', 'tackle', 'challenge'], incorrect: ['reassure', 'empathize', 'admire'] },
+      admire: { correct: ['respect', 'esteem', 'appreciate'], incorrect: ['discourage', 'confront', 'empathize'] },
+    },
+    '30': {
+      curate: { correct: ['select', 'organize', 'assemble'], incorrect: ['moderate', 'annotate', 'broadcast'] },
+      moderate: { correct: ['chair', 'manage', 'facilitate'], incorrect: ['curate', 'broadcast', 'caption'] },
+      annotate: { correct: ['note', 'comment', 'gloss'], incorrect: ['moderate', 'curate', 'broadcast'] },
+      broadcast: { correct: ['air', 'transmit', 'beam'], incorrect: ['curate', 'annotate', 'caption'] },
+      caption: { correct: ['label', 'title', 'tag'], incorrect: ['curate', 'broadcast', 'moderate'] },
+    },
     '11': {
       prioritize: { correct: ['rank', 'order', 'sequence'], incorrect: ['negotiate', 'revise', 'forecast'] },
       negotiate: { correct: ['bargain', 'discuss terms', 'broker'], incorrect: ['prioritize', 'forecast', 'coordinate'] },
@@ -413,9 +725,24 @@ const CORRECT_COLOR = '#437F76';
 const INCORRECT_COLOR = '#924646';
 const ACCENT_COLOR = '#F2935C';
 
-export default function SynonymComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange }: SynonymProps) {
+export default function SynonymComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange, wordsOverride }: SynonymProps) {
   // Get words from levels data
   const wordsData = useMemo(() => {
+    // Use override when provided (dynamic quiz)
+    if (wordsOverride && wordsOverride.length) {
+      let words = wordsOverride;
+      if (wordRange) words = words.slice(wordRange.start, wordRange.end);
+      return words.map(w => {
+        const override = SYN_OVERRIDES[levelId || '']?.[String(setId)]?.[w.word.toLowerCase()];
+        return {
+          word: w.word,
+          ipa: w.phonetic,
+          correct: override?.correct || (w.synonyms || []).slice(0, 3),
+          incorrectPool: override?.incorrect || ['other', 'different', 'alternative'],
+        } as WordEntry;
+      });
+    }
+
     const level = levels.find(l => l.id === levelId);
     if (!level) return [];
     const set = level.sets.find(s => s.id.toString() === setId);

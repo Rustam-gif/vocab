@@ -208,6 +208,8 @@ const styles = StyleSheet.create({
   },
   headerTextArea: {
     flex: 1,
+    // Reserve space so text never runs under the absolute action button
+    paddingRight: 120,
   },
   title: {
     fontSize: 16,
@@ -283,6 +285,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     marginTop: 2,
+    // Extra safety so description never collides with the button
+    paddingRight: 6,
   },
   wordsInfo: {
     flexDirection: 'column',
@@ -303,6 +307,8 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 1,
     fontFamily: 'Ubuntu_400Regular',
+    // Extra safety so preview never collides with the button
+    paddingRight: 6,
   },
   footer: {
     flexDirection: 'row',

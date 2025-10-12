@@ -42,7 +42,29 @@ export default function AtlasPracticeIntegrated() {
   // Check if this is a quiz type
   const level = useMemo(() => levels.find(l => l.id === levelId), [levelId]);
   const set = useMemo(() => level?.sets.find(s => s.id.toString() === setId), [level, setId]);
-  const isQuiz = set?.type === 'quiz';
+
+  // Compute dynamic quiz words for Upper-Intermediate when set is not found
+  const computedQuizWords = useMemo(() => {
+    if (!level || level.id !== 'upper-intermediate') return null;
+    if (set) return null; // exists statically
+    if (!setId || !/^quiz-\d+$/.test(String(setId))) return null;
+    // Rebuild the same visible list used in Learn: drop first 10 numeric sets, exclude quizzes
+    const baseSets = level.sets.filter(s => {
+      const n = Number(s.id);
+      return (isNaN(n) || n > 10) && (s as any).type !== 'quiz';
+    });
+    const groupIndex = Math.max(1, parseInt(String(setId).split('-')[1], 10));
+    const start = (groupIndex - 1) * 4;
+    const group = baseSets.slice(start, start + 4);
+    if (group.length < 1) return null;
+    const words: any[] = [];
+    group.forEach(g => {
+      words.push(...(g.words || []).slice(0, 5));
+    });
+    return words.length ? words : null;
+  }, [level, set, setId]);
+
+  const isQuiz = (set?.type === 'quiz') || !!computedQuizWords;
   
   const [currentPhase, setCurrentPhase] = useState(0);
   const [phases, setPhases] = useState<Phase[]>(
@@ -166,16 +188,24 @@ export default function AtlasPracticeIntegrated() {
     const phase = phases[currentPhase];
     if (!phase) return null;
 
-    const Component = phase.component;
+    const Component = phase.component as any;
     
     // Determine word range for quiz mode
-    // For quizzes: MCQ & Synonym use words 0-4, Usage & Letters use words 5-9
+    // Recap rule: every 4 prior sets → 5 words per exercise
+    //   MCQ:     words 0..4   (from Set A)
+    //   Synonym: words 5..9   (from Set B)
+    //   Usage:   words 10..14 (from Set C)
+    //   Letters: words 15..19 (from Set D)
     let wordRange: { start: number; end: number } | undefined;
     if (isQuiz) {
-      if (phase.id === 'mcq' || phase.id === 'synonym') {
-        wordRange = { start: 0, end: 5 }; // First 5 words
-      } else if (phase.id === 'usage' || phase.id === 'letters') {
-        wordRange = { start: 5, end: 10 }; // Next 5 words
+      if (phase.id === 'mcq') {
+        wordRange = { start: 0, end: 5 };
+      } else if (phase.id === 'synonym') {
+        wordRange = { start: 5, end: 10 };
+      } else if (phase.id === 'usage') {
+        wordRange = { start: 10, end: 15 };
+      } else if (phase.id === 'letters') {
+        wordRange = { start: 15, end: 20 };
       }
     }
     
@@ -187,15 +217,16 @@ export default function AtlasPracticeIntegrated() {
           levelId={levelId || ''}
           onComplete={() => handlePhaseComplete(0, 0)}
           wordRange={wordRange}
+          wordsOverride={computedQuizWords || undefined}
         />
       );
     }
     
     // Special wiring for Missing Letters (new API: single-word component)
     if (phase.id === 'letters') {
-      const level = levels.find(l => l.id === (levelId || ''));
-      const currentSet = level?.sets.find(s => s.id.toString() === String(setId));
-      let words = currentSet?.words ?? [];
+      const levelObj = levels.find(l => l.id === (levelId || ''));
+      const currentSet = levelObj?.sets.find(s => s.id.toString() === String(setId));
+      let words = computedQuizWords || currentSet?.words || [];
       
       // Apply word range if specified
       if (wordRange) {
@@ -258,6 +289,7 @@ export default function AtlasPracticeIntegrated() {
         sharedScore={totalScore}
         onScoreShare={setTotalScore}
         wordRange={wordRange}
+        wordsOverride={computedQuizWords || undefined}
       />
     );
   };

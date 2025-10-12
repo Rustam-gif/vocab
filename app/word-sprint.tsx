@@ -2,10 +2,35 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Dimensions } from 'react-native';
 import LottieView from 'lottie-react-native';
+import { Platform } from 'react-native';
+import { Asset } from 'expo-asset';
+let Rive: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  Rive = require('rive-react-native').default || require('rive-react-native');
+} catch {}
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppStore } from '../lib/store';
 import { analyticsService } from '../services/AnalyticsService';
 import { ProgressService } from '../services/ProgressService';
+
+// Simple error boundary to catch Rive rendering errors and fall back gracefully
+class RiveErrorBoundary extends React.Component<{ onError: () => void; children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch() {
+    try { this.props.onError(); } catch {}
+  }
+  render() {
+    if (this.state.hasError) return null;
+    return this.props.children as any;
+  }
+}
 
 const QUESTION_TIME_MS = 10000; // 10 seconds per question
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -27,6 +52,38 @@ export default function WordSprint() {
   const revealedRef = useRef(false);
   const resultAnim = useRef(new Animated.Value(0)).current;
   const clockAnimRef = useRef<LottieView>(null);
+  // Use Rive when the native module is available and we're not on web (Expo Go doesn't include Rive)
+  const canUseRive = !!Rive && Platform.OS !== 'web';
+  const riveModule = canUseRive ? require('../assets/rive/lil_guy.riv') : null;
+  const [riveUrl, setRiveUrl] = useState<string | null>(null);
+  // Keep Rive stable; if anything fails we fall back to Lottie
+  const [riveFailed, setRiveFailed] = useState(false);
+  // Animation names inside your .riv
+  const RIVE_ANIM_IDLE = 'breathing';
+  const RIVE_ANIM_BOP = 'bopping';
+  const RIVE_ANIM_DANCE = 'Dance 2';
+  // Always use the bopping animation as requested
+  const [riveAnimName, setRiveAnimName] = useState<string>(RIVE_ANIM_BOP);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        if (canUseRive && riveModule) {
+          const asset = Asset.fromModule(riveModule);
+          if (!asset.localUri && !asset.downloaded) {
+            await asset.downloadAsync();
+          }
+          if (mounted) setRiveUrl(asset.localUri || asset.uri || null);
+        } else if (mounted) {
+          setRiveUrl(null);
+        }
+      } catch {
+        if (mounted) setRiveUrl(null);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [canUseRive, riveModule]);
 
   useEffect(() => {
     (async () => { await loadWords(); })();
@@ -39,12 +96,14 @@ export default function WordSprint() {
   useEffect(() => {
     const id = barAnim.addListener(({ value }) => {
       const remaining = Math.max(0, QUESTION_TIME_MS * (1 - value));
-      setTimeLeft(parseFloat((remaining / 1000).toFixed(1)));
+      const secondsLeft = remaining / 1000;
+      setTimeLeft(parseFloat(secondsLeft.toFixed(1)));
+      // Keep animation fixed to bopping (no switching)
     });
     return () => {
       barAnim.removeListener(id);
     };
-  }, [barAnim]);
+  }, [barAnim, riveAnimName]);
 
   useEffect(() => {
     return () => {
@@ -90,7 +149,13 @@ export default function WordSprint() {
     }
   }, [finished, resultAnim]);
 
-  const items = useMemo(() => words.filter(w => w.folderId === folderId), [words, folderId]);
+  const items = useMemo(() => {
+    const pool = words.filter(w => w.folderId === folderId);
+    if (pool.length <= 15) return pool;
+    // Sample 15 unique words deterministically per render
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 15);
+  }, [words, folderId]);
 
   const current = items[Math.min(index, Math.max(0, items.length - 1))];
   const currentWord = current?.word;
@@ -167,6 +232,7 @@ export default function WordSprint() {
     barAnim.stopAnimation();
     barAnim.setValue(0);
     setTimeLeft(QUESTION_TIME_MS / 1000);
+    setRiveAnimName(RIVE_ANIM_BOP);
     
     // Restart clock animation from beginning
     clockAnimRef.current?.reset();
@@ -235,7 +301,12 @@ export default function WordSprint() {
       </View>
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.title}>{title || 'Word Sprint'}</Text>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity accessibilityRole="button" onPress={() => router.back()} style={styles.closeBtn}>
+              <Text style={styles.closeBtnText}>✕</Text>
+            </TouchableOpacity>
+            <Text style={styles.title}>{title || 'Word Sprint'}</Text>
+          </View>
           <View style={styles.headerMeta}>
             <View style={styles.timerBadge}>
               <Text style={styles.timerIcon}>⌚</Text>
@@ -261,13 +332,31 @@ export default function WordSprint() {
           </View>
           {/* Timer animation below the card */}
           <View style={styles.mascotWrap}>
-            <LottieView
-              ref={clockAnimRef}
-              source={require('../assets/lottie/10_Second_Timer.json')}
-              autoPlay={false}
-              loop={false}
-              style={styles.rive}
-            />
+            <View style={styles.riveCrop}>
+              {canUseRive && riveUrl && !riveFailed ? (
+                // Rive mascot (replace 10s timer)
+                // Keep a stable key so the component doesn't remount when animationName changes.
+                <RiveErrorBoundary onError={() => setRiveFailed(true)}>
+                  <Rive
+                    key={riveUrl}
+                    style={styles.riveInner}
+                    url={riveUrl}
+                    autoplay
+                    // Play base motion + Blink + look up (Eyes Y)
+                    animations={[riveAnimName, 'Blink', 'Eyes Y']}
+                  />
+                </RiveErrorBoundary>
+              ) : (
+                // Fallback to Lottie in Expo Go or if Rive fails
+                <LottieView
+                  ref={clockAnimRef}
+                  source={require('../assets/lottie/10_Second_Timer.json')}
+                  autoPlay={false}
+                  loop={false}
+                  style={styles.riveInner}
+                />
+              )}
+            </View>
           </View>
         </View>
         <View style={styles.footer}>
@@ -305,7 +394,10 @@ const styles = StyleSheet.create({
   content: { flex: 1, zIndex: 1 },
   emptyText: { color: '#9CA3AF' },
   header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center' },
   title: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  closeBtn: { marginRight: 10, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(62,70,74,0.88)', alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: '#4b555a' },
+  closeBtnText: { color: '#f4f6f8', fontSize: 14, fontWeight: '800' },
   headerMeta: { flexDirection: 'row', alignItems: 'center' },
   timerBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(38,48,52,0.85)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: '#3f4a4f', marginRight: 8 },
   timerIcon: { color: '#f59f46', fontSize: 14, marginRight: 4 },
@@ -313,7 +405,10 @@ const styles = StyleSheet.create({
   counter: { color: '#9CA3AF', fontSize: 12, fontWeight: '600' },
   body: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
   mascotWrap: { marginTop: 18, alignItems: 'center', justifyContent: 'center' },
-  rive: { width: 180, height: 180 },
+  // Crop box hides the top buttons and right white line in the Rive artboard
+  riveCrop: { width: 180, height: 150, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  // Render larger and shift slightly down, keeping top buttons clipped
+  riveInner: { width: 230, height: 230, transform: [{ translateY: -18 }, { translateX: 0 }, { scale: 1.04 }] },
   progressBackdrop: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', alignItems: 'stretch', zIndex: 0, backgroundColor: 'rgba(226,135,67,0.06)' },
   progressColumn: { backgroundColor: 'rgba(226,135,67,0.32)', borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.12)', shadowColor: '#e28743', shadowOpacity: 0.25, shadowRadius: 24, shadowOffset: { width: 0, height: -6 } },
   card: { width: '100%', backgroundColor: 'rgba(44,47,47,0.88)', borderRadius: 16, padding: 24, borderWidth: StyleSheet.hairlineWidth, borderColor: '#3d474b', shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 12 }, elevation: 8 },

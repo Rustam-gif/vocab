@@ -25,6 +25,7 @@ interface SentenceUsageProps {
   sharedScore: number;
   onScoreShare: (score: number) => void;
   wordRange?: { start: number; end: number };
+  wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
 }
 
 interface UsageSentence {
@@ -91,6 +92,335 @@ function detectPartOfSpeech(word: string, definition: string, synonyms?: string[
 // Exact Usage overrides (word-choice) per level/set/word
 // Use when content owners specify the exact prompt and options
 const USAGE_WORD_OVERRIDES: Record<string, Record<string, Record<string, { prompt: string; options: string[]; correct: string }>>> = {
+  // IELTS curated word-choice usage overrides
+  ielts: {
+    '1': {
+      fluctuate: {
+        prompt: 'In small markets, demand can … within a week.',
+        options: ['fluctuate', 'stabilize', 'decline', 'surge'],
+        correct: 'fluctuate',
+      },
+      stabilize: {
+        prompt: 'Extra supply could … prices before the summer season.',
+        options: ['stabilize', 'fluctuate', 'plateau', 'surge'],
+        correct: 'stabilize',
+      },
+      decline: {
+        prompt: 'After the subsidy ended, sales began to …. ',
+        options: ['decline', 'surge', 'plateau', 'stabilize'],
+        correct: 'decline',
+      },
+      surge: {
+        prompt: 'Tourist arrivals … after the new direct flight.',
+        options: ['surge', 'decline', 'fluctuate', 'plateau'],
+        correct: 'surge',
+      },
+      plateau: {
+        prompt: 'After quick gains, test scores began to …. ',
+        options: ['plateau', 'stabilize', 'fluctuate', 'decline'],
+        correct: 'plateau',
+      },
+    },
+    '2': {
+      investigate: {
+        prompt: 'Journalists … claims before publishing the feature story.',
+        options: ['investigate', 'assess', 'justify', 'implement'],
+        correct: 'investigate',
+      },
+      assess: {
+        prompt: 'We must … risks before choosing a supplier.',
+        options: ['assess', 'investigate', 'justify', 'revise'],
+        correct: 'assess',
+      },
+      justify: {
+        prompt: 'Can you … the budget increase for training?',
+        options: ['justify', 'revise', 'implement', 'investigate'],
+        correct: 'justify',
+      },
+      implement: {
+        prompt: 'Teams will … the policy starting next quarter.',
+        options: ['implement', 'investigate', 'assess', 'revise'],
+        correct: 'implement',
+      },
+      revise: {
+        prompt: 'We should … the schedule before publishing it.',
+        options: ['revise', 'assess', 'justify', 'implement'],
+        correct: 'revise',
+      },
+    },
+  },
+  intermediate: {
+    '11': {
+      warn: {
+        prompt: 'Please … children about the deep water near the pier.',
+        options: ['warn', 'permit', 'forbid', 'advise'],
+        correct: 'warn',
+      },
+      permit: {
+        prompt: 'This ticket will … you to enter after 6 p.m.',
+        options: ['permit', 'warn', 'advise', 'forbid'],
+        correct: 'permit',
+      },
+      forbid: {
+        prompt: 'The museum will … food inside the main gallery rooms.',
+        options: ['forbid', 'advise', 'warn', 'permit'],
+        correct: 'forbid',
+      },
+      advise: {
+        prompt: 'I can … you to start earlier and avoid the traffic.',
+        options: ['advise', 'permit', 'forbid', 'warn'],
+        correct: 'advise',
+      },
+      request: {
+        prompt: 'Guests may … a late checkout if their flight is delayed.',
+        options: ['request', 'permit', 'forbid', 'advise'],
+        correct: 'request',
+      },
+    },
+    '12': {
+      charge: {
+        prompt: 'Do they … extra if the delivery is after midnight?',
+        options: ['charge', 'refund', 'ship', 'track'],
+        correct: 'charge',
+      },
+      refund: {
+        prompt: 'The company will … you within five days after approval.',
+        options: ['refund', 'charge', 'replace', 'track'],
+        correct: 'refund',
+      },
+      replace: {
+        prompt: 'We should … the filter every six months for safety.',
+        options: ['replace', 'track', 'refund', 'ship'],
+        correct: 'replace',
+      },
+      ship: {
+        prompt: 'We can … the replacement today if you confirm the address.',
+        options: ['ship', 'replace', 'charge', 'track'],
+        correct: 'ship',
+      },
+      track: {
+        prompt: 'Use this link to … your order during international shipping.',
+        options: ['track', 'ship', 'charge', 'refund'],
+        correct: 'track',
+      },
+    },
+    '13': {
+      persuade: {
+        prompt: 'Good examples can … people to support the new rules.',
+        options: ['persuade', 'argue', 'reply', 'interrupt'],
+        correct: 'persuade',
+      },
+      argue: {
+        prompt: 'Let’s not … tonight; we can talk calmly tomorrow.',
+        options: ['argue', 'apologize', 'reply', 'interrupt'],
+        correct: 'argue',
+      },
+      reply: {
+        prompt: 'I’ll … to your email once I finish lunch.',
+        options: ['reply', 'argue', 'interrupt', 'apologize'],
+        correct: 'reply',
+      },
+      interrupt: {
+        prompt: 'It’s rude to … when someone is giving directions.',
+        options: ['interrupt', 'reply', 'apologize', 'argue'],
+        correct: 'interrupt',
+      },
+      apologize: {
+        prompt: 'If you arrive late, please … to the instructor politely.',
+        options: ['apologize', 'argue', 'reply', 'interrupt'],
+        correct: 'apologize',
+      },
+    },
+    '14': {
+      reserve: {
+        prompt: 'We should … a room with a quiet view of gardens.',
+        options: ['reserve', 'extend', 'upgrade', 'cancel'],
+        correct: 'reserve',
+      },
+      extend: {
+        prompt: 'Could we … the deadline by two days if trains stop?',
+        options: ['extend', 'reserve', 'upgrade', 'cancel'],
+        correct: 'extend',
+      },
+      upgrade: {
+        prompt: 'If seats are free, we might … to the quiet carriage.',
+        options: ['upgrade', 'cancel', 'reserve', 'extend'],
+        correct: 'upgrade',
+      },
+      cancel: {
+        prompt: 'If the storm worsens, we must … the outdoor concert.',
+        options: ['cancel', 'upgrade', 'extend', 'reserve'],
+        correct: 'cancel',
+      },
+      reschedule: {
+        prompt: 'If your train is late, we can … the meeting easily.',
+        options: ['reschedule', 'upgrade', 'cancel', 'reserve'],
+        correct: 'reschedule',
+      },
+    },
+    '15': {
+      assemble: {
+        prompt: 'Let’s … the new table before guests arrive tonight.',
+        options: ['assemble', 'adjust', 'connect', 'secure'],
+        correct: 'assemble',
+      },
+      adjust: {
+        prompt: 'Please … the mirror so it sits straight on wall.',
+        options: ['adjust', 'assemble', 'secure', 'connect'],
+        correct: 'adjust',
+      },
+      connect: {
+        prompt: 'Once you … the speakers, test the sound with music.',
+        options: ['connect', 'assemble', 'secure', 'adjust'],
+        correct: 'connect',
+      },
+      secure: {
+        prompt: 'Use cable ties to … the wires behind the desk.',
+        options: ['secure', 'assemble', 'adjust', 'connect'],
+        correct: 'secure',
+      },
+      polish: {
+        prompt: 'After sanding, … the door to keep the finish smooth.',
+        options: ['polish', 'connect', 'secure', 'adjust'],
+        correct: 'polish',
+      },
+    },
+    '16': {
+      order: {
+        prompt: 'We should … the meals now before the restaurant gets crowded.',
+        options: ['order', 'serve', 'taste', 'chop', 'stir'],
+        correct: 'order',
+      },
+      serve: {
+        prompt: 'Please … the soup first while the bread finishes warming.',
+        options: ['serve', 'order', 'chop', 'taste', 'stir'],
+        correct: 'serve',
+      },
+      taste: {
+        prompt: 'Could you … this soup and tell me if it’s spicy.',
+        options: ['taste', 'chop', 'order', 'stir', 'serve'],
+        correct: 'taste',
+      },
+      chop: {
+        prompt: 'I’ll … the vegetables while you heat the pan gently.',
+        options: ['chop', 'order', 'serve', 'taste', 'stir'],
+        correct: 'chop',
+      },
+      stir: {
+        prompt: 'Keep the sauce warm and … it every minute or two.',
+        options: ['stir', 'order', 'serve', 'taste', 'chop'],
+        correct: 'stir',
+      },
+    },
+    '17': {
+      worry: {
+        prompt: 'Don’t … about delays; we still have plenty of time.',
+        options: ['worry', 'cheer', 'forgive', 'praise', 'regret'],
+        correct: 'worry',
+      },
+      cheer: {
+        prompt: 'Funny stories always … the team after a long meeting.',
+        options: ['cheer', 'worry', 'forgive', 'praise', 'regret'],
+        correct: 'cheer',
+      },
+      forgive: {
+        prompt: 'It’s hard to … quickly, but it helps everyone move forward.',
+        options: ['forgive', 'worry', 'cheer', 'praise', 'regret'],
+        correct: 'forgive',
+      },
+      praise: {
+        prompt: 'Managers should … progress in public and give advice in private.',
+        options: ['praise', 'worry', 'cheer', 'forgive', 'regret'],
+        correct: 'praise',
+      },
+      regret: {
+        prompt: 'I … not saving the document before the laptop died.',
+        options: ['regret', 'praise', 'forgive', 'cheer', 'worry'],
+        correct: 'regret',
+      },
+    },
+    '18': {
+      heat: {
+        prompt: 'On cold mornings, we … the kitchen for breakfast.',
+        options: ['heat', 'cool', 'dry', 'fold', 'iron'],
+        correct: 'heat',
+      },
+      cool: {
+        prompt: 'Let the pie … before slicing; the filling is still boiling.',
+        options: ['cool', 'heat', 'fold', 'iron', 'dry'],
+        correct: 'cool',
+      },
+      dry: {
+        prompt: 'After washing the car, … the mirrors with a clean towel.',
+        options: ['dry', 'heat', 'fold', 'cool', 'iron'],
+        correct: 'dry',
+      },
+      fold: {
+        prompt: 'After drying, … the shirts neatly and put them away.',
+        options: ['fold', 'iron', 'cool', 'heat', 'dry'],
+        correct: 'fold',
+      },
+      iron: {
+        prompt: 'Can you … the shirt; it’s badly creased from travel.',
+        options: ['iron', 'heat', 'fold', 'cool', 'dry'],
+        correct: 'iron',
+      },
+    },
+    '19': {
+      paint: {
+        prompt: 'Let’s … the chairs blue to match the kitchen wall.',
+        options: ['paint', 'draw', 'camp', 'hike', 'swim'],
+        correct: 'paint',
+      },
+      draw: {
+        prompt: 'In the park, we … the trees and quiet lake.',
+        options: ['draw', 'camp', 'paint', 'swim', 'hike'],
+        correct: 'draw',
+      },
+      camp: {
+        prompt: 'If it’s dry this weekend, we’ll … by the forest.',
+        options: ['camp', 'paint', 'draw', 'hike', 'swim'],
+        correct: 'camp',
+      },
+      hike: {
+        prompt: 'Bring water if we … the hill trail after lunch.',
+        options: ['hike', 'swim', 'paint', 'camp', 'draw'],
+        correct: 'hike',
+      },
+      swim: {
+        prompt: 'If the pool’s quiet, we’ll … for thirty relaxed minutes.',
+        options: ['swim', 'paint', 'camp', 'draw', 'hike'],
+        correct: 'swim',
+      },
+    },
+    '20': {
+      'fill in': {
+        prompt: 'New starters must … their tax number on page two.',
+        options: ['fill in', 'submit', 'print', 'sign', 'file'],
+        correct: 'fill in',
+      },
+      submit: {
+        prompt: 'Please … the report online instead of emailing the file.',
+        options: ['submit', 'sign', 'print', 'file', 'fill in'],
+        correct: 'submit',
+      },
+      print: {
+        prompt: 'After I … the labels, please attach them to each box.',
+        options: ['print', 'sign', 'file', 'fill in', 'submit'],
+        correct: 'print',
+      },
+      sign: {
+        prompt: 'The courier needs you to … here before releasing the parcel.',
+        options: ['sign', 'submit', 'print', 'file', 'fill in'],
+        correct: 'sign',
+      },
+      file: {
+        prompt: 'When you … papers correctly, everyone finds information much faster.',
+        options: ['file', 'print', 'sign', 'fill in', 'submit'],
+        correct: 'file',
+      },
+    },
+  },
   'upper-intermediate': {
     '4': {
       borrow: {
@@ -362,6 +692,465 @@ const USAGE_WORD_OVERRIDES: Record<string, Record<string, Record<string, { promp
         correct: 'conclude',
       },
     },
+    '14': {
+      contemplate: {
+        prompt: 'She paused to … moving abroad before signing the lease.',
+        options: ['contemplate', 'bolster', 'downplay', 'counter'],
+        correct: 'contemplate',
+      },
+      bolster: {
+        prompt: 'New evidence will … their case before the review board.',
+        options: ['bolster', 'contemplate', 'downplay', 'elicit'],
+        correct: 'bolster',
+      },
+      downplay: {
+        prompt: 'Officials tried to … delays during the press conference yesterday.',
+        options: ['downplay', 'bolster', 'elicit', 'counter'],
+        correct: 'downplay',
+      },
+      counter: {
+        prompt: 'She … the claim with data from independent studies.',
+        options: ['counter', 'bolster', 'contemplate', 'elicit'],
+        correct: 'counter',
+      },
+      elicit: {
+        prompt: 'The interviewer used open questions to … more detailed answers.',
+        options: ['elicit', 'downplay', 'counter', 'bolster'],
+        correct: 'elicit',
+      },
+    },
+    '15': {
+      fluctuate: {
+        prompt: 'Currency values often … when investors react to breaking news.',
+        options: ['fluctuate', 'stabilize', 'accelerate', 'plateau'],
+        correct: 'fluctuate',
+      },
+      stabilize: {
+        prompt: 'Better communication can … performance during stressful exam periods.',
+        options: ['stabilize', 'fluctuate', 'deteriorate', 'accelerate'],
+        correct: 'stabilize',
+      },
+      accelerate: {
+        prompt: 'Targeted training can … progress for learners who practice consistently.',
+        options: ['accelerate', 'plateau', 'stabilize', 'fluctuate'],
+        correct: 'accelerate',
+      },
+      deteriorate: {
+        prompt: 'Ignoring small leaks can … the entire roof structure.',
+        options: ['deteriorate', 'stabilize', 'plateau', 'accelerate'],
+        correct: 'deteriorate',
+      },
+      plateau: {
+        prompt: 'Strength gains often … without new exercises or heavier loads.',
+        options: ['plateau', 'accelerate', 'fluctuate', 'deteriorate'],
+        correct: 'plateau',
+      },
+    },
+    '16': {
+      verify: {
+        prompt: 'Independent labs … the findings before the paper is accepted.',
+        options: ['verify', 'refine', 'illustrate', 'formulate'],
+        correct: 'verify',
+      },
+      refine: {
+        prompt: 'After user feedback, the team will … the onboarding flow.',
+        options: ['refine', 'verify', 'navigate', 'illustrate'],
+        correct: 'refine',
+      },
+      formulate: {
+        prompt: 'Leaders should … a plan everyone understands and supports.',
+        options: ['formulate', 'refine', 'navigate', 'verify'],
+        correct: 'formulate',
+      },
+      illustrate: {
+        prompt: 'Use a short story to … how the policy works.',
+        options: ['illustrate', 'verify', 'navigate', 'refine'],
+        correct: 'illustrate',
+      },
+      navigate: {
+        prompt: 'With clear instructions, you can … the application process smoothly.',
+        options: ['navigate', 'refine', 'formulate', 'illustrate'],
+        correct: 'navigate',
+      },
+    },
+    '17': {
+      alleviate: {
+        prompt: 'Simple breathing exercises can … stress during high-pressure interviews significantly.',
+        options: ['alleviate', 'exacerbate', 'mediate', 'ascertain'],
+        correct: 'alleviate',
+      },
+      exacerbate: {
+        prompt: 'Cutting maintenance budgets could … safety problems over the next year.',
+        options: ['exacerbate', 'alleviate', 'delineate', 'mediate'],
+        correct: 'exacerbate',
+      },
+      ascertain: {
+        prompt: 'Before making changes, we must … the root cause of failures.',
+        options: ['ascertain', 'delineate', 'mediate', 'alleviate'],
+        correct: 'ascertain',
+      },
+      delineate: {
+        prompt: 'The handbook will … roles so teams avoid duplicated work.',
+        options: ['delineate', 'ascertain', 'mediate', 'exacerbate'],
+        correct: 'delineate',
+      },
+      mediate: {
+        prompt: 'Human resources offered to … disputes during the merger talks.',
+        options: ['mediate', 'exacerbate', 'alleviate', 'ascertain'],
+        correct: 'mediate',
+      },
+    },
+    '18': {
+      emphasize: {
+        prompt: 'Teachers … key steps so learners avoid common mistakes early.',
+        options: ['emphasize', 'question', 'adapt', 'compensate'],
+        correct: 'emphasize',
+      },
+      acknowledge: {
+        prompt: 'He must … the error and apologize before submitting the revision.',
+        options: ['acknowledge', 'adapt', 'question', 'compensate'],
+        correct: 'acknowledge',
+      },
+      adapt: {
+        prompt: 'Teams … quickly when tools change during tight project schedules.',
+        options: ['adapt', 'emphasize', 'acknowledge', 'compensate'],
+        correct: 'adapt',
+      },
+      compensate: {
+        prompt: 'Extra training can … for limited experience in complex situations.',
+        options: ['compensate', 'adapt', 'question', 'emphasize'],
+        correct: 'compensate',
+      },
+      question: {
+        prompt: 'Journalists … official statements when evidence appears inconsistent with sources.',
+        options: ['question', 'emphasize', 'adapt', 'compensate'],
+        correct: 'question',
+      },
+    },
+    '19': {
+      expedite: {
+        prompt: 'Extra staff can … passport applications during peak travel season.',
+        options: ['expedite', 'hamper', 'contend', 'uphold'],
+        correct: 'expedite',
+      },
+      hamper: {
+        prompt: 'Road closures … deliveries when storms hit remote mountain towns.',
+        options: ['hamper', 'expedite', 'contend', 'uphold'],
+        correct: 'hamper',
+      },
+      contend: {
+        prompt: 'Several researchers … that the sample size was too small.',
+        options: ['contend', 'expedite', 'hamper', 'dispel'],
+        correct: 'contend',
+      },
+      dispel: {
+        prompt: 'Honest updates can … fears after unexpected service interruptions.',
+        options: ['dispel', 'contend', 'expedite', 'hamper'],
+        correct: 'dispel',
+      },
+      uphold: {
+        prompt: 'Judges must … the law even under intense public pressure.',
+        options: ['uphold', 'expedite', 'hamper', 'dispel'],
+        correct: 'uphold',
+      },
+    },
+    '20': {
+      evaluate: {
+        prompt: 'We must … each option before choosing a final plan.',
+        options: ['evaluate', 'depict', 'omit', 'oppose', 'endorse'],
+        correct: 'evaluate',
+      },
+      depict: {
+        prompt: 'The article will … everyday life in the coastal villages.',
+        options: ['depict', 'evaluate', 'omit', 'oppose', 'endorse'],
+        correct: 'depict',
+      },
+      omit: {
+        prompt: 'For privacy, … names that could identify the participants.',
+        options: ['omit', 'evaluate', 'depict', 'oppose', 'endorse'],
+        correct: 'omit',
+      },
+      oppose: {
+        prompt: 'Community groups will … the proposal at next week’s meeting.',
+        options: ['oppose', 'depict', 'evaluate', 'omit', 'endorse'],
+        correct: 'oppose',
+      },
+      endorse: {
+        prompt: 'Several organizations will … the campaign once the results appear.',
+        options: ['endorse', 'depict', 'evaluate', 'omit', 'oppose'],
+        correct: 'endorse',
+      },
+    },
+    '21': {
+      allege: {
+        prompt: 'Witnesses … the contract was altered after signatures without consent.',
+        options: ['allege', 'cite', 'deter', 'diversify'],
+        correct: 'allege',
+      },
+      cite: {
+        prompt: 'Please … two studies to support your policy recommendation.',
+        options: ['cite', 'allege', 'diversify', 'deter'],
+        correct: 'cite',
+      },
+      foster: {
+        prompt: 'After-school programs … resilience and teamwork among local teenagers.',
+        options: ['foster', 'deter', 'allege', 'diversify'],
+        correct: 'foster',
+      },
+      deter: {
+        prompt: 'Strong lighting can … vandalism in poorly supervised car parks.',
+        options: ['deter', 'foster', 'cite', 'allege'],
+        correct: 'deter',
+      },
+      diversify: {
+        prompt: 'Small exporters … products to reach markets beyond their region.',
+        options: ['diversify', 'cite', 'allege', 'deter'],
+        correct: 'diversify',
+      },
+    },
+    '22': {
+      investigate: {
+        prompt: 'The committee will … the complaint before announcing any decision.',
+        options: ['investigate', 'deduce', 'speculate', 'survey'],
+        correct: 'investigate',
+      },
+      deduce: {
+        prompt: 'From the patterns, we can … the likely cause.',
+        options: ['deduce', 'investigate', 'speculate', 'probe'],
+        correct: 'deduce',
+      },
+      speculate: {
+        prompt: 'Without complete records, researchers can only … about motives.',
+        options: ['speculate', 'deduce', 'survey', 'investigate'],
+        correct: 'speculate',
+      },
+      probe: {
+        prompt: 'Regulators may … the merger if prices suddenly climb.',
+        options: ['probe', 'survey', 'deduce', 'speculate'],
+        correct: 'probe',
+      },
+      survey: {
+        prompt: 'The city plans to … residents about new transport options.',
+        options: ['survey', 'investigate', 'probe', 'speculate'],
+        correct: 'survey',
+      },
+    },
+    '23': {
+      streamline: {
+        prompt: 'We should … approvals so small purchases don’t stall projects.',
+        options: ['streamline', 'automate', 'consolidate', 'standardize'],
+        correct: 'streamline',
+      },
+      automate: {
+        prompt: 'We’ll … status emails so updates arrive without delays.',
+        options: ['automate', 'streamline', 'iterate', 'consolidate'],
+        correct: 'automate',
+      },
+      consolidate: {
+        prompt: 'Let’s … similar tools so teams share one platform.',
+        options: ['consolidate', 'iterate', 'automate', 'standardize'],
+        correct: 'consolidate',
+      },
+      standardize: {
+        prompt: 'We’ll … formatting so every report looks professional.',
+        options: ['standardize', 'consolidate', 'automate', 'iterate'],
+        correct: 'standardize',
+      },
+      iterate: {
+        prompt: 'We should … until users complete tasks without help.',
+        options: ['iterate', 'automate', 'consolidate', 'standardize'],
+        correct: 'iterate',
+      },
+    },
+    '24': {
+      paraphrase: {
+        prompt: 'In your report, … the idea to avoid plagiarism.',
+        options: ['paraphrase', 'summarize', 'allude', 'reiterate'],
+        correct: 'paraphrase',
+      },
+      summarize: {
+        prompt: 'Before the Q&A, please … the key conclusions.',
+        options: ['summarize', 'reiterate', 'allude', 'paraphrase'],
+        correct: 'summarize',
+      },
+      elaborate: {
+        prompt: 'The reviewer asked us to … on methods and limitations.',
+        options: ['elaborate', 'summarize', 'reiterate', 'allude'],
+        correct: 'elaborate',
+      },
+      allude: {
+        prompt: 'Editorials sometimes … at motives without accusing anyone directly.',
+        options: ['allude', 'paraphrase', 'summarize', 'reiterate'],
+        correct: 'allude',
+      },
+      reiterate: {
+        prompt: 'Before we finish, I’ll … the safety instructions.',
+        options: ['reiterate', 'paraphrase', 'allude', 'elaborate'],
+        correct: 'reiterate',
+      },
+    },
+    '25': {
+      authorize: {
+        prompt: 'Only the director can … overtime during exam season.',
+        options: ['authorize', 'mandate', 'prohibit', 'waive'],
+        correct: 'authorize',
+      },
+      prohibit: {
+        prompt: 'Regulations … parking here during emergency street repairs.',
+        options: ['prohibit', 'authorize', 'exempt', 'waive'],
+        correct: 'prohibit',
+      },
+      mandate: {
+        prompt: 'The ministry will … audits for all large charities.',
+        options: ['mandate', 'authorize', 'waive', 'prohibit'],
+        correct: 'mandate',
+      },
+      exempt: {
+        prompt: 'Students on scholarships are … from paying the application fee.',
+        options: ['exempt', 'authorize', 'mandate', 'waive'],
+        correct: 'exempt',
+      },
+      waive: {
+        prompt: 'To help families, the clinic will … late payment charges.',
+        options: ['waive', 'authorize', 'mandate', 'prohibit'],
+        correct: 'waive',
+      },
+    },
+    '26': {
+      invest: {
+        prompt: 'Many parents … early in their children’s training.',
+        options: ['invest', 'divest', 'procure', 'reimburse'],
+        correct: 'invest',
+      },
+      divest: {
+        prompt: 'To reduce debt, the company will … two subsidiaries.',
+        options: ['divest', 'invest', 'reimburse', 'hedge'],
+        correct: 'divest',
+      },
+      procure: {
+        prompt: 'The team must … parts locally to meet deadlines.',
+        options: ['procure', 'reimburse', 'hedge', 'invest'],
+        correct: 'procure',
+      },
+      reimburse: {
+        prompt: 'HR will … staff after receipts are checked and approved.',
+        options: ['reimburse', 'invest', 'procure', 'hedge'],
+        correct: 'reimburse',
+      },
+      hedge: {
+        prompt: 'Exporters … currency exposure when exchange rates swing sharply.',
+        options: ['hedge', 'invest', 'divest', 'reimburse'],
+        correct: 'hedge',
+      },
+    },
+    '27': {
+      deploy: {
+        prompt: 'Once tests pass, we’ll … the patch during low traffic.',
+        options: ['deploy', 'configure', 'troubleshoot', 'restore'],
+        correct: 'deploy',
+      },
+      configure: {
+        prompt: 'We need to … notifications for outages and slow responses.',
+        options: ['configure', 'deploy', 'restore', 'troubleshoot'],
+        correct: 'configure',
+      },
+      troubleshoot: {
+        prompt: 'If errors appear, we first … before rolling back.',
+        options: ['troubleshoot', 'deploy', 'synchronize', 'restore'],
+        correct: 'troubleshoot',
+      },
+      restore: {
+        prompt: 'A clean backup helped us … accounts within minutes.',
+        options: ['restore', 'deploy', 'configure', 'troubleshoot'],
+        correct: 'restore',
+      },
+      synchronize: {
+        prompt: 'We must … data between phones and laptops nightly.',
+        options: ['synchronize', 'restore', 'configure', 'deploy'],
+        correct: 'synchronize',
+      },
+    },
+    '28': {
+      conserve: {
+        prompt: 'Smart meters help households … energy during hot summers.',
+        options: ['conserve', 'subsidize', 'regulate', 'restrict'],
+        correct: 'conserve',
+      },
+      regulate: {
+        prompt: 'New standards will … noise from factories near neighborhoods.',
+        options: ['regulate', 'restrict', 'conserve', 'subsidize'],
+        correct: 'regulate',
+      },
+      subsidize: {
+        prompt: 'Grants can … upgrades to cleaner industrial equipment.',
+        options: ['subsidize', 'regulate', 'restrict', 'conserve'],
+        correct: 'subsidize',
+      },
+      incentivize: {
+        prompt: 'Bonuses … teams to hit ambitious sustainability targets early.',
+        options: ['incentivize', 'subsidize', 'regulate', 'restrict'],
+        correct: 'incentivize',
+      },
+      restrict: {
+        prompt: 'New bylaws … plastic bags at supermarkets and markets.',
+        options: ['restrict', 'subsidize', 'regulate', 'conserve'],
+        correct: 'restrict',
+      },
+    },
+    '29': {
+      reassure: {
+        prompt: 'A quick message can … worried travelers during long delays.',
+        options: ['reassure', 'empathize', 'confront', 'discourage'],
+        correct: 'reassure',
+      },
+      empathize: {
+        prompt: 'Counselors … with clients before discussing possible next steps.',
+        options: ['empathize', 'confront', 'reassure', 'discourage'],
+        correct: 'empathize',
+      },
+      discourage: {
+        prompt: 'Harsh grades may … students who are still learning basics.',
+        options: ['discourage', 'empathize', 'reassure', 'confront'],
+        correct: 'discourage',
+      },
+      confront: {
+        prompt: 'We must … the rumor before it spreads further.',
+        options: ['confront', 'reassure', 'empathize', 'discourage'],
+        correct: 'confront',
+      },
+      admire: {
+        prompt: 'Young players … coaches who teach and mentor patiently.',
+        options: ['admire', 'empathize', 'discourage', 'confront'],
+        correct: 'admire',
+      },
+    },
+    '30': {
+      curate: {
+        prompt: 'We should … sources carefully before publishing the newsletter.',
+        options: ['curate', 'moderate', 'annotate', 'broadcast'],
+        correct: 'curate',
+      },
+      moderate: {
+        prompt: 'Please … the Q&A so everyone gets fair time.',
+        options: ['moderate', 'annotate', 'broadcast', 'caption'],
+        correct: 'moderate',
+      },
+      annotate: {
+        prompt: 'Please … the slide deck with definitions for newcomers.',
+        options: ['annotate', 'moderate', 'broadcast', 'curate'],
+        correct: 'annotate',
+      },
+      broadcast: {
+        prompt: 'We’ll … the keynote live across our social platforms.',
+        options: ['broadcast', 'moderate', 'curate', 'caption'],
+        correct: 'broadcast',
+      },
+      caption: {
+        prompt: 'Remember to … charts so readers grasp the message immediately.',
+        options: ['caption', 'broadcast', 'annotate', 'moderate'],
+        correct: 'caption',
+      },
+    },
   },
 };
 
@@ -484,7 +1273,7 @@ interface OptionRow {
   key: string;
 }
 
-export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange }: SentenceUsageProps) {
+export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange, wordsOverride }: SentenceUsageProps) {
   // Decide mode: default sentence selection; for new Intermediate Set 1 use word-choice
   const wordChoiceMode = useMemo(() => {
     const lvl = levels.find(l => l.id === levelId);
@@ -498,6 +1287,55 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
   }, [levelId, setId]);
   // Get words from levels data
   const itemsData = useMemo(() => {
+    // Use words override if provided (dynamic quiz). We still build the same
+    // items structure as normal so the component logic remains consistent.
+    if (wordsOverride && wordsOverride.length) {
+      let words = wordsOverride;
+      if (wordRange) {
+        words = words.slice(wordRange.start, wordRange.end);
+      }
+      // Helper to blank out the target word in a sentence
+      const blankOutWord = (sentence: string, targetWord: string): string => {
+        const s = (sentence || '').trim();
+        if (!s) return '…';
+        const regex = new RegExp(`\\b${targetWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        if (regex.test(s)) return s.replace(regex, '…');
+        const tokens = s.match(/[A-Za-z'']+/g) || [];
+        const targetLower = targetWord.toLowerCase();
+        let foundIdx = tokens.findIndex(t => t.toLowerCase().includes(targetLower) || targetLower.includes(t.toLowerCase()));
+        if (foundIdx === -1) foundIdx = Math.floor(tokens.length / 2);
+        const tokenToReplace = tokens[foundIdx];
+        const idx = s.indexOf(tokenToReplace);
+        return idx !== -1 ? s.slice(0, idx) + '…' + s.slice(idx + tokenToReplace.length) : '…';
+      };
+
+      return words.map((w, wordIdx) => {
+        const correct = blankOutWord(w.example, w.word);
+        const otherWords = words.filter((_, idx) => idx !== wordIdx);
+        const distractors: string[] = [];
+        const shuffled = otherWords
+          .map(ow => ({ word: ow, sort: Math.random() }))
+          .sort((a, b) => a.sort - b.sort)
+          .map(x => x.word);
+        for (const ow of shuffled) {
+          if (distractors.length >= 3) break;
+          const d = blankOutWord(ow.example, w.word);
+          if (!distractors.includes(d) && d !== correct) distractors.push(d);
+        }
+        while (distractors.length < 3) distractors.push('…');
+        const options = [correct, ...distractors]
+          .map(o => ({ o, sort: Math.random() }))
+          .sort((a, b) => a.sort - b.sort)
+          .map(({ o }) => o);
+        return {
+          id: w.word,
+          word: w.word,
+          ipa: w.phonetic,
+          sentences: options.map(text => ({ text, isCorrect: text === correct })),
+        } as any;
+      });
+    }
+
     const level = levels.find(l => l.id === levelId);
     if (!level) return [];
     const set = level.sets.find(s => s.id.toString() === setId);
