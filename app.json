@@ -16,12 +16,13 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.rustikkarim.vocab-working"
+      "bundleIdentifier": "com.rustikkarim.vocab-working",
+      "icon": "./assets/icon.png"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#AFC7CC"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,

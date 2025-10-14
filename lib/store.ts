@@ -245,8 +245,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   
-  // Theme
-  theme: 'dark',
+  // Theme: initialize from system to avoid dark flash before async init
+  theme: ((): ThemeName => {
+    const sys = Appearance.getColorScheme();
+    return (sys === 'light' || sys === 'dark') ? (sys as ThemeName) : 'dark';
+  })(),
   setTheme: async (t: ThemeName) => {
     try {
       await AsyncStorage.setItem('@engniter.theme', t);
@@ -273,13 +276,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       const words = vaultService.getAllWords();
       const analytics = analyticsService.getAnalyticsData();
       const userProgress = await ProgressService.getProgress();
-      // Theme preference
-      // Note: We previously experimented with a light mode. To avoid the app
-      // unintentionally staying in light mode due to a persisted preference,
-      // we now default and persist to dark on init. This overrides any stale
-      // '@engniter.theme' value once at startup.
-      const themePref: ThemeName = 'dark';
-      try { await AsyncStorage.setItem('@engniter.theme', themePref); } catch {}
+      // Theme preference: honor persisted value or system preference; default to dark
+      let themePref: ThemeName | null = null;
+      try {
+        const stored = await AsyncStorage.getItem('@engniter.theme');
+        if (stored === 'light' || stored === 'dark') themePref = stored as ThemeName;
+      } catch {}
+      if (!themePref) {
+        const sys = Appearance.getColorScheme();
+        themePref = (sys === 'light' || sys === 'dark') ? (sys as ThemeName) : 'dark';
+        try { await AsyncStorage.setItem('@engniter.theme', themePref); } catch {}
+      }
 
       set({ words, analytics, userProgress, theme: themePref });
     } catch (error) {

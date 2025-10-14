@@ -19,11 +19,12 @@ const dark: Theme = {
 };
 
 const light: Theme = {
-  background: '#F7F8FA',
-  surface: '#FFFFFF',
+  // Updated palette for light mode
+  background: '#F2E3D0', // main screen color
+  surface: '#F9F1E7',    // card color
   text: '#111827',
   subtext: '#4B5563',
-  border: '#E5E7EB',
+  border: '#F9F1E7',
   accent: '#F2935C',
 };
 

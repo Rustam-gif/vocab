@@ -36,7 +36,7 @@ export const levels: Level[] = [
     sets: [
       {
         id: 1,
-        title: 'A1 — Daily Actions 1',
+        title: 'Daily Actions 1',
         words: [
           { word: 'go', phonetic: '/ɡəʊ/', definition: 'To move from one place to another', example: 'We go to school by bus every morning.', synonyms: ['move', 'travel', 'head'] },
           { word: 'come', phonetic: '/kʌm/', definition: 'To move toward here or another person', example: 'Please come to my house after football practice.', synonyms: ['arrive', 'approach', 'get here'] },
@@ -48,7 +48,7 @@ export const levels: Level[] = [
       },
       {
         id: 2,
-        title: 'A1 — Objects & Handling',
+        title: 'Objects & Handling',
         words: [
           { word: 'get', phonetic: '/ɡet/', definition: 'To receive or obtain something you need', example: 'I get the keys from reception every morning.', synonyms: ['receive', 'obtain', 'pick up'] },
           { word: 'put', phonetic: '/pʊt/', definition: 'To place something in a particular position', example: 'Please put your phone inside the locker now.', synonyms: ['place', 'set', 'lay'] },
@@ -60,7 +60,7 @@ export const levels: Level[] = [
       },
       {
         id: 3,
-        title: 'A1 — Communication Basics',
+        title: 'Communication Basics',
         words: [
           { word: 'ask', phonetic: '/ɑːsk/', definition: 'To say words to get information', example: 'You can ask the teacher after the lesson.', synonyms: ['question', 'enquire', 'request'] },
           { word: 'answer', phonetic: '/ˈɑːnsə/', definition: 'To give information after a question', example: 'Please answer the email before lunchtime today.', synonyms: ['reply', 'respond', 'give answer'] },
@@ -72,7 +72,7 @@ export const levels: Level[] = [
       },
       {
         id: 4,
-        title: 'A1 — Study & Work',
+        title: 'Study & Work',
         words: [
           { word: 'read', phonetic: '/riːd/', definition: 'To look at words and understand', example: 'I read a short story before bed.', synonyms: ['scan', 'look over', 'go through'] },
           { word: 'write', phonetic: '/raɪt/', definition: 'To make words with pen or keyboard', example: 'She writes notes during every lecture at college.', synonyms: ['compose', 'note down', 'record'] },
@@ -84,7 +84,7 @@ export const levels: Level[] = [
       },
       {
         id: 5,
-        title: 'A1 — Personal Care',
+        title: 'Personal Care',
         words: [
           { word: 'wash', phonetic: '/wɒʃ/', definition: 'To clean something using water and soap', example: 'Please wash your hands before you eat dinner.', synonyms: ['clean', 'rinse', 'scrub'] },
           { word: 'brush', phonetic: '/brʌʃ/', definition: 'To clean or smooth with a brush', example: 'I brush my teeth every morning and night.', synonyms: ['clean', 'polish', 'sweep'] },
@@ -96,7 +96,7 @@ export const levels: Level[] = [
       },
       {
         id: 6,
-        title: 'A1 — Travel Basics',
+        title: 'Travel Basics',
         words: [
           { word: 'travel', phonetic: '/ˈtrævəl/', definition: 'To go to places, often far away', example: 'We travel by train to see our grandparents.', synonyms: ['journey', 'go', 'move'] },
           { word: 'visit', phonetic: '/ˈvɪzɪt/', definition: 'To go and spend time with someone', example: 'We visit our aunt on Sundays after lunch.', synonyms: ['see', 'call on', 'drop by'] },
@@ -108,7 +108,7 @@ export const levels: Level[] = [
       },
       {
         id: 7,
-        title: 'A1 — Hand & Carry',
+        title: 'Hand & Carry',
         words: [
           { word: 'use', phonetic: '/juːz/', definition: 'To do something with a thing purposefully', example: 'I use a dictionary when I read news.', synonyms: ['employ', 'apply', 'utilize'] },
           { word: 'hold', phonetic: '/həʊld/', definition: 'To keep something in your hands firmly', example: 'Please hold the ladder while I climb up.', synonyms: ['grip', 'grasp', 'keep'] },
@@ -120,7 +120,7 @@ export const levels: Level[] = [
       },
       {
         id: 8,
-        title: 'A1 — Time & Routine',
+        title: 'Time & Routine',
         words: [
           { word: 'start', phonetic: '/stɑːt/', definition: 'To begin doing something or activity now', example: 'We start class at nine on Monday mornings.', synonyms: ['begin', 'begin doing', 'get going'] },
           { word: 'finish', phonetic: '/ˈfɪnɪʃ/', definition: 'To end something you are doing today', example: 'I finish my homework before dinner each night.', synonyms: ['end', 'complete', 'be done'] },
@@ -132,7 +132,7 @@ export const levels: Level[] = [
       },
       {
         id: 9,
-        title: 'A1 — Family & Friends',
+        title: 'Family & Friends',
         words: [
           { word: 'meet', phonetic: '/miːt/', definition: 'To see someone by plan or chance', example: 'We meet at the park after school today.', synonyms: ['see', 'get together', 'meet up'] },
           { word: 'help', phonetic: '/hɛlp/', definition: 'To do something to make work easier', example: 'Can you help me carry these bags upstairs?', synonyms: ['assist', 'aid', 'support'] },
@@ -144,7 +144,7 @@ export const levels: Level[] = [
       },
       {
         id: 10,
-        title: 'A1 — Senses & Attention',
+        title: 'Senses & Attention',
         words: [
           { word: 'see', phonetic: '/siː/', definition: 'To notice something with your eyes clearly', example: 'I can see the mountains from my window.', synonyms: ['notice', 'spot', 'behold'] },
           { word: 'look', phonetic: '/lʊk/', definition: 'To direct your eyes to something carefully', example: 'Please look at the board during the lesson.', synonyms: ['gaze', 'glance', 'stare'] },
@@ -156,7 +156,7 @@ export const levels: Level[] = [
       },
       {
         id: 11,
-        title: 'A1 — Computer Basics',
+        title: 'Computer Basics',
         words: [
           { word: 'turn on', phonetic: '/tɜːn ɒn/', definition: 'To start a device so it works', example: 'Please turn on the laptop before the lesson.', synonyms: ['switch on', 'power on', 'start'] },
           { word: 'turn off', phonetic: '/tɜːn ɒf/', definition: 'To stop a device so it sleeps', example: 'Don’t forget to turn off the lights after class.', synonyms: ['switch off', 'power off', 'shut down'] },
@@ -168,7 +168,7 @@ export const levels: Level[] = [
       },
       {
         id: 12,
-        title: 'A1 — Movement & Play',
+        title: 'Movement & Play',
         words: [
           { word: 'run', phonetic: '/rʌn/', definition: 'To move very fast using your legs', example: 'We run around the track before stretching together.', synonyms: ['sprint', 'jog', 'dash'] },
           { word: 'jump', phonetic: '/dʒʌmp/', definition: 'To jump off the ground with both feet', example: 'The children jump over the small puddles happily.', synonyms: ['leap', 'hop', 'bounce'] },
@@ -180,7 +180,7 @@ export const levels: Level[] = [
       },
       {
         id: 13,
-        title: 'A1 — Shopping & Errands',
+        title: 'Shopping & Errands',
         words: [
           { word: 'buy', phonetic: '/baɪ/', definition: 'To get something by paying money', example: 'We buy fruit at the market on Saturdays.', synonyms: ['purchase', 'get', 'pick up'] },
           { word: 'pay', phonetic: '/peɪ/', definition: 'To give money to someone you owe', example: 'I pay the bill with my card today.', synonyms: ['settle', 'cover', 'pay for'] },
@@ -192,7 +192,7 @@ export const levels: Level[] = [
       },
       {
         id: 14,
-        title: 'A1 — Weather & Nature',
+        title: 'Weather & Nature',
         words: [
           { word: 'rain', phonetic: '/reɪn/', definition: 'To fall as water drops from clouds', example: 'It often rains here in the spring months.', synonyms: ['drizzle', 'shower', 'pour'] },
           { word: 'snow', phonetic: '/snəʊ/', definition: 'To fall as frozen flakes from clouds', example: 'It might snow tonight on the nearby hills.', synonyms: ['flurry', 'sleet', 'snow lightly'] },
@@ -204,7 +204,7 @@ export const levels: Level[] = [
       },
       {
         id: 15,
-        title: 'A1 — Feelings & Choices',
+        title: 'Feelings & Choices',
         words: [
           { word: 'like', phonetic: '/laɪk/', definition: 'To think something is good or enjoyable', example: 'I like simple songs with easy words.', synonyms: ['enjoy', 'be into', 'prefer'] },
           { word: 'love', phonetic: '/lʌv/', definition: 'To feel very strong liking for someone', example: 'We love our family and spend time together.', synonyms: ['adore', 'care for', 'be fond of'] },
@@ -503,7 +503,7 @@ export const levels: Level[] = [
     sets: [
       {
         id: 1,
-        title: 'IELTS — Data & Trends',
+        title: 'Data & Trends',
         words: [
           { word: 'fluctuate', phonetic: '/ˈflʌktʃueɪt/', definition: 'To change level up and down frequently', example: 'Prices fluctuate during holidays and after major events.', synonyms: ['vary', 'oscillate', 'shift'] },
           { word: 'stabilize', phonetic: '/ˈsteɪbəlaɪz/', definition: 'To make or become steady and consistent', example: 'Policies aim to stabilize rent after sharp increases.', synonyms: ['steady', 'level out', 'firm up'] },
@@ -515,7 +515,7 @@ export const levels: Level[] = [
       },
       {
         id: 2,
-        title: 'IELTS — Academic Processes',
+        title: 'Academic Processes',
         words: [
           { word: 'investigate', phonetic: '/ɪnˈvɛstɪɡeɪt/', definition: 'To examine carefully to discover facts', example: 'Researchers investigate causes using interviews and records.', synonyms: ['examine', 'probe', 'look into'] },
           { word: 'assess', phonetic: '/əˈsɛs/', definition: 'To judge quality or amount after review', example: 'Teachers assess speaking using clear public rubrics.', synonyms: ['evaluate', 'appraise', 'gauge'] },
@@ -743,7 +743,7 @@ export const levels: Level[] = [
       },
       {
         id: 6,
-        title: 'Set 6',
+        title: 'Opinions & Decisions',
         words: [
           { word: 'refuse', definition: 'To say no and not accept something', example: 'He refused the offer politely after reading the contract carefully.', phonetic: '/rɪˈfjuːz/', synonyms: ['decline', 'reject', 'turn down', 'deny'] },
           { word: 'consider', definition: 'To think carefully before making a decision', example: 'Before renting, consider travel time and the total monthly costs.', phonetic: '/kənˈsɪdə/', synonyms: ['think about', 'contemplate', 'weigh', 'regard'] },
@@ -755,7 +755,7 @@ export const levels: Level[] = [
       },
       {
         id: 7,
-        title: 'Set 7',
+        title: 'Community & Volunteering',
         words: [
           { word: 'organize', definition: 'To arrange things so activities run smoothly', example: 'We organized volunteers and tables before the charity market opened.', phonetic: '/ˈɔːɡənaɪz/', synonyms: ['arrange', 'set up', 'coordinate', 'sort out'] },
           { word: 'volunteer', definition: 'To offer help without expecting any payment', example: 'Many residents volunteer on weekends to clean riverside paths.', phonetic: '/ˌvɒlənˈtɪə/', synonyms: ['offer', 'pitch in', 'step forward', 'help'] },
@@ -767,7 +767,7 @@ export const levels: Level[] = [
       },
       {
         id: 8,
-        title: 'Set 8',
+        title: 'Tech Setup',
         words: [
           { word: 'install', definition: 'To put software or equipment in place', example: 'A technician installed the router and checked the signal strength.', phonetic: '/ɪnˈstɔːl/', synonyms: ['set up', 'put in', 'configure', 'mount'] },
           { word: 'update', definition: 'To make something newer with recent changes', example: 'Remember to update apps to fix bugs and improve security.', phonetic: '/ˈʌpdeɪt/', synonyms: ['upgrade', 'refresh', 'patch', 'revise'] },
@@ -779,7 +779,7 @@ export const levels: Level[] = [
       },
       {
         id: 9,
-        title: 'Set 9',
+        title: 'Health & Recovery',
         words: [
           { word: 'prevent', definition: 'To stop something bad from happening again', example: 'Seat belts prevent injuries when cars brake suddenly in traffic.', phonetic: '/prɪˈvɛnt/', synonyms: ['stop', 'avoid', 'block', 'avert'] },
           { word: 'recover', definition: 'To get better after illness or difficulty', example: 'She recovered quickly by resting and following the doctor’s advice.', phonetic: '/rɪˈkʌvə/', synonyms: ['heal', 'get better', 'bounce back', 'regain'] },
@@ -791,7 +791,7 @@ export const levels: Level[] = [
       },
       {
         id: 10,
-        title: 'Set 10',
+        title: 'Scheduling & Appointments',
         words: [
           { word: 'schedule', definition: 'To set a time for something later', example: 'Let’s schedule a follow-up call for Wednesday afternoon.', phonetic: '/ˈʃedjuːl/', synonyms: ['arrange', 'set', 'book', 'timetable'] },
           { word: 'confirm', definition: 'To say a detail is correct officially', example: 'Please confirm your seat by replying to the message.', phonetic: '/kənˈfɜːm/', synonyms: ['verify', 'check', 'approve', 'certify'] },
@@ -803,7 +803,7 @@ export const levels: Level[] = [
       },
       {
         id: 11,
-        title: 'Set 11',
+        title: 'Rules & Requests',
         words: [
           { word: 'warn', definition: 'To tell about danger to prevent harm', example: 'The signs warn hikers about falling rocks after heavy rain.', phonetic: '/wɔːn/', synonyms: ['caution', 'alert', 'notify', 'forewarn'] },
           { word: 'permit', definition: 'To officially allow someone to do something', example: 'The staff permit visitors to take photos without a flash.', phonetic: '/pəˈmɪt/', synonyms: ['allow', 'authorize', 'let', 'approve'] },
@@ -815,7 +815,7 @@ export const levels: Level[] = [
       },
       {
         id: 12,
-        title: 'Set 12',
+        title: 'Orders & Delivery',
         words: [
           { word: 'charge', definition: 'To ask payment amount for a service', example: 'The shop will charge a small fee for home delivery.', phonetic: '/tʃɑːdʒ/', synonyms: ['bill', 'price', 'invoice', 'levy'] },
           { word: 'refund', definition: 'To give money back after a problem', example: 'They’ll refund the ticket if the train is fully canceled.', phonetic: '/ˈriːfʌnd/', synonyms: ['repay', 'reimburse', 'return', 'compensate'] },
@@ -827,7 +827,7 @@ export const levels: Level[] = [
       },
       {
         id: 13,
-        title: 'Set 13',
+        title: 'Conversation & Disagreement',
         words: [
           { word: 'persuade', definition: 'To make someone agree by giving reasons', example: 'She persuaded her parents to let her join the trip.', phonetic: '/pəˈsweɪd/', synonyms: ['convince', 'influence', 'sway', 'win over'] },
           { word: 'argue', definition: 'To speak strongly because you disagree', example: 'Neighbors argued about parking until the council changed the plan.', phonetic: '/ˈɑːɡjuː/', synonyms: ['dispute', 'quarrel', 'contend', 'disagree'] },
@@ -839,7 +839,7 @@ export const levels: Level[] = [
       },
       {
         id: 14,
-        title: 'Set 14',
+        title: 'Reservations & Changes',
         words: [
           { word: 'reserve', definition: 'To book something for your future use', example: 'Let’s reserve seats now so we can sit together.', phonetic: '/rɪˈzɜːv/', synonyms: ['book', 'secure', 'hold', 'set aside'] },
           { word: 'extend', definition: 'To make a period or length longer', example: 'They extended their stay to see family over the weekend.', phonetic: '/ɪkˈstend/', synonyms: ['lengthen', 'prolong', 'continue', 'stretch'] },
@@ -851,7 +851,7 @@ export const levels: Level[] = [
       },
       {
         id: 15,
-        title: 'Set 15',
+        title: 'Assembly & Fixing',
         words: [
           { word: 'assemble', definition: 'To put parts together to make something', example: 'We assembled the shelves carefully using the picture instructions.', phonetic: '/əˈsɛmbl/', synonyms: ['build', 'put together', 'construct', 'set up'] },
           { word: 'adjust', definition: 'To change slightly so it fits better', example: 'You may adjust the chair height for better back support.', phonetic: '/əˈdʒʌst/', synonyms: ['modify', 'alter', 'tune', 'tweak'] },
@@ -863,7 +863,7 @@ export const levels: Level[] = [
       },
       {
         id: 16,
-        title: 'Set 16',
+        title: 'Food & Cooking',
         words: [
           { word: 'order', definition: 'To ask for food or items to buy', example: 'We’ll order two pizzas and a salad for the group.', phonetic: '/ˈɔːdə/', synonyms: ['request', 'purchase', 'place order', 'order in'] },
           { word: 'serve', definition: 'To give food or help to people', example: 'They serve breakfast until eleven on weekends and holidays.', phonetic: '/sɜːv/', synonyms: ['give', 'hand out', 'present', 'provide'] },
@@ -875,7 +875,7 @@ export const levels: Level[] = [
       },
       {
         id: 17,
-        title: 'Set 17',
+        title: 'Emotions & Reactions',
         words: [
           { word: 'worry', definition: 'To feel anxious about possible problems', example: 'Try not to worry; the results arrive tomorrow afternoon.', phonetic: '/ˈwʌri/', synonyms: ['fret', 'be anxious', 'stress'] },
           { word: 'cheer', definition: 'To make someone feel happier or hopeful', example: 'A short message can cheer friends during tough weeks.', phonetic: '/tʃɪə/', synonyms: ['encourage', 'hearten', 'brighten'] },
@@ -887,7 +887,7 @@ export const levels: Level[] = [
       },
       {
         id: 18,
-        title: 'Set 18',
+        title: 'Emphasize & Adapt',
         words: [
           { word: 'heat', definition: 'To make something warmer using energy', example: 'We heat the living room before guests arrive tonight.', phonetic: '/hiːt/', synonyms: ['warm', 'heat up', 'warm up'] },
           { word: 'cool', definition: 'To make something less warm or hot', example: 'Open the window to cool the room after cooking.', phonetic: '/kuːl/', synonyms: ['chill', 'cool down', 'lower'] },
@@ -899,7 +899,7 @@ export const levels: Level[] = [
       },
       {
         id: 19,
-        title: 'Set 19',
+        title: 'Act & Uphold',
         words: [
           { word: 'paint', definition: 'To cover a surface with colored liquid', example: 'We paint small models together on quiet Sunday afternoons.', phonetic: '/peɪnt/', synonyms: ['color', 'decorate', 'coat'] },
           { word: 'draw', definition: 'To make pictures using lines and shapes', example: 'Children draw animals first, then add backgrounds and color.', phonetic: '/drɔː/', synonyms: ['sketch', 'outline', 'illustrate'] },
@@ -911,7 +911,7 @@ export const levels: Level[] = [
       },
       {
         id: 20,
-        title: 'Set 20',
+        title: 'Evaluate & Persuade',
         words: [
           { word: 'fill in', definition: 'To complete a form by writing details', example: 'Please fill in the visitor form before you enter.', phonetic: '/ˌfɪl ˈɪn/', synonyms: ['complete', 'write in', 'enter details'] },
           { word: 'submit', definition: 'To send work or forms for approval', example: 'You must submit timesheets by noon each Friday.', phonetic: '/səbˈmɪt/', synonyms: ['send in', 'hand in', 'turn in'] },
@@ -923,7 +923,7 @@ export const levels: Level[] = [
       },
       {
         id: 16,
-        title: 'Set 16',
+        title: 'Food & Cooking',
         words: [
           { word: 'order', definition: 'To ask for food or items to buy', example: 'We’ll order two pizzas and a salad for the group.', phonetic: '/ˈɔːdə/', synonyms: ['request', 'purchase', 'place order', 'order in'] },
           { word: 'serve', definition: 'To give food or help to people', example: 'They serve breakfast until eleven on weekends and holidays.', phonetic: '/sɜːv/', synonyms: ['give', 'hand out', 'present', 'provide'] },
@@ -935,7 +935,7 @@ export const levels: Level[] = [
       },
       {
         id: 17,
-        title: 'Set 17',
+        title: 'Emotions & Reactions',
         words: [
           { word: 'worry', definition: 'To feel anxious about possible problems', example: 'Try not to worry; the results arrive tomorrow afternoon.', phonetic: '/ˈwʌri/', synonyms: ['fret', 'be anxious', 'stress'] },
           { word: 'cheer', definition: 'To make someone feel happier or hopeful', example: 'A short message can cheer friends during tough weeks.', phonetic: '/tʃɪə/', synonyms: ['encourage', 'hearten', 'brighten'] },
@@ -947,7 +947,7 @@ export const levels: Level[] = [
       },
       {
         id: 18,
-        title: 'Set 18',
+        title: 'Emphasize & Adapt',
         words: [
           { word: 'heat', definition: 'To make something warmer using energy', example: 'We heat the living room before guests arrive tonight.', phonetic: '/hiːt/', synonyms: ['warm', 'heat up', 'warm up'] },
           { word: 'cool', definition: 'To make something less warm or hot', example: 'Open the window to cool the room after cooking.', phonetic: '/kuːl/', synonyms: ['chill', 'cool down', 'lower'] },
@@ -959,7 +959,7 @@ export const levels: Level[] = [
       },
       {
         id: 19,
-        title: 'Set 19',
+        title: 'Act & Uphold',
         words: [
           { word: 'paint', definition: 'To cover a surface with colored liquid', example: 'We paint small models together on quiet Sunday afternoons.', phonetic: '/peɪnt/', synonyms: ['color', 'decorate', 'coat'] },
           { word: 'draw', definition: 'To make pictures using lines and shapes', example: 'Children draw animals first, then add backgrounds and color.', phonetic: '/drɔː/', synonyms: ['sketch', 'outline', 'illustrate'] },
@@ -971,7 +971,7 @@ export const levels: Level[] = [
       },
       {
         id: 20,
-        title: 'Set 20',
+        title: 'Evaluate & Persuade',
         words: [
           { word: 'fill in', definition: 'To complete a form by writing details', example: 'Please fill in the visitor form before you enter.', phonetic: '/ˌfɪl ˈɪn/', synonyms: ['complete', 'write in', 'enter details'] },
           { word: 'submit', definition: 'To send work or forms for approval', example: 'You must submit timesheets by noon each Friday.', phonetic: '/səbˈmɪt/', synonyms: ['send in', 'hand in', 'turn in'] },
@@ -1241,7 +1241,7 @@ export const levels: Level[] = [
     sets: [
       {
         id: 1,
-        title: 'Set 1',
+        title: 'Travel & Booking',
         words: [
           { word: 'pack', definition: 'To put belongings into bags for travel', example: 'We packed last night so catching the early train felt easy.', phonetic: '/pæk/', synonyms: ['load', 'stow', 'bundle', 'bag'] },
           { word: 'book', definition: 'To reserve and pay for a service', example: 'Let\u2019s book the hotel today before the prices go up.', phonetic: '/bʊk/', synonyms: ['reserve', 'schedule', 'arrange', 'secure'] },
@@ -1253,7 +1253,7 @@ export const levels: Level[] = [
       },
       {
         id: 2,
-        title: 'Set 2',
+        title: 'Health & Fitness',
         words: [
           { word: 'stretch', definition: 'To extend muscles gently to improve flexibility', example: 'Stretch for five minutes before running to prevent tight calves.', phonetic: '/strɛtʃ/', synonyms: ['extend', 'lengthen', 'loosen', 'limber'] },
           { word: 'hydrate', definition: 'To drink enough water to stay healthy', example: 'Remember to hydrate during hot days, even if you\u2019re indoors.', phonetic: '/ˈhaɪdreɪt/', synonyms: ['drink', 'water', 'replenish', 'rehydrate'] },
@@ -1265,7 +1265,7 @@ export const levels: Level[] = [
       },
       {
         id: 3,
-        title: 'Set 3',
+        title: 'Study Skills',
         words: [
           { word: 'review', definition: 'To look again to check and improve', example: 'Please review chapter five before tomorrow\u2019s short quiz.', phonetic: '/rɪˈvjuː/', synonyms: ['check', 'revisit', 'go over', 'revise'] },
           { word: 'memorize', definition: 'To learn information so you remember later', example: 'I memorize new words with flashcards every night.', phonetic: '/ˈmɛmərəˌzaɪz/', synonyms: ['learn', 'remember', 'retain', 'commit'] },
@@ -1277,7 +1277,7 @@ export const levels: Level[] = [
       },
       {
         id: 4,
-        title: 'Set 4',
+        title: 'Home & DIY',
         words: [
           { word: 'sweep', definition: 'To clean a floor by moving a broom', example: 'Please sweep the kitchen before guests arrive tonight.', phonetic: '/swiːp/', synonyms: ['brush', 'clean', 'clear', 'tidy'] },
           { word: 'boil', definition: 'To heat liquid until it bubbles strongly', example: 'Boil the pasta water, then add salt and noodles.', phonetic: '/bɔɪl/', synonyms: ['heat', 'bubble', 'cook', 'seethe'] },
@@ -1289,7 +1289,7 @@ export const levels: Level[] = [
       },
       {
         id: 5,
-        title: 'Set 5',
+        title: 'Weather & Nature',
         words: [
           { word: 'shine', definition: 'To give bright light like the sun', example: 'The lantern shone all night during the campsite storm.', phonetic: '/ʃaɪn/', synonyms: ['glow', 'gleam', 'beam', 'sparkle'] },
           { word: 'rain', definition: 'To fall as water drops from clouds', example: 'It rained all morning, then the sun came out.', phonetic: '/reɪn/', synonyms: ['pour', 'drizzle', 'shower', 'rain down'] },
@@ -1301,7 +1301,7 @@ export const levels: Level[] = [
       },
       {
         id: 6,
-        title: 'Set 6',
+        title: 'Opinions & Decisions',
         words: [
           { word: 'refuse', definition: 'To say no and not accept something', example: 'He refused the offer politely after reading the contract carefully.', phonetic: '/rɪˈfjuːz/', synonyms: ['decline', 'reject', 'turn down', 'deny'] },
           { word: 'consider', definition: 'To think carefully before making a decision', example: 'Before renting, consider travel time and the total monthly costs.', phonetic: '/kənˈsɪdə/', synonyms: ['think about', 'contemplate', 'weigh', 'regard'] },
@@ -1313,7 +1313,7 @@ export const levels: Level[] = [
       },
       {
         id: 7,
-        title: 'Set 7',
+        title: 'Community & Volunteering',
         words: [
           { word: 'organize', definition: 'To arrange things so activities run smoothly', example: 'We organized volunteers and tables before the charity market opened.', phonetic: '/ˈɔːɡənaɪz/', synonyms: ['arrange', 'set up', 'coordinate', 'sort out'] },
           { word: 'volunteer', definition: 'To offer help without expecting any payment', example: 'Many residents volunteer on weekends to clean riverside paths.', phonetic: '/ˌvɒlənˈtɪə/', synonyms: ['offer', 'pitch in', 'step forward', 'help'] },
@@ -1325,7 +1325,7 @@ export const levels: Level[] = [
       },
       {
         id: 8,
-        title: 'Set 8',
+        title: 'Tech Setup',
         words: [
           { word: 'install', definition: 'To put software or equipment in place', example: 'Please install the printer before the class begins at nine.', phonetic: '/ɪnˈstɔːl/', synonyms: ['set up', 'put in', 'configure', 'mount'] },
           { word: 'update', definition: 'To make something newer with recent changes', example: 'Remember to update apps to fix bugs and improve security.', phonetic: '/ˈʌpdeɪt/', synonyms: ['upgrade', 'refresh', 'patch', 'revise'] },
@@ -1337,7 +1337,7 @@ export const levels: Level[] = [
       },
       {
         id: 9,
-        title: 'Set 9',
+        title: 'Health & Recovery',
         words: [
           { word: 'prevent', definition: 'To stop something bad from happening again', example: 'Good handwashing helps prevent stomach bugs during holiday trips.', phonetic: '/prɪˈvɛnt/', synonyms: ['stop', 'avoid', 'block', 'avert'] },
           { word: 'recover', definition: 'To get better after illness or difficulty', example: 'It may take weeks to recover fully after the operation.', phonetic: '/rɪˈkʌvə/', synonyms: ['heal', 'get better', 'bounce back', 'regain'] },
@@ -1349,7 +1349,7 @@ export const levels: Level[] = [
       },
       {
         id: 10,
-        title: 'Set 10',
+        title: 'Scheduling & Appointments',
         words: [
           { word: 'schedule', definition: 'To set a time for something later', example: 'We should schedule the interview before the end of today.', phonetic: '/ˈʃedjuːl/', synonyms: ['arrange', 'set', 'book', 'timetable'] },
           { word: 'confirm', definition: 'To say a detail is correct officially', example: 'Could you confirm the delivery window before tomorrow morning?', phonetic: '/kənˈfɜːm/', synonyms: ['verify', 'check', 'approve', 'certify'] },
@@ -1361,7 +1361,7 @@ export const levels: Level[] = [
       },
       {
         id: 11,
-        title: 'Set 11',
+        title: 'Rules & Requests',
         words: [
           { word: 'warn', definition: 'To tell about danger to prevent harm', example: 'The signs warn hikers about falling rocks after heavy rain.', phonetic: '/wɔːn/', synonyms: ['caution', 'alert', 'notify', 'forewarn'] },
           { word: 'permit', definition: 'To officially allow someone to do something', example: 'The staff permit visitors to take photos without a flash.', phonetic: '/pəˈmɪt/', synonyms: ['allow', 'authorize', 'let', 'approve'] },
@@ -1373,7 +1373,7 @@ export const levels: Level[] = [
       },
       {
         id: 12,
-        title: 'Set 12',
+        title: 'Orders & Delivery',
         words: [
           { word: 'charge', definition: 'To ask payment amount for a service', example: 'The shop will charge a small fee for home delivery.', phonetic: '/tʃɑːdʒ/', synonyms: ['bill', 'price', 'invoice', 'levy'] },
           { word: 'refund', definition: 'To give money back after a problem', example: 'They’ll refund the ticket if the train is fully canceled.', phonetic: '/ˈriːfʌnd/', synonyms: ['repay', 'reimburse', 'return', 'compensate'] },
@@ -1385,7 +1385,7 @@ export const levels: Level[] = [
       },
       {
         id: 13,
-        title: 'Set 13',
+        title: 'Conversation & Disagreement',
         words: [
           { word: 'persuade', definition: 'To make someone agree by giving reasons', example: 'She persuaded her parents to let her join the trip.', phonetic: '/pəˈsweɪd/', synonyms: ['convince', 'influence', 'sway', 'win over'] },
           { word: 'argue', definition: 'To speak strongly because you disagree', example: 'Neighbors argued about parking until the council changed the plan.', phonetic: '/ˈɑːɡjuː/', synonyms: ['dispute', 'quarrel', 'contend', 'disagree'] },
@@ -1397,7 +1397,7 @@ export const levels: Level[] = [
       },
       {
         id: 14,
-        title: 'Set 14',
+        title: 'Reservations & Changes',
         words: [
           { word: 'reserve', definition: 'To book something for your future use', example: 'Let’s reserve seats now so we can sit together.', phonetic: '/rɪˈzɜːv/', synonyms: ['book', 'secure', 'hold', 'set aside'] },
           { word: 'extend', definition: 'To make a period or length longer', example: 'They extended their stay to see family over the weekend.', phonetic: '/ɪkˈstend/', synonyms: ['lengthen', 'prolong', 'continue', 'stretch'] },
@@ -1409,7 +1409,7 @@ export const levels: Level[] = [
       },
       {
         id: 15,
-        title: 'Set 15',
+        title: 'Assembly & Fixing',
         words: [
           { word: 'assemble', definition: 'To put parts together to make something', example: 'We assembled the shelves carefully using the picture instructions.', phonetic: '/əˈsɛmbl/', synonyms: ['build', 'put together', 'construct', 'set up'] },
           { word: 'adjust', definition: 'To change slightly so it fits better', example: 'You may adjust the chair height for better back support.', phonetic: '/əˈdʒʌst/', synonyms: ['modify', 'alter', 'tune', 'tweak'] },
@@ -1421,7 +1421,7 @@ export const levels: Level[] = [
       },
       {
         id: 16,
-        title: 'Set 16',
+        title: 'Food & Cooking',
         words: [
           { word: 'order', definition: 'To ask for food or items to buy', example: 'We’ll order two pizzas and a salad for the group.', phonetic: '/ˈɔːdə/', synonyms: ['request', 'purchase', 'place order', 'order in'] },
           { word: 'serve', definition: 'To give food or help to people', example: 'They serve breakfast until eleven on weekends and holidays.', phonetic: '/sɜːv/', synonyms: ['give', 'hand out', 'present', 'provide'] },
@@ -1433,7 +1433,7 @@ export const levels: Level[] = [
       },
       {
         id: 17,
-        title: 'Set 17',
+        title: 'Emotions & Reactions',
         words: [
           { word: 'worry', definition: 'To feel anxious about possible problems', example: 'Try not to worry; the results arrive tomorrow afternoon.', phonetic: '/ˈwʌri/', synonyms: ['fret', 'be anxious', 'stress'] },
           { word: 'cheer', definition: 'To make someone feel happier or hopeful', example: 'A short message can cheer friends during tough weeks.', phonetic: '/tʃɪə/', synonyms: ['encourage', 'hearten', 'brighten'] },
@@ -1445,7 +1445,7 @@ export const levels: Level[] = [
       },
       {
         id: 18,
-        title: 'Set 18',
+        title: 'Laundry & Household',
         words: [
           { word: 'heat', definition: 'To make something warmer using energy', example: 'We heat the living room before guests arrive tonight.', phonetic: '/hiːt/', synonyms: ['warm', 'heat up', 'warm up'] },
           { word: 'cool', definition: 'To make something less warm or hot', example: 'Open the window to cool the room after cooking.', phonetic: '/kuːl/', synonyms: ['chill', 'cool down', 'lower'] },
@@ -1457,7 +1457,7 @@ export const levels: Level[] = [
       },
       {
         id: 19,
-        title: 'Set 19',
+        title: 'Hobbies & Outdoors',
         words: [
           { word: 'paint', definition: 'To cover a surface with colored liquid', example: 'We paint small models together on quiet Sunday afternoons.', phonetic: '/peɪnt/', synonyms: ['color', 'decorate', 'coat'] },
           { word: 'draw', definition: 'To make pictures using lines and shapes', example: 'Children draw animals first, then add backgrounds and color.', phonetic: '/drɔː/', synonyms: ['sketch', 'outline', 'illustrate'] },
@@ -1469,7 +1469,7 @@ export const levels: Level[] = [
       },
       {
         id: 20,
-        title: 'Set 20',
+        title: 'Forms & Office Tasks',
         words: [
           { word: 'fill in', definition: 'To complete a form by writing details', example: 'Please fill in the visitor form before you enter.', phonetic: '/ˌfɪl ˈɪn/', synonyms: ['complete', 'write in', 'enter details'] },
           { word: 'submit', definition: 'To send work or forms for approval', example: 'You must submit timesheets by noon each Friday.', phonetic: '/səbˈmɪt/', synonyms: ['send in', 'hand in', 'turn in'] },
@@ -1490,7 +1490,7 @@ export const levels: Level[] = [
     sets: [
       {
         id: 1,
-        title: 'Set 1',
+        title: 'Descriptive Adjectives',
         words: [
           { word: 'fragile', definition: 'Easily broken or damaged, requiring careful handling', example: 'Handle the fragile vase carefully; its thin glass chips easily.', phonetic: '/ˈfrædʒaɪl/', synonyms: ['delicate', 'breakable', 'brittle', 'frail'] },
           { word: 'generous', definition: 'Willing to give more than necessary', example: 'Her generous donation kept the shelter open through winter this year.', phonetic: '/ˈdʒɛnərəs/', synonyms: ['charitable', 'big-hearted', 'liberal', 'giving'] },
@@ -1502,7 +1502,7 @@ export const levels: Level[] = [
       },
       {
         id: 2,
-        title: 'Set 2',
+        title: 'Actions & Attitudes',
         words: [
           { word: 'predict', definition: 'To say what will happen before', example: "Experts predict heavy rain tomorrow despite today's unusually clear sky.", phonetic: '/prɪˈdɪkt/', synonyms: ['anticipate', 'foresee', 'expect', 'forecast'] },
           { word: 'avoid', definition: 'To keep away from something unpleasant', example: 'We should avoid busy roads during rush hour to stay safe.', phonetic: '/əˈvɔɪd/', synonyms: ['evade', 'dodge', 'shun', 'steer clear'] },
@@ -1515,7 +1515,7 @@ export const levels: Level[] = [
       },
       {
         id: 3,
-        title: 'Set 3',
+        title: 'Decisions & Delivery',
         words: [
           { word: 'decide', definition: 'To choose after considering different possible options', example: 'After comparing prices, we decided to buy the smaller model.', phonetic: '/dɪˈsaɪd/', synonyms: ['choose', 'determine', 'settle', 'conclude'] },
           { word: 'recommend', definition: 'To suggest something as good or suitable', example: 'I recommend visiting early, because the museum gets crowded later.', phonetic: '/ˌrɛkəˈmɛnd/', synonyms: ['suggest', 'advise', 'endorse', 'propose'] },
@@ -1527,7 +1527,7 @@ export const levels: Level[] = [
       },
       {
         id: 4,
-        title: 'Set 4',
+        title: 'Compare & Explain',
         words: [
           { word: 'borrow', definition: 'To take and use something temporarily', example: 'You can borrow my umbrella if the rain starts again.', phonetic: '/ˈbɒrəʊ/', synonyms: ['take on loan', 'use temporarily', 'get on loan'] },
           { word: 'lend', definition: 'To give something temporarily to someone', example: 'She agreed to lend me her notes for tomorrow\'s exam.', phonetic: '/lɛnd/', synonyms: ['loan', 'give temporarily', 'advance'] },
@@ -1539,7 +1539,7 @@ export const levels: Level[] = [
       },
       {
         id: 5,
-        title: 'Set 5',
+        title: 'Planning & Problem Solving',
         words: [
           { word: 'mitigate', definition: 'To make a problem less severe or harmful', example: 'New safety guidelines aim to mitigate risks during maintenance work.', phonetic: '/ˈmɪtɪɡeɪt/', synonyms: ['lessen', 'alleviate', 'reduce', 'ease'] },
           { word: 'allocate', definition: 'To assign resources or duties for particular purposes', example: 'The manager will allocate funds after reviewing each department’s proposal.', phonetic: '/ˈæləkeɪt/', synonyms: ['assign', 'apportion', 'distribute', 'earmark'] },
@@ -1551,7 +1551,7 @@ export const levels: Level[] = [
       },
       {
         id: 6,
-        title: 'Set 6',
+        title: 'Evaluation & Reasoning',
         words: [
           { word: 'assess', definition: "To evaluate something's quality, value, or significance", example: 'We need to assess the proposal before allocating any funds.', phonetic: '/əˈsɛs/', synonyms: ['evaluate', 'appraise', 'gauge', 'judge'] },
           { word: 'interpret', definition: 'To explain the meaning of something clearly', example: 'Students must interpret the graph before answering the final question.', phonetic: '/ɪnˈtɜːprɪt/', synonyms: ['explain', 'construe', 'decipher', 'expound'] },
@@ -1563,7 +1563,7 @@ export const levels: Level[] = [
       },
       {
         id: 7,
-        title: 'Set 7',
+        title: 'Advocacy & Analysis',
         words: [
           { word: 'scrutinize', definition: 'To examine something carefully for detailed accuracy', example: 'Editors scrutinize every reference to prevent misleading claims in print.', phonetic: '/ˈskruːtɪnaɪz/', synonyms: ['inspect', 'examine', 'analyze', 'probe'] },
           { word: 'advocate', definition: 'To publicly support a cause or idea', example: 'Scientists advocate stronger policies to protect rapidly warming ecosystems.', phonetic: '/ˈædvəkeɪt/', synonyms: ['support', 'champion', 'endorse', 'promote'] },
@@ -1575,7 +1575,7 @@ export const levels: Level[] = [
       },
       {
         id: 8,
-        title: 'Set 8',
+        title: 'Argument & Claims',
         words: [
           { word: 'assert', definition: 'To state something confidently as true', example: 'The author asserts the policy harms small businesses in rural areas.', phonetic: '/əˈsɜːt/', synonyms: ['maintain', 'claim', 'contend', 'affirm'] },
           { word: 'concede', definition: 'To admit something true after initial denial', example: 'After reviewing the data, she conceded their method needed revisions.', phonetic: '/kənˈsiːd/', synonyms: ['admit', 'acknowledge', 'yield', 'grant'] },
@@ -1587,7 +1587,7 @@ export const levels: Level[] = [
       },
       {
         id: 9,
-        title: 'Set 9',
+        title: 'Evidence & Methods',
         words: [
           { word: 'contrast', definition: 'To compare to show clear differences', example: 'The study contrasts rural and urban spending across three decades.', phonetic: '/ˈkɒntrɑːst/', synonyms: ['differ', 'distinguish', 'juxtapose', 'set against'] },
           { word: 'corroborate', definition: 'To provide evidence that supports a claim', example: 'Multiple witnesses corroborated the timeline described in the police statement.', phonetic: '/kəˈrɒbəreɪt/', synonyms: ['confirm', 'substantiate', 'validate', 'support'] },
@@ -1599,7 +1599,7 @@ export const levels: Level[] = [
       },
       {
         id: 10,
-        title: 'Set 10',
+        title: 'Data & Clarity',
         words: [
           { word: 'correlate', definition: 'To show a relationship between two variables', example: 'Their findings correlate temperature spikes with increased energy consumption nationwide.', phonetic: '/ˈkɒrəleɪt/', synonyms: ['connect', 'relate', 'link', 'associate'] },
           { word: 'validate', definition: 'To confirm something is accurate or acceptable', example: 'Independent labs validate the results before journals agree to publish.', phonetic: '/ˈvælɪdeɪt/', synonyms: ['confirm', 'verify', 'authenticate', 'substantiate'] },
@@ -1611,7 +1611,7 @@ export const levels: Level[] = [
       },
       {
         id: 11,
-        title: 'Set 11',
+        title: 'Planning & Coordination',
         words: [
           { word: 'prioritize', definition: 'To arrange tasks by importance or urgency', example: 'We must prioritize critical bugs before adding new optional features.', phonetic: '/praɪˈɒrətaɪz/', synonyms: ['rank', 'order', 'sequence', 'triage'] },
           { word: 'negotiate', definition: 'To discuss terms to reach a fair agreement', example: 'Vendors will negotiate prices if we present dependable long-term demand.', phonetic: '/nɪˈɡəʊʃieɪt/', synonyms: ['bargain', 'discuss terms', 'broker', 'mediate'] },
@@ -1623,7 +1623,7 @@ export const levels: Level[] = [
       },
       {
         id: 12,
-        title: 'Set 12',
+        title: 'Legal & Compliance',
         words: [
           { word: 'enforce', definition: 'Ensure rules are obeyed through authority', example: 'Inspectors enforce safety rules during construction to prevent avoidable accidents.', phonetic: '/ɪnˈfɔːs/', synonyms: ['impose', 'apply', 'implement', 'execute'] },
           { word: 'comply', definition: 'Act according to rules, requests, or standards', example: 'All suppliers must comply with updated packaging standards this year.', phonetic: '/kəmˈplaɪ/', synonyms: ['obey', 'conform', 'adhere', 'follow'] },
@@ -1635,7 +1635,7 @@ export const levels: Level[] = [
       },
       {
         id: 13,
-        title: 'Set 13',
+        title: 'Change & Correction',
         words: [
           { word: 'curtail', definition: 'To reduce something in extent or amount', example: 'The committee voted to curtail overtime during the slower season.', phonetic: '/kɜːˈteɪl/', synonyms: ['reduce', 'cut', 'limit', 'restrict'] },
           { word: 'amplify', definition: 'To make something stronger, louder, or greater', example: 'The update will amplify signal strength in crowded indoor spaces.', phonetic: '/ˈæmplɪfaɪ/', synonyms: ['increase', 'boost', 'intensify', 'magnify'] },
@@ -1648,7 +1648,7 @@ export const levels: Level[] = [
       ,
       {
         id: 14,
-        title: 'Set 14',
+        title: 'Emphasis & Response',
         words: [
           { word: 'contemplate', definition: 'To think about something deeply and carefully', example: 'She paused to contemplate moving abroad before signing the lease.', phonetic: '/ˈkɒntəmpleɪt/', synonyms: ['consider', 'ponder', 'deliberate', 'mull over'] },
           { word: 'bolster', definition: 'To support or strengthen something already existing', example: 'New evidence will bolster their case before the review board.', phonetic: '/ˈbəʊlstə/', synonyms: ['strengthen', 'support', 'reinforce', 'fortify'] },
@@ -1661,7 +1661,7 @@ export const levels: Level[] = [
       ,
       {
         id: 15,
-        title: 'Set 15',
+        title: 'Trends & Change',
         words: [
           { word: 'fluctuate', definition: 'To change level frequently, rising and falling', example: 'Energy demand fluctuates during heatwaves, challenging grids and pushing prices higher nationwide.', phonetic: '/ˈflʌktʃueɪt/', synonyms: ['vary', 'oscillate', 'swing', 'shift'] },
           { word: 'stabilize', definition: 'To make or become steady and consistent', example: 'Emergency loans helped stabilize markets after weeks of unsettling volatility worldwide.', phonetic: '/ˈsteɪbəlaɪz/', synonyms: ['steady', 'level', 'normalize', 'balance'] },
@@ -1674,7 +1674,7 @@ export const levels: Level[] = [
       ,
       {
         id: 16,
-        title: 'Set 16',
+        title: 'Refine & Verify',
         words: [
           { word: 'verify', definition: 'Confirm truth or accuracy through careful checks', example: 'Scientists verify results with replication before publishing in major journals.', phonetic: '/ˈvɛrɪfaɪ/', synonyms: ['confirm', 'validate', 'authenticate', 'check'] },
           { word: 'refine', definition: 'Improve something by making small precise changes', example: 'We refined the prototype after testers reported several usability issues.', phonetic: '/rɪˈfaɪn/', synonyms: ['improve', 'polish', 'hone', 'sharpen'] },
@@ -1687,7 +1687,7 @@ export const levels: Level[] = [
       ,
       {
         id: 17,
-        title: 'Set 17',
+        title: 'Resolve & Clarify',
         words: [
           { word: 'alleviate', definition: 'To make pain or problems less severe', example: 'Simple breathing exercises can alleviate stress during high-pressure interviews significantly.', phonetic: '/əˈliːvieɪt/', synonyms: ['lessen', 'ease', 'mitigate', 'relieve'] },
           { word: 'exacerbate', definition: 'To make a difficult situation even worse', example: 'Ignoring early warnings may exacerbate shortages throughout the winter months.', phonetic: '/ɪɡˈzæsəbeɪt/', synonyms: ['worsen', 'aggravate', 'intensify', 'amplify'] },
@@ -1700,7 +1700,7 @@ export const levels: Level[] = [
       ,
       {
         id: 18,
-        title: 'Set 18',
+        title: 'Emphasize & Adapt',
         words: [
           { word: 'emphasize', definition: 'To give special importance or extra attention', example: 'Teachers emphasize key steps so learners avoid common mistakes early.', phonetic: '/ˈɛmfəsaɪz/', synonyms: ['stress', 'highlight', 'underscore', 'accentuate'] },
           { word: 'acknowledge', definition: 'To accept or admit the truth of something', example: 'He must acknowledge the error and apologize before submitting the revision.', phonetic: '/əkˈnɒlɪdʒ/', synonyms: ['admit', 'accept', 'recognize', 'concede'] },
@@ -1713,7 +1713,7 @@ export const levels: Level[] = [
       ,
       {
         id: 19,
-        title: 'Set 19',
+        title: 'Act & Uphold',
         words: [
           { word: 'expedite', definition: 'To make a process happen faster', example: 'Extra staff can expedite passport applications during peak travel season.', phonetic: '/ˈɛkspɪdaɪt/', synonyms: ['accelerate', 'hasten', 'speed up', 'fast-track'] },
           { word: 'hamper', definition: 'To make progress difficult or slow', example: 'Road closures hamper deliveries when storms hit remote mountain towns.', phonetic: '/ˈhæmpə/', synonyms: ['hinder', 'impede', 'obstruct', 'hold back'] },
@@ -1726,7 +1726,7 @@ export const levels: Level[] = [
       ,
       {
         id: 20,
-        title: 'Set 20',
+        title: 'Evaluate & Persuade',
         words: [
           { word: 'evaluate', definition: 'Judge something’s value, quality, or effectiveness', example: 'Teachers evaluate projects using clear criteria and feedback rubrics each semester.', phonetic: '/ɪˈvæljueɪt/', synonyms: ['assess', 'appraise', 'judge', 'rate'] },
           { word: 'depict', definition: 'Represent something in words, pictures, or symbols', example: 'The mural depicts local history using bold colors and simple shapes.', phonetic: '/dɪˈpɪkt/', synonyms: ['portray', 'represent', 'illustrate', 'show'] },
@@ -1739,7 +1739,7 @@ export const levels: Level[] = [
       ,
       {
         id: 21,
-        title: 'Set 21',
+        title: 'Claims & Influence',
         words: [
           { word: 'allege', definition: 'To claim something as true without proof', example: 'Witnesses allege the contract was altered after signatures without consent.', phonetic: '/əˈlɛdʒ/', synonyms: ['claim', 'assert', 'contend', 'maintain'] },
           { word: 'cite', definition: 'To mention evidence as support in argument', example: 'Report authors cite three sources to support the revised estimates.', phonetic: '/saɪt/', synonyms: ['quote', 'mention', 'refer to', 'reference'] },
@@ -1752,7 +1752,7 @@ export const levels: Level[] = [
       ,
       {
         id: 22,
-        title: 'Set 22',
+        title: 'Inquiry & Research',
         words: [
           { word: 'investigate', definition: 'To examine a subject carefully for facts', example: 'Reporters investigate claims before publishing any potentially damaging story.', phonetic: '/ɪnˈvɛstɪɡeɪt/', synonyms: ['examine', 'look into', 'explore', 'check'] },
           { word: 'deduce', definition: 'To reach a conclusion from available evidence', example: 'From these figures, analysts deduce which strategy performed best.', phonetic: '/dɪˈdjuːs/', synonyms: ['infer', 'conclude', 'derive', 'reason'] },
@@ -1765,7 +1765,7 @@ export const levels: Level[] = [
       ,
       {
         id: 23,
-        title: 'Set 23',
+        title: 'Process Improvement',
         words: [
           { word: 'streamline', definition: 'To simplify a process for greater efficiency', example: 'They streamlined onboarding to reduce errors and shorten waiting times.', phonetic: '/ˈstriːmlaɪn/', synonyms: ['simplify', 'rationalize', 'optimize', 'trim'] },
           { word: 'automate', definition: 'To make a task operate by itself', example: 'The team automated billing to cut repetitive manual work.', phonetic: '/ˈɔːtəmeɪt/', synonyms: ['mechanize', 'computerize', 'systematize', 'robotize'] },
@@ -1778,7 +1778,7 @@ export const levels: Level[] = [
       ,
       {
         id: 24,
-        title: 'Set 24',
+        title: 'Explain & Restate',
         words: [
           { word: 'paraphrase', definition: 'To express the same meaning using different words', example: 'Please paraphrase sources rather than copying long sections directly.', phonetic: '/ˈpærəfreɪz/', synonyms: ['reword', 'restate', 'rephrase', 'put differently'] },
           { word: 'summarize', definition: 'To present main points briefly and clearly', example: 'Start by summarizing findings before discussing their implications further.', phonetic: '/ˈsʌməraɪz/', synonyms: ['outline', 'recap', 'condense', 'sum up'] },
@@ -1791,7 +1791,7 @@ export const levels: Level[] = [
       ,
       {
         id: 25,
-        title: 'Set 25',
+        title: 'Authorize & Prohibit',
         words: [
           { word: 'authorize', definition: 'To officially permit or approve an action', example: 'The council authorized night work to repair the bridge safely.', phonetic: '/ˈɔːθəraɪz/', synonyms: ['permit', 'approve', 'sanction', 'empower'] },
           { word: 'prohibit', definition: 'To formally forbid an action by rule', example: 'Signs prohibit smoking anywhere inside the historic building.', phonetic: '/prəˈhɪbɪt/', synonyms: ['forbid', 'ban', 'bar', 'outlaw'] },
@@ -1804,7 +1804,7 @@ export const levels: Level[] = [
       ,
       {
         id: 26,
-        title: 'Set 26',
+        title: 'Finance & Procurement',
         words: [
           { word: 'invest', definition: 'To commit money to earn future returns', example: 'Households invest steadily in education during stable economic periods.', phonetic: '/ɪnˈvɛst/', synonyms: ['fund', 'finance', 'stake', 'commit'] },
           { word: 'divest', definition: 'To sell assets or withdraw from holdings', example: 'Firms divest divisions that no longer match strategy.', phonetic: '/daɪˈvɛst/', synonyms: ['sell off', 'dispose of', 'shed', 'unload'] },
@@ -1817,7 +1817,7 @@ export const levels: Level[] = [
       ,
       {
         id: 27,
-        title: 'Set 27',
+        title: 'Deploy & Maintain',
         words: [
           { word: 'deploy', definition: 'To put a system or resource into use', example: 'We deploy the new app after final security checks pass.', phonetic: '/dɪˈplɔɪ/', synonyms: ['launch', 'roll out', 'implement', 'release'] },
           { word: 'configure', definition: 'To set options so something works correctly', example: 'Please configure alerts to notify admins about critical errors.', phonetic: '/kənˈfɪɡjə/', synonyms: ['set up', 'arrange', 'tune', 'customize'] },
@@ -1830,7 +1830,7 @@ export const levels: Level[] = [
       ,
       {
         id: 28,
-        title: 'Set 28',
+        title: 'Policy & Resources',
         words: [
           { word: 'conserve', definition: 'To protect and use resources carefully to last', example: 'Farmers conserve water with sensors and targeted nighttime irrigation.', phonetic: '/kənˈsɜːv/', synonyms: ['save', 'preserve', 'protect', 'husband'] },
           { word: 'regulate', definition: 'To control activities through rules and oversight', example: 'Agencies regulate emissions to protect public health and ecosystems.', phonetic: '/ˈrɛɡjʊleɪt/', synonyms: ['control', 'govern', 'oversee', 'manage'] },
@@ -1843,7 +1843,7 @@ export const levels: Level[] = [
       ,
       {
         id: 29,
-        title: 'Set 29',
+        title: 'People & Emotions',
         words: [
           { word: 'reassure', definition: 'To comfort someone and reduce their anxiety', example: 'Nurses reassure patients with clear explanations before difficult procedures.', phonetic: '/ˌriːəˈʃʊə/', synonyms: ['comfort', 'soothe', 'calm', 'encourage'] },
           { word: 'empathize', definition: 'To understand and share another person’s feelings', example: 'Good listeners empathize instead of offering immediate, unnecessary advice.', phonetic: '/ˈɛmpəθaɪz/', synonyms: ['understand', 'relate', 'sympathize', 'identify'] },
@@ -1856,7 +1856,7 @@ export const levels: Level[] = [
       ,
       {
         id: 30,
-        title: 'Set 30',
+        title: 'Media & Communication',
         words: [
           { word: 'curate', definition: 'To select and organize content for an audience', example: 'Editors curate articles to balance depth, freshness, and readability.', phonetic: '/kjʊˈreɪt/', synonyms: ['select', 'organize', 'assemble', 'arrange'] },
           { word: 'moderate', definition: 'To manage discussion and keep it respectful', example: 'Hosts moderate panels by timing speakers and inviting balanced viewpoints.', phonetic: '/ˈmɒdəreɪt/', synonyms: ['chair', 'manage', 'facilitate', 'preside'] },
@@ -1877,7 +1877,7 @@ export const levels: Level[] = [
     sets: [
       {
         id: 1,
-        title: 'Set 1',
+        title: 'Analysis & Evidence Verbs',
         words: [
           { word: 'extrapolate', definition: 'To infer unknown trends from limited data', example: 'Economists extrapolate demand using brief pilot program results.', phonetic: '/ɪkˈstræpəleɪt/', synonyms: ['infer', 'project', 'generalize', 'extend'] },
           { word: 'corroborate', definition: 'To support a claim with confirming evidence', example: 'Two independent trials corroborate the therapy’s reported success rate.', phonetic: '/kəˈrɒbəreɪt/', synonyms: ['confirm', 'validate', 'support', 'back up'] },
@@ -2118,6 +2118,183 @@ export const levels: Level[] = [
     ]
   },
   {
+    id: 'phrasal-verbs',
+    name: 'Phrasal Verbs',
+    description: '14 Sets, 70 common phrasal verbs',
+    cefr: 'B1-B2',
+    icon: '🔗',
+    sets: [
+      {
+        id: 1,
+        title: 'Phrasal Verbs — Projects & Solutions',
+        words: [
+          { word: 'carry on', phonetic: '/ˈkæri ɒn/', definition: 'To continue doing something without stopping', example: 'Despite the noise, they carried on with testing.', synonyms: ['continue', 'keep going', 'persist'] },
+          { word: 'put off', phonetic: '/pʊt ɒf/', definition: 'To delay something to a later time', example: 'We put off the demo until Friday morning.', synonyms: ['postpone', 'delay', 'defer'] },
+          { word: 'figure out', phonetic: '/ˈfɪɡə raʊt/', definition: 'To understand or solve something after thinking', example: 'She figured out the error in minutes.', synonyms: ['solve', 'understand', 'work out'] },
+          { word: 'give up', phonetic: '/ɡɪv ʌp/', definition: 'To stop trying because it feels impossible', example: 'Don’t give up; try a different approach first.', synonyms: ['quit', 'stop trying', 'surrender'] },
+          { word: 'come up with', phonetic: '/kʌm ʌp wɪð/', definition: 'To produce an idea or possible solution', example: 'They came up with a cheaper design.', synonyms: ['devise', 'think of', 'propose'] },
+        ],
+        completed: false,
+      },
+      {
+        id: 2,
+        title: 'Phrasal Verbs — Research & Tasks',
+        words: [
+          { word: 'look into', phonetic: '/lʊk ˈɪntuː/', definition: 'To investigate a subject to find facts', example: 'The team will look into the complaint.', synonyms: ['investigate', 'examine', 'check'] },
+          { word: 'carry out', phonetic: '/ˈkæri aʊt/', definition: 'To perform a task or planned action', example: 'Inspectors carried out tests at the site.', synonyms: ['perform', 'execute', 'conduct'] },
+          { word: 'find out', phonetic: '/faɪnd aʊt/', definition: 'To discover information after searching or asking', example: 'She found out the fee was refundable.', synonyms: ['discover', 'learn', 'uncover'] },
+          { word: 'point out', phonetic: '/pɔɪnt aʊt/', definition: 'To draw attention to a detail clearly', example: 'Reviewers pointed out two missing references.', synonyms: ['highlight', 'indicate', 'note'] },
+          { word: 'account for', phonetic: '/əˈkaʊnt fɔː/', definition: 'To explain cause or proportion of something', example: 'These factors account for the regional differences.', synonyms: ['explain', 'clarify', 'justify'] },
+        ],
+        completed: false,
+      },
+      {
+        id: 3,
+        title: 'Phrasal Verbs — Meetings & Offers',
+        words: [
+          { word: 'turn down', phonetic: '/tɜːn daʊn/', definition: 'To reject an offer or polite request', example: 'He turned down the job after interviews.', synonyms: ['reject', 'decline', 'refuse'] },
+          { word: 'bring up', phonetic: '/brɪŋ ʌp/', definition: 'To introduce a topic for discussion', example: 'She brought up budgets during Q&A time.', synonyms: ['raise', 'introduce', 'mention'] },
+          { word: 'follow up', phonetic: '/ˈfɒləʊ ʌp/', definition: 'To take further action after initial contact', example: 'Please follow up with a summary email.', synonyms: ['pursue', 'continue', 'revisit'] },
+          { word: 'set up', phonetic: '/set ʌp/', definition: 'To arrange or prepare something in advance', example: 'They set up the room for interviews.', synonyms: ['arrange', 'organize', 'prepare'] },
+          { word: 'back up', phonetic: '/bæk ʌp/', definition: 'To support a claim with extra evidence', example: 'Please back up your points with data.', synonyms: ['support', 'corroborate', 'substantiate'] },
+        ],
+        completed: false,
+      },
+      {
+        id: 4,
+        title: 'Phrasal Verbs — Travel & Transport',
+        words: [
+          { word: 'set off', phonetic: '/set ɒf/', definition: 'To start a journey or depart from a place', example: 'They set off before sunrise to avoid traffic.', synonyms: ['depart', 'leave', 'start out'] },
+          { word: 'check in', phonetic: '/tʃek ɪn/', definition: 'To register arrival at a hotel or airport', example: 'We checked in online the night before.', synonyms: ['register', 'sign in', 'report'] },
+          { word: 'get on', phonetic: '/ɡet ɒn/', definition: 'To board a bus, train, or plane', example: 'We got on the tram near the square.', synonyms: ['board', 'mount', 'step onto'] },
+          { word: 'get off', phonetic: '/ɡet ɒf/', definition: 'To leave a bus, train, or plane', example: 'She gets off at the third station daily.', synonyms: ['disembark', 'alight', 'leave'] },
+          { word: 'take off', phonetic: '/teɪk ɒf/', definition: 'To leave the ground and begin flying', example: 'The plane took off twenty minutes late today.', synonyms: ['lift off', 'depart', 'ascend'] },
+        ],
+        completed: false,
+      },
+      {
+        id: 5,
+        title: 'Phrasal Verbs — Health & Habits',
+        words: [
+          { word: 'cut down on', phonetic: '/kʌt ˈdaʊn ɒn/', definition: 'To reduce how much you use or eat', example: 'She cut down on sugar last winter.', synonyms: ['reduce', 'decrease', 'limit'] },
+          { word: 'work out', phonetic: '/wɜːk aʊt/', definition: 'To exercise to improve health and strength', example: 'We work out together three mornings weekly.', synonyms: ['exercise', 'train', 'keep fit'] },
+          { word: 'come down with', phonetic: '/kʌm daʊn wɪð/', definition: 'To start to suffer from an illness', example: 'He came down with flu after travel.', synonyms: ['catch', 'contract', 'develop'] },
+          { word: 'build up', phonetic: '/bɪld ʌp/', definition: 'To develop strength or gradually increase', example: 'Training will build up stamina before races.', synonyms: ['strengthen', 'increase', 'accumulate'] },
+          { word: 'pass out', phonetic: '/pɑːs aʊt/', definition: 'To become unconscious for a short time', example: 'He passed out after standing too fast.', synonyms: ['faint', 'black out', 'collapse'] },
+        ],
+        completed: false,
+      },
+      {
+        id: 6,
+        title: 'Phrasal Verbs — Money & Spending',
+        words: [
+          { word: 'pay off', phonetic: '/peɪ ɒf/', definition: 'To finish paying a debt completely', example: 'We paid off the loan last month.', synonyms: ['clear', 'settle', 'discharge'] },
+          { word: 'save up', phonetic: '/seɪv ʌp/', definition: 'To collect money gradually for something', example: 'She’s saving up for a language course.', synonyms: ['put aside', 'set aside', 'accumulate'] },
+          { word: 'run out of', phonetic: '/rʌn aʊt əv/', definition: 'To have no more remaining of something', example: 'We ran out of ink during printing.', synonyms: ['exhaust', 'deplete', 'use up'] },
+          { word: 'cut back on', phonetic: '/kʌt bæk ɒn/', definition: 'To reduce spending or consumption of something', example: 'Many households cut back on dining out.', synonyms: ['reduce', 'trim', 'scale down'] },
+          { word: 'splash out', phonetic: '/splæʃ aʊt/', definition: 'To spend a lot on something enjoyable', example: 'They splashed out on a weekend getaway.', synonyms: ['splurge', 'spend freely', 'treat yourself'] },
+        ],
+        completed: false,
+      },
+      {
+        id: 7,
+        title: 'Phrasal Verbs — Relationships & Feelings',
+        words: [
+          { word: 'get along', phonetic: '/ɡet əˈlɒŋ/', definition: 'To have a friendly relationship with someone', example: 'Do you get along with your neighbors?', synonyms: ['be friendly', 'get on', 'coexist'] },
+          { word: 'fall out', phonetic: '/fɔːl aʊt/', definition: 'To argue and stop being friendly', example: 'They fell out over money last year.', synonyms: ['argue', 'quarrel', 'row'] },
+          { word: 'make up', phonetic: '/meɪk ʌp/', definition: 'To become friends again after conflict', example: 'They made up after a long talk.', synonyms: ['reconcile', 'resolve', 'patch up'] },
+          { word: 'cheer up', phonetic: '/tʃɪə ʌp/', definition: 'To become happier after feeling sad', example: 'A call from friends cheered her up.', synonyms: ['brighten', 'lift spirits', 'feel happier'] },
+          { word: 'calm down', phonetic: '/kɑːm daʊn/', definition: 'To become less angry, excited, or upset', example: 'He calmed down after hearing the explanation.', synonyms: ['settle', 'relax', 'compose yourself'] },
+        ],
+        completed: false,
+      },
+      {
+        id: 8,
+        title: 'Phrasal Verbs — Study & School',
+        words: [
+          { word: 'hand in', phonetic: '/hænd ɪn/', definition: 'To submit work to a teacher officially', example: 'Please hand in essays by midday Friday.', synonyms: ['submit', 'turn in', 'deliver'] },
+          { word: 'look up', phonetic: '/lʊk ʌp/', definition: 'To search for information in sources', example: 'We looked up the term in the glossary.', synonyms: ['search', 'consult', 'check'] },
+          { word: 'go over', phonetic: '/ɡəʊ ˈəʊvə/', definition: 'To review something carefully for accuracy', example: 'Let’s go over the notes before class.', synonyms: ['review', 'examine', 'check over'] },
+          { word: 'drop out', phonetic: '/drɒp aʊt/', definition: 'To leave a course before finishing it', example: 'He dropped out when work hours increased.', synonyms: ['withdraw', 'leave', 'quit'] },
+          { word: 'keep up with', phonetic: '/kiːp ʌp wɪð/', definition: 'To stay at the same pace as', example: 'Reading daily helps keep up with class.', synonyms: ['match', 'maintain pace', 'stay abreast'] },
+        ],
+        completed: false,
+      },
+      {
+        id: 9,
+        title: 'Phrasal Verbs — Work & Careers',
+        words: [
+          { word: 'step down', phonetic: '/step daʊn/', definition: 'To resign from an important position', example: 'The director stepped down after ten years.', synonyms: ['resign', 'quit', 'leave office'] },
+          { word: 'move up', phonetic: '/muːv ʌp/', definition: 'To be promoted to a higher position', example: 'He moved up after leading two projects.', synonyms: ['advance', 'be promoted', 'rise'] },
+          { word: 'call off', phonetic: '/kɔːl ɒf/', definition: 'To cancel a planned event or activity', example: 'They called off the launch due to bugs.', synonyms: ['cancel', 'scrap', 'abort'] },
+          { word: 'draw up', phonetic: '/drɔː ʌp/', definition: 'To prepare a document or detailed plan', example: 'Legal counsel drew up the new contract.', synonyms: ['draft', 'prepare', 'compose'] },
+          { word: 'lay off', phonetic: '/leɪ ɒf/', definition: 'To dismiss workers because of limited work', example: 'The firm laid off staff after sales fell.', synonyms: ['dismiss', 'make redundant', 'let go'] },
+        ],
+        completed: false,
+      },
+      {
+        id: 10,
+        title: 'Phrasal Verbs — Communication & Clarity',
+        words: [
+          { word: 'get across', phonetic: '/ɡet əˈkrɒs/', definition: 'To make people understand your message', example: 'She got across the risks without drama.', synonyms: ['communicate', 'convey', 'put over'] },
+          { word: 'spell out', phonetic: '/spel aʊt/', definition: 'To explain something clearly and in detail', example: 'The memo spells out all requirements simply.', synonyms: ['explain', 'clarify', 'detail'] },
+          { word: 'tone down', phonetic: '/təʊn daʊn/', definition: 'To make something less strong or direct', example: 'They toned down the language in ads.', synonyms: ['soften', 'moderate', 'reduce'] },
+          { word: 'talk over', phonetic: '/tɔːk ˈəʊvə/', definition: 'To discuss something fully before deciding', example: 'Let’s talk over the budget after lunch.', synonyms: ['discuss', 'deliberate', 'go over'] },
+          { word: 'cut off', phonetic: '/kʌt ɒf/', definition: 'To interrupt someone or stop a connection', example: 'The mic cut off during the keynote address.', synonyms: ['interrupt', 'disconnect', 'sever'] },
+        ],
+        completed: false,
+      },
+      {
+        id: 11,
+        title: 'Phrasal Verbs — Problems & Breakdowns',
+        words: [
+          { word: 'break down', phonetic: '/breɪk daʊn/', definition: 'To stop working because of a fault', example: 'The lift broke down during a storm.', synonyms: ['fail', 'stop working', 'malfunction'] },
+          { word: 'deal with', phonetic: '/diːl wɪð/', definition: 'To manage or solve a difficult situation', example: 'Staff dealt with complaints quickly and calmly.', synonyms: ['handle', 'manage', 'address'] },
+          { word: 'think over', phonetic: '/θɪŋk ˈəʊvə/', definition: 'To think about something carefully again', example: 'I’ll think over the offer this weekend.', synonyms: ['consider', 'reflect', 'ponder'] },
+          { word: 'get back to', phonetic: '/ɡet bæk tuː/', definition: 'To return a call or message later', example: 'I’ll get back to you by Tuesday.', synonyms: ['reply later', 'respond', 'return to'] },
+          { word: 'sort out', phonetic: '/sɔːt aʊt/', definition: 'To find a practical answer to something', example: 'They sorted out seating before guests arrived.', synonyms: ['resolve', 'fix', 'arrange'] },
+        ],
+        completed: false,
+      },
+      {
+        id: 12,
+        title: 'Phrasal Verbs — Media & Online',
+        words: [
+          { word: 'log in', phonetic: '/lɒɡ ɪn/', definition: 'To enter credentials to access an account', example: 'Please log in before viewing your messages.', synonyms: ['sign in', 'access', 'authenticate'] },
+          { word: 'log out', phonetic: '/lɒɡ aʊt/', definition: 'To remove yourself from an online session', example: 'Always log out on shared computers.', synonyms: ['sign out', 'exit', 'disconnect'] },
+          { word: 'put up', phonetic: '/pʊt ʌp/', definition: 'To upload files from device to server', example: 'We put up the photos after approval.', synonyms: ['upload', 'post', 'publish'] },
+          { word: 'take down', phonetic: '/teɪk daʊn/', definition: 'To remove a post or take something down', example: 'Moderators took down the duplicate listing.', synonyms: ['remove', 'delete', 'pull down'] },
+          { word: 'sign off', phonetic: '/saɪn ɒf/', definition: 'To approve formally or end communication', example: 'The manager signed off on the budget.', synonyms: ['approve', 'authorize', 'conclude'] },
+        ],
+        completed: false,
+      },
+      {
+        id: 13,
+        title: 'Phrasal Verbs — Causes & Results',
+        words: [
+          { word: 'bring about', phonetic: '/brɪŋ əˈbaʊt/', definition: 'To cause something important to happen', example: 'The policy brought about rapid improvements locally.', synonyms: ['cause', 'generate', 'produce'] },
+          { word: 'end up', phonetic: '/end ʌp/', definition: 'To finally happen as a result naturally', example: 'We ended up moving the launch date.', synonyms: ['result', 'turn out', 'land'] },
+          { word: 'roll back', phonetic: '/rəʊl bæk/', definition: 'To cancel a decision or reverse a change', example: 'They rolled back fees after complaints.', synonyms: ['reverse', 'repeal', 'undo'] },
+          { word: 'scale up', phonetic: '/skeɪl ʌp/', definition: 'To increase something to a larger scale', example: 'We’ll scale up hiring if demand grows.', synonyms: ['expand', 'increase', 'ramp up'] },
+          { word: 'phase out', phonetic: '/feɪz aʊt/', definition: 'To stop using something gradually over time', example: 'The firm phased out plastic packaging entirely.', synonyms: ['discontinue', 'retire', 'wind down'] },
+        ],
+        completed: false,
+      },
+      {
+        id: 14,
+        title: 'Phrasal Verbs — Careers & Applications',
+        words: [
+          { word: 'apply for', phonetic: '/əˈplaɪ fɔː/', definition: 'To formally request a job or program', example: 'She applied for three internships in March.', synonyms: ['request', 'seek', 'put in for'] },
+          { word: 'attach to', phonetic: '/əˈtætʃ tuː/', definition: 'To include something with other submitted materials', example: 'Please attach your CV to the email.', synonyms: ['add', 'include', 'append'] },
+          { word: 'fill out', phonetic: '/fɪl aʊt/', definition: 'To fill in required details on a form', example: 'Candidates filled out the online questionnaire.', synonyms: ['complete', 'enter', 'write in'] },
+          { word: 'step in', phonetic: '/step ɪn/', definition: 'To start doing a role temporarily for someone', example: 'The deputy stepped in during the strike.', synonyms: ['substitute', 'cover', 'fill in'] },
+          { word: 'follow through', phonetic: '/ˈfɒləʊ θruː/', definition: 'To continue until everything is completed', example: 'Good managers follow through on commitments.', synonyms: ['persist', 'continue', 'see through'] },
+        ],
+        completed: false,
+      },
+    ],
+  },
+  {
     id: 'advanced-plus',
     name: 'Advanced Plus',
     description: '150 Sets, 750 words at CEFR C1+ Level',
@@ -2126,7 +2303,7 @@ export const levels: Level[] = [
     sets: [
       {
         id: 1,
-        title: 'Set 1',
+        title: 'Academic Adjectives',
         words: [
           { word: 'paradigm', definition: 'A typical example or pattern', example: 'This represents a new paradigm', phonetic: '/ˈpærədaɪm/', synonyms: ['model', 'framework'] },
           { word: 'ephemeral', definition: 'Lasting for a very short time', example: 'Beauty is often ephemeral', phonetic: '/ɪˈfemərəl/', synonyms: ['temporary', 'transient'] },
@@ -2147,7 +2324,7 @@ export const levels: Level[] = [
     sets: [
       {
         id: 1,
-        title: 'Set 1',
+        title: 'Elite Adjectives',
         words: [
           { word: 'serendipitous', definition: 'Occurring by happy chance', example: 'It was a serendipitous meeting', phonetic: '/ˌserənˈdɪpɪtəs/', synonyms: ['fortuitous', 'lucky'] },
           { word: 'perspicacious', definition: 'Having keen insight', example: 'He is a perspicacious observer', phonetic: '/ˌpɜːrspɪˈkeɪʃəs/', synonyms: ['perceptive', 'astute'] },

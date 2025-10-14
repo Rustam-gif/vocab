@@ -29,7 +29,8 @@ class AnalyticsService {
         }
       }
     } catch (e) {
-      console.error('Analytics: failed to read local cache', e);
+      // Use warn to avoid red error overlay during dev
+      console.warn('Analytics: failed to read local cache', e);
       local = [];
     }
 
@@ -55,7 +56,7 @@ class AnalyticsService {
       // keep synchronized backup to guard against accidental clears across updates
       await AsyncStorage.setItem(ANALYTICS_BACKUP_KEY, json);
     } catch (e) {
-      console.error('Analytics: failed to write local cache', e);
+      console.warn('Analytics: failed to write local cache', e);
     }
     if (user) {
       try {
@@ -87,7 +88,8 @@ class AnalyticsService {
         await supabase.auth.updateUser({ data: { analytics: this.results } });
       }
     } catch (error) {
-      console.error('Failed to save analytics:', error);
+      // Network can be unavailable (simulators/offline). Log as warn to avoid dev overlay.
+      console.warn('Analytics: save skipped (offline):', error);
     }
   }
 

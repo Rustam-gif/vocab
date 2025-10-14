@@ -2,35 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Dimensions } from 'react-native';
 import LottieView from 'lottie-react-native';
-import { Platform } from 'react-native';
-import { Asset } from 'expo-asset';
-let Rive: any = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  Rive = require('rive-react-native').default || require('rive-react-native');
-} catch {}
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppStore } from '../lib/store';
+import { getTheme } from '../lib/theme';
 import { analyticsService } from '../services/AnalyticsService';
 import { ProgressService } from '../services/ProgressService';
-
-// Simple error boundary to catch Rive rendering errors and fall back gracefully
-class RiveErrorBoundary extends React.Component<{ onError: () => void; children: React.ReactNode }, { hasError: boolean }> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-  componentDidCatch() {
-    try { this.props.onError(); } catch {}
-  }
-  render() {
-    if (this.state.hasError) return null;
-    return this.props.children as any;
-  }
-}
 
 const QUESTION_TIME_MS = 10000; // 10 seconds per question
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -39,6 +15,9 @@ export default function WordSprint() {
   const router = useRouter();
   const { folderId, title } = useLocalSearchParams<{ folderId: string; title?: string }>();
   const { words, loadWords, loadProgress } = useAppStore();
+  const themeName = useAppStore(s => s.theme);
+  const colors = getTheme(themeName);
+  const isLight = themeName === 'light';
   const [index, setIndex] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [revealed, setRevealed] = useState(false);
@@ -52,42 +31,104 @@ export default function WordSprint() {
   const revealedRef = useRef(false);
   const resultAnim = useRef(new Animated.Value(0)).current;
   const clockAnimRef = useRef<LottieView>(null);
-  // Use Rive when the native module is available and we're not on web (Expo Go doesn't include Rive)
-  const canUseRive = !!Rive && Platform.OS !== 'web';
-  const riveModule = canUseRive ? require('../assets/rive/lil_guy.riv') : null;
-  const [riveUrl, setRiveUrl] = useState<string | null>(null);
-  // Keep Rive stable; if anything fails we fall back to Lottie
-  const [riveFailed, setRiveFailed] = useState(false);
-  // Animation names inside your .riv
-  const RIVE_ANIM_IDLE = 'breathing';
-  const RIVE_ANIM_BOP = 'bopping';
-  const RIVE_ANIM_DANCE = 'Dance 2';
-  // Always use the bopping animation as requested
-  const [riveAnimName, setRiveAnimName] = useState<string>(RIVE_ANIM_BOP);
+  // Penguin is static; no walk loop
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        if (canUseRive && riveModule) {
-          const asset = Asset.fromModule(riveModule);
-          if (!asset.localUri && !asset.downloaded) {
-            await asset.downloadAsync();
-          }
-          if (mounted) setRiveUrl(asset.localUri || asset.uri || null);
-        } else if (mounted) {
-          setRiveUrl(null);
-        }
-      } catch {
-        if (mounted) setRiveUrl(null);
+  // Use a toned-down, app-themed palette for the Penguin Lottie
+  const penguinSource = React.useMemo(() => {
+    try {
+      // Require returns parsed JSON in RN; clone before mutating
+      const raw: any = require('../assets/lottie/Penguin.json');
+      const clone = JSON.parse(JSON.stringify(raw));
+      const toNorm = (hex: string) => {
+        const h = hex.replace('#', '');
+        const r = parseInt(h.slice(0, 2), 16) / 255;
+        const g = parseInt(h.slice(2, 4), 16) / 255;
+        const b = parseInt(h.slice(4, 6), 16) / 255;
+        return [r, g, b] as [number, number, number];
+      };
+      const ACCENT = toNorm('#F2935C'); // warm orange
+      const TEAL = toNorm('#187486');   // brand teal
+      const LIGHT = toNorm('#E5E7EB');  // off-white
+      const DARK = toNorm('#2A3033');   // dark slate
+
+      const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+      const setColor = (node: any, rgb: [number, number, number], a: number) => {
+        node.c.k = [clamp01(rgb[0]), clamp01(rgb[1]), clamp01(rgb[2]), clamp01(a)];
+      };
+      const classify = (rgb: [number, number, number]) => {
+        const [r, g, b] = rgb;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const sat = max - min;
+        const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        // Warm/orange-ish
+        if (r > g && r > b && r - b > 0.12) return 'accent';
+        // Cool/blue-green-ish
+        if (b > r + 0.08 || g > r + 0.08) return 'teal';
+        // Near white/gray
+        if (lum > 0.85 || (lum > 0.7 && sat < 0.08)) return 'light';
+        return 'dark';
+      };
+      // Remove any background/base layers that cause blue bands
+      if (Array.isArray(clone.layers)) {
+        clone.layers = clone.layers.filter((ly: any) => {
+          const name = (ly?.nm || '').toString().toLowerCase();
+          // Drop generic background layers often named "Layer 1", "bg", "background"
+          if (name === 'layer 1' || name === 'bg' || name === 'background') return false;
+          return true;
+        });
       }
-    })();
-    return () => { mounted = false; };
-  }, [canUseRive, riveModule]);
+
+      const visit = (n: any) => {
+        if (!n || typeof n !== 'object') return;
+        // Vector Fill
+        if (n.ty === 'fl' && n.c && Array.isArray(n.c.k) && n.c.k.length >= 3) {
+          const k = n.c.k;
+          const rgb: [number, number, number] = [k[0], k[1], k[2]];
+          const a = k[3] ?? 1;
+          const type = classify(rgb);
+          // Remove deep blue strip-like fills (very blue, low red/green)
+          if (rgb[2] > 0.5 && rgb[0] < 0.2 && rgb[1] < 0.2 && a > 0.7) {
+            n.o = { a: 0, k: 0 } as any; // force transparent
+            return;
+          }
+          if (type === 'accent') setColor(n, ACCENT, a * 0.95);
+          else if (type === 'teal') setColor(n, TEAL, a * 0.95);
+          else if (type === 'light') setColor(n, LIGHT, a * 0.95);
+          else setColor(n, DARK, a);
+        }
+        // Gradient fill support (optional): reduce saturation by biasing to TEAL/LIGHT
+        if ((n.ty === 'gf' || n.ty === 'gs') && n.g && n.g.k && Array.isArray(n.g.k.k)) {
+          // Gradient array format: [pos,r,g,b,pos,r,g,b,...]
+          const arr = n.g.k.k;
+          for (let i = 0; i < arr.length; i += 4) {
+            const r = arr[i + 1], g = arr[i + 2], b = arr[i + 3];
+            const type = classify([r, g, b]);
+            const tint = type === 'accent' ? ACCENT : type === 'teal' ? TEAL : type === 'light' ? LIGHT : DARK;
+            arr[i + 1] = tint[0];
+            arr[i + 2] = tint[1];
+            arr[i + 3] = tint[2];
+          }
+        }
+        Object.keys(n).forEach(k => {
+          const v = (n as any)[k];
+          if (Array.isArray(v)) v.forEach(visit);
+          else if (v && typeof v === 'object') visit(v);
+        });
+      };
+      visit(clone);
+      return clone;
+    } catch {
+      // Fallback to original asset if anything goes wrong
+      return require('../assets/lottie/Penguin.json');
+    }
+  }, []);
 
   useEffect(() => {
     (async () => { await loadWords(); })();
   }, [loadWords]);
+
+  // Removed walk loop (keep penguin static)
 
   useEffect(() => {
     revealedRef.current = revealed;
@@ -103,7 +144,7 @@ export default function WordSprint() {
     return () => {
       barAnim.removeListener(id);
     };
-  }, [barAnim, riveAnimName]);
+  }, [barAnim]);
 
   useEffect(() => {
     return () => {
@@ -232,8 +273,6 @@ export default function WordSprint() {
     barAnim.stopAnimation();
     barAnim.setValue(0);
     setTimeLeft(QUESTION_TIME_MS / 1000);
-    setRiveAnimName(RIVE_ANIM_BOP);
-    
     // Restart clock animation from beginning
     clockAnimRef.current?.reset();
     clockAnimRef.current?.play();
@@ -295,37 +334,39 @@ export default function WordSprint() {
   const progressOpacity = barAnim.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0.08] });
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
+      {/* Snow overlay for a snowy environment */}
+      <Snowfall flakes={36} />
       <View pointerEvents="none" style={styles.progressBackdrop}>
         <Animated.View style={[styles.progressColumn, { height: progressHeight, opacity: progressOpacity }]} />
       </View>
       <View style={styles.content}>
-        <View style={styles.header}>
+        <View style={[styles.header, isLight && { borderBottomColor: '#E5E7EB' }]}>
           <View style={styles.headerLeft}>
-            <TouchableOpacity accessibilityRole="button" onPress={() => router.back()} style={styles.closeBtn}>
-              <Text style={styles.closeBtnText}>✕</Text>
+            <TouchableOpacity accessibilityRole="button" onPress={() => router.back()} style={[styles.closeBtn, isLight && { backgroundColor: '#E5E7EB', borderColor: '#E5E7EB' }]}>
+              <Text style={[styles.closeBtnText, isLight && { color: '#111827' }]}>✕</Text>
             </TouchableOpacity>
-            <Text style={styles.title}>{title || 'Word Sprint'}</Text>
+            <Text style={[styles.title, isLight && { color: '#111827' }]}>{title || 'Word Sprint'}</Text>
           </View>
           <View style={styles.headerMeta}>
-            <View style={styles.timerBadge}>
-              <Text style={styles.timerIcon}>⌚</Text>
-              <Text style={styles.timerText}>{timeLeft.toFixed(1)}s</Text>
+            <View style={[styles.timerBadge, isLight && { backgroundColor: '#E5E7EB', borderColor: '#E5E7EB' }]}>
+              <Text style={[styles.timerIcon, isLight && { color: '#F2935C' }]}>⌚</Text>
+              <Text style={[styles.timerText, isLight && { color: '#111827' }]}>{timeLeft.toFixed(1)}s</Text>
             </View>
-            <Text style={styles.counter}>{index + 1}/{items.length}</Text>
+            <Text style={[styles.counter, isLight && { color: '#6B7280' }]}>{index + 1}/{items.length}</Text>
           </View>
         </View>
         <View style={styles.body}>
-          <View style={styles.card}>
-            <Text style={styles.definition}>{current.definition}</Text>
+          <View style={[styles.card, isLight && styles.cardLight]}>
+            <Text style={[styles.definition, isLight && { color: '#111827' }]}>{current.definition}</Text>
             <View style={{ height: 16 }} />
             {options.map((opt, i) => {
               const isPicked = selected === i;
               const isAnswer = revealed && opt === current.word;
               const wrong = revealed && isPicked && !isAnswer;
               return (
-                <TouchableOpacity key={`${opt}-${i}`} style={[styles.option, isAnswer && styles.correct, wrong && styles.wrong]} onPress={() => handlePick(i)} disabled={revealed}>
-                  <Text style={styles.optionText}>{opt}</Text>
+                <TouchableOpacity key={`${opt}-${i}`} style={[styles.option, isLight && styles.optionLight, isAnswer && styles.correct, wrong && styles.wrong]} onPress={() => handlePick(i)} disabled={revealed}>
+                  <Text style={[styles.optionText, isLight && { color: '#111827' }]}>{opt}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -333,29 +374,15 @@ export default function WordSprint() {
           {/* Timer animation below the card */}
           <View style={styles.mascotWrap}>
             <View style={styles.riveCrop}>
-              {canUseRive && riveUrl && !riveFailed ? (
-                // Rive mascot (replace 10s timer)
-                // Keep a stable key so the component doesn't remount when animationName changes.
-                <RiveErrorBoundary onError={() => setRiveFailed(true)}>
-                  <Rive
-                    key={riveUrl}
-                    style={styles.riveInner}
-                    url={riveUrl}
-                    autoplay
-                    // Play base motion + Blink + look up (Eyes Y)
-                    animations={[riveAnimName, 'Blink', 'Eyes Y']}
-                  />
-                </RiveErrorBoundary>
-              ) : (
-                // Fallback to Lottie in Expo Go or if Rive fails
+              <View style={{ alignItems: 'center' }}>
                 <LottieView
                   ref={clockAnimRef}
-                  source={require('../assets/lottie/10_Second_Timer.json')}
+                  source={penguinSource as any}
                   autoPlay={false}
                   loop={false}
                   style={styles.riveInner}
                 />
-              )}
+              </View>
             </View>
           </View>
         </View>
@@ -388,8 +415,70 @@ export default function WordSprint() {
   );
 }
 
+// Lightweight, self‑contained snowfall overlay without external assets
+const Snowfall: React.FC<{ flakes?: number }> = ({ flakes = 24 }) => {
+  const width = Dimensions.get('window').width;
+  const height = Dimensions.get('window').height;
+
+  const flakeViews = Array.from({ length: flakes }).map((_, i) => {
+    const size = Math.random() * 3 + 2; // 2–5 px
+    const left = Math.random() * width;
+    const duration = 8000 + Math.random() * 6000; // 8–14s
+    const delay = Math.random() * 4000; // up to 4s
+    const drift = (Math.random() - 0.5) * 40; // -20..20 px horizontal drift
+
+    const y = new Animated.Value(-20);
+    const x = new Animated.Value(0);
+
+    React.useEffect(() => {
+      const fall = Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(y, { toValue: height + 40, duration, easing: Easing.linear, useNativeDriver: true }),
+          Animated.timing(y, { toValue: -20, duration: 0, useNativeDriver: true }),
+        ])
+      );
+      const sway = Animated.loop(
+        Animated.sequence([
+          Animated.timing(x, { toValue: drift, duration: duration / 2, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+          Animated.timing(x, { toValue: 0, duration: duration / 2, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        ])
+      );
+      fall.start();
+      sway.start();
+      return () => {
+        fall.stop();
+        sway.stop();
+      };
+    }, []);
+
+    return (
+      <Animated.View
+        key={`flake-${i}`}
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: 'rgba(255,255,255,0.85)',
+          opacity: 0.95,
+          transform: [
+            { translateX: x },
+            { translateY: y },
+          ],
+          left,
+          top: -20,
+        }}
+      />
+    );
+  });
+
+  return <View pointerEvents="none" style={StyleSheet.absoluteFill}>{flakeViews}</View>;
+};
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1E1E1E' },
+  container: { flex: 1, backgroundColor: '#0F172A' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { flex: 1, zIndex: 1 },
   emptyText: { color: '#9CA3AF' },
@@ -404,17 +493,20 @@ const styles = StyleSheet.create({
   timerText: { color: '#f4f6f8', fontSize: 13, fontWeight: '600' },
   counter: { color: '#9CA3AF', fontSize: 12, fontWeight: '600' },
   body: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
-  mascotWrap: { marginTop: 18, alignItems: 'center', justifyContent: 'center' },
-  // Crop box hides the top buttons and right white line in the Rive artboard
-  riveCrop: { width: 180, height: 150, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  // Render larger and shift slightly down, keeping top buttons clipped
-  riveInner: { width: 230, height: 230, transform: [{ translateY: -18 }, { translateX: 0 }, { scale: 1.04 }] },
-  progressBackdrop: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', alignItems: 'stretch', zIndex: 0, backgroundColor: 'rgba(226,135,67,0.06)' },
-  progressColumn: { backgroundColor: 'rgba(226,135,67,0.32)', borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.12)', shadowColor: '#e28743', shadowOpacity: 0.25, shadowRadius: 24, shadowOffset: { width: 0, height: -6 } },
-  card: { width: '100%', backgroundColor: 'rgba(44,47,47,0.88)', borderRadius: 16, padding: 24, borderWidth: StyleSheet.hairlineWidth, borderColor: '#3d474b', shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 12 }, elevation: 8 },
+  mascotWrap: { marginTop: 28, alignItems: 'center', justifyContent: 'center' },
+  // Crop box: keep centered, allow a bit more vertical room
+  riveCrop: { width: 180, height: 170, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  // Smaller penguin, nudged down, with 20% transparency
+  riveInner: { width: 180, height: 180, opacity: 0.8, transform: [{ translateY: 10 }, { translateX: 0 }, { scale: 0.8 }] },
+  progressBackdrop: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', alignItems: 'stretch', zIndex: 0, backgroundColor: 'rgba(99,179,237,0.08)' },
+  progressColumn: { backgroundColor: 'rgba(99,179,237,0.28)', borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.12)', shadowColor: '#60A5FA', shadowOpacity: 0.25, shadowRadius: 24, shadowOffset: { width: 0, height: -6 } },
+  card: { width: '100%', backgroundColor: 'rgba(30,41,59,0.92)', borderRadius: 16, padding: 24, borderWidth: StyleSheet.hairlineWidth, borderColor: '#324357', shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 12 }, elevation: 8 },
+  cardLight: { backgroundColor: '#F9F1E7', borderColor: '#F9F1E7' },
   definition: { color: '#e0e0e0', fontSize: 16, lineHeight: 22, textAlign: 'center' },
   option: { backgroundColor: 'rgba(62,70,74,0.88)', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 12, marginTop: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#4b555a' },
+  optionLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
   optionText: { color: '#f4f6f8', fontSize: 16, fontWeight: '600', textAlign: 'center' },
+  // Revert to original success/error colors
   correct: { backgroundColor: '#437F76', borderColor: '#437F76' },
   wrong: { backgroundColor: '#924646', borderColor: '#924646' },
   footer: { alignItems: 'center', paddingBottom: 20 },

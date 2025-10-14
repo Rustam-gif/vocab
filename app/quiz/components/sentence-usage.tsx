@@ -9,6 +9,8 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
+import { useAppStore } from '../../../lib/store';
+import { getTheme } from '../../../lib/theme';
 import { Vibration } from 'react-native';
 import { analyticsService } from '../../../services/AnalyticsService';
 import { levels } from '../data/levels';
@@ -1274,6 +1276,9 @@ interface OptionRow {
 }
 
 export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange, wordsOverride }: SentenceUsageProps) {
+  const themeName = useAppStore(s => s.theme);
+  const colors = getTheme(themeName);
+  const isLight = themeName === 'light';
   // Decide mode: default sentence selection; for new Intermediate Set 1 use word-choice
   const wordChoiceMode = useMemo(() => {
     const lvl = levels.find(l => l.id === levelId);
@@ -1613,9 +1618,9 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isLight && { backgroundColor: colors.background }]}>
       <View style={styles.progressContainer}>
-        <Text style={styles.progressText}>Word {index + 1} of {itemsData.length}</Text>
+        <Text style={[styles.progressText, isLight && { color: '#6B7280' }]}>Word {index + 1} of {itemsData.length}</Text>
         <View style={styles.scoreWrapper}>
           <Animated.Text
             style={[
@@ -1631,23 +1636,23 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
           <Text style={styles.scoreText}>{displayScore}</Text>
         </View>
       </View>
-      <View style={styles.progressBar}>
+      <View style={[styles.progressBar, isLight && { backgroundColor: '#E5E7EB' }]}>
         <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
       </View>
 
-      <Text style={styles.headerText}>Natural Usage</Text>
-      <Text style={styles.subHeaderText}>
+      <Text style={[styles.headerText, isLight && { color: '#111827' }]}>Natural Usage</Text>
+      <Text style={[styles.subHeaderText, isLight && { color: '#6B7280' }]}>
         {item.mode === 'word' ? 'Select the word that correctly completes the sentence.' : 'Pick the sentence that uses the word correctly.'}
       </Text>
 
       {item.mode === 'word' ? (
         <View style={styles.promptHeader}>
-          <Text style={styles.promptText}>{item.prompt}</Text>
+          <Text style={[styles.promptText, isLight && { color: '#111827' }]}>{item.prompt}</Text>
         </View>
       ) : (
       <View style={styles.wordHeader}>
-        <Text style={styles.wordText}>{item.word}</Text>
-        <Text style={styles.ipaText}>{item.ipa}</Text>
+        <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{item.word}</Text>
+        <Text style={[styles.ipaText, isLight && { color: '#6B7280' }]}>{item.ipa}</Text>
       </View>
       )}
 
@@ -1657,14 +1662,15 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
           const isCorrect = option.isCorrect;
 
           const cardStyle: ViewStyle[] = [styles.optionCard];
-          const textStyle: TextStyle[] = [styles.optionText];
+          const textStyle: TextStyle[] = [styles.optionText, isLight && { color: '#111827' }];
+          if (isLight) cardStyle.push(styles.optionLight);
 
           if (!revealed && isSelected) {
             cardStyle.push(styles.cardSelected);
           }
 
           if (revealed && isSelected) {
-            cardStyle.push(isCorrect ? styles.cardCorrect : styles.cardIncorrect);
+            cardStyle.push(isCorrect ? (isLight ? styles.cardCorrectLight : styles.cardCorrect) : (isLight ? styles.cardIncorrectLight : styles.cardIncorrect));
           }
 
           if (revealed && !isSelected && isCorrect && selected !== null) {
@@ -1783,8 +1789,14 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
   },
+  optionLight: {
+    backgroundColor: '#F9F1E7',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#F9F1E7',
+  },
   cardSelected: {
-    borderWidth: 2,
+    // Make selection clearer on dark cards
+    borderWidth: 3,
     borderColor: ACCENT_COLOR,
   },
   optionText: {
@@ -1797,6 +1809,12 @@ const styles = StyleSheet.create({
   },
   cardIncorrect: {
     backgroundColor: INCORRECT_COLOR,
+  },
+  cardCorrectLight: {
+    backgroundColor: '#A1BFBA',
+  },
+  cardIncorrectLight: {
+    backgroundColor: '#C9A3A3',
   },
   correctText: {
     color: CORRECT_COLOR,

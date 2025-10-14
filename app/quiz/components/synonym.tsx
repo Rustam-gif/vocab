@@ -11,6 +11,8 @@ import {
   StyleProp,
   ViewStyle,
 } from 'react-native';
+import { useAppStore } from '../../../lib/store';
+import { getTheme } from '../../../lib/theme';
 import { Vibration } from 'react-native';
 import { analyticsService } from '../../../services/AnalyticsService';
 import AnimatedNextButton from './AnimatedNextButton';
@@ -721,11 +723,18 @@ const SYN_OVERRIDES: Record<string, Record<string, Record<string, { correct: str
   },
 };
 
+// Strong (dark theme) colors
 const CORRECT_COLOR = '#437F76';
 const INCORRECT_COLOR = '#924646';
+// Soft light-theme variants (~50% less saturated/tinted)
+const CORRECT_COLOR_LIGHT = '#A1BFBA';
+const INCORRECT_COLOR_LIGHT = '#C9A3A3';
 const ACCENT_COLOR = '#F2935C';
 
 export default function SynonymComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange, wordsOverride }: SynonymProps) {
+  const themeName = useAppStore(s => s.theme);
+  const colors = getTheme(themeName);
+  const isLight = themeName === 'light';
   // Get words from levels data
   const wordsData = useMemo(() => {
     // Use override when provided (dynamic quiz)
@@ -946,11 +955,11 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
   const primaryLabel = revealed ? (isLastWord ? 'Finish' : 'Next') : 'Next';
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isLight && { backgroundColor: colors.background }]}>
       <View style={styles.body}>
         <View style={styles.topRow}>
         <View style={styles.progressContainer}>
-          <Text style={styles.progressText}>
+          <Text style={[styles.progressText, isLight && { color: '#6B7280' }]}>
             Word {currentIndex + 1} of {wordsData.length}
           </Text>
           <View style={styles.scoreWrapper}>
@@ -968,17 +977,17 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
             <Text style={styles.scoreText}>{displayScore}</Text>
           </View>
         </View>
-        <View style={styles.progressBar}>
+        <View style={[styles.progressBar, isLight && { backgroundColor: '#E5E7EB' }]}>
           <Animated.View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
         </View>
       </View>
 
         <View style={styles.wordHeader}>
-          <Text style={styles.wordHighlight}>{currentWord.word}</Text>
-          <Text style={styles.promptText}>
+          <Text style={[styles.wordHighlight, isLight && { color: '#111827' }]}>{currentWord.word}</Text>
+          <Text style={[styles.promptText, isLight && { color: '#4B5563' }]}>
             Select {requiredCount} {pluralised}
           </Text>
-          <Text style={styles.ipaText}>{currentWord.ipa}</Text>
+          <Text style={[styles.ipaText, isLight && { color: '#6B7280' }]}>{currentWord.ipa}</Text>
         </View>
 
         <View style={styles.grid}>
@@ -986,14 +995,16 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
             const isSelected = selected.includes(choice);
             const isCorrect = currentWord.correct.includes(choice);
             const buttonStyles: Array<ViewStyle> = [styles.optionButton];
+            // Keep light card color regardless of reveal state
+            if (isLight) buttonStyles.push(styles.optionLight);
 
             if (revealed) {
               if (isSelected && isCorrect) {
-                buttonStyles.push(styles.optionCorrect);
+                buttonStyles.push(isLight ? styles.optionCorrectLight : styles.optionCorrect);
               } else if (isSelected && !isCorrect) {
-                buttonStyles.push(styles.optionIncorrect);
+                buttonStyles.push(isLight ? styles.optionIncorrectLight : styles.optionIncorrect);
               } else if (!isSelected && isCorrect) {
-                buttonStyles.push(styles.optionCorrectOutline);
+                buttonStyles.push(isLight ? styles.optionCorrectOutlineLight : styles.optionCorrectOutline);
               }
             } else if (isSelected) {
               buttonStyles.push(styles.optionSelected);
@@ -1014,7 +1025,7 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
               >
                 <TouchableWithoutFeedback onPress={() => toggleSelection(choice)}>
                 <View style={buttonStyles}>
-                  <Text style={styles.optionText}>{choice}</Text>
+                  <Text style={[styles.optionText, isLight && { color: '#111827' }]}>{choice}</Text>
                 </View>
               </TouchableWithoutFeedback>
               </Animated.View>
@@ -1139,8 +1150,16 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     minHeight: 88,
   },
+  optionLight: {
+    // Match MCQ light card color for consistency
+    backgroundColor: '#F9F1E7',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#F9F1E7',
+  },
   optionSelected: {
     borderColor: ACCENT_COLOR,
+    // Make selection clearly visible over the light card background
+    borderWidth: 3,
   },
   optionCorrect: {
     backgroundColor: CORRECT_COLOR,
@@ -1150,9 +1169,21 @@ const styles = StyleSheet.create({
     backgroundColor: INCORRECT_COLOR,
     borderColor: 'transparent',
   },
+  optionCorrectLight: {
+    backgroundColor: CORRECT_COLOR_LIGHT,
+    borderColor: 'transparent',
+  },
+  optionIncorrectLight: {
+    backgroundColor: INCORRECT_COLOR_LIGHT,
+    borderColor: 'transparent',
+  },
   optionCorrectOutline: {
     borderColor: CORRECT_COLOR,
     backgroundColor: 'rgba(67, 127, 118, 0.1)',
+  },
+  optionCorrectOutlineLight: {
+    borderColor: CORRECT_COLOR_LIGHT,
+    backgroundColor: 'rgba(161, 191, 186, 0.25)',
   },
   optionText: {
     color: '#fff',

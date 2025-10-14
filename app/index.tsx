@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Animated, Easing } from 'react-native';
+import { Asset } from 'expo-asset';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Plus, ChevronRight } from 'lucide-react-native';
@@ -7,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
+import { Launch } from '../lib/launch';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 
@@ -105,12 +107,66 @@ export default function HomeScreen() {
     },
   ];
 
+  // Preload home icons to avoid decode jank during the entrance animation
+  useEffect(() => {
+    const mods = sections.flatMap(s => s.items.map(i => i.icon));
+    try { Asset.loadAsync(mods as any); } catch {}
+  }, []);
+
+  // Smooth, GPU-driven timeline animation (one driver for all cards)
+  const totalItems = useMemo(() => sections.reduce((acc, s) => acc + s.items.length, 0), [sections]);
+  const timelineRef = useRef(new Animated.Value(0));
+  const [animSeed, setAnimSeed] = useState(0);
+
+  const runEntrance = useCallback(() => {
+    // Reset timeline
+    timelineRef.current.stopAnimation();
+    timelineRef.current.setValue(0);
+    // Duration scales with number of items; keep frame-friendly easing
+    const duration = 300 + Math.max(0, totalItems - 1) * 60; // ~60ms per card
+    Animated.timing(timelineRef.current, {
+      toValue: 1,
+      duration,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [totalItems]);
+
+  useEffect(() => {
+    // If launch overlay already finished, run immediately; otherwise wait for it.
+    if (Launch.isDone()) {
+      runEntrance();
+      return;
+    }
+    const unsub = Launch.onDone(() => runEntrance());
+    return unsub;
+  }, [runEntrance]);
+
+  // Extra safety: kick off a run ~2.5s after mount in case launch event missed
+  // Removed extra fallback run (caused redundant animations)
+
+  // Re-run animation when returning to Home
+  useFocusEffect(
+    useCallback(() => {
+      // re-run entrance when returning
+      const t = setTimeout(() => runEntrance(), 50);
+      return () => clearTimeout(t);
+    }, [runEntrance])
+  );
+
+  const getFlatIndex = (sectionIdx: number, itemIdx: number) => {
+    let idx = 0;
+    for (let i = 0; i < sectionIdx; i++) idx += sections[i].items.length;
+    return idx + itemIdx;
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: background }] }>
       <ScrollView
         style={[styles.scrollView, { backgroundColor: background }]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        removeClippedSubviews
       >
         {/* Header removed per request */}
 
@@ -119,30 +175,47 @@ export default function HomeScreen() {
           <View key={sectionIndex} style={styles.section}>
             <Text style={styles.sectionTitle}>{section.title}</Text>
             {section.items.map((item, itemIndex) => {
+              const flatIdx = getFlatIndex(sectionIndex, itemIndex);
+              const step = 1 / Math.max(1, totalItems);
+              const start = flatIdx * step;
+              const end = Math.min(1, start + step * 0.9);
+              const mid = (start + end) / 2;
+              const opacity = timelineRef.current.interpolate({ inputRange: [start, end], outputRange: [0, 1], extrapolate: 'clamp' });
+              const scale = timelineRef.current.interpolate({ inputRange: [start, mid, end], outputRange: [0.96, 1.04, 1], extrapolate: 'clamp' });
               return (
-                <TouchableOpacity
+                <Animated.View
                   key={itemIndex}
-                  style={styles.card}
-                  onPress={item.onPress}
-                  activeOpacity={0.7}
+                  style={{
+                    transform: [{ scale }],
+                    opacity,
+                    backfaceVisibility: 'hidden',
+                    renderToHardwareTextureAndroid: true,
+                    shouldRasterizeIOS: true,
+                  }}
                 >
-                  <View style={styles.cardContent}>
-                    <View style={styles.cardLeft}>
-                      <View style={styles.iconContainer}>
-                        <Image
-                          source={item.icon}
-                          style={styles.homeIcon}
-                          resizeMode="contain"
-                        />
+                  <TouchableOpacity
+                    style={[styles.card, theme === 'light' && styles.cardLight]}
+                    onPress={item.onPress}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.cardContent}>
+                      <View style={styles.cardLeft}>
+                        <View style={styles.iconContainer}>
+                          <Image
+                            source={item.icon}
+                            style={styles.homeIcon}
+                            resizeMode="contain"
+                          />
+                        </View>
+                        <View style={styles.cardText}>
+                          <Text style={[styles.cardTitle, theme === 'light' && styles.cardTitleLight]}>{item.title}</Text>
+                          <Text style={[styles.cardSubtitle, theme === 'light' && styles.cardSubtitleLight]}>{item.subtitle}</Text>
+                        </View>
                       </View>
-                      <View style={styles.cardText}>
-                        <Text style={styles.cardTitle}>{item.title}</Text>
-                        <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
-                      </View>
+                      <ChevronRight size={20} color="#187486" />
                     </View>
-                    <ChevronRight size={20} color="#187486" />
-                  </View>
-                </TouchableOpacity>
+                  </TouchableOpacity>
+                </Animated.View>
               );
             })}
           </View>
@@ -260,11 +333,17 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     fontFamily: 'Ubuntu_700Bold',
   },
+  cardTitleLight: { color: '#111827' },
   cardSubtitle: {
     fontSize: 13,
     color: '#9CA3AF',
     lineHeight: 18,
     fontFamily: 'Ubuntu_400Regular',
+  },
+  cardSubtitleLight: { color: '#4B5563' },
+  cardLight: {
+    backgroundColor: '#F9F1E7',
+    borderColor: '#F9F1E7',
   },
   bottomSpacing: {
     height: 64,

@@ -12,6 +12,7 @@ import {
   InteractionManager,
   Animated,
 } from 'react-native';
+import { getTheme } from '../../../lib/theme';
 import { Easing } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { TextInput as TextInputRef } from 'react-native';
@@ -40,7 +41,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const COLORS = {
+const DARK_COLORS = {
   bg: '#1E1E1E',
   text: '#FFFFFF',
   sub: '#9CA3AF',
@@ -50,6 +51,19 @@ const COLORS = {
   accent: '#F2935C',
   border: '#3A3A3A',
   hint: '#353535',
+};
+
+const LIGHT_THEME = getTheme('light');
+const LIGHT_COLORS = {
+  bg: LIGHT_THEME.background,      // '#F2E3D0'
+  text: LIGHT_THEME.text,          // '#111827'
+  sub: LIGHT_THEME.subtext,        // '#4B5563'
+  slotNeutral: LIGHT_THEME.surface, // '#F9F1E7'
+  slotCorrect: '#A1BFBA',          // soft green
+  slotWrong: '#C9A3A3',            // soft red
+  accent: LIGHT_THEME.accent,      // '#F2935C'
+  border: LIGHT_THEME.border,      // '#F9F1E7'
+  hint: '#E5E7EB',
 };
 
 type Slot = {
@@ -306,7 +320,9 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
     }
   }, [completed]);
 
-  const themeStyles = theme === 'dark' ? darkStyles : darkStyles; // light theme could be added later
+  // Select styles and palette by theme
+  const themeStyles = theme === 'light' ? lightStyles : darkStyles;
+  const pal = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
   const deductionOpacity = deductionAnim.interpolate({
     inputRange: [0, 0.2, 1],
     outputRange: [0, 1, 0],
@@ -349,7 +365,7 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
           if (s.isSpace) {
             return <View key={i} style={themeStyles.spaceBox} />;
           }
-          const bg = s.status === 'wrong' ? COLORS.slotWrong : s.status === 'correct' || s.isHint ? COLORS.slotCorrect : COLORS.slotNeutral;
+          const bg = s.status === 'wrong' ? pal.slotWrong : s.status === 'correct' || s.isHint ? pal.slotCorrect : pal.slotNeutral;
           const locked = s.isHint || completed;
           const v = slotAnims.current[i] || new Animated.Value(1);
           const scale = v.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.86, 1.06, 1] });
@@ -361,7 +377,12 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
               accessible
               accessibilityRole="text"
               accessibilityLabel={`letter ${i + 1} of ${slots.length}`}
-              style={[themeStyles.slot, { backgroundColor: bg, transform: [{ translateY }, { scale }], opacity }]}
+              style={[
+                themeStyles.slot,
+                { backgroundColor: bg, transform: [{ translateY }, { scale }], opacity },
+                // Emphasize the active slot while editing
+                (focused === i && s.status === 'idle' && !s.isHint && !completed) && themeStyles.slotFocused,
+              ]}
             >
               <TextInput
                 ref={ref => {
@@ -378,7 +399,7 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
                 autoCorrect={false}
                 keyboardType="default"
                 placeholder={s.isHint ? undefined : ''}
-                placeholderTextColor={COLORS.sub}
+                placeholderTextColor={pal.sub}
               />
             </Animated.View>
           );
@@ -399,7 +420,7 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
 const darkStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: DARK_COLORS.bg,
     paddingHorizontal: 20,
     paddingTop: 20,
   },
@@ -411,7 +432,7 @@ const darkStyles = StyleSheet.create({
   },
   progressText: {
     fontSize: 14,
-    color: COLORS.sub,
+    color: DARK_COLORS.sub,
     fontWeight: '500',
   },
   scoreWrapper: {
@@ -429,18 +450,18 @@ const darkStyles = StyleSheet.create({
   scoreText: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.accent,
+    color: DARK_COLORS.accent,
   },
   progressBar: {
     height: 6,
-    backgroundColor: COLORS.border,
+    backgroundColor: DARK_COLORS.border,
     borderRadius: 3,
     overflow: 'hidden',
     marginBottom: 18,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: COLORS.accent,
+    backgroundColor: DARK_COLORS.accent,
   },
   header: {
     alignItems: 'center',
@@ -448,14 +469,14 @@ const darkStyles = StyleSheet.create({
     marginBottom: 18,
   },
   clue: {
-    color: COLORS.text,
+    color: DARK_COLORS.text,
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
   },
   ipa: {
     marginTop: 6,
-    color: COLORS.sub,
+    color: DARK_COLORS.sub,
     fontSize: 14,
   },
   slotsRow: {
@@ -475,7 +496,11 @@ const darkStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: DARK_COLORS.border,
+  },
+  slotFocused: {
+    borderWidth: 3,
+    borderColor: DARK_COLORS.accent,
   },
   spaceBox: {
     width: 16,
@@ -484,12 +509,12 @@ const darkStyles = StyleSheet.create({
   input: {
     width: '100%',
     textAlign: 'center',
-    color: COLORS.text,
+    color: DARK_COLORS.text,
     fontSize: 20,
     fontWeight: '700',
   },
   button: {
-    backgroundColor: COLORS.accent,
+    backgroundColor: DARK_COLORS.accent,
     paddingVertical: 14,
     paddingHorizontal: 32,
     borderRadius: 12,
@@ -503,7 +528,125 @@ const darkStyles = StyleSheet.create({
     transform: [{ translateX: -50 }],
   },
   buttonText: {
-    color: COLORS.text,
+    color: DARK_COLORS.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+});
+
+// Light theme styles
+const lightStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: LIGHT_COLORS.bg,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  progressText: {
+    fontSize: 14,
+    color: LIGHT_COLORS.sub,
+    fontWeight: '500',
+  },
+  scoreWrapper: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    minWidth: 48,
+  },
+  deductionText: {
+    position: 'absolute',
+    top: -20,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#F87171',
+  },
+  scoreText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: LIGHT_COLORS.accent,
+  },
+  progressBar: {
+    height: 6,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 18,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: LIGHT_COLORS.accent,
+  },
+  header: {
+    alignItems: 'center',
+    marginTop: 40,
+    marginBottom: 18,
+  },
+  clue: {
+    color: LIGHT_COLORS.text,
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  ipa: {
+    marginTop: 6,
+    color: LIGHT_COLORS.sub,
+    fontSize: 14,
+  },
+  slotsRow: {
+    position: 'absolute',
+    bottom: 360,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  slot: {
+    width: 36,
+    height: 48,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: LIGHT_COLORS.border,
+  },
+  slotFocused: {
+    borderWidth: 3,
+    borderColor: LIGHT_COLORS.accent,
+  },
+  spaceBox: {
+    width: 16,
+    height: 48,
+  },
+  input: {
+    width: '100%',
+    textAlign: 'center',
+    color: LIGHT_COLORS.text,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  button: {
+    backgroundColor: LIGHT_COLORS.accent,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  continueButton: {
+    position: 'absolute',
+    bottom: 250,
+    alignSelf: 'center',
+    left: '50%',
+    transform: [{ translateX: -50 }],
+  },
+  buttonText: {
+    color: LIGHT_COLORS.text,
     fontSize: 16,
     fontWeight: '700',
   },

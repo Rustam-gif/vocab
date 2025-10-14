@@ -1,7 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View, StyleSheet } from 'react-native';
 import { useFonts } from 'expo-font';
 import {
   Ubuntu_400Regular,
@@ -10,6 +10,8 @@ import {
 } from '@expo-google-fonts/ubuntu';
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
+import LottieView from 'lottie-react-native';
+import { Launch } from '../lib/launch';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -19,6 +21,10 @@ export default function RootLayout() {
   });
   const themeName = useAppStore(s => s.theme);
   const initializeApp = useAppStore(s => s.initialize);
+  const [showLaunch, setShowLaunch] = useState(true);
+  const launchRef = useRef<LottieView>(null);
+  const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const finishedRef = useRef(false);
 
   // Apply a global font family across the app after fonts load
   useEffect(() => {
@@ -35,11 +41,20 @@ export default function RootLayout() {
     initializeApp().catch(() => {});
   }, [initializeApp]);
 
+  // Fallback: hide overlay if animation never finishes (e.g., 8s)
+  useEffect(() => {
+    if (!fontsLoaded) return;
+    fallbackTimerRef.current = setTimeout(() => setShowLaunch(false), 8000) as any;
+    return () => {
+      if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+    };
+  }, [fontsLoaded]);
+
   if (!fontsLoaded) {
     return (
       <>
-        <StatusBar style="light" />
-        <View />
+        <StatusBar style={themeName === 'light' ? 'dark' : 'light'} />
+        <View style={{ flex: 1, backgroundColor: getTheme(themeName).background }} />
       </>
     );
   }
@@ -66,6 +81,53 @@ export default function RootLayout() {
         <Stack.Screen name="stats" options={{ title: 'Progress' }} />
         <Stack.Screen name="profile" options={{ title: 'Profile' }} />
       </Stack>
+
+      {showLaunch && (
+        <View
+          style={[
+            styles.launchOverlay,
+            themeName === 'light' && { backgroundColor: getTheme(themeName).background },
+          ]}
+          pointerEvents="none"
+        >
+          <LottieView
+            ref={launchRef}
+            source={require('../assets/lottie/launch.json')}
+            autoPlay
+            loop={false}
+            speed={0.7}
+            // Delay 2 seconds after the animation finishes before showing home
+            onAnimationFinish={() => {
+              if (finishedRef.current) return;
+              finishedRef.current = true;
+              if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+              setTimeout(() => {
+                setShowLaunch(false);
+                try { Launch.markDone(); } catch {}
+              }, 2000);
+            }}
+            style={styles.launchLottie}
+          />
+        </View>
+      )}
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  launchOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#121415',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 9999,
+  },
+  launchLottie: {
+    width: 220,
+    height: 220,
+  },
+});

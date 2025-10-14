@@ -8,6 +8,7 @@ import {
   Animated,
 } from 'react-native';
 import { ArrowLeft, ArrowRight, Volume2, Bookmark, Check, Sparkles } from 'lucide-react-native';
+import LottieView from 'lottie-react-native';
 let Speech: any = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -15,6 +16,7 @@ try {
 } catch {}
 import { useRouter } from 'expo-router';
 import { useAppStore } from '../../../lib/store';
+import { getTheme } from '../../../lib/theme';
 import { levels } from '../data/levels';
 import AnimatedNextButton from './AnimatedNextButton';
 
@@ -42,6 +44,9 @@ const SIDE_PADDING = Math.round((SCREEN_WIDTH - CARD_WIDTH) / 2);
 export default function WordIntroComponent({ setId, levelId, onComplete }: WordIntroProps) {
   const router = useRouter();
   const { addWord } = useAppStore();
+  const themeName = useAppStore(s => s.theme);
+  const colors = getTheme(themeName);
+  const isLight = themeName === 'light';
   const [currentIndex, setCurrentIndex] = useState(0);
   const [words, setWords] = useState<Word[]>([]);
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
@@ -168,14 +173,20 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
 
   if (words.length === 0) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading words...</Text>
+      <View style={[styles.loadingContainer, isLight && { backgroundColor: colors.background }]}>
+        <LottieView
+          source={require('../../../assets/lottie/loading.json')}
+          autoPlay
+          loop
+          style={{ width: 140, height: 140 }}
+        />
+        <Text style={[styles.loadingText, isLight && { color: '#6B7280' }]}>Loading words...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isLight && { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>{isCtaIndex ? 'All set' : 'Word Introduction'}</Text>
@@ -216,13 +227,13 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
           scrollEventThrottle={16}
         >
           {words.map((w, idx) => (
-            <View key={w.word + idx} style={[styles.wordCard, { width: CARD_WIDTH, marginRight: CARD_SPACING }]}>
+            <View key={w.word + idx} style={[styles.wordCard, isLight && styles.wordCardLight, { width: CARD_WIDTH, marginRight: CARD_SPACING }]}>
               <View style={styles.cardContent}>
                 {/* Word Header */}
                 <View style={styles.wordHeader}>
-                  <Text style={styles.wordText}>{w.word}</Text>
+                  <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{w.word}</Text>
                   <TouchableOpacity
-                    style={[styles.audioButton, speakingWord === w.word && { backgroundColor: '#3a2b23' }]}
+                    style={[styles.audioButton, isLight && { backgroundColor: '#E5E7EB' }, speakingWord === w.word && { backgroundColor: '#ecd2bf' }]}
                     onPress={() => {
                       try {
                         // Toggle if the same word is already speaking
@@ -253,18 +264,18 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
                 </View>
 
                 {/* Phonetic */}
-                <Text style={styles.phoneticText}>{w.phonetic}</Text>
+                <Text style={[styles.phoneticText, isLight && { color: '#6B7280' }]}>{w.phonetic}</Text>
 
                 {/* Definition */}
                 <View style={styles.definitionSection}>
                   <Text style={styles.sectionTitle}>Definition</Text>
-                  <Text style={styles.definitionText}>{w.definition}</Text>
+                  <Text style={[styles.definitionText, isLight && { color: '#1F2937' }]}>{w.definition}</Text>
                 </View>
 
                 {/* Example */}
                 <View style={styles.exampleSection}>
                   <Text style={styles.sectionTitle}>Example</Text>
-                  <Text style={styles.exampleText}>
+                  <Text style={[styles.exampleText, isLight && { color: '#4B5563' }]}>
                     {w.example ? w.example.split(w.word).map((part, i) => (
                       <Text key={i}>
                         {i === 0 ? part : (
@@ -284,8 +295,8 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
                     <Text style={styles.sectionTitle}>Synonyms</Text>
                     <View style={styles.synonymsContainer}>
                       {w.synonyms.map((syn, i) => (
-                        <View key={syn + i} style={styles.synonymTag}>
-                          <Text style={styles.synonymText}>{syn}</Text>
+                        <View key={syn + i} style={[styles.synonymTag, isLight && { backgroundColor: '#E5E7EB' }]}>
+                          <Text style={[styles.synonymText, isLight && { color: '#111827' }]}>{syn}</Text>
                         </View>
                       ))}
                     </View>
@@ -324,12 +335,12 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
           ))}
 
           {/* CTA Final Card */}
-          <View key="cta-card" style={[styles.wordCard, styles.ctaCard, { width: CARD_WIDTH, marginRight: CARD_SPACING }]}>
-            <View style={styles.ctaIconWrap}>
+          <View key="cta-card" style={[styles.wordCard, styles.ctaCard, isLight && styles.wordCardLight, { width: CARD_WIDTH, marginRight: CARD_SPACING }]}>
+            <View style={[styles.ctaIconWrap, isLight && { backgroundColor: '#E5E7EB' }]}>
               <Sparkles size={28} color="#F2935C" />
             </View>
-            <Text style={styles.ctaTitle}>You're ready!</Text>
-            <Text style={styles.ctaText}>You've seen all {words.length} words. When you’re ready, start practicing.</Text>
+            <Text style={[styles.ctaTitle, isLight && { color: '#111827' }]}>You're ready!</Text>
+            <Text style={[styles.ctaText, isLight && { color: '#6B7280' }]}>You've seen all {words.length} words. When you’re ready, start practicing.</Text>
             <AnimatedNextButton
               onPress={handleStartPractice}
             />
@@ -338,23 +349,23 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
       </View>
 
       {/* Navigation Controls */}
-      <View style={styles.navigationContainer}>
+      <View style={[styles.navigationContainer, isLight && { backgroundColor: 'transparent' }]}>
         <TouchableOpacity
-          style={[styles.navButton, currentIndex === 0 && styles.disabledButton]}
+          style={[styles.navButton, isLight && { backgroundColor: '#E5E7EB' }, currentIndex === 0 && (isLight ? styles.disabledButtonLight : styles.disabledButton)]}
           onPress={goToPrevious}
           disabled={currentIndex === 0}
         >
-          <ArrowLeft size={24} color={currentIndex === 0 ? "#666" : "#F2935C"} />
+          <ArrowLeft size={24} color={currentIndex === 0 ? (isLight ? '#9CA3AF' : '#666') : '#F2935C'} />
         </TouchableOpacity>
 
         <View style={styles.navSpacer} />
 
         <TouchableOpacity
-          style={[styles.navButton, currentIndex === TOTAL_CARDS - 1 && styles.disabledButton]}
+          style={[styles.navButton, isLight && { backgroundColor: '#E5E7EB' }, currentIndex === TOTAL_CARDS - 1 && (isLight ? styles.disabledButtonLight : styles.disabledButton)]}
           onPress={goToNext}
           disabled={currentIndex === TOTAL_CARDS - 1}
         >
-          <ArrowRight size={24} color={currentIndex === TOTAL_CARDS - 1 ? "#666" : "#F2935C"} />
+          <ArrowRight size={24} color={currentIndex === TOTAL_CARDS - 1 ? (isLight ? '#9CA3AF' : '#666') : '#F2935C'} />
         </TouchableOpacity>
       </View>
     </View>
@@ -431,6 +442,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     position: 'relative',
   },
+  wordCardLight: { backgroundColor: '#F9F1E7', borderWidth: StyleSheet.hairlineWidth, borderColor: '#F9F1E7' },
   cardContent: {
     flexGrow: 1,
     paddingBottom: 96
@@ -567,6 +579,10 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: '#222',
+  },
+  disabledButtonLight: {
+    backgroundColor: '#E5E7EB',
+    opacity: 0.6,
   },
   navSpacer: {
     flex: 1,

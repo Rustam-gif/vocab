@@ -9,6 +9,9 @@ import {
   Dimensions 
 } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
+import LottieView from 'lottie-react-native';
+import { useAppStore } from '../../../lib/store';
+import { getTheme } from '../../../lib/theme';
 import { levels } from '../data/levels';
 import { analyticsService } from '../../../services/AnalyticsService';
 import AnimatedNextButton from './AnimatedNextButton';
@@ -35,6 +38,8 @@ interface Question {
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// Tiny holder to access theme in inline style closures without rerender churn
+const mcqThemeHack: { theme?: string; colors?: any } = {};
 
 const shortenPhrase = (phrase: string): string => {
   let trimmed = phrase.trim();
@@ -1920,6 +1925,9 @@ const typedFallbacks = (setTitle: string, pos: 'verb'|'noun'|'adjective'): strin
 };
 
 export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange, wordsOverride }: MCQProps) {
+  const themeName = useAppStore(s => s.theme);
+  const colors = getTheme(themeName);
+  const isLight = themeName === 'light';
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [displayScore, setDisplayScore] = useState(sharedScore);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -2695,8 +2703,14 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
 
   if (questions.length === 0) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading questions...</Text>
+      <View style={[styles.loadingContainer, isLight && { backgroundColor: colors.background }]}>
+        <LottieView
+          source={require('../../../assets/lottie/loading.json')}
+          autoPlay
+          loop
+          style={{ width: 140, height: 140 }}
+        />
+        <Text style={[styles.loadingText, isLight && { color: '#6B7280' }]}>Loading questions...</Text>
       </View>
     );
   }
@@ -2745,11 +2759,11 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isLight && { backgroundColor: colors.background }]}>
       {/* Header with Progress and Score */}
       <View style={styles.header}>
         <View style={styles.progressContainer}>
-          <Text style={styles.progressText}>
+          <Text style={[styles.progressText, (mcqThemeHack as any).theme === 'light' && { color: '#6B7280' }]}>
             Word {currentWordIndex + 1} of {questions.length}
           </Text>
           <View style={styles.scoreWrapper}>
@@ -2767,7 +2781,7 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
             <Text style={styles.scoreText}>{displayScore}</Text>
           </View>
         </View>
-        <View style={styles.progressBar}>
+        <View style={[styles.progressBar, isLight && { backgroundColor: '#E5E7EB' }]}>
           <Animated.View 
             style={[
               styles.progressFill, 
@@ -2793,12 +2807,12 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
         }}
       >
         <View style={styles.wordHeader}>
-          <Text style={styles.wordText}>{currentQuestion.word}</Text>
-          <Text style={styles.ipaText}>{currentQuestion.ipa}</Text>
-          <Text style={styles.exampleInline}>
+          <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{currentQuestion.word}</Text>
+          <Text style={[styles.ipaText, isLight && { color: '#6B7280' }]}>{currentQuestion.ipa}</Text>
+          <Text style={[styles.exampleInline, isLight && { color: '#6B7280' }]}>
             {renderSentenceWithHighlight(currentQuestion.example, currentQuestion.word)}
           </Text>
-        </View>
+       </View>
 
         <View style={styles.optionsContainer}>
           {currentQuestion.options.map((option, index) => {
@@ -2818,13 +2832,16 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
                 <TouchableOpacity
                 style={[
                   styles.optionButton,
-                  (showFeedback && index === currentQuestion.correctAnswer) && styles.correctOption,
-                  (showFeedback && isSelected && !isCorrectOption) && styles.wrongOption,
+                  // Keep light card color even after feedback so unselected options don't darken
+                  isLight && styles.optionLight,
+                  (!showFeedback && isSelected) && (isLight ? styles.selectedOptionLight : styles.selectedOption),
+                  (showFeedback && index === currentQuestion.correctAnswer) && (isLight ? styles.correctOptionLight : styles.correctOption),
+                  (showFeedback && isSelected && !isCorrectOption) && (isLight ? styles.wrongOptionLight : styles.wrongOption),
                 ]}
                 onPress={() => handleAnswerSelect(index)}
                 disabled={isAnswered}
               >
-                  <Text style={styles.optionText}>
+                  <Text style={[styles.optionText, isLight && { color: '#111827' }]}>
                   {option}
                 </Text>
               </TouchableOpacity>
@@ -2940,12 +2957,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 72,
   },
-  correctOption: {
-    backgroundColor: '#437F76',
-  },
-  wrongOption: {
-    backgroundColor: '#924646',
-  },
+  // Light mode card color to match Learn cards
+  optionLight: { backgroundColor: '#F9F1E7', borderWidth: StyleSheet.hairlineWidth, borderColor: '#F9F1E7' },
+  // Brighter selected state before feedback (dark and light variants)
+  selectedOption: { backgroundColor: 'rgba(242, 147, 92, 0.18)', borderWidth: 2, borderColor: '#F2935C' },
+  selectedOptionLight: { backgroundColor: '#FBE8DB', borderWidth: 2, borderColor: '#F2935C' },
+  // Reveal states
+  // Dark theme strong colors
+  correctOption: { backgroundColor: '#437F76' },
+  wrongOption: { backgroundColor: '#924646' },
+  // Light theme soft, less saturated colors (≈50% tint)
+  correctOptionLight: { backgroundColor: '#A1BFBA' },
+  wrongOptionLight: { backgroundColor: '#C9A3A3' },
   optionText: {
     fontSize: 16,
     color: '#fff',

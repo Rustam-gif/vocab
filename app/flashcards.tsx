@@ -4,11 +4,15 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, PanResponde
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppStore } from '../lib/store';
+import { getTheme } from '../lib/theme';
 
 export default function Flashcards() {
   const router = useRouter();
   const { folderId, title } = useLocalSearchParams<{ folderId: string; title?: string }>();
   const { words, loadWords, getDueWords, gradeWordSrs, resetSrs } = useAppStore();
+  const themeName = useAppStore(s => s.theme);
+  const colors = getTheme(themeName);
+  const isLight = themeName === 'light';
   const [index, setIndex] = useState(0);
   const [queue, setQueue] = useState<any[]>([]);
   const rotate = useRef(new Animated.Value(0)).current;
@@ -248,11 +252,11 @@ export default function Flashcards() {
   const swipeStyle = { transform: [{ perspective: 900 }, { translateX: panX }, { rotate: swipeRotate }] } as const;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}><Text style={styles.backTxt}>Back</Text></TouchableOpacity>
-        <Text style={styles.title}>{title || 'Flashcards'}</Text>
-        <Text style={styles.counter}>{`${Math.min(index + 1, items.length)}/${items.length}`}</Text>
+    <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
+      <View style={[styles.header, isLight && { borderBottomColor: '#E5E7EB' }]}>
+        <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, isLight && { backgroundColor: '#E5E7EB' }]}><Text style={[styles.backTxt, isLight && { color: '#111827' }]}>Back</Text></TouchableOpacity>
+        <Text style={[styles.title, isLight && { color: '#111827' }]}>{title || 'Flashcards'}</Text>
+        <Text style={[styles.counter, isLight && { color: '#6B7280' }]}>{`${Math.min(index + 1, items.length)}/${items.length}`}</Text>
       </View>
       <View style={styles.dotsBar}>
         {dotsIndices.map((i, idx) => {
@@ -263,18 +267,18 @@ export default function Flashcards() {
           return (
             <View
               key={`dot-${i}-${idx}`}
-              style={[styles.dot, isActive && styles.dotActive, { opacity: fadeOpacity }]}
+              style={[styles.dot, isActive && styles.dotActive, isLight && !isActive && { backgroundColor: '#D1D5DB' }, { opacity: fadeOpacity }]}
             />
           );
         })}
       </View>
       <View style={styles.body}>
-        <TouchableOpacity style={styles.resetBtn} onPress={() => resetSrs(folderId as string)}>
-          <Text style={styles.resetTxt}>Reset SRS</Text>
+        <TouchableOpacity style={[styles.resetBtn, isLight && { backgroundColor: '#E5E7EB' }]} onPress={() => resetSrs(folderId as string)}>
+          <Text style={[styles.resetTxt, isLight && { color: '#111827' }]}>Reset SRS</Text>
         </TouchableOpacity>
         <Animated.View key={`card-${current.id}-${index}`} style={[styles.cardWrap, appearStyle]}>
           {thirdCard && (
-            <View pointerEvents="none" style={[styles.deckCard, styles.deckCardThird]} />
+            <View pointerEvents="none" style={[styles.deckCard, styles.deckCardThird, isLight && { backgroundColor: '#F9F1E7', borderColor: '#E5E7EB', shadowOpacity: 0.15 }]} />
           )}
           {nextCard && (
             <Animated.View
@@ -294,20 +298,20 @@ export default function Flashcards() {
           )}
           <Animated.View style={[styles.activeCardContainer, swipeStyle]}>
             {/* Front */}
-            <Animated.View style={[styles.card, styles.cardFront, styles.cardElevated, { transform: [{ rotateY: frontRotate }] }]}
+            <Animated.View style={[styles.card, styles.cardFront, styles.cardElevated, isLight && { backgroundColor: '#F9F1E7', borderColor: '#E5E7EB' }, { transform: [{ rotateY: frontRotate }] }]}
               collapsable={false}
             >
               <View style={styles.cardHeaderStripe}>
-                <Text style={styles.cardLabel}>Word</Text>
+                <Text style={[styles.cardLabel, isLight && { color: '#6B7280' }]}>Word</Text>
               </View>
-              <Text style={styles.word}>{current.word}</Text>
-              <Text style={styles.hint}>Tap to see meaning</Text>
+              <Text style={[styles.word, isLight && { color: '#111827', textShadowColor: 'transparent' }]}>{current.word}</Text>
+              <Text style={[styles.hint, isLight && { color: '#6B7280' }]}>Tap to see meaning</Text>
             </Animated.View>
             {/* Back */}
-            <Animated.View style={[styles.card, styles.cardBack, styles.cardBackSurface, styles.cardElevated, { transform: [{ rotateY: backRotate }] }]}> 
-              <Text style={styles.definition}>{current.definition}</Text>
+            <Animated.View style={[styles.card, styles.cardBack, styles.cardBackSurface, styles.cardElevated, isLight && { backgroundColor: '#F9F1E7' }, { transform: [{ rotateY: backRotate }] }]}> 
+              <Text style={[styles.definition, isLight && { color: '#111827' }]}>{current.definition}</Text>
               {!!current.example && (
-                <Text style={styles.example}>"{current.example}"</Text>
+                <Text style={[styles.example, isLight && { color: '#6B7280' }]}>"{current.example}"</Text>
               )}
             </Animated.View>
             <Animated.View pointerEvents="none" style={[styles.feedbackOverlay, styles.feedbackKnow, { opacity: knowDragOpacity }]} />

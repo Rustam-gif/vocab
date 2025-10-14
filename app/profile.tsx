@@ -67,6 +67,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user, setUser, userProgress, loadProgress } = useAppStore();
+  const themeName = useAppStore(s => s.theme);
+  const toggleTheme = useAppStore(s => s.toggleTheme);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [showEmailAuth, setShowEmailAuth] = useState(false);
   const [email, setEmail] = useState('');
@@ -450,6 +452,23 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Appearance */}
+        <View style={styles.infoCard}>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Theme</Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Toggle theme"
+              onPress={toggleTheme}
+              activeOpacity={0.85}
+              style={[styles.themeToggle, themeName === 'light' && styles.themeToggleActive]}
+            >
+              <View style={[styles.themeThumb, themeName === 'light' && styles.themeThumbOn]} />
+              <Text style={[styles.themeToggleText]}>{themeName === 'light' ? 'Light' : 'Dark'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
             <View style={styles.statIcon}>
@@ -603,6 +622,32 @@ const styles = StyleSheet.create({
   },
   infoLabel: { color: '#9CA3AF', marginLeft: 10, fontSize: 12, width: 60 },
   infoValue: { color: '#fff', flex: 1, textAlign: 'right' },
+  themeToggle: {
+    marginLeft: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)'
+  },
+  themeToggleActive: {
+    backgroundColor: 'rgba(242,147,92,0.18)',
+    borderColor: 'rgba(242,147,92,0.45)'
+  },
+  themeThumb: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#9CA3AF',
+  },
+  themeThumbOn: {
+    backgroundColor: '#F2935C',
+  },
+  themeToggleText: { color: '#E5E7EB', fontWeight: '700', fontSize: 12 },
   signInContainer: {
     flex: 1,
     justifyContent: 'center',

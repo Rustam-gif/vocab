@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Image
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Check } from 'lucide-react-native';
 import { levels, Level } from './data/levels';
+import { useAppStore } from '../../lib/store';
+import { getTheme } from '../../lib/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
@@ -10,6 +12,9 @@ const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 export default function LevelSelectScreen() {
   const router = useRouter();
   const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
+  const themeName = useAppStore(s => s.theme);
+  const colors = getTheme(themeName);
+  const isLight = themeName === 'light';
 
   useEffect(() => {
     let mounted = true;
@@ -82,15 +87,20 @@ export default function LevelSelectScreen() {
     
     return (
       <TouchableOpacity
-        style={[styles.levelCard, isSelected && styles.selectedCard, isSelected && { borderColor: accent }]}
+        style={[
+          styles.levelCard,
+          isLight && styles.levelCardLight,
+          isSelected && (isLight ? styles.selectedCardLight : styles.selectedCard),
+          isSelected && { borderColor: accent },
+        ]}
         onPress={() => handleLevelSelect(item.id)}
       >
         <View style={styles.levelHeader}>
           <View style={styles.levelInfo}>
             <Image source={getLevelIcon(item.id)} style={styles.levelImage} resizeMode="contain" />
             <View style={styles.levelDetails}>
-              <Text style={styles.levelName}>{item.name}</Text>
-              <Text style={styles.levelDescription}>{item.description}</Text>
+              <Text style={[styles.levelName, isLight && { color: '#111827' }]}>{item.name}</Text>
+              <Text style={[styles.levelDescription, isLight && { color: '#4B5563' }]}>{item.description}</Text>
               <Text style={[styles.levelCefr, { color: accent }]}>CEFR {item.cefr}</Text>
             </View>
           </View>
@@ -103,16 +113,16 @@ export default function LevelSelectScreen() {
   const canContinue = Boolean(selectedLevel);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <ArrowLeft size={24} color="#fff" />
+          <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
         </TouchableOpacity>
-        <Text style={styles.title}>Select a Level</Text>
+        <Text style={[styles.title, isLight && { color: '#111827' }]}>Select a Level</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -126,7 +136,7 @@ export default function LevelSelectScreen() {
       />
 
       {/* Continue Button */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, isLight && { backgroundColor: colors.background }]}>
         <TouchableOpacity
           style={[styles.continueButton, { backgroundColor: accent }, !canContinue && styles.continueButtonDisabled]}
           onPress={handleContinue}
@@ -185,8 +195,14 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  levelCardLight: { backgroundColor: '#F9F1E7', borderColor: '#F9F1E7' },
   selectedCard: {
     backgroundColor: '#3A3A3A',
+  },
+  selectedCardLight: {
+    backgroundColor: '#F3E6D7', // slightly deeper than surface for focus
+    borderColor: '#F2935C',
+    borderWidth: 2,
   },
   levelHeader: {
     flexDirection: 'row',

@@ -16,6 +16,8 @@ import {
   Alert,
   Modal,
   Animated,
+  Easing,
+  Dimensions,
   TextInput,
   Platform,
   KeyboardAvoidingView,
@@ -130,6 +132,7 @@ export default function StoryExerciseScreen() {
   const [showCustomizeModal, setShowCustomizeModal] = useState(false);
   const [isNormalMode, setIsNormalMode] = useState(false); // false = Fill-in-the-blanks, true = Normal
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const themeName = useAppStore(s => s.theme);
   const [isDarkMode, setIsDarkMode] = useState(true); // true = dark mode, false = light mode
   const [customization, setCustomization] = useState<StoryCustomization>({
     genre: 'adventure',
@@ -147,6 +150,12 @@ export default function StoryExerciseScreen() {
   const iconRefs = useRef<{ [key: string]: Text | null }>({});
   const [showControls, setShowControls] = useState(true); // show panels initially; hide after generation
   const chevronAnim = useRef(new Animated.Value(1)).current; // 1=open, 0=closed
+  // Magical reveal for newly generated text
+  const revealAnim = useRef(new Animated.Value(0)).current; // 0 -> 1
+  // Sparkles overlay for reveal (fallback stars only)
+  const [showSparkles, setShowSparkles] = useState(false);
+  const sparklesProgress = useRef(new Animated.Value(0)).current; // stars timeline
+  const sparklesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // (Shine animation removed per request)
 
@@ -167,6 +176,21 @@ export default function StoryExerciseScreen() {
   useEffect(() => {
     loadWords();
   }, []);
+
+  // Sync initial mode with app theme; user can still toggle locally
+  useEffect(() => {
+    const isLight = themeName === 'light';
+    setIsDarkMode(!isLight);
+  }, [themeName]);
+
+  // Cleanup sparkles timer on unmount
+  useEffect(() => {
+    return () => {
+      if (sparklesTimeoutRef.current) clearTimeout(sparklesTimeoutRef.current);
+    };
+  }, []);
+
+  // no-op: stars use Animated timing controlled above
 
   // Android hardware back: if navigated from results, go Home; also exit fullscreen first.
   useEffect(() => {
@@ -237,6 +261,31 @@ export default function StoryExerciseScreen() {
       setIsNormalMode(false);
       setShowControls(false); // compact reading mode by default after generation
       chevronAnim.setValue(0);
+      // Kick magical appear animation
+      try {
+        revealAnim.setValue(0);
+        Animated.timing(revealAnim, {
+          toValue: 1,
+          // Slow, smooth reveal for the whole text block
+          duration: 2400,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }).start();
+        // Trigger sparkle overlays; hide automatically after it finishes or via fallback timeout
+        setShowSparkles(true);
+        try {
+          sparklesProgress.setValue(0);
+          Animated.timing(sparklesProgress, {
+            toValue: 1,
+            duration: 4000,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }).start();
+        } catch {}
+        if (sparklesTimeoutRef.current) clearTimeout(sparklesTimeoutRef.current);
+        // Keep sparkles visible longer so they’re noticeable
+        sparklesTimeoutRef.current = setTimeout(() => setShowSparkles(false), 6000);
+      } catch {}
     } catch (error) {
       console.error('Error generating story:', error);
       Alert.alert('Error', 'Failed to generate story. Please try again.');
@@ -680,7 +729,7 @@ const buildStoryFromContent = (
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, !isDarkMode && styles.containerLight]}>
         <View style={styles.loadingContainer}>
           <LottieView
             source={require('./Poetry.json')}
@@ -695,10 +744,10 @@ const buildStoryFromContent = (
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, !isDarkMode && styles.containerLight]}>
       {/* Header - Hidden in fullscreen */}
       {!isFullscreen && (
-        <View style={styles.header}>
+        <View style={[styles.header, !isDarkMode && styles.headerLight]}>
           <TouchableOpacity onPress={() => {
             if (params.from === 'results') {
               router.replace('/');
@@ -706,12 +755,12 @@ const buildStoryFromContent = (
               router.back();
             }
           }} style={styles.backButton}>
-            <ArrowLeft size={24} color="#FFFFFF" />
+            <ArrowLeft size={24} color={isDarkMode ? "#FFFFFF" : "#111827"} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>{headerTitle}</Text>
+            <Text style={[styles.headerTitle, !isDarkMode && styles.headerTitleLight]}>{headerTitle}</Text>
             {headerSubtitle ? (
-              <Text style={styles.headerSubtitle}>{headerSubtitle}</Text>
+              <Text style={[styles.headerSubtitle, !isDarkMode && styles.headerSubtitleLight]}>{headerSubtitle}</Text>
             ) : null}
           </View>
           <TouchableOpacity style={styles.closeButton} onPress={() => {
@@ -721,7 +770,7 @@ const buildStoryFromContent = (
               router.back();
             }
           }}>
-            <X size={24} color="#FFFFFF" />
+            <X size={24} color={isDarkMode ? "#FFFFFF" : "#111827"} />
           </TouchableOpacity>
         </View>
       )}
@@ -736,7 +785,7 @@ const buildStoryFromContent = (
             <View style={[styles.toggleTrack, isNormalMode && styles.toggleTrackActive]}>
               <View style={[styles.toggleThumb, isNormalMode && styles.toggleThumbActive]} />
             </View>
-            <Text style={styles.toggleLabel}>
+            <Text style={[styles.toggleLabel, !isDarkMode && styles.toggleLabelLight]}>
               {isNormalMode ? 'Normal Reading' : 'Fill-in-the-blanks'}
             </Text>
           </TouchableOpacity>
@@ -746,7 +795,7 @@ const buildStoryFromContent = (
       {/* Tools Dock - grouped controls in one place */}
       {!isFullscreen && (
         <View style={styles.panelContainer}>
-          <View style={styles.toolsDock}>
+          <View style={[styles.toolsDock, !isDarkMode && styles.toolsDockLight]}>
             {/* Pick */}
             <TouchableOpacity
               style={styles.dockItem}
@@ -760,8 +809,8 @@ const buildStoryFromContent = (
               }}
               activeOpacity={0.85}
             >
-              <Search size={12} color="#E5E7EB" />
-              <Text style={styles.dockText}>Pick</Text>
+              <Search size={12} color={isDarkMode ? "#E5E7EB" : "#374151"} />
+              <Text style={[styles.dockText, !isDarkMode && styles.dockTextLight]}>Pick</Text>
             </TouchableOpacity>
 
             {/* Customize */}
@@ -770,8 +819,8 @@ const buildStoryFromContent = (
               onPress={() => setShowCustomizeModal(true)}
               activeOpacity={0.85}
             >
-              <Settings size={12} color="#E5E7EB" />
-              <Text style={styles.dockText}>Customize</Text>
+              <Settings size={12} color={isDarkMode ? "#E5E7EB" : "#374151"} />
+              <Text style={[styles.dockText, !isDarkMode && styles.dockTextLight]}>Customize</Text>
             </TouchableOpacity>
 
             {/* Save */}
@@ -781,8 +830,8 @@ const buildStoryFromContent = (
               disabled={!hasStory}
               activeOpacity={0.85}
             >
-              <Bookmark size={12} color="#E5E7EB" />
-              <Text style={styles.dockText}>Save</Text>
+              <Bookmark size={12} color={isDarkMode ? "#E5E7EB" : "#374151"} />
+              <Text style={[styles.dockText, !isDarkMode && styles.dockTextLight]}>Save</Text>
             </TouchableOpacity>
           </View>
           {/* Gamified quest progress */}
@@ -793,7 +842,11 @@ const buildStoryFromContent = (
       {/* Story Content */}
       <View style={styles.storyContainer}>
         <ScrollView 
-          style={[styles.content, isFullscreen && styles.contentFullscreen]} 
+          style={[
+            styles.content,
+            isFullscreen && styles.contentFullscreen,
+            isFullscreen && !isDarkMode && styles.contentFullscreenLight,
+          ]} 
           showsVerticalScrollIndicator={false}
         >
           {/* Paper-like reading card when a story is present */}
@@ -810,18 +863,58 @@ const buildStoryFromContent = (
                 <Maximize2 size={16} color="#9CA3AF" />
               }
             </TouchableOpacity>
-            
-            {/* Theme toggle removed */}
-            
-            <View style={[styles.storyText, !isDarkMode && styles.storyTextLight]}>
+
+            {/* Theme toggle */}
+            <TouchableOpacity
+              style={styles.themeIconBtn}
+              onPress={() => setIsDarkMode(prev => !prev)}
+              accessibilityRole="button"
+              accessibilityLabel={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              activeOpacity={0.85}
+            >
+              {isDarkMode ? (
+                <Sun size={14} color="#F3F4F6" />
+              ) : (
+                <Moon size={14} color="#111827" />
+              )}
+            </TouchableOpacity>
+
+            <Animated.View
+              style={[
+                styles.storyText,
+                !isDarkMode && styles.storyTextLight,
+                {
+                  // Keep a gentle entrance transform on the wrapper
+                  opacity: 1,
+                  transform: [
+                    { translateY: revealAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+                    { scale: revealAnim.interpolate({ inputRange: [0, 1], outputRange: [0.985, 1] }) },
+                  ],
+                },
+              ]}
+            >
               {hasStory ? (
-                <Text style={isDarkMode ? styles.sentenceText : styles.sentenceTextPaper}>
-                  {(story?.sentences ?? []).map(renderSentence)}
-                </Text>
+                <View>
+                  {(story?.sentences ?? []).map((s, idx) => {
+                    const total = Math.max(1, (story?.sentences?.length ?? 1));
+                    const step = 1 / (total + 1);
+                    const start = Math.min(idx * step, 0.9);
+                    const end = Math.min(start + step * 0.85, 1);
+                    const opacity = revealAnim.interpolate({ inputRange: [start, end], outputRange: [0, 1], extrapolate: 'clamp' });
+                    const ty = revealAnim.interpolate({ inputRange: [start, end], outputRange: [6, 0], extrapolate: 'clamp' });
+                    return (
+                      <Animated.View key={s.id} style={{ opacity, transform: [{ translateY: ty }] }}>
+                        <Text style={isDarkMode ? styles.sentenceText : styles.sentenceTextPaper}>
+                          {renderSentence(s)}
+                        </Text>
+                      </Animated.View>
+                    );
+                  })}
+                </View>
               ) : (
                 <View style={styles.storyPlaceholder}>
-                  <Text style={styles.storyPlaceholderTitle}>Ready when you are</Text>
-                  <Text style={styles.storyPlaceholderBody}>
+                  <Text style={[styles.storyPlaceholderTitle, !isDarkMode && styles.storyPlaceholderTitleLight]}>Ready when you are</Text>
+                  <Text style={[styles.storyPlaceholderBody, !isDarkMode && styles.storyPlaceholderBodyLight]}>
                     Choose five words, tweak the story settings, then tap Generate to craft a new narrative.
                   </Text>
                   <TouchableOpacity
@@ -839,7 +932,11 @@ const buildStoryFromContent = (
                   </TouchableOpacity>
                 </View>
               )}
-            </View>
+              {/* Lottie sparkles overlay while revealing */}
+              {hasStory && showSparkles && (
+                <MagicSparkles progress={sparklesProgress} dark={isDarkMode} />
+              )}
+            </Animated.View>
           </View>
           <View style={styles.bottomSpacing} />
           </>
@@ -1225,12 +1322,12 @@ const buildStoryFromContent = (
         animationType="fade"
         onRequestClose={() => setShowWordSelectionModal(false)}
       >
-        <View style={styles.wordSelectionOverlay}>
-          <View style={styles.wordSelectionModal}>
-            <View style={styles.wordSelectionHeader}>
-              <Text style={styles.wordSelectionTitle}>Choose a Word</Text>
+        <View style={[styles.wordSelectionOverlay, !isDarkMode && styles.wordSelectionOverlayLight]}>
+          <View style={[styles.wordSelectionModal, !isDarkMode && styles.wordSelectionModalLight]}>
+            <View style={[styles.wordSelectionHeader, !isDarkMode && styles.wordSelectionHeaderLight]}>
+              <Text style={[styles.wordSelectionTitle, !isDarkMode && styles.wordSelectionTitleLight]}>Choose a Word</Text>
               <TouchableOpacity onPress={() => setShowWordSelectionModal(false)}>
-                <X size={24} color="#9CA3AF" />
+                <X size={24} color={isDarkMode ? '#9CA3AF' : '#6B7280'} />
               </TouchableOpacity>
             </View>
             
@@ -1242,17 +1339,17 @@ const buildStoryFromContent = (
                 {getAvailableWords().map((word) => (
                   <TouchableOpacity
                     key={word}
-                    style={styles.wordSelectionItem}
+                    style={[styles.wordSelectionItem, !isDarkMode && styles.wordSelectionItemLight]}
                     onPress={() => handleWordSelection(word)}
                   >
-                    <Text style={styles.wordSelectionText}>{word}</Text>
+                    <Text style={[styles.wordSelectionText, !isDarkMode && styles.wordSelectionTextLight]}>{word}</Text>
                   </TouchableOpacity>
                 ))}
                 
                 {getAvailableWords().length === 0 && (
                   <View style={styles.noWordsAvailable}>
-                    <Text style={styles.noWordsText}>No words available</Text>
-                    <Text style={styles.noWordsSubtext}>All words are already used</Text>
+                    <Text style={[styles.noWordsText, !isDarkMode && styles.noWordsTextLight]}>No words available</Text>
+                    <Text style={[styles.noWordsSubtext, !isDarkMode && styles.noWordsSubtextLight]}>All words are already used</Text>
                   </View>
                 )}
             </ScrollView>
@@ -1264,10 +1361,89 @@ const buildStoryFromContent = (
   );
 }
 
+// Magical sparkles overlay (fallback): star-shaped sparkles (smaller, lighter, more of them)
+const MagicSparkles: React.FC<{ progress: Animated.Value; dark?: boolean }> = ({ progress, dark }) => {
+  const width = Dimensions.get('window').width - 40; // roughly card width minus padding
+  const areaH = 220; // cover a taller portion near the top of the card
+  const color = dark ? 'rgba(242,147,92,0.5)' : 'rgba(15,23,42,0.5)';
+  const dimColor = dark ? 'rgba(242,147,92,0.25)' : 'rgba(15,23,42,0.25)';
+  const peakOpacity = 0.5; // 50% max opacity as requested
+  // More, smaller stars across the upper third of the card
+  const points = [
+    // row 1
+    { x: 0.05, y: 0.06, s: 10 }, { x: 0.13, y: 0.04, s: 8 }, { x: 0.21, y: 0.07, s: 9 }, { x: 0.29, y: 0.05, s: 10 }, { x: 0.37, y: 0.08, s: 9 }, { x: 0.45, y: 0.06, s: 10 }, { x: 0.53, y: 0.07, s: 9 }, { x: 0.61, y: 0.05, s: 10 }, { x: 0.69, y: 0.08, s: 9 }, { x: 0.77, y: 0.06, s: 10 }, { x: 0.85, y: 0.07, s: 9 }, { x: 0.93, y: 0.05, s: 10 },
+    // row 2
+    { x: 0.09, y: 0.16, s: 9 }, { x: 0.17, y: 0.14, s: 8 }, { x: 0.25, y: 0.18, s: 10 }, { x: 0.33, y: 0.15, s: 9 }, { x: 0.41, y: 0.17, s: 8 }, { x: 0.49, y: 0.16, s: 10 }, { x: 0.57, y: 0.14, s: 9 }, { x: 0.65, y: 0.18, s: 8 }, { x: 0.73, y: 0.16, s: 10 }, { x: 0.81, y: 0.15, s: 9 }, { x: 0.89, y: 0.17, s: 8 },
+    // row 3
+    { x: 0.07, y: 0.27, s: 9 }, { x: 0.15, y: 0.25, s: 8 }, { x: 0.23, y: 0.29, s: 10 }, { x: 0.31, y: 0.26, s: 9 }, { x: 0.39, y: 0.28, s: 8 }, { x: 0.47, y: 0.27, s: 10 }, { x: 0.55, y: 0.25, s: 9 }, { x: 0.63, y: 0.29, s: 8 }, { x: 0.71, y: 0.27, s: 10 }, { x: 0.79, y: 0.26, s: 9 }, { x: 0.87, y: 0.28, s: 8 },
+  ];
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: areaH, zIndex: 21 }}>
+      {points.map((p, i) => {
+        // Stagger each spark's timing window across the 0->1 progress
+        const t0 = Math.min(0.035 * i, 0.9);
+        const t1 = Math.min(t0 + 0.12, 0.96);
+        const t2 = Math.min(t1 + 0.18, 1);
+        const opacity = progress.interpolate({ inputRange: [0, t0, t1, t2, 1], outputRange: [0, 0, peakOpacity, 0, 0], extrapolate: 'clamp' });
+        const scale = progress.interpolate({ inputRange: [0, t1, t2, 1], outputRange: [0.7, 1.0, 0.95, 0.95], extrapolate: 'clamp' });
+        const rotate = progress.interpolate({ inputRange: [0, t2, 1], outputRange: ['-8deg', '8deg', '8deg'], extrapolate: 'clamp' });
+        const translateY = progress.interpolate({ inputRange: [0, t2, 1], outputRange: [8, 0, 0], extrapolate: 'clamp' });
+
+        const thickness = 1.6; // thinner rays for subtler look
+        const len = p.s; // half length of rays
+
+        return (
+          <Animated.View
+            key={`spark-${i}`}
+            style={{
+              position: 'absolute',
+              left: p.x * width,
+              top: p.y * areaH,
+              width: 1,
+              height: 1,
+              opacity,
+              transform: [{ translateY }, { scale }, { rotate }],
+            }}
+          >
+            {/* central diamond */}
+            <View
+              style={{
+                position: 'absolute',
+                left: -thickness * 1.8,
+                top: -thickness * 1.8,
+                width: thickness * 3.6,
+                height: thickness * 3.6,
+                backgroundColor: color,
+                transform: [{ rotate: '45deg' }],
+                borderRadius: 1,
+                shadowColor: color,
+                shadowOpacity: 0.4,
+                shadowRadius: 4,
+                shadowOffset: { width: 0, height: 0 },
+                elevation: 1,
+              }}
+            />
+            {/* horizontal ray */}
+            <View style={{ position: 'absolute', left: -len, top: -thickness / 2, width: len * 2, height: thickness, backgroundColor: color, borderRadius: thickness / 2 }} />
+            {/* vertical ray */}
+            <View style={{ position: 'absolute', left: -thickness / 2, top: -len, width: thickness, height: len * 2, backgroundColor: color, borderRadius: thickness / 2 }} />
+            {/* diagonal rays */}
+            <View style={{ position: 'absolute', left: -len, top: -thickness / 2, width: len * 2, height: thickness, backgroundColor: dimColor, borderRadius: thickness / 2, transform: [{ rotate: '45deg' }] }} />
+            <View style={{ position: 'absolute', left: -len, top: -thickness / 2, width: len * 2, height: thickness, backgroundColor: dimColor, borderRadius: thickness / 2, transform: [{ rotate: '-45deg' }] }} />
+          </Animated.View>
+        );
+      })}
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1E1E1E',
+  },
+  containerLight: {
+    backgroundColor: '#F2E3D0',
   },
   header: {
     flexDirection: 'row',
@@ -1277,6 +1453,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#374151',
+  },
+  headerLight: {
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: 'transparent',
   },
   backButton: {
     width: 24,
@@ -1290,10 +1470,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
+  headerTitleLight: {
+    color: '#111827',
+  },
   headerSubtitle: {
     fontSize: 12,
     color: '#9CA3AF',
     marginTop: 2,
+  },
+  headerSubtitleLight: {
+    color: '#6B7280',
   },
   closeButton: {
     width: 24,
@@ -1344,6 +1530,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     fontWeight: '500',
+  },
+  toggleLabelLight: {
+    color: '#111827',
   },
   wordBankContainer: {
     paddingHorizontal: 20,
@@ -1404,6 +1593,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
   },
+  toolsDockLight: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+  },
   dockItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1414,6 +1607,7 @@ const styles = StyleSheet.create({
   },
   dockItemDisabled: { opacity: 0.5 },
   dockText: { color: '#E5E7EB', fontSize: 12, fontWeight: '700' },
+  dockTextLight: { color: '#374151' },
   wordBank: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1500,25 +1694,27 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingHorizontal: 20,
   },
+  contentFullscreenLight: {
+    backgroundColor: '#F2E3D0',
+  },
   storyContentCard: {
-    backgroundColor: '#2D2D2D',
-    borderRadius: 12,
+    backgroundColor: 'transparent',
+    borderRadius: 0,
     padding: 20,
-    paddingTop: 50, // Reduced from 100 to 50
-    paddingBottom: 20, // Reduced from 30 to 20
+    paddingTop: 50,
+    paddingBottom: 20,
     marginBottom: 16,
     position: 'relative',
-    minHeight: 300, // Much smaller minimum height (was 600)
-    // Removed borderWidth and borderColor
+    // Remove forced min height so it flows with content
   },
   storyPaperCard: {
-    backgroundColor: '#F6F1EA',
-    borderRadius: 22,
+    backgroundColor: 'transparent',
+    borderRadius: 0,
     paddingTop: 24,
     paddingBottom: 28,
     paddingHorizontal: 18,
-    borderWidth: 1,
-    borderColor: '#EDE6DB',
+    borderWidth: 0,
+    borderColor: 'transparent',
   },
   storyContentCardLight: {
     backgroundColor: '#F8F9FA',
@@ -1833,11 +2029,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
+  storyPlaceholderTitleLight: {
+    color: '#111827',
+  },
   storyPlaceholderBody: {
     fontSize: 14,
     color: '#9CA3AF',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  storyPlaceholderBodyLight: {
+    color: '#4B5563',
   },
   storyPlaceholderButton: {
     marginTop: 18,
@@ -1939,6 +2141,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  wordSelectionOverlayLight: {
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+  },
   wordSelectionModal: {
     backgroundColor: '#2D2D2D',
     borderRadius: 16,
@@ -1952,6 +2157,10 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 8,
   },
+  wordSelectionModalLight: {
+    backgroundColor: '#F9F1E7',
+    shadowColor: '#F2935C',
+  },
   wordSelectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1961,10 +2170,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#374151',
   },
+  wordSelectionHeaderLight: {
+    borderBottomColor: '#E5E7EB',
+  },
   wordSelectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  wordSelectionTitleLight: {
+    color: '#111827',
   },
   wordSelectionList: {
     maxHeight: 300,
@@ -1987,11 +2202,18 @@ const styles = StyleSheet.create({
     borderColor: '#4B5563',
     alignSelf: 'flex-start',
   },
+  wordSelectionItemLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+  },
   wordSelectionText: {
     fontSize: 14,
     fontWeight: '500',
     color: '#FFFFFF',
     textAlign: 'center',
+  },
+  wordSelectionTextLight: {
+    color: '#111827',
   },
   noWordsAvailable: {
     alignItems: 'center',
@@ -2003,11 +2225,13 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginBottom: 4,
   },
+  noWordsTextLight: { color: '#6B7280' },
   noWordsSubtext: {
     fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
   },
+  noWordsSubtextLight: { color: '#9CA3AF' },
   // Word Picker (Choose exactly five words) Styles
   wordPickerOverlay: {
     flex: 1,

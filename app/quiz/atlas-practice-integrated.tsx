@@ -17,6 +17,8 @@ import SynonymComponent from './components/synonym';
 import SentenceUsageComponent from './components/sentence-usage';
 import MissingLetters from './components/missing-letters';
 import { levels } from './data/levels';
+import { useAppStore } from '../../lib/store';
+import { getTheme } from '../../lib/theme';
 import { analyticsService } from '../../services/AnalyticsService';
 import { SetProgressService } from '../../services/SetProgressService';
 
@@ -35,6 +37,9 @@ interface Phase {
 export default function AtlasPracticeIntegrated() {
   const router = useRouter();
   const { setId, levelId } = useLocalSearchParams<{ setId: string; levelId: string }>();
+  const themeName = useAppStore(s => s.theme);
+  const colors = getTheme(themeName);
+  const isLight = themeName === 'light';
   
   // Debug logging
   console.log('AtlasPracticeIntegrated - Received params:', { setId, levelId });
@@ -248,7 +253,7 @@ export default function AtlasPracticeIntegrated() {
           word={w.word}
           ipa={w.phonetic}
           clue={w.definition}
-          theme="dark"
+          theme={isLight ? 'light' : 'dark'}
           wordIndex={mlIndex}
           totalWords={words.length}
           sharedScore={totalScore}
@@ -296,16 +301,16 @@ export default function AtlasPracticeIntegrated() {
 
   if (!setId || !levelId) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Missing set or level information</Text>
+          <Text style={[styles.errorText, isLight && { color: '#6B7280' }]}>Missing set or level information</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -318,7 +323,7 @@ export default function AtlasPracticeIntegrated() {
             router.back();
           }}
         >
-          <ArrowLeft size={24} color="#fff" />
+          <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
         </TouchableOpacity>
 
         <View
@@ -348,7 +353,8 @@ export default function AtlasPracticeIntegrated() {
                 <Text
                   style={[
                     styles.exerciseName,
-                    currentPhase === index && styles.exerciseNameActive,
+                    { color: isLight ? '#6B7280' : '#6B7280' },
+                    currentPhase === index && { color: isLight ? '#111827' : '#FFFFFF', fontWeight: '700' },
                   ]}
                 >
                   {phase.name}

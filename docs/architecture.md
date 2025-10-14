@@ -50,6 +50,7 @@ Directories and files discovered under configured roots:
   - StoryExercise.tsx
   - _layout.tsx
 - lib
+  - launch.ts
   - store.ts
   - supabase.ts
   - theme.ts

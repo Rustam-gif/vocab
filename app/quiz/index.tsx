@@ -1,6 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useAppStore } from '../../lib/store';
+import { getTheme } from '../../lib/theme';
+import LottieView from 'lottie-react-native';
 
 export default function QuizIndex() {
   const router = useRouter();
@@ -14,22 +17,22 @@ export default function QuizIndex() {
     return () => clearTimeout(timer);
   }, [router]);
 
+  const theme = useAppStore(s => s.theme);
+  const colors = getTheme(theme);
   return (
-    <View style={styles.container}>
-      <Text style={styles.text}>Loading Quiz...</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <LottieView
+        source={require('../../assets/lottie/loading.json')}
+        autoPlay
+        loop
+        style={{ width: 140, height: 140 }}
+      />
+      <Text style={[styles.text, theme === 'light' && { color: '#6B7280', marginTop: 12 }]}>Loading Quiz...</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#252525',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  text: {
-    color: '#fff',
-    fontSize: 16,
-  },
+  container: { flex: 1, backgroundColor: '#252525', justifyContent: 'center', alignItems: 'center' },
+  text: { color: '#fff', fontSize: 16 },
 });
