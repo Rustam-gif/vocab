@@ -9,19 +9,24 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
 import { Launch } from '../lib/launch';
+import OnboardingModal from './components/OnboardingModal';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 
 export default function HomeScreen() {
   const router = useRouter();
   const [storedLevel, setStoredLevel] = useState<string | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const theme = useAppStore(s => s.theme);
   const colors = getTheme(theme);
 
   useEffect(() => {
-    AsyncStorage.getItem(SELECTED_LEVEL_KEY).then(level => {
+    (async () => {
+      const level = await AsyncStorage.getItem(SELECTED_LEVEL_KEY);
       if (level) setStoredLevel(level);
-    });
+      // Testing: always show onboarding on launch
+      setShowOnboarding(true);
+    })();
   }, []);
 
   const handleQuizSession = () => {
@@ -233,11 +238,21 @@ export default function HomeScreen() {
       {/* Floating Action Button */}
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => router.push('/vault')}
+        onPress={() => router.push('/vault?add=1')}
         activeOpacity={0.8}
       >
         <Plus size={24} color="#FFFFFF" />
       </TouchableOpacity>
+
+      {/* Onboarding */}
+      <OnboardingModal
+        visible={showOnboarding}
+        theme={theme}
+        onClose={async () => {
+          setShowOnboarding(false);
+          try { await AsyncStorage.setItem('@engniter.onboarding_done_v1', '1'); } catch {}
+        }}
+      />
     </SafeAreaView>
   );
 }

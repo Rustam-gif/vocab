@@ -14,10 +14,23 @@ import LottieView from 'lottie-react-native';
 import { Launch } from '../lib/launch';
 
 export default function RootLayout() {
+  // Try to load Lexend fonts if the package is installed; fall back silently.
+  let Lexend_400Regular: any, Lexend_500Medium: any, Lexend_700Bold: any;
+  try {
+    const mod = require('@expo-google-fonts/lexend');
+    Lexend_400Regular = mod?.Lexend_400Regular;
+    Lexend_500Medium = mod?.Lexend_500Medium;
+    Lexend_700Bold = mod?.Lexend_700Bold;
+  } catch {}
+
   const [fontsLoaded] = useFonts({
     Ubuntu_400Regular,
     Ubuntu_500Medium,
     Ubuntu_700Bold,
+    // Optional Lexend faces (present only if package available)
+    ...(Lexend_400Regular ? { Lexend_400Regular } : {}),
+    ...(Lexend_500Medium ? { Lexend_500Medium } : {}),
+    ...(Lexend_700Bold ? { Lexend_700Bold } : {}),
   });
   const themeName = useAppStore(s => s.theme);
   const initializeApp = useAppStore(s => s.initialize);

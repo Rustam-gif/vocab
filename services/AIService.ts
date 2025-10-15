@@ -1,3 +1,4 @@
+// aiService.ts
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
@@ -8,7 +9,7 @@ const API_PORT =
   DEFAULT_PORT;
 
 const OPENAI_BASE_URL = 'https://api.openai.com/v1';
-const OPENAI_MODEL = 'gpt-4o-mini';
+const OPENAI_MODEL = 'gpt-4o';
 
 function sanitizeBase(base: string | null): string | null {
   if (!base) return null;
@@ -47,12 +48,10 @@ function getApiBaseUrl(): string | null {
 
   const parseHost = (raw: string): string | null => {
     try {
-      // Strip scheme if present (e.g., exp://, http://)
       const withoutScheme = raw.includes('://') ? raw.split('://')[1] : raw;
       const firstSegment = withoutScheme.split('/')[0];
       const hostPart = firstSegment.split(':')[0];
       if (!hostPart) return null;
-      // Android emulator cannot reach localhost of host machine directly
       if (Platform.OS === 'android' && (hostPart === 'localhost' || hostPart === '127.0.0.1')) {
         return '10.0.2.2';
       }
@@ -98,6 +97,161 @@ export interface Story {
   content: string;
 }
 
+/* ---------------- JSON parsing (robust to fences / smart quotes) ---------------- */
+function parseJSONLoose(text: string): any {
+  if (!text) throw new Error('Empty response');
+  let s = String(text).trim();
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) s = fence[1].trim();
+  s = s
+    .replace(/\uFEFF/g, '')
+    .replace(/[\u200B-\u200D]/g, '')
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'");
+  try {
+    return JSON.parse(s);
+  } catch {
+    const m = s.match(/\{[\s\S]*\}/);
+    if (m) return JSON.parse(m[0]);
+    throw new Error('Failed to parse JSON content');
+  }
+}
+
+/* ---------------- Text normalization & dedupe ---------------- */
+function normalizeForCompare(s: string): string {
+  return s
+    .normalize('NFKC')
+    .replace(/\uFEFF/g, '')
+    .replace(/[\u200B-\u200D]/g, '')
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+// RN/Hermes-safe sentence splitter (no lookbehind)
+function splitIntoSentences(paragraph: string): string[] {
+  const p = paragraph.replace(/\s+/g, ' ').trim();
+  const out: string[] = [];
+  let cur = '';
+  const closing = `"'’”)]}`;
+  for (let i = 0; i < p.length; i++) {
+    const ch = p[i];
+    cur += ch;
+    if (ch === '.' || ch === '!' || ch === '?') {
+      let j = i + 1;
+      while (j < p.length && closing.includes(p[j])) {
+        cur += p[j];
+        i = j;
+        j++;
+      }
+      out.push(cur.trim());
+      cur = '';
+    }
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+
+function reflowParagraphs(raw: string): string[] {
+  let s = raw
+    .replace(/\r\n/g, '\n')
+    .replace(/\uFEFF/g, '')
+    .replace(/[\u200B-\u200D]/g, '')
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'");
+
+  let paras = s
+    .split(/\n{2,}/)
+    .map(p =>
+      p
+        .replace(/[ \t]*\n[ \t]*/g, ' ')
+        .replace(/\s+([,;:!?\.])/g, '$1')
+        .replace(/([,;:!?\.])\s+/g, '$1 ')
+        .trim()
+    )
+    .filter(Boolean);
+
+  // Merge paragraphs that end mid-sentence
+  let i = 0;
+  while (i < paras.length - 1) {
+    const endsWithPunct = /[.!?]["')\]]?$/.test(paras[i]);
+    if (!endsWithPunct) {
+      paras[i] = `${paras[i]} ${paras[i + 1]}`.replace(/\s+/g, ' ').trim();
+      paras.splice(i + 1, 1);
+    } else {
+      i++;
+    }
+  }
+
+  // Keep at most 3 paragraphs; merge extras into previous
+  while (paras.length > 3) {
+    const last = paras.pop()!;
+    paras[paras.length - 1] = `${paras[paras.length - 1]} ${last}`.replace(/\s+/g, ' ').trim();
+  }
+
+  return paras;
+}
+
+/**
+ * Collapse duplicates:
+ * - Always removes **contiguous exact duplicates** (A A) — fixes the “every sentence repeats twice” symptom.
+ * - Removes global exact duplicates too.
+ * - Does NOT use fuzzy matching (so we won't eat near-matches).
+ * - Keeps one copy even if the sentence includes a target word.
+ */
+function collapseDuplicateSentences(paragraphs: string[]): string[] {
+  const seen = new Set<string>();
+  const cleaned: string[] = [];
+
+  for (const p of paragraphs) {
+    const sentences = splitIntoSentences(p);
+    const out: string[] = [];
+    let prevNorm = '';
+
+    for (let s of sentences) {
+      s = s.replace(/\s+/g, ' ').trim();
+      if (!s) continue;
+      const norm = normalizeForCompare(s);
+
+      // Drop contiguous duplicate
+      if (norm === prevNorm) continue;
+
+      // Drop global exact duplicates (keep first occurrence only)
+      if (seen.has(norm)) continue;
+
+      out.push(s);
+      prevNorm = norm;
+      seen.add(norm);
+    }
+
+    if (out.length) cleaned.push(out.join(' '));
+  }
+
+  return cleaned;
+}
+
+function finalizeStoryContent(input: string): string {
+  const paras = reflowParagraphs(input);
+  const deduped = collapseDuplicateSentences(paras)
+    .map(p => p.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+
+  if (!deduped.length) {
+    return input
+      .replace(/\r\n/g, '\n')
+      .replace(/[ \t]*\n[ \t]*/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  // Ensure single blank line separation only (no content steering)
+  const joined = deduped.join('\n\n').trim();
+  return joined;
+}
+
+/* ---------------- Service ---------------- */
 class AIService {
   private apiKey: string | null = null;
 
@@ -116,11 +270,11 @@ class AIService {
   }
 
   private ensureApiKey() {
+    if (!this.apiKey) this.apiKey = this.resolveApiKey();
     if (!this.apiKey) {
-      this.apiKey = this.resolveApiKey();
-    }
-    if (!this.apiKey) {
-      throw new Error('Missing OpenAI API key. Prefer using a proxy by setting EXPO_PUBLIC_API_BASE_URL (or extra.API_BASE_URL) to your server (e.g., http://<host>:4000). If you must call OpenAI directly, set EXPO_PUBLIC_OPENAI_API_KEY or OPENAI_API_KEY.');
+      throw new Error(
+        'Missing OpenAI API key. Prefer using a proxy by setting EXPO_PUBLIC_API_BASE_URL (or extra.API_BASE_URL) to your server (e.g., http://<host>:4000). If you must call OpenAI directly, set EXPO_PUBLIC_OPENAI_API_KEY or OPENAI_API_KEY.'
+      );
     }
   }
 
@@ -132,7 +286,6 @@ class AIService {
     frequency_penalty?: number;
     max_tokens?: number;
   }) {
-    // If a backend API base URL is available (env/extra/dev fallback), use it to keep the key server-side.
     const base = getApiBaseUrl();
     if (base) {
       if (__DEV__ && !loggedBaseOnce) {
@@ -154,7 +307,6 @@ class AIService {
       return content.trim();
     }
 
-    // Fallback: direct call (NOT recommended for production as it exposes the key to the client bundle).
     if (__DEV__) {
       console.warn('[AIService] No proxy base URL detected. Falling back to direct OpenAI call.');
     }
@@ -201,7 +353,7 @@ class AIService {
         max_tokens: 400,
       });
 
-      const parsed = JSON.parse(response);
+      const parsed = parseJSONLoose(response);
       return {
         definition: parsed.definition,
         example: parsed.example,
@@ -219,7 +371,7 @@ class AIService {
       genre: 'sci-fi' | 'romance' | 'adventure' | 'mystery' | 'fantasy' | 'comedy' | 'drama';
       difficulty: 'easy' | 'medium' | 'hard';
       length: 'short' | 'medium' | 'long';
-      tone?: 'playful' | 'dramatic' | 'serious' | 'humorous' | 'wistful';
+      tone?: 'casual' | 'playful' | 'dramatic' | 'serious' | 'humorous' | 'wistful';
     }
   ): Promise<Story> {
     const genre = customization?.genre ?? 'adventure';
@@ -227,83 +379,92 @@ class AIService {
     const tone = customization?.tone ?? 'casual';
     const length = customization?.length ?? 'short';
 
+    // Light variation to avoid repeating the same protagonist setup across stories
+    const namePool = [
+      'Ava', 'Leo', 'Maya', 'Noah', 'Zara', 'Luca', 'Iris', 'Kai', 'Nora', 'Sami',
+      'Aisha', 'Mina', 'Hugo', 'Aria', 'Juno', 'Omar', 'Lena', 'Yara', 'Niko', 'Indra'
+    ];
+    const perspective: 'first-person' | 'third-person' = Math.random() < 0.5 ? 'first-person' : 'third-person';
+    const protagonist = namePool[Math.floor(Math.random() * namePool.length)];
+
     const lengthDescription = {
-      short: 'STRICTLY 70-90 words total across two paragraphs (hard cap)',
-      medium: 'STRICTLY 90-120 words total across two to three paragraphs (hard cap)',
-      long: 'STRICTLY 120-150 words total across three paragraphs (hard cap)',
+      short: '80–110 words',
+      medium: '120–160 words',
+      long: '180–230 words',
     }[length];
 
-    const difficultyDescription = {
-      easy: 'Use STRICTLY CEFR A1 English level ONLY. Write in a casual, conversational style with very simple present tense sentences, basic vocabulary (everyday words), short sentences (5-8 words), and elementary grammar. Keep the tone friendly and easy-going. Avoid complex words, idioms, or advanced structures.',
-      medium: 'Use varied sentence structures and rich but accessible vocabulary.',
-      hard: 'Use sophisticated sentence structures and advanced vocabulary while staying coherent.',
+    const maxTokens = {
+      short: 450,
+      medium: 700,
+      long: 950,
+    }[length];
+
+    const difficultyRule = {
+      easy: 'CEFR A1–A2: very short, simple sentences, mostly present tense, everyday words.',
+      medium: 'CEFR B1: varied but clear sentences, accessible vocabulary.',
+      hard: 'CEFR B2–C1: more complex sentences and richer vocabulary, but still coherent.',
     }[difficulty];
 
-    const narrativeVoices = [
-      'first-person diary entry written the night it happened',
-      'third-person omniscient narrator with lyrical flair',
-      'close third-person limited viewpoint that tracks the protagonist’s senses',
-      'epistolary format composed of dispatches between characters',
-      'oral history interview transcript stitched together',
-      'dramatic radio broadcast with present-tense urgency'
-    ];
-    const structuralFlavors = [
-      'three-act arc with an unexpected reversal in the middle',
-      'nonlinear timeline that jumps between two contrasting moments',
-      'mystery structure where clues surface gradually',
-      'travelogue that charts distinct locations each paragraph',
-      'character study that pivots on an internal dilemma revealed late',
-      'high-stakes mission log noted hour by hour'
-    ];
-    const settingAngles = [
-      'remote natural landscape far from any city',
-      'speculative world detail that could only exist in this genre',
-      'tight-knit community with distinct cultural rituals',
-      'historical era rendered with sensory specifics',
-      'unusual workplace or craft setting that shapes the stakes',
-      'intimate domestic space transformed by an extraordinary event'
-    ];
+    const targetWords = words.slice(0, 5).map(w => (w.word || '').trim()).filter(Boolean);
+    const targetList = targetWords.join('\n');
 
-    const selectedVoice = narrativeVoices[Math.floor(Math.random() * narrativeVoices.length)];
-    const selectedStructure = structuralFlavors[Math.floor(Math.random() * structuralFlavors.length)];
-    const selectedSetting = settingAngles[Math.floor(Math.random() * settingAngles.length)];
+    const SYSTEM_PROMPT = `Return ONLY valid JSON (no markdown, no backticks):
+{
+  "id": string,
+  "title": string,
+  "content": string
+}
 
-    const vocabularyList = words
-      .map((w, index) => `${index + 1}. ${w.word} — ${w.definition || 'no definition provided'}`)
-      .join('\n');
+Requirements (keep it natural and varied):
+- Use EACH target word EXACTLY ONCE and wrap each as **word** (this is mandatory so the app can blank them out).
+- Do NOT put a target word in the very first or the very last sentence.
+- Write a coherent short story (free style, any perspective), in plain prose.
+- Avoid clichés and stock openings. Specifically, do NOT use phrases like "in the heart of", "once upon a time", "at the edge of", "nestled in", or similar formulaic openers.
+- Vary sentence openings and structure; prefer concrete, sensory details over generic scene-setters.
+- Do NOT use placeholder names like Tom, John, Mary, or Jane.
+- If you use a character name, use the one provided in the user message only, at most twice; otherwise prefer pronouns.
+- No lists, headings, or meta commentary.
+`;
 
-    const systemPrompt = `You are a master storyteller who writes vivid, original narratives on demand. Always respond with valid JSON using the structure:\n{\n  "id": string,\n  "title": string,\n  "content": string\n}\n\n🚨🚨🚨 CRITICAL RULE #1 - VOCABULARY WORD PLACEMENT (VIOLATIONS = AUTOMATIC REJECTION) 🚨🚨🚨\n\nYOU WILL BE IMMEDIATELY REJECTED IF:\n❌ ANY vocabulary word (marked with **) appears in the FIRST sentence\n❌ ANY vocabulary word (marked with **) appears in the LAST sentence  \n❌ ANY vocabulary word (marked with **) appears within the final 20 words of the story\n❌ There are fewer than 20 words of plain text AFTER the last ** wrapped word\n\n✅ REQUIRED STRUCTURE:\n1. First sentence: MUST be 100% plain narrative text (NO ** wrapped words)\n2. Middle sentences: Vocabulary words can appear here, separated by 2-3 sentences each\n3. Last vocabulary word: MUST have at least 20 words of plain text after it\n4. Last sentence: MUST be 100% plain narrative text (NO ** wrapped words)\n\n📌 EXAMPLE OF CORRECT ENDING:\n"...The children discovered a mysterious **artifact** hidden beneath the sand. They carefully cleaned it off and examined its strange markings. As the sun began to set, they packed their things and headed home, already planning their next adventure together the following weekend."\n\n❌ EXAMPLE OF WRONG ENDING (DO NOT DO THIS):\n"...They headed home with their new **artifact**."\n\nOther Rules:\n1. Produce a ${lengthDescription} story that feels unmistakably ${tone} in tone and sits firmly in the ${genre} genre.\n2. Naturally weave each supplied vocabulary word exactly once, wrapping the word in double asterisks (e.g., **word**) so it is easy to spot.\n3. MANDATORY: Each vocabulary word must be separated by at least 2-3 full sentences of regular text.\n4. CRITICAL: Write grammatically correct, coherent sentences. NO repetition of sentences or phrases. Each sentence must be unique and make logical sense.\n5. CRITICAL: Ensure perfect grammar, proper sentence structure, and natural flow. Proofread for errors.\n6. Never add commentary outside the JSON fields.`;
+    const USER_PROMPT = `Target words (wrap as **word**, use once each):
+${targetList}
 
-    const userPrompt = `Vocabulary to include:\n${vocabularyList}\n\nDifficulty guidance: ${difficultyDescription}\nTone: ${tone}.\nGenre cues: ${genre}. Include world-specific flavor and conflict resolution.\n\n⚠️ QUALITY REQUIREMENTS:\n- Each sentence must be grammatically correct and unique\n- NO repetition of any sentence or phrase\n- Ensure logical flow and coherent story progression\n- Proofread carefully for errors before responding\n\n🚫🚫🚫 CRITICAL SENTENCE PLACEMENT RULES - YOUR RESPONSE WILL BE REJECTED IF VIOLATED:\n\n1. FIRST SENTENCE of the story = NO VOCABULARY WORDS (must be plain narrative)\n2. LAST SENTENCE of the story = NO VOCABULARY WORDS (must be plain narrative)\n3. The story MUST end with at least 15-20 words of regular text AFTER the final vocabulary word\n4. Vocabulary words can appear anywhere EXCEPT the first and last sentences\n5. Separate each vocabulary word with 2-3 complete sentences\n\nBEFORE responding, verify:\n✓ First sentence has NO ** wrapped words\n✓ Last sentence has NO ** wrapped words  \n✓ Story ends with at least 15 words of regular narrative\n✓ At least 15-20 words after the last ** wrapped word\n\nWrite the story now.`;
-
-    // Constrain token budget based on requested length to encourage shorter outputs
-    const maxTokens = length === 'short' ? 550 : length === 'medium' ? 800 : 1100;
+Genre: ${genre}
+Tone: ${tone}
+Length: ${lengthDescription} (roughly; do not pad).
+Level: ${difficultyRule}
+Perspective: ${perspective}${perspective === 'third-person' ? `\nProtagonist name: ${protagonist} (use this name at most twice; then switch to pronouns).` : `\nDo not use any first names; keep the narrator unnamed.`}
+Return only the JSON object.`;
 
     try {
       const response = await this.callOpenAI({
         messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: USER_PROMPT },
         ],
-        temperature: 0.7,
+        temperature: 0.8,
         top_p: 0.95,
-        presence_penalty: 0.6,
-        frequency_penalty: 0.8,
+        presence_penalty: 0.85,
+        frequency_penalty: 0.35,
         max_tokens: maxTokens,
       });
 
-      const parsed = JSON.parse(response);
+      const parsed = parseJSONLoose(response);
       if (!parsed?.content) {
         throw new Error('Story response missing content');
       }
 
+      // Fix broken lines and collapse duplicates (formatting only)
+      const cleaned = finalizeStoryContent(String(parsed.content || ''));
+
       return {
         id: parsed.id || `story_${Date.now()}`,
         title: parsed.title || `${genre[0].toUpperCase() + genre.slice(1)} Tale`,
-        content: parsed.content,
+        content: cleaned,
       };
     } catch (error) {
-      console.error('Error generating story via OpenAI:', error);
+      // Do not use any local templates; surface the error to the caller
+      console.warn('Error generating story via OpenAI:', error);
       throw error;
     }
   }

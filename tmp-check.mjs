@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 dotenv.config();
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 try {
-  const r = await client.chat.completions.create({ model: "gpt-4o-mini", messages: [{ role: "user", content: "say ok" }] });
+  const r = await client.chat.completions.create({ model: "gpt-4o", messages: [{ role: "user", content: "say ok" }] });
   console.log("status", 200);
   console.log(r.choices?.[0]?.message?.content);
 } catch (e) {

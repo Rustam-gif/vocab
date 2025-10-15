@@ -3,7 +3,6 @@
  * 
  * New story exercise with sentence-by-sentence layout and pill-style blanks
  */
-
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -69,6 +68,40 @@ const sanitizeWords = (words: string[]): string[] => {
   const unique = Array.from(new Set(words.map(w => w.trim()).filter(Boolean)));
   return unique.slice(0, MAX_BLANKS);
 };
+
+// Soft hyphen utility: inserts discretionary hyphen points so long words can
+// split across lines gracefully (a hyphen only appears when the line breaks).
+const SOFT_HYPHEN = '\u00AD';
+// Removed word-joiner — we want normal wrap behavior around highlighted words.
+// const WORD_JOINER = '\u2060';
+const VOWELS = 'aeiouyAEIOUY';
+function hyphenateWord(word: string): string {
+  const w = (word || '').trim();
+  if (w.length < 8) return w; // keep short words intact
+  if (w.includes(SOFT_HYPHEN)) return w; // already hyphenated
+  if (/[^A-Za-z]/.test(w)) return w; // avoid altering non-latin or mixed tokens
+
+  // Simple heuristic: insert points after vowel->consonant boundaries,
+  // keeping chunks at least 3 chars; cap to two insertions for readability.
+  const parts: string[] = [];
+  let cur = '';
+  let hyphens = 0;
+  for (let i = 0; i < w.length; i++) {
+    const ch = w[i];
+    cur += ch;
+    const next = i + 1 < w.length ? w[i + 1] : '';
+    const boundary = VOWELS.includes(ch) && next && !VOWELS.includes(next);
+    const minChunk = cur.length >= 3;
+    const roomAhead = w.length - (i + 1) >= 3;
+    if (boundary && minChunk && roomAhead && hyphens < 2) {
+      parts.push(cur);
+      cur = '';
+      hyphens++;
+    }
+  }
+  if (cur) parts.push(cur);
+  return parts.join(SOFT_HYPHEN);
+}
 
 // Inline one-shot dots animation for blanks (slower, visible jump; plays once)
 const InlineDotsOnce: React.FC<{ style?: any }> = ({ style }) => {
@@ -156,6 +189,10 @@ export default function StoryExerciseScreen() {
   const [showSparkles, setShowSparkles] = useState(false);
   const sparklesProgress = useRef(new Animated.Value(0)).current; // stars timeline
   const sparklesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Save toast
+  const [saveToastVisible, setSaveToastVisible] = useState(false);
+  const saveToastAnim = useRef(new Animated.Value(0)).current;
+  const saveToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // (Shine animation removed per request)
 
@@ -258,6 +295,7 @@ export default function StoryExerciseScreen() {
       setCurrentVocabulary(vocabularyList);
       setSelectedWords(new Set());
       setScore(100);
+      // Default to Fill-in-the-blanks mode
       setIsNormalMode(false);
       setShowControls(false); // compact reading mode by default after generation
       chevronAnim.setValue(0);
@@ -266,8 +304,8 @@ export default function StoryExerciseScreen() {
         revealAnim.setValue(0);
         Animated.timing(revealAnim, {
           toValue: 1,
-          // Slow, smooth reveal for the whole text block
-          duration: 2400,
+          // Gentle 1s fade-in for the whole text block
+          duration: 1000,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }).start();
@@ -277,17 +315,18 @@ export default function StoryExerciseScreen() {
           sparklesProgress.setValue(0);
           Animated.timing(sparklesProgress, {
             toValue: 1,
-            duration: 4000,
+            duration: 1200,
             easing: Easing.out(Easing.quad),
             useNativeDriver: true,
           }).start();
         } catch {}
         if (sparklesTimeoutRef.current) clearTimeout(sparklesTimeoutRef.current);
-        // Keep sparkles visible longer so they’re noticeable
-        sparklesTimeoutRef.current = setTimeout(() => setShowSparkles(false), 6000);
+        // Hide sparkles shortly after the text appears
+        sparklesTimeoutRef.current = setTimeout(() => setShowSparkles(false), 1600);
       } catch {}
     } catch (error) {
-      console.error('Error generating story:', error);
+      // Use warn to avoid blocking red overlay when offline or parse fails
+      console.warn('Error generating story:', error);
       Alert.alert('Error', 'Failed to generate story. Please try again.');
     } finally {
       setLoading(false);
@@ -453,9 +492,59 @@ export default function StoryExerciseScreen() {
     }
   };
 
-  const handleSaveToJournal = () => {
+  const handleSaveToJournal = async () => {
     if (!story) return;
-    Alert.alert('Coming soon', 'Saving stories to the journal will be available soon.');
+    try {
+      // Reconstruct full plain text with correct words (mirror render spacing rules)
+      const startsWithPunctuation = (value: string) => /^[\s.,;:!?\)\]]/.test(value);
+      const endsWithWhitespace = (value: string) => /[\s\u00A0]$/.test(value);
+      const pieces: string[] = [];
+      for (const s of story.sentences) {
+        pieces.push(s.beforeBlank || '');
+        const needSpaceBeforeFirst = !!(s.beforeBlank && !endsWithWhitespace(s.beforeBlank));
+        pieces.push(needSpaceBeforeFirst ? ` ${s.blank.correctWord}` : s.blank.correctWord);
+        if (s.afterBlank) {
+          if (!startsWithPunctuation(s.afterBlank)) pieces.push(' ');
+          pieces.push(s.afterBlank);
+          if (s.secondBlank) {
+            const needSpaceBeforeSecond = !endsWithWhitespace(s.afterBlank);
+            pieces.push(needSpaceBeforeSecond ? ` ${s.secondBlank.correctWord}` : s.secondBlank.correctWord);
+          }
+        } else if (s.secondBlank) {
+          pieces.push(' ' + s.secondBlank.correctWord);
+        }
+        if (s.afterSecondBlank) {
+          if (!startsWithPunctuation(s.afterSecondBlank)) pieces.push(' ');
+          pieces.push(s.afterSecondBlank);
+        }
+        pieces.push(' ');
+      }
+      const content = pieces.join('').replace(/\s+/g, ' ').trim();
+
+      const save = useAppStore.getState().saveStory;
+      const level = customization.difficulty;
+      const title = headerTitle || 'Story';
+      await save({
+        id: `story_${Date.now()}`,
+        title,
+        content,
+        level,
+        words: story.availableWords,
+        createdAt: new Date(),
+      });
+
+      // Fancy toast instead of system alert
+      if (saveToastTimerRef.current) clearTimeout(saveToastTimerRef.current);
+      setSaveToastVisible(true);
+      saveToastAnim.setValue(0);
+      Animated.timing(saveToastAnim, { toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+      saveToastTimerRef.current = setTimeout(() => {
+        Animated.timing(saveToastAnim, { toValue: 0, duration: 180, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => setSaveToastVisible(false));
+      }, 2000);
+    } catch (e) {
+      console.warn('Failed to save story:', e);
+      Alert.alert('Save Failed', 'Could not save the story. Please try again.');
+    }
   };
 
   const renderBlank = (blank: StoryBlank) => {
@@ -530,7 +619,7 @@ export default function StoryExerciseScreen() {
               !isDarkMode && !showCorrectness ? styles.blankTextFilledLight : null,
             ]}
           >
-            {blank.userAnswer}
+            {hyphenateWord(blank.userAnswer)}
           </Text>
           {showCorrectness && !blank.isCorrect && blank.userAnswer && (
             <>
@@ -549,7 +638,7 @@ export default function StoryExerciseScreen() {
               {isShowingAnswer && (
                 <Text style={styles.inlinePopup}>
                   {'\n'}
-                  <Text style={styles.inlinePopupText}>{blank.correctWord}</Text>
+                  <Text style={styles.inlinePopupText}>{hyphenateWord(blank.correctWord)}</Text>
                 </Text>
               )}
             </>
@@ -570,24 +659,33 @@ export default function StoryExerciseScreen() {
     const endsWithWhitespace = (value: string) => /[\s\u00A0]$/.test(value);
 
     if (isNormalMode) {
+      const needsSpaceBeforeFirst = !!(sentence.beforeBlank && !endsWithWhitespace(sentence.beforeBlank));
+      const needsSpaceBeforeSecond = !!(sentence.afterBlank && !endsWithWhitespace(sentence.afterBlank));
       return (
         <React.Fragment key={sentence.id}>
           {sentence.beforeBlank}
-          {sentence.beforeBlank && !endsWithWhitespace(sentence.beforeBlank) ? ' ' : ''}
-          <Text style={styles.completedWord}>{sentence.blank.correctWord}</Text>
+          <Text style={styles.completedWord}>
+            {needsSpaceBeforeFirst ? ' ' : ''}
+            {hyphenateWord(sentence.blank.correctWord)}
+          </Text>
           {sentence.afterBlank && (
             <>
               {!startsWithPunctuation(sentence.afterBlank) ? ' ' : ''}
               {sentence.afterBlank}
               {sentence.secondBlank && (
-                <>
-                  {!endsWithWhitespace(sentence.afterBlank) ? ' ' : ''}
-                  <Text style={styles.completedWord}>{sentence.secondBlank.correctWord}</Text>
-                </>
+                <Text style={styles.completedWord}>
+                  {needsSpaceBeforeSecond ? ' ' : ''}
+                  {hyphenateWord(sentence.secondBlank.correctWord)}
+                </Text>
               )}
             </>
           )}
-          {sentence.secondBlank && !sentence.afterBlank && ' '}
+          {!sentence.afterBlank && sentence.secondBlank && (
+            <Text style={styles.completedWord}>
+              {' '}
+              {hyphenateWord(sentence.secondBlank.correctWord)}
+            </Text>
+          )}
           {sentence.afterSecondBlank && (
             <>
               {!startsWithPunctuation(sentence.afterSecondBlank) ? ' ' : ''}
@@ -598,33 +696,31 @@ export default function StoryExerciseScreen() {
       );
     }
 
-    return (
-      <React.Fragment key={sentence.id}>
-        {sentence.beforeBlank}
-        {sentence.beforeBlank && !endsWithWhitespace(sentence.beforeBlank) ? ' ' : ''}
-        {renderBlankInline(sentence.blank)}
-        {sentence.afterBlank ? (
-          <>
-            {!startsWithPunctuation(sentence.afterBlank) ? ' ' : ''}
-            {sentence.afterBlank}
-            {sentence.secondBlank && (
-              <>
-                {!endsWithWhitespace(sentence.afterBlank) ? ' ' : ''}
-                {renderBlankInline(sentence.secondBlank)}
-              </>
-            )}
-          </>
-        ) : (
-          sentence.secondBlank && <>{' '}{renderBlankInline(sentence.secondBlank)}</>
-        )}
-        {sentence.afterSecondBlank && (
-          <>
-            {!startsWithPunctuation(sentence.afterSecondBlank) ? ' ' : ''}
-            {sentence.afterSecondBlank}
-          </>
-        )}
-      </React.Fragment>
-    );
+    {
+      const needsSpaceBeforeFirst = !!(sentence.beforeBlank && !endsWithWhitespace(sentence.beforeBlank));
+      const needsSpaceBeforeSecond = !!(sentence.afterBlank && !endsWithWhitespace(sentence.afterBlank));
+      return (
+        <React.Fragment key={sentence.id}>
+          {sentence.beforeBlank}
+          {renderBlankInline(sentence.blank, needsSpaceBeforeFirst)}
+          {sentence.afterBlank ? (
+            <>
+              {!startsWithPunctuation(sentence.afterBlank) ? ' ' : ''}
+              {sentence.afterBlank}
+              {sentence.secondBlank && renderBlankInline(sentence.secondBlank, needsSpaceBeforeSecond)}
+            </>
+          ) : (
+            sentence.secondBlank && renderBlankInline(sentence.secondBlank, true)
+          )}
+          {sentence.afterSecondBlank && (
+            <>
+              {!startsWithPunctuation(sentence.afterSecondBlank) ? ' ' : ''}
+              {sentence.afterSecondBlank}
+            </>
+          )}
+        </React.Fragment>
+      );
+    }
   };  const getAvailableWords = () => {
     if (!story) return [];
     return story.availableWords.filter(word => !selectedWords.has(word));
@@ -638,24 +734,68 @@ const buildStoryFromContent = (
   const cleanWords = sanitizeWords(vocabulary);
   // Normalize newlines
   let normalized = rawContent.replace(/\r\n/g, '\n');
-  // If the model forgot to wrap some words with **, wrap the first occurrence ourselves.
+  // Keep only true paragraph breaks and remove single newlines inside paragraphs
+  // 1) Mark paragraph breaks (two or more newlines)
+  normalized = normalized.replace(/\n{2,}/g, '<<BR>>');
+  // 2) Collapse single newlines to spaces
+  normalized = normalized.replace(/\n/g, ' ');
+  // 3) Restore paragraph breaks as a single blank line
+  normalized = normalized.replace(/<<BR>>/g, '\n\n');
+  // 4) Normalize excessive spaces
+  normalized = normalized.replace(/\s+/g, ' ').replace(/\s*\n\s*/g, '\n\n').trim();
+  // Prefer **word** markers; otherwise support six-dot blanks "......" mapped to vocabulary order.
   const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  for (const w of cleanWords) {
-    const wrapped = new RegExp(`\\*\\*${escapeRe(w)}\\*\\*`, 'i');
-    if (!wrapped.test(normalized)) {
-      const plain = new RegExp(`\\b${escapeRe(w)}\\b`, 'i');
-      if (plain.test(normalized)) {
-        normalized = normalized.replace(plain, (m) => `**${m}**`);
+  let pieces: string[] | null = null;
+  if (/\*\*(.+?)\*\*/.test(normalized)) {
+    pieces = normalized.split(/\*\*(.+?)\*\*/g);
+  } else if (/\.{6}/.test(normalized)) {
+    // Split around six-dot placeholders, keeping separators
+    const parts = normalized.split(/(\.{6})/);
+    // Build pseudo pieces array compatible with the **word** logic: [before, word1, after1, word2, after2, ...]
+    const pseudo: string[] = [];
+    let before = '';
+    let idx = 0;
+    parts.forEach((seg) => {
+      if (seg === '......') {
+        const correct = cleanWords[idx] || `word${idx + 1}`;
+        pseudo.push(before);
+        pseudo.push(correct);
+        before = '';
+        idx += 1;
+      } else {
+        before += seg;
+      }
+    });
+    pseudo.push(before);
+    pieces = pseudo;
+  } else {
+    // Try to auto-wrap the first occurrence of each word with ** ** as a fallback
+    for (const w of cleanWords) {
+      const wrapped = new RegExp(`\\*\\*${escapeRe(w)}\\*\\*`, 'i');
+      if (!wrapped.test(normalized)) {
+        const plain = new RegExp(`\\b${escapeRe(w)}\\b`, 'i');
+        if (plain.test(normalized)) {
+          normalized = normalized.replace(plain, (m) => `**${m}**`);
+        }
       }
     }
+    pieces = normalized.split(/\*\*(.+?)\*\*/g);
   }
-  const pieces = normalized.split(/\*\*(.+?)\*\*/g);
 
   const sentences: StorySentence[] = [];
+  let suppressNextBefore = false; // when true, we hide the next before-segment to avoid duplication
   for (let i = 0; i < cleanWords.length; i += 1) {
-    const beforeSegment = (pieces[2 * i] ?? '');
+    const baseBefore = (pieces[2 * i] ?? '');
+    const beforeSegment = suppressNextBefore ? '' : baseBefore;
+    suppressNextBefore = false;
     const highlightedWord = pieces[2 * i + 1]?.trim() || cleanWords[i];
-    const afterSegment = pieces[2 * i + 2] ?? '';
+    const rawAfter = pieces[2 * i + 2] ?? '';
+    // Show the inter-blank span after the CURRENT word, not before the next one.
+    // This keeps punctuation attached to the chosen word and prevents odd line breaks.
+    let afterSegment = rawAfter;
+    if (i < cleanWords.length - 1) {
+      suppressNextBefore = true; // we already displayed this span; don't render it as the next 'before'
+    }
 
     // Only use words from our vocabulary list - ignore extra words the AI might have wrapped
     const isVocabWord = cleanWords.some(w => w.toLowerCase() === highlightedWord.toLowerCase());
@@ -677,6 +817,8 @@ const buildStoryFromContent = (
     });
   }
 
+  // No template lead-ins; leave content unchanged even if it starts with a blank
+
   // If no matches were found, create simple structure using the entire content
   if (!sentences.length) {
     sentences.push({
@@ -691,32 +833,7 @@ const buildStoryFromContent = (
     });
   }
 
-  // VALIDATION & FIXUP: Ensure the last vocabulary word is NOT at the end
-  if (sentences.length > 0) {
-    const lastSentence = sentences[sentences.length - 1];
-    const textAfterLastBlank = lastSentence.afterBlank?.trim() || '';
-    // Count words after the last blank
-    const wordsAfter = textAfterLastBlank.split(/\s+/).filter(w => w.length > 0);
-
-    // Require a generous safety margin after the final vocabulary word
-    const MIN_AFTER_WORDS = 15; // target at least ~15 words of trailing narrative
-    if (wordsAfter.length < MIN_AFTER_WORDS) {
-      console.warn('⚠️ Story tail too short; appending neutral closing sentence to keep blanks away from the end.');
-      const closers = [
-        'As evening approached, they packed up and headed home, already planning what to try next.',
-        'With the day winding down, they took a deep breath and looked forward to tomorrow.',
-        'They smiled at the small victory, tidied up, and made their way back through the quiet streets.',
-      ];
-      const tail = ' ' + closers[Math.floor(Math.random() * closers.length)];
-      if (lastSentence.afterSecondBlank && lastSentence.afterSecondBlank.trim().length > 0) {
-        lastSentence.afterSecondBlank = (lastSentence.afterSecondBlank + (/[.!?]$/.test(lastSentence.afterSecondBlank.trim()) ? '' : '.') + tail).replace(/\s+/g, ' ').trim();
-      } else if (lastSentence.afterBlank) {
-        lastSentence.afterBlank = (lastSentence.afterBlank + (/[.!?]$/.test(lastSentence.afterBlank.trim()) ? '' : '.') + tail).replace(/\s+/g, ' ').trim();
-      } else {
-        lastSentence.afterBlank = tail.trim();
-      }
-    }
-  }
+  // No template tail padding; leave the ending as-is
 
   return {
     id: meta?.id || `story_${Date.now()}`,
@@ -894,7 +1011,7 @@ const buildStoryFromContent = (
               ]}
             >
               {hasStory ? (
-                <View>
+                <Text style={isDarkMode ? styles.sentenceText : styles.sentenceTextPaper}>
                   {(story?.sentences ?? []).map((s, idx) => {
                     const total = Math.max(1, (story?.sentences?.length ?? 1));
                     const step = 1 / (total + 1);
@@ -903,14 +1020,12 @@ const buildStoryFromContent = (
                     const opacity = revealAnim.interpolate({ inputRange: [start, end], outputRange: [0, 1], extrapolate: 'clamp' });
                     const ty = revealAnim.interpolate({ inputRange: [start, end], outputRange: [6, 0], extrapolate: 'clamp' });
                     return (
-                      <Animated.View key={s.id} style={{ opacity, transform: [{ translateY: ty }] }}>
-                        <Text style={isDarkMode ? styles.sentenceText : styles.sentenceTextPaper}>
-                          {renderSentence(s)}
-                        </Text>
-                      </Animated.View>
+                      <Animated.Text key={s.id} style={{ opacity, transform: [{ translateY: ty }] }}>
+                        {renderSentence(s)}
+                      </Animated.Text>
                     );
                   })}
-                </View>
+                </Text>
               ) : (
                 <View style={styles.storyPlaceholder}>
                   <Text style={[styles.storyPlaceholderTitle, !isDarkMode && styles.storyPlaceholderTitleLight]}>Ready when you are</Text>
@@ -962,6 +1077,46 @@ const buildStoryFromContent = (
             <Text style={styles.checkButtonText}>Check Answers</Text>
           </TouchableOpacity>
         </View>
+      )}
+
+      {/* Save Toast */}
+      {saveToastVisible && (
+        <Animated.View
+          pointerEvents="box-none"
+          style={[
+            styles.saveToastWrap,
+            {
+              opacity: saveToastAnim,
+              transform: [
+                { translateY: saveToastAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) },
+              ],
+            },
+          ]}
+        >
+          <View style={[styles.saveToastCard, !isDarkMode && styles.saveToastCardLight]}>
+            <Text style={[styles.saveToastTitle, !isDarkMode && styles.saveToastTitleLight]}>Saved to Journal</Text>
+            <Text style={[styles.saveToastText, !isDarkMode && styles.saveToastTextLight]}>Your story has been saved.</Text>
+            <View style={styles.saveToastActions}>
+              <TouchableOpacity
+                onPress={() => {
+                  Animated.timing(saveToastAnim, { toValue: 0, duration: 160, useNativeDriver: true }).start(() => setSaveToastVisible(false));
+                }}
+                style={styles.saveToastBtn}
+              >
+                <Text style={[styles.saveToastBtnText, !isDarkMode && styles.saveToastBtnTextLight]}>Close</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  Animated.timing(saveToastAnim, { toValue: 0, duration: 140, useNativeDriver: true }).start(() => setSaveToastVisible(false));
+                  router.push('/journal');
+                }}
+                style={[styles.saveToastBtn, styles.saveToastPrimary]}
+              >
+                <Text style={styles.saveToastPrimaryText}>Open Journal</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
       )}
 
       {/* SRS feedback banner */}
@@ -1087,18 +1242,18 @@ const buildStoryFromContent = (
         animationType="slide"
         onRequestClose={() => setWordPickerOpen(false)}
       >
-        <SafeAreaView style={styles.wordPickerOverlay}>
+        <SafeAreaView style={[styles.wordPickerOverlay, !isDarkMode && styles.wordPickerOverlayLight]}>
           <KeyboardAvoidingView
-            style={styles.wordPickerContent}
+            style={[styles.wordPickerContent, !isDarkMode && styles.wordPickerContentLight]}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           >
             <View style={styles.wordPickerHeader}>
-              <Text style={styles.modalTitle}>Select Words</Text>
+              <Text style={[styles.modalTitle, !isDarkMode && styles.modalTitleLight]}>Select Words</Text>
               <TouchableOpacity onPress={() => setWordPickerOpen(false)}>
-                <X size={24} color="#9CA3AF" />
+                <X size={24} color={isDarkMode ? '#9CA3AF' : '#6B7280'} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.wordPickerSubtitle}>
+            <Text style={[styles.wordPickerSubtitle, !isDarkMode && styles.wordPickerSubtitleLight]}>
               Pick 5 words from your vault.
             </Text>
             {/* SRS filters + search */}
@@ -1112,10 +1267,10 @@ const buildStoryFromContent = (
                 ] as const).map(({ key, label }) => (
                   <TouchableOpacity
                     key={key}
-                    style={[styles.filterChip, pickerFilter === key && styles.filterChipActive]}
+                    style={[styles.filterChip, !isDarkMode && styles.filterChipLight, pickerFilter === key && styles.filterChipActive]}
                     onPress={() => setPickerFilter(key)}
                   >
-                    <Text style={[styles.filterChipText, pickerFilter === key && styles.filterChipTextActive]}>{label}</Text>
+                    <Text style={[styles.filterChipText, !isDarkMode && styles.filterChipTextLight, pickerFilter === key && styles.filterChipTextActive]}>{label}</Text>
                   </TouchableOpacity>
                 ))}
                 <TouchableOpacity
@@ -1168,13 +1323,13 @@ const buildStoryFromContent = (
                   <Text style={styles.autoPickButtonText}>Auto-pick 5</Text>
                 </TouchableOpacity>
               </View>
-              <View style={styles.searchInputWrap}>
+              <View style={[styles.searchInputWrap, !isDarkMode && styles.searchInputWrapLight]}>
                 <TextInput
                   placeholder="Search word or definition"
                   placeholderTextColor="#6B7280"
                   value={pickerQuery}
                   onChangeText={setPickerQuery}
-                  style={styles.searchInput}
+                  style={[styles.searchInput, !isDarkMode && styles.searchInputLight]}
                 />
               </View>
             </View>
@@ -1235,7 +1390,8 @@ const buildStoryFromContent = (
                     key={word.id}
                     style={[
                       styles.wordPickerItem,
-                      selected && styles.wordPickerItemSelected,
+                      !isDarkMode && styles.wordPickerItemLight,
+                      selected && (isDarkMode ? styles.wordPickerItemSelected : styles.wordPickerItemSelectedLight),
                       disabled && styles.wordPickerItemDisabled,
                     ]}
                     activeOpacity={0.7}
@@ -1248,7 +1404,7 @@ const buildStoryFromContent = (
                     }}
                   >
                     <View style={styles.wordPickerItemHeader}>
-                      <Text style={styles.wordPickerWord}>{word.word}</Text>
+                      <Text style={[styles.wordPickerWord, !isDarkMode && styles.wordPickerWordLight]}>{hyphenateWord(word.word)}</Text>
                       <View style={styles.wordBadgeRow}>
                         {word.isWeak ? (
                           <View style={[styles.statusPill, { backgroundColor: 'rgba(242,147,92,0.15)', borderColor: 'rgba(242,147,92,0.35)' }]}>
@@ -1261,9 +1417,9 @@ const buildStoryFromContent = (
                       </View>
                       {selected && <Check size={16} color="#437F76" />}
                     </View>
-                    <Text style={styles.wordPickerDefinition}>{word.definition}</Text>
+                    <Text style={[styles.wordPickerDefinition, !isDarkMode && styles.wordPickerDefinitionLight]}>{word.definition}</Text>
                     {!!word.example && (
-                      <Text style={styles.wordPickerExample}>“{word.example}”</Text>
+                      <Text style={[styles.wordPickerExample, !isDarkMode && styles.wordPickerExampleLight]}>“{word.example}”</Text>
                     )}
                   </TouchableOpacity>
                 );
@@ -1278,16 +1434,16 @@ const buildStoryFromContent = (
               )}
             </ScrollView>
             <View style={styles.wordPickerFooter}>
-              <Text style={styles.wordPickerCount}>
+              <Text style={[styles.wordPickerCount, !isDarkMode && styles.wordPickerCountLight]}>
                 {tempSelection.length} / {MAX_BLANKS} selected
               </Text>
               <View style={styles.footerActions}>
                 <TouchableOpacity
-                  style={[styles.modalReset, tempSelection.length === 0 && styles.modalResetDisabled]}
+                  style={[styles.modalReset, !isDarkMode && styles.modalResetLight, tempSelection.length === 0 && styles.modalResetDisabled]}
                   onPress={() => setTempSelection([])}
                   disabled={tempSelection.length === 0}
                 >
-                  <Text style={styles.modalResetText}>Reset</Text>
+                  <Text style={[styles.modalResetText, !isDarkMode && styles.modalResetTextLight]}>Reset</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.modalPrimary, tempSelection.length !== MAX_BLANKS && styles.modalPrimaryDisabled]}
@@ -1342,7 +1498,7 @@ const buildStoryFromContent = (
                     style={[styles.wordSelectionItem, !isDarkMode && styles.wordSelectionItemLight]}
                     onPress={() => handleWordSelection(word)}
                   >
-                    <Text style={[styles.wordSelectionText, !isDarkMode && styles.wordSelectionTextLight]}>{word}</Text>
+                    <Text style={[styles.wordSelectionText, !isDarkMode && styles.wordSelectionTextLight]}>{hyphenateWord(word)}</Text>
                   </TouchableOpacity>
                 ))}
                 
@@ -1745,17 +1901,15 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 32,
     color: '#FFFFFF',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    // Prefer Seravek on iOS; use sans-serif on Android; System elsewhere
-    fontFamily: Platform.select({ ios: 'Seravek', android: 'sans-serif', default: 'System' }) as any,
+    // Use Lexend for story reading when available (loaded in _layout). Falls back if missing.
+    fontFamily: 'Lexend_400Regular',
     letterSpacing: 0.2,
   },
   sentenceTextPaper: {
     color: '#2B2B2B',
     fontSize: 22,
     lineHeight: 32,
-    fontFamily: Platform.select({ ios: 'Seravek', android: 'sans-serif', default: 'System' }) as any,
+    fontFamily: 'Lexend_400Regular',
     letterSpacing: 0.2,
   },
   controlsToggleWrap: {
@@ -1826,7 +1980,10 @@ const styles = StyleSheet.create({
   },
   completedWord: {
     color: '#437F76',
-    fontWeight: '600',
+    // Keep weight same as body to avoid width spikes near wrap points
+    // (inherits Lexend_400Regular from parent)
+    // Match parent letter spacing so the inline run lays out identically
+    letterSpacing: 0.2,
   },
   inlineBlank: {
     alignSelf: 'baseline',
@@ -1976,6 +2133,79 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  // Save toast styles
+  saveToastWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 96,
+    alignItems: 'center',
+    zIndex: 50,
+  },
+  saveToastCard: {
+    width: '88%',
+    maxWidth: 420,
+    borderRadius: 16,
+    backgroundColor: 'rgba(38,43,46,0.96)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#434d51',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
+  },
+  saveToastCardLight: {
+    backgroundColor: '#F8F9FA',
+    borderColor: '#E5E7EB',
+  },
+  saveToastTitle: {
+    color: '#F3F4F6',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  saveToastTitleLight: {
+    color: '#111827',
+  },
+  saveToastText: {
+    marginTop: 4,
+    color: '#CBD5E1',
+    fontSize: 13,
+  },
+  saveToastTextLight: {
+    color: '#4B5563',
+  },
+  saveToastActions: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  saveToastBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: 'transparent',
+  },
+  saveToastBtnText: {
+    color: '#E5E7EB',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  saveToastBtnTextLight: {
+    color: '#374151',
+  },
+  saveToastPrimary: {
+    backgroundColor: '#F2935C',
+  },
+  saveToastPrimaryText: {
+    color: '#111827',
+    fontWeight: '800',
+    fontSize: 13,
+    paddingHorizontal: 2,
   },
   srsBanner: {
     position: 'absolute',
@@ -2409,6 +2639,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#E5E7EB',
   },
+  // Light mode variants for word picker
+  wordPickerOverlayLight: { backgroundColor: '#F2E3D0' },
+  wordPickerContentLight: { backgroundColor: '#F2E3D0' },
+  modalTitleLight: { color: '#111827' },
+  wordPickerSubtitleLight: { color: '#6B7280' },
+  filterChipLight: { borderColor: '#E5E7EB', backgroundColor: '#FFFFFF' },
+  filterChipTextLight: { color: '#6B7280' },
+  searchInputWrapLight: { borderColor: '#E5E7EB', backgroundColor: '#FFFFFF' },
+  searchInputLight: { color: '#111827' },
+  wordPickerItemLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
+  wordPickerItemSelectedLight: { borderColor: '#437F76', backgroundColor: '#E6F0EE' },
+  wordPickerWordLight: { color: '#111827' },
+  wordPickerDefinitionLight: { color: '#374151' },
+  wordPickerExampleLight: { color: '#6B7280' },
+  wordPickerCountLight: { color: '#6B7280' },
+  modalResetLight: { borderColor: '#E5E7EB', backgroundColor: '#FFFFFF' },
+  modalResetTextLight: { color: '#374151' },
   wordPickerCount: {
     fontSize: 12,
     color: '#9CA3AF',

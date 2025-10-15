@@ -24,6 +24,8 @@ const { width } = Dimensions.get('window');
 export default function StatsScreen() {
   const router = useRouter();
   const { analytics, loadAnalytics } = useAppStore();
+  const themeName = useAppStore(s => s.theme);
+  const isLight = themeName === 'light';
   const [stats, setStats] = useState<any>(null);
   const [deepOpen, setDeepOpen] = useState(false);
 
@@ -52,8 +54,8 @@ export default function StatsScreen() {
     const maxAccuracy = Math.max(...Object.values(analytics.accuracyByType).map(v => Number(v)));
 
     return (
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Accuracy by Exercise</Text>
+      <View style={[styles.card, isLight && styles.cardLight]}>
+        <Text style={[styles.cardTitle, isLight && styles.cardTitleLight]}>Accuracy by Exercise</Text>
         <View style={styles.barChart}>
           {exerciseTypes.map((type, index) => {
             const accuracy = analytics.accuracyByType[type];
@@ -69,8 +71,8 @@ export default function StatsScreen() {
                 <View style={styles.barWrapper}>
                   <LinearGradient colors={gradient} start={{x:0,y:0}} end={{x:0,y:1}} style={[styles.bar, { height }]} />
                 </View>
-                <Text style={styles.barLabel}>{type.toUpperCase()}</Text>
-                <Text style={styles.barValue}>{accuracy}%</Text>
+                <Text style={[styles.barLabel, isLight && styles.barLabelLight]}>{type.toUpperCase()}</Text>
+                <Text style={[styles.barValue, isLight && styles.barValueLight]}>{accuracy}%</Text>
               </View>
             );
           })}
@@ -85,14 +87,14 @@ export default function StatsScreen() {
     const iconFor = (k: string) => k === 'srs' ? <Clock3 size={16} color="#FFFFFF" /> : k === 'weak' ? <AlertTriangle size={16} color="#FFFFFF" /> : <CheckCircle2 size={16} color="#FFFFFF" />;
     const bgFor = (k: string) => k === 'srs' ? '#187486' : k === 'weak' ? '#F2AB27' : '#4CAF50';
     return (
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Recommendations</Text>
+      <View style={[styles.card, isLight && styles.cardLight]}>
+        <Text style={[styles.cardTitle, isLight && styles.cardTitleLight]}>Recommendations</Text>
         {items.map((r, idx) => (
           <View key={`${r.kind}-${idx}`} style={styles.recoRow}>
             <View style={[styles.recoIcon, { backgroundColor: bgFor(r.kind) }]}>
               {iconFor(r.kind)}
             </View>
-            <Text style={styles.recoText}>{r.text}</Text>
+            <Text style={[styles.recoText, isLight && styles.recoTextLight]}>{r.text}</Text>
           </View>
         ))}
       </View>
@@ -106,8 +108,8 @@ export default function StatsScreen() {
     const maxSeconds = Math.max(...trendData.map((d: any) => d.seconds), 1);
 
     return (
-      <View style={styles.chartContainer}>
-        <Text style={styles.chartTitle}>Time Spent per Day (Last 7 Days)</Text>
+      <View style={[styles.chartContainer, isLight && styles.chartContainerLight]}>
+        <Text style={[styles.chartTitle, isLight && styles.chartTitleLight]}>Time Spent per Day (Last 7 Days)</Text>
         <View style={styles.trendChart}>
           <View style={styles.trendLine}>
             {trendData.map((point: any, index: number) => {
@@ -126,11 +128,8 @@ export default function StatsScreen() {
           </View>
           <View style={styles.trendLabels}>
             {trendData.map((point: any, index: number) => (
-              <Text key={index} style={styles.trendLabel}>
-                {new Date(point.date).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                })}
+              <Text key={index} style={[styles.trendLabel, isLight && styles.trendLabelLight]}>
+                {new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               </Text>
             ))}
           </View>
@@ -149,15 +148,15 @@ export default function StatsScreen() {
 
     const overdueOther = (ob['1-3d'] || 0) + (ob['4-7d'] || 0) + (ob['8+d'] || 0);
     return (
-      <View style={styles.card}>
-        <Text style={styles.chartTitle}>SRS Health</Text>
-        <View style={styles.row}><Text style={styles.rowLeft}>Due now</Text><Text style={styles.rowRight}>{ob.today || 0}</Text></View>
-        <View style={styles.row}><Text style={styles.rowLeft}>Overdue</Text><Text style={[styles.rowRight, { color: overdueOther > 0 ? '#F2AB27' : '#9CA3AF' }]}>{overdueOther}</Text></View>
-        <View style={styles.row}><Text style={styles.rowLeft}>Avg EF</Text><Text style={styles.rowRight}>{srs.avgEaseFactor}</Text></View>
-        <View style={styles.row}><Text style={styles.rowLeft}>Avg Interval</Text><Text style={styles.rowRight}>{srs.avgInterval} d</Text></View>
+      <View style={[styles.card, isLight && styles.cardLight]}>
+        <Text style={[styles.chartTitle, isLight && styles.chartTitleLight]}>SRS Health</Text>
+        <View style={styles.row}><Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>Due now</Text><Text style={[styles.rowRight, isLight && styles.rowRightLight]}>{ob.today || 0}</Text></View>
+        <View style={styles.row}><Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>Overdue</Text><Text style={[styles.rowRight, isLight && styles.rowRightLight, { color: overdueOther > 0 ? '#F2AB27' : (isLight ? '#6B7280' : '#9CA3AF') }]}>{overdueOther}</Text></View>
+        <View style={styles.row}><Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>Avg EF</Text><Text style={[styles.rowRight, isLight && styles.rowRightLight]}>{srs.avgEaseFactor}</Text></View>
+        <View style={styles.row}><Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>Avg Interval</Text><Text style={[styles.rowRight, isLight && styles.rowRightLight]}>{srs.avgInterval} d</Text></View>
         {srs.topLapses?.length ? (
           <View style={[styles.row, { paddingTop: 8 }]}>
-            <Text style={styles.rowLeft}>Most lapses</Text>
+            <Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>Most lapses</Text>
             <Text style={[styles.rowRight, { color: '#F87171' }]}>
               {srs.topLapses.slice(0, 3).map(w => w.word).join(', ')}
             </Text>
@@ -168,32 +167,33 @@ export default function StatsScreen() {
   };
 
   const renderDonutChart = () => {
-    // Replace accuracy card with "Words Learned"
+    // Words Learned: a word counts as learned after 3 correct answers
+    // across any exercises (global), independent of SRS stage.
     const words = vaultService.getAllWords();
     const total = words.length;
-    const learned = words.filter(w => (w.srs?.repetition ?? 0) >= 3).length; // learned = SRS rep >= 3
+    const learned = words.filter(w => (w.correctCount ?? 0) >= 3).length;
     const remaining = Math.max(0, total - learned);
     const percent = total ? Math.round((learned / total) * 100) : 0;
 
     return (
-      <View style={styles.chartContainer}>
-        <Text style={styles.chartTitle}>Words Learned</Text>
+      <View style={[styles.chartContainer, isLight && styles.chartContainerLight]}>
+        <Text style={[styles.chartTitle, isLight && styles.chartTitleLight]}>Words Learned</Text>
         <View style={styles.donutChart}>
-          <View style={styles.donutOuter}>
+          <View style={[styles.donutOuter, isLight && styles.donutOuterLight]}>
             <View style={styles.donutInner}>
-              <Text style={styles.donutValue}>{learned}</Text>
-              <Text style={styles.donutLabel}>of {total}</Text>
-              <Text style={[styles.donutLabel, { marginTop: 2 }]}>{percent}%</Text>
+              <Text style={[styles.donutValue, isLight && styles.donutValueLight]}>{learned}</Text>
+              <Text style={[styles.donutLabel, isLight && styles.donutLabelLight]}>of {total}</Text>
+              <Text style={[styles.donutLabel, isLight && styles.donutLabelLight, { marginTop: 2 }]}>{percent}%</Text>
             </View>
           </View>
           <View style={styles.donutLegend}>
             <View style={styles.legendItem}>
               <View style={[styles.legendColor, { backgroundColor: '#4CAF50' }]} />
-              <Text style={styles.legendText}>Learned ({learned})</Text>
+              <Text style={[styles.legendText, isLight && styles.legendTextLight]}>Learned ({learned})</Text>
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendColor, { backgroundColor: '#6B7280' }]} />
-              <Text style={styles.legendText}>Remaining ({remaining})</Text>
+              <Text style={[styles.legendText, isLight && styles.legendTextLight]}>Remaining ({remaining})</Text>
             </View>
           </View>
         </View>
@@ -204,12 +204,12 @@ export default function StatsScreen() {
   const renderWeakWords = () => {
     if (!analytics?.weakWords || analytics.weakWords.length === 0) return null;
     return (
-      <View style={styles.card}>
-        <Text style={styles.chartTitle}>Weakest Words</Text>
+      <View style={[styles.card, isLight && styles.cardLight]}>
+        <Text style={[styles.chartTitle, isLight && styles.chartTitleLight]}>Weakest Words</Text>
         {analytics.weakWords.slice(0, 8).map((w: any, idx: number) => (
           <View key={`${w.word}-${idx}`} style={styles.row}>
-            <Text style={styles.rowLeft}>{w.word}</Text>
-            <Text style={[styles.rowRight, { color: w.accuracy < 50 ? '#F87171' : '#F2AB27' }]}>{w.accuracy}% • {w.attempts}x</Text>
+            <Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>{w.word}</Text>
+            <Text style={[styles.rowRight, isLight && styles.rowRightLight, { color: w.accuracy < 50 ? '#F87171' : '#F2AB27' }]}>{w.accuracy}% • {w.attempts}x</Text>
           </View>
         ))}
       </View>
@@ -223,24 +223,24 @@ export default function StatsScreen() {
     const weakest = sorted.slice(0, 5);
     const strongest = [...sorted].reverse().slice(0, 5);
     return (
-      <View style={styles.card}>
-        <Text style={styles.chartTitle}>Skill by Topic</Text>
+      <View style={[styles.card, isLight && styles.cardLight]}>
+        <Text style={[styles.chartTitle, isLight && styles.chartTitleLight]}>Skill by Topic</Text>
         <View style={styles.splitRow}>
           <View style={styles.splitCol}>
-            <Text style={styles.subheading}>Weak</Text>
+            <Text style={[styles.subheading, isLight && styles.subheadingLight]}>Weak</Text>
             {weakest.map((t, idx) => (
               <View key={`w-${t.tag}-${idx}`} style={styles.row}>
-                <Text style={styles.rowLeft}>{t.tag}</Text>
-                <Text style={[styles.rowRight, { color: '#F87171' }]}>{t.accuracy}% • {t.attempts}x</Text>
+                <Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>{t.tag}</Text>
+                <Text style={[styles.rowRight, isLight && styles.rowRightLight, { color: '#F87171' }]}>{t.accuracy}% • {t.attempts}x</Text>
               </View>
             ))}
           </View>
           <View style={styles.splitCol}>
-            <Text style={styles.subheading}>Strong</Text>
+            <Text style={[styles.subheading, isLight && styles.subheadingLight]}>Strong</Text>
             {strongest.map((t, idx) => (
               <View key={`s-${t.tag}-${idx}`} style={styles.row}>
-                <Text style={styles.rowLeft}>{t.tag}</Text>
-                <Text style={[styles.rowRight, { color: '#4CAF50' }]}>{t.accuracy}% • {t.attempts}x</Text>
+                <Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>{t.tag}</Text>
+                <Text style={[styles.rowRight, isLight && styles.rowRightLight, { color: '#4CAF50' }]}>{t.accuracy}% • {t.attempts}x</Text>
               </View>
             ))}
           </View>
@@ -255,12 +255,12 @@ export default function StatsScreen() {
     const sum = items.reduce((acc, [, v]) => acc + (v || 0), 0);
     if (sum === 0) return null; // hide if no signal yet
     return (
-      <View style={styles.card}>
-        <Text style={styles.chartTitle}>Time of Day Performance</Text>
+      <View style={[styles.card, isLight && styles.cardLight]}>
+        <Text style={[styles.chartTitle, isLight && styles.chartTitleLight]}>Time of Day Performance</Text>
         {items.map(([k, v]) => (
           <View key={k} style={styles.row}>
-            <Text style={styles.rowLeft}>{k[0].toUpperCase() + k.slice(1)}</Text>
-            <Text style={styles.rowRight}>{v}%</Text>
+            <Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>{k[0].toUpperCase() + k.slice(1)}</Text>
+            <Text style={[styles.rowRight, isLight && styles.rowRightLight]}>{v}%</Text>
           </View>
         ))}
       </View>
@@ -273,43 +273,43 @@ export default function StatsScreen() {
     const recordStreak = analyticsService.getRecordStreak();
     return (
       <View style={styles.summaryContainer}>
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryIcon}>
+        <View style={[styles.summaryCard, isLight && styles.summaryCardLight]}>
+          <View style={[styles.summaryIcon, isLight && styles.summaryIconLight]}>
             <TrendingUp size={24} color="#4CAF50" />
           </View>
           <View style={styles.summaryContent}>
-            <Text style={styles.summaryValue}>{analytics.streak}</Text>
-            <Text style={styles.summaryLabel}>Day Streak</Text>
+            <Text style={[styles.summaryValue, isLight && styles.summaryValueLight]}>{analytics.streak}</Text>
+            <Text style={[styles.summaryLabel, isLight && styles.summaryLabelLight]}>Day Streak</Text>
           </View>
         </View>
 
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryIcon}>
+        <View style={[styles.summaryCard, isLight && styles.summaryCardLight]}>
+          <View style={[styles.summaryIcon, isLight && styles.summaryIconLight]}>
             <CalendarDays size={24} color="#F2AB27" />
           </View>
           <View style={styles.summaryContent}>
-            <Text style={styles.summaryValue}>{counts.today}</Text>
-            <Text style={styles.summaryLabel}>Exercises Today</Text>
+            <Text style={[styles.summaryValue, isLight && styles.summaryValueLight]}>{counts.today}</Text>
+            <Text style={[styles.summaryLabel, isLight && styles.summaryLabelLight]}>Exercises Today</Text>
           </View>
         </View>
 
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryIcon}>
+        <View style={[styles.summaryCard, isLight && styles.summaryCardLight]}>
+          <View style={[styles.summaryIcon, isLight && styles.summaryIconLight]}>
             <BarChart3 size={24} color="#2196F3" />
           </View>
           <View style={styles.summaryContent}>
-            <Text style={styles.summaryValue}>{counts.total}</Text>
-            <Text style={styles.summaryLabel}>Exercises Overall</Text>
+            <Text style={[styles.summaryValue, isLight && styles.summaryValueLight]}>{counts.total}</Text>
+            <Text style={[styles.summaryLabel, isLight && styles.summaryLabelLight]}>Exercises Overall</Text>
           </View>
         </View>
 
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryIcon}>
+        <View style={[styles.summaryCard, isLight && styles.summaryCardLight]}>
+          <View style={[styles.summaryIcon, isLight && styles.summaryIconLight]}>
             <Award size={24} color="#e28743" />
           </View>
           <View style={styles.summaryContent}>
-            <Text style={styles.summaryValue}>{recordStreak}</Text>
-            <Text style={styles.summaryLabel}>Record Streak</Text>
+            <Text style={[styles.summaryValue, isLight && styles.summaryValueLight]}>{recordStreak}</Text>
+            <Text style={[styles.summaryLabel, isLight && styles.summaryLabelLight]}>Record Streak</Text>
           </View>
         </View>
       </View>
@@ -317,15 +317,15 @@ export default function StatsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
+      <View style={[styles.header, isLight && styles.headerLight]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <ArrowLeft size={24} color="#fff" />
+          <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
         </TouchableOpacity>
-        <Text style={styles.title}>Analytics</Text>
+        <Text style={[styles.title, isLight && styles.titleLight]}>Analytics</Text>
         <TouchableOpacity
           style={styles.resetButton}
           onPress={async () => {
@@ -348,7 +348,7 @@ export default function StatsScreen() {
             ]);
           }}
         >
-          <Text style={styles.resetText}>Reset</Text>
+          <Text style={[styles.resetText, isLight && styles.resetTextLight]}>Reset</Text>
         </TouchableOpacity>
       </View>
 
@@ -391,6 +391,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#252525',
   },
+  containerLight: {
+    backgroundColor: '#F2E3D0',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -400,6 +403,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#2c2f2f',
   },
+  headerLight: {
+    borderBottomColor: '#E5DED3',
+  },
   backButton: {
     padding: 8,
   },
@@ -408,6 +414,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontFamily: 'Ubuntu_700Bold',
   },
+  titleLight: { color: '#111827' },
   placeholder: {
     width: 40,
   },
@@ -423,6 +430,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Ubuntu_500Medium',
   },
+  resetTextLight: { color: '#c24d1f' },
   content: {
     flex: 1,
     padding: 20,
@@ -442,6 +450,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  summaryCardLight: { backgroundColor: '#F9F1E7' },
   summaryIcon: {
     width: 40,
     height: 40,
@@ -451,6 +460,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
+  summaryIconLight: { backgroundColor: '#E9E6E0' },
   summaryContent: {
     flex: 1,
   },
@@ -459,18 +469,21 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontFamily: 'Ubuntu_700Bold',
   },
+  summaryValueLight: { color: '#111827' },
   summaryLabel: {
     fontSize: 12,
     color: '#a0a0a0',
     marginTop: 2,
     fontFamily: 'Ubuntu_400Regular',
   },
+  summaryLabelLight: { color: '#6B7280' },
   chartContainer: {
     backgroundColor: '#2c2f2f',
     borderRadius: 12,
     padding: 20,
     marginBottom: 20,
   },
+  chartContainerLight: { backgroundColor: '#F9F1E7' },
   deepToggleRow: {
     marginTop: 4,
     marginBottom: 12,
@@ -493,6 +506,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Ubuntu_700Bold',
   },
+  deepToggleTextLight: { color: '#374151' },
   deepContent: {
     overflow: 'hidden',
   },
@@ -500,10 +514,13 @@ const styles = StyleSheet.create({
     height: 0,
   },
   card: { backgroundColor: '#2C2C2C', borderRadius: 12, padding: 16, marginBottom: 20 },
+  cardLight: { backgroundColor: '#F9F1E7' },
   cardTitle: { fontSize: 16, color: '#fff', marginBottom: 12, fontFamily: 'Ubuntu_700Bold' },
+  cardTitleLight: { color: '#111827' },
   recoRow: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 6 },
   recoIcon: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   recoText: { color: '#E5E7EB', fontSize: 14, flex: 1, fontFamily: 'Ubuntu_400Regular' },
+  recoTextLight: { color: '#374151' },
   card: {
     backgroundColor: '#2c2f2f',
     borderRadius: 12,
@@ -554,12 +571,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: 'Ubuntu_400Regular',
   },
+  barLabelLight: { color: '#6B7280' },
   barValue: {
     fontSize: 12,
     color: '#fff',
     marginTop: 4,
     fontFamily: 'Ubuntu_700Bold',
   },
+  barValueLight: { color: '#111827' },
   trendChart: {
     height: 120,
   },
@@ -603,6 +622,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: 'Ubuntu_400Regular',
   },
+  trendLabelLight: { color: '#6B7280' },
   donutChart: {
     alignItems: 'center',
   },
@@ -615,6 +635,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
+  donutOuterLight: { backgroundColor: '#E9E6E0' },
   donutInner: {
     alignItems: 'center',
   },
@@ -623,11 +644,13 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontFamily: 'Ubuntu_700Bold',
   },
+  donutValueLight: { color: '#111827' },
   donutLabel: {
     fontSize: 12,
     color: '#a0a0a0',
     fontFamily: 'Ubuntu_400Regular',
   },
+  donutLabelLight: { color: '#6B7280' },
   donutLegend: {
     gap: 8,
   },
@@ -646,4 +669,8 @@ const styles = StyleSheet.create({
     color: '#e0e0e0',
     fontFamily: 'Ubuntu_400Regular',
   },
+  legendTextLight: { color: '#374151' },
+  rowLeftLight: { color: '#111827' },
+  rowRightLight: { color: '#6B7280' },
+  subheadingLight: { color: '#6B7280' },
 });

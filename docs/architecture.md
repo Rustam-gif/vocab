@@ -13,6 +13,10 @@ Directories and files discovered under configured roots:
   - vault-folder.tsx
   - vault.tsx
   - word-sprint.tsx
+- app/components
+  - OnboardingModal.tsx
+- app/journal
+  - [id].tsx
 - app/placement
   - index.tsx
   - result.tsx

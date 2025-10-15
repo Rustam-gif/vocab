@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import aiService from './AIService';
 
 export type StoryLevel = 'Beginner' | 'Intermediate' | 'Advanced';
 
@@ -16,7 +17,7 @@ export interface GeneratedStory {
 }
 
 const OPENAI_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
-const MODEL = 'gpt-4o-mini';
+const MODEL = 'gpt-4o';
 
 const DEFAULT_PORT = '4000';
 const API_PORT =
@@ -101,131 +102,76 @@ function getApiKey(): string {
   return key;
 }
 
-const SYSTEM_PROMPT = `You are a creative storyteller for a vocabulary learning app. Always respond with valid JSON following this schema:
-{
-  "raw_story": "the complete story using the supplied words",
-  "story_with_blanks": "the same story where each supplied word is replaced by [[BLANK_#]] in order"
+function escapeRegExp(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-Rules:
-1. Produce a short story of about two hundred words that uses all supplied vocabulary words exactly as provided.
-2. The narrative must match the requested level, genre, and tone.
-3. STRICTLY FORBIDDEN: You MUST NOT place ANY vocabulary word in the first sentence, the first paragraph, the last sentence, or the last paragraph. The story MUST begin and end with regular narrative text only.
-4. MANDATORY: Distribute vocabulary words evenly in the MIDDLE sections of the story only. Each word must be separated by multiple sentences of regular text.
-5. In raw_story, keep the words visible exactly as given.
-6. In story_with_blanks, replace the words in the order they appear with [[BLANK_1]] ... [[BLANK_5]].
-7. Do not add any extra keys, commentary, or Markdown.`;
+function makeRaw(contentWithMarkup: string): string {
+  return contentWithMarkup.replace(/\*\*([\s\S]+?)\*\*/g, '$1');
+}
 
-export async function generateStory(options: StoryGenerationOptions): Promise<GeneratedStory> {
-  if (options.words.length !== 5) {
-    throw new Error('Exactly five words are required to generate a story.');
-  }
+function makeStoryWithBlanks(contentWithMarkup: string, words: string[]): string {
+  const targets = words.map(w => w.trim()).filter(Boolean);
 
-  // Prefer backend proxy to avoid exposing client-side keys
-  const base = getApiBaseUrl();
-  const wordsList = options.words.map((word, idx) => `${idx + 1}. ${word}`).join('\n');
-  const levelInstruction =
-    options.level === 'Beginner'
-      ? 'Use CEFR A2-B1 vocabulary with short sentences.'
-      : options.level === 'Intermediate'
-      ? 'Use CEFR B1-B2 vocabulary with varied sentence structures.'
-      : 'Use CEFR C1-C2 vocabulary with rich and varied sentences.';
+  // First, try to blank out the explicitly marked tokens (**word**), in order of appearance
+  let blankIndex = 0;
+  const assigned = new Map<string, number>(); // normalized word -> BLANK_#
 
-  const userPrompt = `Words to use (exact form):\n${wordsList}\n\nLevel: ${options.level}\nInstructions: ${levelInstruction}\nGenre: ${options.genre}\nTone: ${options.tone}\n\n🚫 ABSOLUTE PLACEMENT RULES - VIOLATION WILL CAUSE FAILURE:\n1. The FIRST paragraph and FIRST sentence MUST contain ZERO vocabulary words.\n2. The LAST paragraph and LAST sentence MUST contain ZERO vocabulary words.\n3. ALL vocabulary words MUST appear ONLY in the middle paragraphs.\n4. Each vocabulary word MUST be separated by at least 3-4 sentences of regular narrative.\n5. NO clustering of vocabulary words - spread them evenly across the middle section.\n\nWrite a cohesive story of roughly two hundred words. Use each word naturally in the MIDDLE sections only. After writing the story, replace each vocabulary word with [[BLANK_1]] ... [[BLANK_5]] in the order they appeared. Ensure the surrounding context gives strong hints for the missing word. Avoid using numerals.`;
-
-  // If proxy base URL is available, go through server
-  if (base) {
-    const resp = await fetch(`${base.replace(/\/$/, '')}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: MODEL,
-        temperature: 0.8,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-      }),
-    });
-
-    const data = await resp.json();
-    if (!resp.ok) {
-      throw new Error(`Story generation failed: ${resp.status} ${JSON.stringify(data)}`);
+  const replaced = contentWithMarkup.replace(/\*\*([\s\S]+?)\*\*/g, (full, inner) => {
+    const norm = String(inner).trim().toLowerCase();
+    const matched = targets.find(w => w.toLowerCase() === norm);
+    if (!matched) {
+      // Not a target word (unexpected). Remove bold.
+      return inner;
     }
-
-    const content: string | undefined = data?.content;
-    if (!content) {
-      throw new Error('Story generation returned an empty response from proxy.');
+    if (!assigned.has(norm)) {
+      blankIndex += 1;
+      assigned.set(norm, blankIndex);
     }
-
-    let parsed: { raw_story: string; story_with_blanks: string } | null = null;
-    try {
-      parsed = JSON.parse(content);
-    } catch (err) {
-      const match = content.match(/\{[\s\S]*\}/);
-      if (match) {
-        parsed = JSON.parse(match[0]);
-      }
-    }
-
-    if (!parsed?.raw_story || !parsed?.story_with_blanks) {
-      throw new Error('Story generation returned unexpected content.');
-    }
-
-    return {
-      storyWithBlanks: parsed.story_with_blanks.trim(),
-      rawStory: parsed.raw_story.trim(),
-    };
-  }
-
-  // Fallback: direct OpenAI call requiring client key
-  const apiKey = getApiKey();
-  const response = await fetch(OPENAI_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      temperature: 0.8,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
-    }),
+    const idx = assigned.get(norm)!;
+    return `[[BLANK_${idx}]]`;
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Story generation failed: ${response.status} ${errorText}`);
-  }
-
-  const data = await response.json();
-  const content: string | undefined = data?.choices?.[0]?.message?.content;
-  if (!content) {
-    throw new Error('Story generation returned an unexpected response.');
-  }
-
-  let parsed: { raw_story: string; story_with_blanks: string } | null = null;
-
-  try {
-    parsed = JSON.parse(content);
-  } catch (err) {
-    const match = content.match(/\{[\s\S]*\}/);
-    if (match) {
-      parsed = JSON.parse(match[0]);
+  // If no blanks were created (model forgot to bold), fall back to replacing plain words sequentially
+  if (blankIndex === 0) {
+    let out = contentWithMarkup;
+    for (let i = 0; i < targets.length; i++) {
+      const w = targets[i];
+      const re = new RegExp(`\\b${escapeRegExp(w)}\\b`, 'i');
+      out = out.replace(re, () => `[[BLANK_${i + 1}]]`);
     }
+    return out.replace(/\*\*([\s\S]+?)\*\*/g, '$1'); // strip any leftover bold
   }
 
-  if (!parsed?.raw_story || !parsed?.story_with_blanks) {
-    throw new Error('Story generation returned unexpected content.');
+  // Clean any leftover unmatched bold markup
+  return replaced.replace(/\*\*/g, '');
+}
+
+export async function generateStory(options: StoryGenerationOptions): Promise<GeneratedStory> {
+  const words = options.words.slice(0, 5).map(w => w.trim()).filter(Boolean);
+  if (words.length !== 5) {
+    throw new Error('Please provide exactly five words.');
   }
 
-  return {
-    storyWithBlanks: parsed.story_with_blanks.trim(),
-    rawStory: parsed.raw_story.trim(),
-  };
+  // Map level to AI difficulty; keep a medium length for readability
+  const difficulty =
+    options.level === 'Beginner' ? 'easy' : options.level === 'Intermediate' ? 'medium' : 'hard';
+  const length: 'short' | 'medium' | 'long' = 'medium';
+
+  const story = await aiService.generateStory(
+    words.map((w, idx) => ({ id: String(idx + 1), word: w, definition: '', example: '' })),
+    {
+      genre: (options.genre?.toLowerCase?.() as any) || 'adventure',
+      difficulty: difficulty as any,
+      length,
+      tone: (options.tone?.toLowerCase?.() as any) || 'casual',
+    }
+  );
+
+  const rawStory = makeRaw(story.content || '');
+  const storyWithBlanks = makeStoryWithBlanks(story.content || '', words);
+
+  return { rawStory, storyWithBlanks };
 }
 
 export default {

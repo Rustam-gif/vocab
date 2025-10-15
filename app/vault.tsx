@@ -11,7 +11,7 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Plus, Search, BookOpen, Trash2 } from 'lucide-react-native';
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
@@ -20,6 +20,7 @@ import { aiService } from '../services/AIService';
 
 export default function VaultScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ add?: string }>();
   const { words, loading, loadWords, addWord, searchWords, getFolders, createFolder, moveWordToFolder, deleteFolder } = useAppStore();
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
@@ -40,6 +41,18 @@ export default function VaultScreen() {
       setFolders(getFolders());
     })();
   }, []);
+
+  // Auto-open Add Word modal when navigated with ?add=1
+  useEffect(() => {
+    if (params?.add === '1' && !isAddModalOpen) {
+      setIsAddModalOpen(true);
+      if (!selectedModalFolderId) {
+        const guess = folders.find(f => f.title.toLowerCase().includes('my saved'))?.id || folders[0]?.id || null;
+        setSelectedModalFolderId(guess);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params?.add]);
 
   const handleAddWord = async () => {
     if (!newWord.trim()) return;
@@ -186,7 +199,7 @@ export default function VaultScreen() {
       {isAddModalOpen && (
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, isLight && styles.surfaceCard]}>
-            <Text style={styles.modalTitle}>Add New Word</Text>
+            <Text style={[styles.modalTitle, isLight && { color: '#111827' }]}>Add New Word</Text>
             <TextInput
               style={[styles.modalInput, isLight && { backgroundColor: '#FFFFFF', color: '#111827' }]}
               placeholder="Enter a word..."
@@ -196,28 +209,28 @@ export default function VaultScreen() {
               autoFocus
             />
             <View style={{ marginBottom: 16 }}>
-              <Text style={styles.modalSectionLabel}>Save to</Text>
+              <Text style={[styles.modalSectionLabel, isLight && { color: '#6B7280' }]}>Save to</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
                 {folders.map(f => (
                   <TouchableOpacity
                     key={f.id}
-                    style={[styles.folderChip, selectedModalFolderId === f.id && styles.folderChipActive]}
+                    style={[styles.folderChip, isLight && styles.folderChipLight, selectedModalFolderId === f.id && styles.folderChipActive]}
                     onPress={() => setSelectedModalFolderId(f.id)}
                   >
-                    <Text style={styles.folderChipText}>{f.title}</Text>
+                    <Text style={[styles.folderChipText, isLight && styles.folderChipTextLight]}>{f.title}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             </View>
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+                style={[styles.modalButton, styles.cancelButton, isLight && styles.cancelButtonLight]}
                 onPress={() => {
                   setIsAddModalOpen(false);
                   setNewWord('');
                 }}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={[styles.cancelButtonText, isLight && styles.cancelButtonTextLight]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.addButton]}
@@ -239,7 +252,7 @@ export default function VaultScreen() {
       {showFolderCreate && (
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, isLight && styles.surfaceCard]}>
-            <Text style={styles.modalTitle}>Create Folder</Text>
+            <Text style={[styles.modalTitle, isLight && { color: '#111827' }]}>Create Folder</Text>
             <TextInput
               style={[styles.modalInput, isLight && { backgroundColor: '#FFFFFF', color: '#111827' }]}
               placeholder="Folder title"
@@ -430,6 +443,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginRight: 8,
   },
+  folderChipLight: {
+    backgroundColor: '#E9E6E0',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#D7D3CB',
+  },
   folderChipStatic: {
     backgroundColor: '#2c2f2f',
     paddingHorizontal: 12,
@@ -445,6 +463,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  folderChipTextLight: {
+    color: '#111827',
   },
   practiceInfo: {
     flex: 1,
@@ -514,10 +535,16 @@ const styles = StyleSheet.create({
   cancelButton: {
     backgroundColor: '#444',
   },
+  cancelButtonLight: {
+    backgroundColor: '#E9E6E0',
+  },
   cancelButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  cancelButtonTextLight: {
+    color: '#374151',
   },
   addButton: {
     backgroundColor: '#e28743',

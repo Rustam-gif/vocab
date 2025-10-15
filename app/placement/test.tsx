@@ -4,11 +4,14 @@ import { useRouter } from 'expo-router';
 import { buildBank, pickNextItem, startSession, updateAbility, recommendedLevelFromAbility, PlacementItem, Band } from '../../services/PlacementService';
 import { analyticsService } from '../../services/AnalyticsService';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAppStore } from '../../lib/store';
 
 const TOTAL = 30;
 
 export default function PlacementTest() {
   const router = useRouter();
+  const themeName = useAppStore(s => s.theme);
+  const isLight = themeName === 'light';
   const bank = useMemo(() => buildBank(), []);
   const sessionRef = useRef(startSession());
   const targetBandForIndex = (idx: number): Band => {
@@ -94,39 +97,39 @@ export default function PlacementTest() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <Text style={styles.headerTitle}>Placement Test</Text>
+          <Text style={[styles.headerTitle, isLight && styles.headerTitleLight]}>Placement Test</Text>
           <View style={styles.headerRight}>
-            <View style={styles.counterPill}><Text style={styles.counterText}>{index + 1}/{TOTAL}</Text></View>
+            <View style={[styles.counterPill, isLight && styles.counterPillLight]}><Text style={[styles.counterText, isLight && styles.counterTextLight]}>{index + 1}/{TOTAL}</Text></View>
             <View style={[styles.bandPill, bandColors(targetBandForIndex(index)).pill]}> 
               <Text style={[styles.bandText, bandColors(targetBandForIndex(index)).text]}>{targetBandForIndex(index)}</Text>
             </View>
           </View>
         </View>
-        <View style={styles.progressBar}>
+        <View style={[styles.progressBar, isLight && styles.progressBarLight]}>
           <Animated.View style={[styles.progressFill, { width: progressAnim.interpolate({ inputRange: [0,1], outputRange: ['0%', '100%'] }) }]} />
         </View>
       </View>
-      <View style={styles.questionCard}>
-        <Text style={styles.word}>{current.word}</Text>
-        <Text style={styles.prompt}>{current.prompt}</Text>
+      <View style={[styles.questionCard, isLight && styles.questionCardLight]}>
+        <Text style={[styles.word, isLight && styles.wordLight]}>{current.word}</Text>
+        <Text style={[styles.prompt, isLight && styles.promptLight]}>{current.prompt}</Text>
         {current.meta?.example ? (
-          <Text style={styles.example}>Example: {current.meta.example}</Text>
+          <Text style={[styles.example, isLight && styles.exampleLight]}>Example: {current.meta.example}</Text>
         ) : null}
         <View style={styles.options}>
           {allOptions.map((opt, i) => (
             <TouchableOpacity
               key={`${current.id}-${i}`}
-              style={[styles.option, selected === i && styles.optionSelected]}
+              style={[styles.option, isLight && styles.optionLight, selected === i && styles.optionSelected]}
               onPress={() => setSelected(i)}
               disabled={locked}
               activeOpacity={0.8}
             >
               <View style={styles.optionInnerRow}>
-                <View style={[styles.radio, selected === i && styles.radioActive]} />
-                <Text style={styles.optionText}>{opt}</Text>
+                <View style={[styles.radio, isLight && styles.radioLight, selected === i && styles.radioActive]} />
+                <Text style={[styles.optionText, isLight && styles.optionTextLight]}>{opt}</Text>
               </View>
             </TouchableOpacity>
           ))}
@@ -150,29 +153,41 @@ export default function PlacementTest() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#121415' },
+  containerLight: { backgroundColor: '#F2E3D0' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   text: { color: '#fff' },
   header: { padding: 16 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   headerTitle: { color: '#E5E7EB', fontSize: 16, fontWeight: '800' },
+  headerTitleLight: { color: '#111827' },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   counterPill: { backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.15)' },
+  counterPillLight: { backgroundColor: '#E9E6E0', borderColor: '#D7D3CB' },
   counterText: { color: '#E5E7EB', fontSize: 12, fontWeight: '700' },
+  counterTextLight: { color: '#374151' },
   headerText: { color: '#9CA3AF', fontWeight: '700' },
   streakWarn: { color: '#F2AB27', fontWeight: '700', marginTop: 4 },
   progressBar: { height: 8, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 6, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.12)' },
+  progressBarLight: { backgroundColor: '#E9E6E0', borderColor: '#D7D3CB' },
   progressFill: { height: '100%', backgroundColor: '#187486', borderRadius: 6 },
   questionCard: { backgroundColor: 'rgba(44,47,47,0.9)', marginHorizontal: 16, borderRadius: 18, padding: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: '#3d474b', shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 12 }, elevation: 8, marginTop: 8 },
+  questionCardLight: { backgroundColor: '#F9F1E7', borderColor: '#E5E7EB', shadowOpacity: 0.15 },
   word: { color: '#fff', fontSize: 26, fontWeight: '900' },
+  wordLight: { color: '#111827' },
   prompt: { color: '#9CA3AF', marginTop: 8, marginBottom: 12, fontSize: 14 },
+  promptLight: { color: '#4B5563' },
   example: { color: '#9CA3AF', fontStyle: 'italic', marginBottom: 12 },
+  exampleLight: { color: '#6B7280' },
   options: { gap: 10 },
   option: { backgroundColor: 'rgba(62,70,74,0.88)', borderWidth: StyleSheet.hairlineWidth, borderColor: '#4b555a', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14 },
+  optionLight: { backgroundColor: '#F3F4F6', borderColor: '#E5E7EB' },
   optionSelected: { borderColor: '#F2935C' },
   optionInnerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' },
   radio: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#6B7280', marginTop: 3 },
+  radioLight: { borderColor: '#9CA3AF' },
   radioActive: { borderColor: '#F2935C', backgroundColor: '#F2935C' },
   optionText: { color: '#E5E7EB', fontSize: 15, fontWeight: '600', flex: 1, flexShrink: 1, lineHeight: 20 },
+  optionTextLight: { color: '#111827' },
   footer: { flexDirection: 'row', gap: 10, padding: 16 },
   btn: { flex: 1, borderRadius: 12, paddingVertical: 0, alignItems: 'center', overflow: 'hidden' },
   nextGradient: { width: '100%', borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, minHeight: 44 },

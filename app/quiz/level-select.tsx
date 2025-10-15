@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Check } from 'lucide-react-native';
+import { ArrowLeft, Check, CheckCircle } from 'lucide-react-native';
 import { levels, Level } from './data/levels';
 import { useAppStore } from '../../lib/store';
 import { getTheme } from '../../lib/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
+const HIGHEST_LEVEL_KEY = '@engniter.highestLevel';
 
 export default function LevelSelectScreen() {
   const router = useRouter();
   const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
+  const [highestLevel, setHighestLevel] = useState<string | null>(null);
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
@@ -22,6 +24,10 @@ export default function LevelSelectScreen() {
       if (!mounted) return;
       if (stored) setSelectedLevel(stored);
       else if (levels.length > 0) setSelectedLevel(levels[0].id);
+    });
+    AsyncStorage.getItem(HIGHEST_LEVEL_KEY).then(v => {
+      if (!mounted) return;
+      if (v) setHighestLevel(v);
     });
     return () => {
       mounted = false;
@@ -61,6 +67,25 @@ export default function LevelSelectScreen() {
 
   const accent = '#F2935C';
 
+  // Desired ordering for core CEFR levels
+  const coreOrder = [
+    'beginner',
+    'intermediate',
+    'upper-intermediate',
+    'advanced',
+    'advanced-plus',
+    'proficient',
+  ];
+  const coreSet = new Set(coreOrder);
+  const weight = (id: string) => {
+    const idx = coreOrder.indexOf(id);
+    if (idx >= 0) return idx;
+    // Specialized and other levels go after core, sorted by name
+    return 100 + id.charCodeAt(0);
+  };
+  const sortedLevels = [...levels].sort((a, b) => weight(a.id) - weight(b.id));
+  const firstSpecialIndex = sortedLevels.findIndex(l => !coreSet.has(l.id));
+
   const getLevelIcon = (id: string) => {
     switch (id) {
       case 'beginner':
@@ -84,6 +109,14 @@ export default function LevelSelectScreen() {
 
   const renderLevelItem = ({ item }: { item: Level }) => {
     const isSelected = selectedLevel === item.id;
+    const coreOrder = ['beginner', 'intermediate', 'upper-intermediate', 'advanced', 'advanced-plus', 'proficient'];
+    const weight = (id: string) => {
+      const i = coreOrder.indexOf(id);
+      return i >= 0 ? i : 999;
+    };
+    const isCore = coreOrder.includes(item.id);
+    const isCompleted = isCore && highestLevel != null && weight(item.id) <= weight(highestLevel);
+    const isCurrent = isCore && highestLevel === item.id;
     
     return (
       <TouchableOpacity
@@ -92,6 +125,8 @@ export default function LevelSelectScreen() {
           isLight && styles.levelCardLight,
           isSelected && (isLight ? styles.selectedCardLight : styles.selectedCard),
           isSelected && { borderColor: accent },
+          isCompleted && styles.completedCard,
+          isCompleted && isLight && styles.completedCardLight,
         ]}
         onPress={() => handleLevelSelect(item.id)}
       >
@@ -104,7 +139,15 @@ export default function LevelSelectScreen() {
               <Text style={[styles.levelCefr, { color: accent }]}>CEFR {item.cefr}</Text>
             </View>
           </View>
-          {isSelected && <Check size={20} color={accent} />}
+          <View style={styles.badgeArea}>
+            {isCompleted && (
+              <View style={[styles.completedBadge, isLight && styles.completedBadgeLight]}>
+                <CheckCircle size={14} color={isLight ? '#10B981' : '#10B981'} />
+                <Text style={[styles.completedText, isLight && styles.completedTextLight]}>{isCurrent ? 'Current' : 'Completed'}</Text>
+              </View>
+            )}
+            {isSelected && <Check size={20} color={accent} />}
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -128,8 +171,18 @@ export default function LevelSelectScreen() {
 
       {/* Levels List */}
       <FlatList
-        data={levels}
-        renderItem={renderLevelItem}
+        data={sortedLevels}
+        renderItem={({ item, index }) => (
+          <>
+            {index === 0 && (
+              <Text style={[styles.sectionLabel, isLight && { color: '#6B7280' }]}>Core Levels</Text>
+            )}
+            {index === firstSpecialIndex && (
+              <Text style={[styles.sectionLabel, isLight && { color: '#6B7280' }]}>Specialized</Text>
+            )}
+            {renderLevelItem({ item })}
+          </>
+        )}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
@@ -179,6 +232,16 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 100,
   },
+  sectionLabel: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+    marginTop: 4,
+    marginLeft: 4,
+    fontFamily: 'Ubuntu_700Bold',
+  },
   levelCard: {
     backgroundColor: '#2A2A2A',
     borderRadius: 16,
@@ -204,11 +267,14 @@ const styles = StyleSheet.create({
     borderColor: '#F2935C',
     borderWidth: 2,
   },
+  completedCard: { borderWidth: 2, borderColor: '#10B981' },
+  completedCardLight: { borderWidth: 2, borderColor: '#10B981' },
   levelHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  badgeArea: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   levelInfo: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -241,6 +307,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontFamily: 'Ubuntu_500Medium',
   },
+  completedBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(16,185,129,0.12)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
+  completedBadgeLight: { backgroundColor: 'rgba(16,185,129,0.15)' },
+  completedText: { color: '#A7F3D0', fontWeight: '800', fontSize: 12 },
+  completedTextLight: { color: '#065F46' },
   checkContainer: {
     width: 32,
     height: 32,
