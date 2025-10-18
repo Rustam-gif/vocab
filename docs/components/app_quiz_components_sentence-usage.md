@@ -8,6 +8,7 @@ File: app/quiz/components/sentence-usage.tsx
 - sharedScore
 - onScoreShare
 - wordRange
+- wordsOverride
 
 ## Notes
 - (none)

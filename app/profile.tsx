@@ -67,6 +67,9 @@ export default function ProfileScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user, setUser, userProgress, loadProgress } = useAppStore();
+  const themeName = useAppStore(s => s.theme);
+  const isLight = themeName === 'light';
+  const toggleTheme = useAppStore(s => s.toggleTheme);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [showEmailAuth, setShowEmailAuth] = useState(false);
   const [email, setEmail] = useState('');
@@ -244,20 +247,20 @@ export default function ProfileScreen() {
 
   if (!user) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
+      <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
+        <View style={[styles.header, isLight && styles.headerLight]}>
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <ArrowLeft size={24} color="#fff" />
+            <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
           </TouchableOpacity>
-          <Text style={styles.title}>Profile</Text>
+          <Text style={[styles.title, isLight && styles.titleLight]}>Profile</Text>
           <View style={styles.placeholder} />
         </View>
 
         <View style={styles.signInContainer}>
-          <ScrollView contentContainerStyle={styles.signInContent}>
-            <UserIcon size={64} color="#a0a0a0" />
-            <Text style={styles.signInTitle}>Welcome to Engniter</Text>
-            <Text style={styles.signInSubtitle}>
+          <ScrollView contentContainerStyle={[styles.signInContent, isLight && styles.signInContentLight]}>
+            <UserIcon size={64} color={isLight ? '#6B7280' : '#a0a0a0'} />
+            <Text style={[styles.signInTitle, isLight && styles.signInTitleLight]}>Welcome to Vocadoo</Text>
+            <Text style={[styles.signInSubtitle, isLight && styles.signInSubtitleLight]}>
               {showEmailAuth ? (isSignUp ? 'Create an account' : 'Sign in to your account') : 'Sign in to sync your progress across devices'}
             </Text>
 
@@ -292,12 +295,12 @@ export default function ProfileScreen() {
                       </View>
                     </View>
 
-                    <View style={styles.inputContainer}>
+                    <View style={[styles.inputContainer, isLight && styles.inputContainerLight]}>
                       <UserIcon size={20} color="#a0a0a0" style={styles.inputIcon} />
                       <TextInput
-                        style={styles.input}
+                        style={[styles.input, isLight && styles.inputLight]}
                         placeholder="Full Name"
-                        placeholderTextColor="#666"
+                        placeholderTextColor={isLight ? '#9CA3AF' : '#666'}
                         value={fullName}
                         onChangeText={setFullName}
                         autoCapitalize="words"
@@ -307,12 +310,12 @@ export default function ProfileScreen() {
                   </>
                 )}
 
-                <View style={styles.inputContainer}>
+                <View style={[styles.inputContainer, isLight && styles.inputContainerLight]}>
                   <Mail size={20} color="#a0a0a0" style={styles.inputIcon} />
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, isLight && styles.inputLight]}
                     placeholder="Email"
-                    placeholderTextColor="#666"
+                    placeholderTextColor={isLight ? '#9CA3AF' : '#666'}
                     value={email}
                     onChangeText={setEmail}
                     keyboardType="email-address"
@@ -321,12 +324,12 @@ export default function ProfileScreen() {
                   />
                 </View>
 
-                <View style={styles.inputContainer}>
+                <View style={[styles.inputContainer, isLight && styles.inputContainerLight]}>
                   <Text style={styles.inputIcon}>🔒</Text>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, isLight && styles.inputLight]}
                     placeholder="Password"
-                    placeholderTextColor="#666"
+                    placeholderTextColor={isLight ? '#9CA3AF' : '#666'}
                     value={password}
                     onChangeText={setPassword}
                     secureTextEntry
@@ -335,12 +338,12 @@ export default function ProfileScreen() {
                 </View>
 
                 {isSignUp && (
-                  <View style={styles.inputContainer}>
+                  <View style={[styles.inputContainer, isLight && styles.inputContainerLight]}>
                     <Text style={styles.inputIcon}>🔒</Text>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, isLight && styles.inputLight]}
                       placeholder="Confirm Password"
-                      placeholderTextColor="#666"
+                      placeholderTextColor={isLight ? '#9CA3AF' : '#666'}
                       value={confirmPassword}
                       onChangeText={setConfirmPassword}
                       secureTextEntry
@@ -417,19 +420,19 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
+      <View style={[styles.header, isLight && styles.headerLight]}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowLeft size={24} color="#fff" />
+          <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
         </TouchableOpacity>
-        <Text style={styles.title}>Profile</Text>
+        <Text style={[styles.title, isLight && styles.titleLight]}>Profile</Text>
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
           <LogOut size={20} color="#a0a0a0" />
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.profileCard}>
+        <View style={[styles.profileCard, isLight && styles.profileCardLight]}>
           <View style={styles.avatarContainer}>
             <Image source={getAvatarSource()} style={styles.avatar} />
             <View style={styles.levelBadge}>
@@ -437,55 +440,72 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <Text style={styles.userName}>{user.name}</Text>
+          <Text style={[styles.userName, isLight && styles.userNameLight]}>{user.name}</Text>
 
           <View style={styles.xpContainer}>
-            <Text style={styles.xpLabel}>XP Progress</Text>
-            <View style={styles.xpBar}>
+            <Text style={[styles.xpLabel, isLight && styles.xpLabelLight]}>XP Progress</Text>
+            <View style={[styles.xpBar, isLight && styles.xpBarLight]}>
               <View style={[styles.xpProgress, { width: `${getXPProgress(safeXp)}%` }]} />
             </View>
-            <Text style={styles.xpText}>
+            <Text style={[styles.xpText, isLight && styles.xpTextLight]}>
               {safeXp} XP • Level {getLevel(safeXp)}
             </Text>
           </View>
         </View>
 
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <Star size={24} color="#F2AB27" />
-            </View>
-            <Text style={styles.statValue}>{safeXp}</Text>
-            <Text style={styles.statLabel}>Total XP</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <Award size={24} color="#4F8EF7" />
-            </View>
-            <Text style={styles.statValue}>{safeExercises}</Text>
-            <Text style={styles.statLabel}>Exercises</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <Calendar size={24} color="#6CC24A" />
-            </View>
-            <Text style={styles.statValue}>{safeStreak}</Text>
-            <Text style={styles.statLabel}>Day Streak</Text>
+        {/* Appearance */}
+        <View style={[styles.infoCard, isLight && styles.infoCardLight]}>
+          <View style={styles.infoRow}>
+            <Text style={[styles.infoLabel, isLight && styles.infoLabelLight]}>Theme</Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Toggle theme"
+              onPress={toggleTheme}
+              activeOpacity={0.85}
+              style={[styles.themeToggle, themeName === 'light' && styles.themeToggleActive, isLight && styles.themeToggleLight]}
+            >
+              <View style={[styles.themeThumb, themeName === 'light' && styles.themeThumbOn]} />
+              <Text style={[styles.themeToggleText, isLight && styles.themeToggleTextLight]}>{themeName === 'light' ? 'Light' : 'Dark'}</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.infoCard}>
+        <View style={styles.statsContainer}>
+          <View style={[styles.statCard, isLight && styles.statCardLight]}>
+            <View style={[styles.statIcon, isLight && styles.statIconLight]}>
+              <Star size={24} color="#F2AB27" />
+            </View>
+            <Text style={[styles.statValue, isLight && styles.statValueLight]}>{safeXp}</Text>
+            <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>Total XP</Text>
+          </View>
+
+          <View style={[styles.statCard, isLight && styles.statCardLight]}>
+            <View style={[styles.statIcon, isLight && styles.statIconLight]}>
+              <Award size={24} color="#4F8EF7" />
+            </View>
+            <Text style={[styles.statValue, isLight && styles.statValueLight]}>{safeExercises}</Text>
+            <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>Exercises</Text>
+          </View>
+
+          <View style={[styles.statCard, isLight && styles.statCardLight]}>
+            <View style={[styles.statIcon, isLight && styles.statIconLight]}>
+              <Calendar size={24} color="#6CC24A" />
+            </View>
+            <Text style={[styles.statValue, isLight && styles.statValueLight]}>{safeStreak}</Text>
+            <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>Day Streak</Text>
+          </View>
+        </View>
+
+        <View style={[styles.infoCard, isLight && styles.infoCardLight]}>
           <View style={styles.infoRow}>
             <Mail size={18} color="#8a8a8a" />
-            <Text style={styles.infoLabel}>Email</Text>
-            <Text style={styles.infoValue}>{user.email ?? 'Not provided'}</Text>
+            <Text style={[styles.infoLabel, isLight && styles.infoLabelLight]}>Email</Text>
+            <Text style={[styles.infoValue, isLight && styles.infoValueLight]}>{user.email ?? 'Not provided'}</Text>
           </View>
           <View style={styles.infoRow}>
             <Calendar size={18} color="#8a8a8a" />
-            <Text style={styles.infoLabel}>Joined</Text>
-            <Text style={styles.infoValue}>{formatDate(user.createdAt)}</Text>
+            <Text style={[styles.infoLabel, isLight && styles.infoLabelLight]}>Joined</Text>
+            <Text style={[styles.infoValue, isLight && styles.infoValueLight]}>{formatDate(user.createdAt)}</Text>
           </View>
         </View>
       </ScrollView>
@@ -495,6 +515,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#121315' },
+  containerLight: { flex: 1, backgroundColor: '#F2E3D0' },
   header: {
     paddingHorizontal: 20,
     paddingTop: 16,
@@ -503,7 +524,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  headerLight: {},
   title: { color: '#fff', fontSize: 20, fontWeight: '700' },
+  titleLight: { color: '#111827' },
   backButton: {
     width: 44,
     height: 44,
@@ -529,6 +552,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
+  profileCardLight: { backgroundColor: '#F9F1E7' },
   avatarContainer: {
     width: 110,
     height: 110,
@@ -553,17 +577,21 @@ const styles = StyleSheet.create({
   },
   levelText: { color: '#121315', fontWeight: '700', fontSize: 12 },
   userName: { color: '#fff', fontSize: 22, fontWeight: '700' },
+  userNameLight: { color: '#111827' },
   userEmail: { color: '#9CA3AF', marginTop: 4 },
   xpContainer: { marginTop: 20, width: '100%' },
   xpLabel: { color: '#9CA3AF', fontSize: 12, marginBottom: 6 },
+  xpLabelLight: { color: '#6B7280' },
   xpBar: {
     height: 10,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 6,
     overflow: 'hidden',
   },
+  xpBarLight: { backgroundColor: '#E9E6E0' },
   xpProgress: { height: '100%', backgroundColor: '#4F8EF7' },
   xpText: { color: '#9CA3AF', marginTop: 6, fontSize: 12 },
+  xpTextLight: { color: '#374151' },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -578,6 +606,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  statCardLight: { backgroundColor: '#F9F1E7' },
   statIcon: {
     width: 48,
     height: 48,
@@ -587,22 +616,59 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  statIconLight: { backgroundColor: '#E9E6E0' },
   statContent: { flex: 1 },
   statValue: { color: '#fff', fontWeight: '700', fontSize: 18, textAlign: 'center', marginTop: 4 },
+  statValueLight: { color: '#111827' },
   statLabel: { color: '#9CA3AF', fontSize: 11, marginTop: 4, textAlign: 'center' },
+  statLabelLight: { color: '#6B7280' },
   infoCard: {
     backgroundColor: 'rgba(255,255,255,0.04)',
     borderRadius: 18,
     padding: 16,
     marginBottom: 40,
   },
+  infoCardLight: { backgroundColor: '#F9F1E7' },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
   },
   infoLabel: { color: '#9CA3AF', marginLeft: 10, fontSize: 12, width: 60 },
+  infoLabelLight: { color: '#6B7280' },
   infoValue: { color: '#fff', flex: 1, textAlign: 'right' },
+  infoValueLight: { color: '#111827' },
+  themeToggle: {
+    marginLeft: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)'
+  },
+  themeToggleLight: {
+    backgroundColor: '#E9E6E0',
+    borderColor: '#D7D3CB',
+  },
+  themeToggleActive: {
+    backgroundColor: 'rgba(242,147,92,0.18)',
+    borderColor: 'rgba(242,147,92,0.45)'
+  },
+  themeThumb: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#9CA3AF',
+  },
+  themeThumbOn: {
+    backgroundColor: '#F2935C',
+  },
+  themeToggleText: { color: '#E5E7EB', fontWeight: '700', fontSize: 12 },
+  themeToggleTextLight: { color: '#374151' },
   signInContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -617,8 +683,11 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
     borderRadius: 20,
   },
+  signInContentLight: { backgroundColor: '#F9F1E7' },
   signInTitle: { color: '#fff', fontSize: 20, fontWeight: '700', marginTop: 16 },
+  signInTitleLight: { color: '#111827' },
   signInSubtitle: { color: '#9CA3AF', textAlign: 'center', marginTop: 8 },
+  signInSubtitleLight: { color: '#4B5563' },
   signInButtons: { width: '100%', marginTop: 20 },
   signInButton: {
     backgroundColor: '#e28743',
@@ -643,6 +712,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingHorizontal: 12,
   },
+  inputContainerLight: { backgroundColor: '#E9E6E0' },
   inputIcon: { marginRight: 8 },
   input: {
     flex: 1,
@@ -650,6 +720,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 16,
   },
+  inputLight: { color: '#111827' },
   switchAuthText: {
     color: '#e28743',
     textAlign: 'center',

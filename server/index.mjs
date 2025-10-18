@@ -45,7 +45,7 @@ app.post('/api/chat', async (req, res) => {
 
     try {
       const completion = await client.chat.completions.create({
-        model: body.model || 'gpt-4o-mini',
+        model: body.model || 'gpt-4o',
         messages: body.messages,
         temperature: body.temperature ?? 0.8,
         top_p: body.top_p ?? 0.95,

@@ -8,6 +8,7 @@ File: app/quiz/components/mcq.tsx
 - sharedScore
 - onScoreShare
 - wordRange
+- wordsOverride
 
 ## Notes
 - (none)

@@ -8,7 +8,11 @@ import {
   Dimensions,
 } from 'react-native';
 import { Volume2 } from 'lucide-react-native';
-import * as Speech from 'expo-speech';
+let Speech: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  Speech = require('expo-speech');
+} catch {}
 import LottieView from 'lottie-react-native';
 import { levels } from '../data/levels';
 import { useAppStore } from '../../../lib/store';
@@ -199,12 +203,12 @@ export default function WordIntro({
           onPress={() => {
             try {
               if (speakingFor) {
-                Speech.stop();
+                Speech?.stop?.();
                 setSpeakingFor(null);
               }
               const toSpeak = item.word;
               setSpeakingFor(toSpeak);
-              Speech.speak(toSpeak, {
+              Speech?.speak?.(toSpeak, {
                 language: 'en-US',
                 rate: 1.0,
                 pitch: 1.0,

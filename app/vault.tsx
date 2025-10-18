@@ -11,15 +11,20 @@ import {
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Plus, Search, BookOpen, Trash2 } from 'lucide-react-native';
 import { useAppStore } from '../lib/store';
+import { getTheme } from '../lib/theme';
 import { Word } from '../types';
 import { aiService } from '../services/AIService';
 
 export default function VaultScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ add?: string }>();
   const { words, loading, loadWords, addWord, searchWords, getFolders, createFolder, moveWordToFolder, deleteFolder } = useAppStore();
+  const themeName = useAppStore(s => s.theme);
+  const colors = getTheme(themeName);
+  const isLight = themeName === 'light';
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
@@ -36,6 +41,18 @@ export default function VaultScreen() {
       setFolders(getFolders());
     })();
   }, []);
+
+  // Auto-open Add Word modal when navigated with ?add=1
+  useEffect(() => {
+    if (params?.add === '1' && !isAddModalOpen) {
+      setIsAddModalOpen(true);
+      if (!selectedModalFolderId) {
+        const guess = folders.find(f => f.title.toLowerCase().includes('my saved'))?.id || folders[0]?.id || null;
+        setSelectedModalFolderId(guess);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params?.add]);
 
   const handleAddWord = async () => {
     if (!newWord.trim()) return;
@@ -86,25 +103,25 @@ export default function VaultScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#e28743" />
-          <Text style={styles.loadingText}>Loading your vocabulary...</Text>
+          <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={[styles.loadingText, isLight && { color: '#4B5563' }]}>Loading your vocabulary...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
+      <View style={[styles.header, isLight && styles.headerLight]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <ArrowLeft size={24} color="#fff" />
+          <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
         </TouchableOpacity>
-        <Text style={styles.title}>Vocabulary Vault</Text>
+        <Text style={[styles.title, isLight && styles.titleLight]}>Vocabulary Vault</Text>
         <TouchableOpacity
           style={styles.addButtonIcon}
           onPress={() => {
@@ -115,16 +132,16 @@ export default function VaultScreen() {
             }
           }}
         >
-          <Plus size={24} color="#fff" />
+          <Plus size={24} color={isLight ? '#111827' : '#fff'} />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.searchContainer}>
-        <Search size={20} color="#a0a0a0" style={styles.searchIcon} />
+      <View style={[styles.searchContainer, isLight && styles.surfaceCard]}>
+        <Search size={20} color={isLight ? '#6B7280' : '#a0a0a0'} style={styles.searchIcon} />
         <TextInput
-          style={styles.searchInput}
+          style={[styles.searchInput, isLight && { color: '#111827' }]}
           placeholder="Search words..."
-          placeholderTextColor="#a0a0a0"
+          placeholderTextColor={isLight ? '#6B7280' : '#a0a0a0'}
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
@@ -133,17 +150,17 @@ export default function VaultScreen() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {foldersToShow.length === 0 ? (
           <View style={styles.emptyState}>
-            <BookOpen size={64} color="#a0a0a0" />
-            <Text style={styles.emptyTitle}>
+            <BookOpen size={64} color={isLight ? '#6B7280' : '#a0a0a0'} />
+            <Text style={[styles.emptyTitle, isLight && { color: '#111827' }]}>
               {searchQuery ? 'No folders found' : 'No folders yet'}
             </Text>
-            <Text style={styles.emptySubtitle}>Create a folder to organize your saved words.</Text>
+            <Text style={[styles.emptySubtitle, isLight && { color: '#4B5563' }]}>Create a folder to organize your saved words.</Text>
           </View>
         ) : (
           <View style={styles.wordsList}>
-            <TouchableOpacity style={styles.newFolderRow} onPress={() => setShowFolderCreate(true)}>
+            <TouchableOpacity style={[styles.newFolderRow, isLight && styles.surfaceCard]} onPress={() => setShowFolderCreate(true)}>
               <Image source={require('../assets/foldericons/add_folder.png')} style={styles.folderIconSmall} />
-              <Text style={styles.newFolderText}>New Folder</Text>
+              <Text style={[styles.newFolderText, isLight && { color: '#111827' }]}>New Folder</Text>
             </TouchableOpacity>
             {foldersToShow.map((f) => {
               const count = words.filter(w => w.folderId === f.id).length;
@@ -151,11 +168,11 @@ export default function VaultScreen() {
               const isDefaultFolder = ['folder-sets-default', 'folder-user-default', 'folder-phrasal-default', 'folder-daily-default'].includes(f.id);
               
               return (
-                <TouchableOpacity key={f.id} style={styles.folderRow} onPress={() => router.push({ pathname: '/vault-folder', params: { id: f.id, title: f.title } })}>
+                <TouchableOpacity key={f.id} style={[styles.folderRow, isLight && styles.surfaceCard]} onPress={() => router.push({ pathname: '/vault-folder', params: { id: f.id, title: f.title } })}>
                   <Image source={require('../assets/foldericons/foldericon.png')} style={styles.folderIcon} />
                   <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={styles.folderTitle}>{f.title}</Text>
-                    <Text style={styles.folderSubtitle}>{count} {count === 1 ? 'word' : 'words'}</Text>
+                    <Text style={[styles.folderTitle, isLight && { color: '#111827' }]}>{f.title}</Text>
+                    <Text style={[styles.folderSubtitle, isLight && { color: '#4B5563' }]}>{count} {count === 1 ? 'word' : 'words'}</Text>
                   </View>
                   {!isDefaultFolder && (
                     <TouchableOpacity
@@ -168,7 +185,7 @@ export default function VaultScreen() {
                       }}
                       style={{ padding: 6 }}
                     >
-                      <Trash2 size={18} color="#a0a0a0" />
+                      <Trash2 size={18} color={isLight ? '#6B7280' : '#a0a0a0'} />
                     </TouchableOpacity>
                   )}
                 </TouchableOpacity>
@@ -181,39 +198,39 @@ export default function VaultScreen() {
       {/* Add Word Modal */}
       {isAddModalOpen && (
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add New Word</Text>
+          <View style={[styles.modalContent, isLight && styles.surfaceCard]}>
+            <Text style={[styles.modalTitle, isLight && { color: '#111827' }]}>Add New Word</Text>
             <TextInput
-              style={styles.modalInput}
+              style={[styles.modalInput, isLight && { backgroundColor: '#FFFFFF', color: '#111827' }]}
               placeholder="Enter a word..."
-              placeholderTextColor="#a0a0a0"
+              placeholderTextColor={isLight ? '#6B7280' : '#a0a0a0'}
               value={newWord}
               onChangeText={setNewWord}
               autoFocus
             />
             <View style={{ marginBottom: 16 }}>
-              <Text style={styles.modalSectionLabel}>Save to</Text>
+              <Text style={[styles.modalSectionLabel, isLight && { color: '#6B7280' }]}>Save to</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
                 {folders.map(f => (
                   <TouchableOpacity
                     key={f.id}
-                    style={[styles.folderChip, selectedModalFolderId === f.id && styles.folderChipActive]}
+                    style={[styles.folderChip, isLight && styles.folderChipLight, selectedModalFolderId === f.id && styles.folderChipActive]}
                     onPress={() => setSelectedModalFolderId(f.id)}
                   >
-                    <Text style={styles.folderChipText}>{f.title}</Text>
+                    <Text style={[styles.folderChipText, isLight && styles.folderChipTextLight]}>{f.title}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             </View>
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+                style={[styles.modalButton, styles.cancelButton, isLight && styles.cancelButtonLight]}
                 onPress={() => {
                   setIsAddModalOpen(false);
                   setNewWord('');
                 }}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={[styles.cancelButtonText, isLight && styles.cancelButtonTextLight]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.addButton]}
@@ -234,12 +251,12 @@ export default function VaultScreen() {
       {/* Create Folder Modal */}
       {showFolderCreate && (
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Create Folder</Text>
+          <View style={[styles.modalContent, isLight && styles.surfaceCard]}>
+            <Text style={[styles.modalTitle, isLight && { color: '#111827' }]}>Create Folder</Text>
             <TextInput
-              style={styles.modalInput}
+              style={[styles.modalInput, isLight && { backgroundColor: '#FFFFFF', color: '#111827' }]}
               placeholder="Folder title"
-              placeholderTextColor="#a0a0a0"
+              placeholderTextColor={isLight ? '#6B7280' : '#a0a0a0'}
               value={newFolderTitle}
               onChangeText={setNewFolderTitle}
               autoFocus
@@ -297,6 +314,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#2c2f2f',
   },
+  headerLight: {
+    borderBottomColor: '#E5E7EB',
+  },
   backButton: {
     padding: 8,
   },
@@ -305,6 +325,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
   },
+  titleLight: { color: '#111827' },
   addButtonIcon: {
     padding: 8,
   },
@@ -316,6 +337,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#2c2f2f',
     borderRadius: 12,
     paddingHorizontal: 16,
+  },
+  surfaceCard: {
+    backgroundColor: '#F9F1E7',
+    borderColor: '#F9F1E7',
   },
   searchIcon: {
     marginRight: 12,
@@ -418,6 +443,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginRight: 8,
   },
+  folderChipLight: {
+    backgroundColor: '#E9E6E0',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#D7D3CB',
+  },
   folderChipStatic: {
     backgroundColor: '#2c2f2f',
     paddingHorizontal: 12,
@@ -433,6 +463,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  folderChipTextLight: {
+    color: '#111827',
   },
   practiceInfo: {
     flex: 1,
@@ -502,10 +535,16 @@ const styles = StyleSheet.create({
   cancelButton: {
     backgroundColor: '#444',
   },
+  cancelButtonLight: {
+    backgroundColor: '#E9E6E0',
+  },
   cancelButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  cancelButtonTextLight: {
+    color: '#374151',
   },
   addButton: {
     backgroundColor: '#e28743',

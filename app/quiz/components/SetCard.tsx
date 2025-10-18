@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CheckCircle, Lock } from 'lucide-react-native';
+import { useAppStore } from '../../../lib/store';
 
 interface SetCardProps {
   set: {
@@ -19,6 +20,8 @@ interface SetCardProps {
 }
 
 export default function SetCard({ set, onPress }: SetCardProps) {
+  const themeName = useAppStore(s => s.theme);
+  const isLight = themeName === 'light';
   const isQuiz = set.type === 'quiz';
   const isCompleted = set.completed;
   const isInProgress = set.inProgress;
@@ -27,8 +30,17 @@ export default function SetCard({ set, onPress }: SetCardProps) {
   const accent = '#F2935C';
   const success = '#437F76';
 
+  const cleanTitle = (title: string) => {
+    const raw = String(title || '').trim();
+    const mCefr = raw.match(/^(A[12]|B[12]|C[12])\s*(?:—|-)\s*(.+)$/i);
+    if (mCefr && mCefr[2]) return mCefr[2].trim();
+    const mSetTopic = raw.match(/^Set\s*\d+\s*(?:—|-|:)\s*(.+)$/i);
+    if (mSetTopic && mSetTopic[1]) return mSetTopic[1].trim();
+    return raw;
+  };
+
   const getIconSource = () => {
-    const t = (set.title || '').toLowerCase();
+    const t = cleanTitle(set.title || '').toLowerCase();
     if (set.type === 'quiz') return require('../../../assets/wordset_icons/quiz.png');
     
     // IELTS topics
@@ -115,7 +127,7 @@ export default function SetCard({ set, onPress }: SetCardProps) {
 
   return (
     <TouchableOpacity 
-      style={[styles.container, isLocked && styles.lockedContainer]} 
+      style={[styles.container, isLocked && styles.lockedContainer, isLight && styles.containerLight]} 
       onPress={onPress}
       disabled={isLocked}
       activeOpacity={isLocked ? 1 : 0.7}
@@ -127,15 +139,15 @@ export default function SetCard({ set, onPress }: SetCardProps) {
           resizeMode="contain" 
         />
         <View style={styles.headerTextArea}>
-          <Text style={[styles.title, isLocked && styles.lockedText]}>{set.title}</Text>
+          <Text style={[styles.title, isLocked && styles.lockedText, isLight && { color: '#111827' }]}>{cleanTitle(set.title)}</Text>
           {!isQuiz && (
-            <Text style={[styles.wordsPreviewInline, isLocked && styles.lockedText]} numberOfLines={1}>
+            <Text style={[styles.wordsPreviewInline, isLocked && styles.lockedText, isLight && { color: '#6B7280' }]} numberOfLines={1}>
               {set.words?.slice(0, 3).map(w => w.word).join(', ')}
               {set.words && set.words.length > 3 && '...'}
             </Text>
           )}
           {isQuiz && !!set.description && (
-            <Text style={[styles.quizPreviewInline, isLocked && styles.lockedText]} numberOfLines={1}>
+            <Text style={[styles.quizPreviewInline, isLocked && styles.lockedText, isLight && { color: '#6B7280' }]} numberOfLines={1}>
               {set.description}
             </Text>
           )}
@@ -194,6 +206,11 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     position: 'relative',
   },
+  containerLight: {
+    backgroundColor: '#F9F1E7',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#F9F1E7',
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -208,6 +225,8 @@ const styles = StyleSheet.create({
   },
   headerTextArea: {
     flex: 1,
+    // Reserve space so text never runs under the absolute action button
+    paddingRight: 120,
   },
   title: {
     fontSize: 16,
@@ -283,6 +302,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     marginTop: 2,
+    // Extra safety so description never collides with the button
+    paddingRight: 6,
   },
   wordsInfo: {
     flexDirection: 'column',
@@ -303,6 +324,8 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 1,
     fontFamily: 'Ubuntu_400Regular',
+    // Extra safety so preview never collides with the button
+    paddingRight: 6,
   },
   footer: {
     flexDirection: 'row',

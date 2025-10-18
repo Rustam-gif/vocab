@@ -34,6 +34,7 @@ interface AppState {
   savedStories: Story[];
   loadStories: () => Promise<void>;
   saveStory: (story: Story) => Promise<void>;
+  deleteStory: (id: string) => Promise<void>;
   
   // Exercise state
   currentExercise: any;
@@ -176,19 +177,67 @@ export const useAppStore = create<AppState>((set, get) => ({
   savedStories: [],
   loadStories: async () => {
     try {
-      // In a real app, this would load from storage
-      set({ savedStories: [] });
+      const raw = await AsyncStorage.getItem('@engniter.stories');
+      if (!raw) {
+        set({ savedStories: [] });
+        return;
+      }
+      const parsed = JSON.parse(raw) as any[];
+      const stories = Array.isArray(parsed)
+        ? parsed.map((s) => ({
+            ...s,
+            createdAt: s.createdAt ? new Date(s.createdAt) : new Date(),
+          }))
+        : [];
+      set({ savedStories: stories });
     } catch (error) {
       console.error('Failed to load stories:', error);
+      set({ savedStories: [] });
     }
   },
   saveStory: async (story) => {
     try {
-      set(state => ({
-        savedStories: [...state.savedStories, story]
-      }));
+      const state = get();
+      const next = [...state.savedStories, story];
+      set({ savedStories: next });
+      try {
+        await AsyncStorage.setItem(
+          '@engniter.stories',
+          JSON.stringify(
+            next.map((s) => ({
+              ...s,
+              // Persist as ISO strings for safety
+              createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
+            }))
+          )
+        );
+      } catch (e) {
+        console.warn('Failed to persist stories:', e);
+      }
     } catch (error) {
       console.error('Failed to save story:', error);
+    }
+  },
+  deleteStory: async (id) => {
+    try {
+      const state = get();
+      const next = state.savedStories.filter(s => s.id !== id);
+      set({ savedStories: next });
+      try {
+        await AsyncStorage.setItem(
+          '@engniter.stories',
+          JSON.stringify(
+            next.map((s) => ({
+              ...s,
+              createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
+            }))
+          )
+        );
+      } catch (e) {
+        console.warn('Failed to persist stories after delete:', e);
+      }
+    } catch (error) {
+      console.error('Failed to delete story:', error);
     }
   },
   
@@ -199,6 +248,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   recordExerciseResult: async (result) => {
     try {
       await analyticsService.recordResult(result);
+      try {
+        // Update per-word mastery stats in the vault so "Words Learned" can reflect
+        // total corrects across all exercise types.
+        await vaultService.recordPracticeResult(result.wordId, {
+          scoreChange: result.correct ? 2 : 0,
+          correct: result.correct,
+          exerciseType: result.exerciseType,
+        });
+      } catch (e) {
+        console.warn('recordPracticeResult failed:', e);
+      }
       set(state => ({
         exerciseResults: [...state.exerciseResults, result]
       }));
@@ -245,8 +305,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   
-  // Theme
-  theme: 'dark',
+  // Theme: initialize from system to avoid dark flash before async init
+  theme: ((): ThemeName => {
+    const sys = Appearance.getColorScheme();
+    return (sys === 'light' || sys === 'dark') ? (sys as ThemeName) : 'dark';
+  })(),
   setTheme: async (t: ThemeName) => {
     try {
       await AsyncStorage.setItem('@engniter.theme', t);
@@ -273,13 +336,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       const words = vaultService.getAllWords();
       const analytics = analyticsService.getAnalyticsData();
       const userProgress = await ProgressService.getProgress();
-      // Theme preference
-      // Note: We previously experimented with a light mode. To avoid the app
-      // unintentionally staying in light mode due to a persisted preference,
-      // we now default and persist to dark on init. This overrides any stale
-      // '@engniter.theme' value once at startup.
-      const themePref: ThemeName = 'dark';
-      try { await AsyncStorage.setItem('@engniter.theme', themePref); } catch {}
+      // Theme preference: honor persisted value or system preference; default to dark
+      let themePref: ThemeName | null = null;
+      try {
+        const stored = await AsyncStorage.getItem('@engniter.theme');
+        if (stored === 'light' || stored === 'dark') themePref = stored as ThemeName;
+      } catch {}
+      if (!themePref) {
+        const sys = Appearance.getColorScheme();
+        themePref = (sys === 'light' || sys === 'dark') ? (sys as ThemeName) : 'dark';
+        try { await AsyncStorage.setItem('@engniter.theme', themePref); } catch {}
+      }
 
       set({ words, analytics, userProgress, theme: themePref });
     } catch (error) {

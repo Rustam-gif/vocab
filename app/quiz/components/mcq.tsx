@@ -9,6 +9,9 @@ import {
   Dimensions 
 } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
+import LottieView from 'lottie-react-native';
+import { useAppStore } from '../../../lib/store';
+import { getTheme } from '../../../lib/theme';
 import { levels } from '../data/levels';
 import { analyticsService } from '../../../services/AnalyticsService';
 import AnimatedNextButton from './AnimatedNextButton';
@@ -20,6 +23,8 @@ interface MCQProps {
   sharedScore: number;
   onScoreShare: (newScore: number) => void;
   wordRange?: { start: number; end: number };
+  // Optional override list for dynamic quizzes not present in levels.ts
+  wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
 }
 
 interface Question {
@@ -33,6 +38,8 @@ interface Question {
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// Tiny holder to access theme in inline style closures without rerender churn
+const mcqThemeHack: { theme?: string; colors?: any } = {};
 
 const shortenPhrase = (phrase: string): string => {
   let trimmed = phrase.trim();
@@ -46,6 +53,93 @@ const shortenPhrase = (phrase: string): string => {
 // Per-set MCQ overrides to use EXACT options as provided by content owners
 // Format: levelId -> setId -> word -> { correct, distractors }
 const MCQ_OVERRIDES: Record<string, Record<string, Record<string, { correct: string; distractors: string[] }>>> = {
+  // IELTS curated MCQs
+  ielts: {
+    '1': {
+      fluctuate: {
+        correct: 'To change level up and down frequently',
+        distractors: [
+          'To make or become steady and consistent',
+          'To decrease gradually in amount or strength',
+          'To rise suddenly and strongly in number',
+        ],
+      },
+      stabilize: {
+        correct: 'To make or become steady and consistent',
+        distractors: [
+          'To change level up and down frequently',
+          'To stop rising and stay almost unchanged',
+          'To rise suddenly and strongly in number',
+        ],
+      },
+      decline: {
+        correct: 'To decrease gradually in amount or strength',
+        distractors: [
+          'To rise suddenly and strongly in number',
+          'To stop rising and stay almost unchanged',
+          'To make or become steady and consistent',
+        ],
+      },
+      surge: {
+        correct: 'To rise suddenly and strongly in number',
+        distractors: [
+          'To decrease gradually in amount or strength',
+          'To change level up and down frequently',
+          'To stop rising and stay almost unchanged',
+        ],
+      },
+      plateau: {
+        correct: 'To stop rising and stay almost unchanged',
+        distractors: [
+          'To make or become steady and consistent',
+          'To change level up and down frequently',
+          'To decrease gradually in amount or strength',
+        ],
+      },
+    },
+    '2': {
+      investigate: {
+        correct: 'To examine carefully to discover facts',
+        distractors: [
+          'To judge quality or amount after review',
+          'To give reasons to support a decision',
+          'To put a plan or decision into action',
+        ],
+      },
+      assess: {
+        correct: 'To judge quality or amount after review',
+        distractors: [
+          'To examine carefully to discover facts',
+          'To give reasons to support a decision',
+          'To change something to improve or correct',
+        ],
+      },
+      justify: {
+        correct: 'To give reasons to support a decision',
+        distractors: [
+          'To change something to improve or correct',
+          'To put a plan or decision into action',
+          'To examine carefully to discover facts',
+        ],
+      },
+      implement: {
+        correct: 'To put a plan or decision into action',
+        distractors: [
+          'To examine carefully to discover facts',
+          'To judge quality or amount after review',
+          'To change something to improve or correct',
+        ],
+      },
+      revise: {
+        correct: 'To change something to improve or correct',
+        distractors: [
+          'To judge quality or amount after review',
+          'To give reasons to support a decision',
+          'To put a plan or decision into action',
+        ],
+      },
+    },
+  },
   intermediate: {
     '1': {
       agenda: {
@@ -86,6 +180,426 @@ const MCQ_OVERRIDES: Record<string, Record<string, Record<string, { correct: str
           'To raise an issue to higher authority',
           'To assign responsibilities to appropriate team members',
           'To announce schedule changes during weekly meetings',
+        ],
+      },
+    },
+    '11': {
+      warn: {
+        correct: 'To tell about danger to prevent harm',
+        distractors: [
+          'To officially allow someone to do something',
+          'To say something is not allowed officially',
+          'To give suggestions to help someone’s decision',
+        ],
+      },
+      permit: {
+        correct: 'To officially allow someone to do something',
+        distractors: [
+          'To say something is not allowed officially',
+          'To give suggestions to help someone’s decision',
+          'To tell about danger to prevent harm',
+        ],
+      },
+      forbid: {
+        correct: 'To say something is not allowed officially',
+        distractors: [
+          'To give suggestions to help someone’s decision',
+          'To officially allow someone to do something',
+          'To tell about danger to prevent harm',
+        ],
+      },
+      advise: {
+        correct: 'To give suggestions to help someone’s decision',
+        distractors: [
+          'To say something is not allowed officially',
+          'To tell about danger to prevent harm',
+          'To officially allow someone to do something',
+        ],
+      },
+      request: {
+        correct: 'To politely ask for something from someone',
+        distractors: [
+          'To give suggestions to help someone’s decision',
+          'To officially allow someone to do something',
+          'To tell about danger to prevent harm',
+        ],
+      },
+    },
+    '12': {
+      charge: {
+        correct: 'To ask payment amount for a service',
+        distractors: [
+          'To give money back after a problem',
+          'To send goods to a customer somewhere',
+          'To follow progress or location over time',
+        ],
+      },
+      refund: {
+        correct: 'To give money back after a problem',
+        distractors: [
+          'To ask payment amount for a service',
+          'To put a new thing instead of old',
+          'To send goods to a customer somewhere',
+        ],
+      },
+      replace: {
+        correct: 'To put a new thing instead of old',
+        distractors: [
+          'To follow progress or location over time',
+          'To give money back after a problem',
+          'To send goods to a customer somewhere',
+        ],
+      },
+      ship: {
+        correct: 'To send goods to a customer somewhere',
+        distractors: [
+          'To ask payment amount for a service',
+          'To follow progress or location over time',
+          'To give money back after a problem',
+        ],
+      },
+      track: {
+        correct: 'To follow progress or location over time',
+        distractors: [
+          'To send goods to a customer somewhere',
+          'To put a new thing instead of old',
+          'To ask payment amount for a service',
+        ],
+      },
+    },
+    '13': {
+      persuade: {
+        correct: 'To make someone agree by giving reasons',
+        distractors: [
+          'To speak strongly because you disagree',
+          'To answer after receiving a message',
+          'To stop someone speaking for a moment',
+        ],
+      },
+      argue: {
+        correct: 'To speak strongly because you disagree',
+        distractors: [
+          'To make someone agree by giving reasons',
+          'To stop someone speaking for a moment',
+          'To say sorry for a mistake',
+        ],
+      },
+      reply: {
+        correct: 'To answer after receiving a message',
+        distractors: [
+          'To speak strongly because you disagree',
+          'To say sorry for a mistake',
+          'To stop someone speaking for a moment',
+        ],
+      },
+      interrupt: {
+        correct: 'To stop someone speaking for a moment',
+        distractors: [
+          'To say sorry for a mistake',
+          'To make someone agree by giving reasons',
+          'To answer after receiving a message',
+        ],
+      },
+      apologize: {
+        correct: 'To say sorry for a mistake',
+        distractors: [
+          'To answer after receiving a message',
+          'To stop someone speaking for a moment',
+          'To speak strongly because you disagree',
+        ],
+      },
+    },
+    '14': {
+      reserve: {
+        correct: 'To book something for your future use',
+        distractors: [
+          'To make a period or length longer',
+          'To change to a better, newer level',
+          'To decide an event will not happen',
+        ],
+      },
+      extend: {
+        correct: 'To make a period or length longer',
+        distractors: [
+          'To change to a better, newer level',
+          'To decide an event will not happen',
+          'To book something for your future use',
+        ],
+      },
+      upgrade: {
+        correct: 'To change to a better, newer level',
+        distractors: [
+          'To decide an event will not happen',
+          'To book something for your future use',
+          'To make a period or length longer',
+        ],
+      },
+      cancel: {
+        correct: 'To decide an event will not happen',
+        distractors: [
+          'To make a period or length longer',
+          'To change to a better, newer level',
+          'To book something for your future use',
+        ],
+      },
+      reschedule: {
+        correct: 'To change a planned time to another',
+        distractors: [
+          'To decide an event will not happen',
+          'To make a period or length longer',
+          'To change to a better, newer level',
+        ],
+      },
+    },
+    '15': {
+      assemble: {
+        correct: 'To put parts together to make something',
+        distractors: [
+          'To change slightly so it fits better',
+          'To join two things so they work',
+          'To fasten firmly so it stays safe',
+        ],
+      },
+      adjust: {
+        correct: 'To change slightly so it fits better',
+        distractors: [
+          'To put parts together to make something',
+          'To fasten firmly so it stays safe',
+          'To join two things so they work',
+        ],
+      },
+      connect: {
+        correct: 'To join two things so they work',
+        distractors: [
+          'To put parts together to make something',
+          'To fasten firmly so it stays safe',
+          'To change slightly so it fits better',
+        ],
+      },
+      secure: {
+        correct: 'To fasten firmly so it stays safe',
+        distractors: [
+          'To join two things so they work',
+          'To change slightly so it fits better',
+          'To put parts together to make something',
+        ],
+      },
+      polish: {
+        correct: 'To rub a surface until it shines',
+        distractors: [
+          'To put parts together to make something',
+          'To join two things so they work',
+          'To fasten firmly so it stays safe',
+        ],
+      },
+    },
+    '16': {
+      order: {
+        correct: 'To ask for food or items to buy',
+        distractors: [
+          'To give food or help to people',
+          'To try small amount to check flavor',
+          'To cut something into small pieces quickly',
+        ],
+      },
+      serve: {
+        correct: 'To give food or help to people',
+        distractors: [
+          'To ask for food or items to buy',
+          'To move food around to mix evenly',
+          'To cut something into small pieces quickly',
+        ],
+      },
+      taste: {
+        correct: 'To try small amount to check flavor',
+        distractors: [
+          'To cut something into small pieces quickly',
+          'To give food or help to people',
+          'To move food around to mix evenly',
+        ],
+      },
+      chop: {
+        correct: 'To cut something into small pieces quickly',
+        distractors: [
+          'To ask for food or items to buy',
+          'To try small amount to check flavor',
+          'To move food around to mix evenly',
+        ],
+      },
+      stir: {
+        correct: 'To move food around to mix evenly',
+        distractors: [
+          'To give food or help to people',
+          'To try small amount to check flavor',
+          'To cut something into small pieces quickly',
+        ],
+      },
+    },
+    '17': {
+      worry: {
+        correct: 'To feel anxious about possible problems',
+        distractors: [
+          'To make someone feel happier or hopeful',
+          'To stop being angry about someone’s mistake',
+          'To say good things about someone’s work',
+        ],
+      },
+      cheer: {
+        correct: 'To make someone feel happier or hopeful',
+        distractors: [
+          'To feel anxious about possible problems',
+          'To say good things about someone’s work',
+          'To feel sorry about something that happened',
+        ],
+      },
+      forgive: {
+        correct: 'To stop being angry about someone’s mistake',
+        distractors: [
+          'To make someone feel happier or hopeful',
+          'To feel sorry about something that happened',
+          'To say good things about someone’s work',
+        ],
+      },
+      praise: {
+        correct: 'To say good things about someone’s work',
+        distractors: [
+          'To feel anxious about possible problems',
+          'To stop being angry about someone’s mistake',
+          'To feel sorry about something that happened',
+        ],
+      },
+      regret: {
+        correct: 'To feel sorry about something that happened',
+        distractors: [
+          'To make someone feel happier or hopeful',
+          'To say good things about someone’s work',
+          'To stop being angry about someone’s mistake',
+        ],
+      },
+    },
+    '18': {
+      heat: {
+        correct: 'To make something warmer using energy',
+        distractors: [
+          'To remove water so something becomes dry',
+          'To bend paper or cloth into layers',
+          'To press clothes flat with a hot iron',
+        ],
+      },
+      cool: {
+        correct: 'To make something less warm or hot',
+        distractors: [
+          'To make something warmer using energy',
+          'To remove water so something becomes dry',
+          'To press clothes flat with a hot iron',
+        ],
+      },
+      dry: {
+        correct: 'To remove water so something becomes dry',
+        distractors: [
+          'To make something less warm or hot',
+          'To bend paper or cloth into layers',
+          'To press clothes flat with a hot iron',
+        ],
+      },
+      fold: {
+        correct: 'To bend paper or cloth into layers',
+        distractors: [
+          'To make something warmer using energy',
+          'To remove water so something becomes dry',
+          'To press clothes flat with a hot iron',
+        ],
+      },
+      iron: {
+        correct: 'To press clothes flat with a hot iron',
+        distractors: [
+          'To make something less warm or hot',
+          'To remove water so something becomes dry',
+          'To bend paper or cloth into layers',
+        ],
+      },
+    },
+    '19': {
+      paint: {
+        correct: 'To cover a surface with colored liquid',
+        distractors: [
+          'To make pictures using lines and shapes',
+          'To sleep outside in tents for fun',
+          'To move through water using arms and legs',
+        ],
+      },
+      draw: {
+        correct: 'To make pictures using lines and shapes',
+        distractors: [
+          'To move through water using arms and legs',
+          'To cover a surface with colored liquid',
+          'To sleep outside in tents for fun',
+        ],
+      },
+      camp: {
+        correct: 'To sleep outside in tents for fun',
+        distractors: [
+          'To make pictures using lines and shapes',
+          'To walk long distances for exercise',
+          'To move through water using arms and legs',
+        ],
+      },
+      hike: {
+        correct: 'To walk long distances for exercise',
+        distractors: [
+          'To cover a surface with colored liquid',
+          'To move through water using arms and legs',
+          'To sleep outside in tents for fun',
+        ],
+      },
+      swim: {
+        correct: 'To move through water using arms and legs',
+        distractors: [
+          'To make pictures using lines and shapes',
+          'To walk long distances for exercise',
+          'To cover a surface with colored liquid',
+        ],
+      },
+    },
+    '20': {
+      'fill in': {
+        correct: 'To complete a form by writing details',
+        distractors: [
+          'To send work or forms for approval',
+          'To make a paper copy from digital files',
+          'To write your name to show agreement',
+        ],
+      },
+      submit: {
+        correct: 'To send work or forms for approval',
+        distractors: [
+          'To write your name to show agreement',
+          'To store documents in a specific place',
+          'To complete a form by writing details',
+        ],
+      },
+      print: {
+        correct: 'To make a paper copy from digital files',
+        distractors: [
+          'To send work or forms for approval',
+          'To store documents in a specific place',
+          'To write your name to show agreement',
+        ],
+      },
+      sign: {
+        correct: 'To write your name to show agreement',
+        distractors: [
+          'To make a paper copy from digital files',
+          'To store documents in a specific place',
+          'To complete a form by writing details',
+        ],
+      },
+      file: {
+        correct: 'To store documents in a specific place',
+        distractors: [
+          'To send work or forms for approval',
+          'To make a paper copy from digital files',
+          'To write your name to show agreement',
         ],
       },
     },
@@ -637,6 +1151,720 @@ const MCQ_OVERRIDES: Record<string, Record<string, Record<string, { correct: str
         ],
       },
     },
+    '14': {
+      contemplate: {
+        correct: 'To think about something deeply and carefully',
+        distractors: [
+          'To support or strengthen something already existing',
+          'To respond with opposing argument or action',
+          'To mention briefly without detailed supporting evidence',
+        ],
+      },
+      bolster: {
+        correct: 'To support or strengthen something already existing',
+        distractors: [
+          'To make something seem less important',
+          'To draw out a response or reaction',
+          'To reduce or limit intensity through caution',
+        ],
+      },
+      downplay: {
+        correct: 'To make something seem less important',
+        distractors: [
+          'To think about something deeply and carefully',
+          'To support or strengthen something already existing',
+          'To present information clearly with helpful emphasis',
+        ],
+      },
+      counter: {
+        correct: 'To respond with opposing argument or action',
+        distractors: [
+          'To draw out a response or reaction',
+          'To make something seem less important',
+          'To question politely without offering firm opposition',
+        ],
+      },
+      elicit: {
+        correct: 'To draw out a response or reaction',
+        distractors: [
+          'To respond with opposing argument or action',
+          'To think about something deeply and carefully',
+          'To store information safely for later retrieval',
+        ],
+      },
+    },
+    '15': {
+      fluctuate: {
+        correct: 'To change level frequently, rising and falling',
+        distractors: [
+          'To make or become steady and consistent',
+          'To increase speed or rate of change',
+          'To reach a stable level after growth',
+        ],
+      },
+      stabilize: {
+        correct: 'To make or become steady and consistent',
+        distractors: [
+          'To change level frequently, rising and falling',
+          'To become worse in quality or condition',
+          'To increase speed or rate of change',
+        ],
+      },
+      accelerate: {
+        correct: 'To increase speed or rate of change',
+        distractors: [
+          'To make or become steady and consistent',
+          'To reach a stable level after growth',
+          'To change level frequently, rising and falling',
+        ],
+      },
+      deteriorate: {
+        correct: 'To become worse in quality or condition',
+        distractors: [
+          'To make or become steady and consistent',
+          'To increase speed or rate of change',
+          'To reach a stable level after growth',
+        ],
+      },
+      plateau: {
+        correct: 'To reach a stable level after growth',
+        distractors: [
+          'To change level frequently, rising and falling',
+          'To become worse in quality or condition',
+          'To make or become steady and consistent',
+        ],
+      },
+    },
+    '16': {
+      verify: {
+        correct: 'Confirm truth or accuracy through careful checks',
+        distractors: [
+          'Improve something by making small precise changes',
+          'Create or express an idea in detail',
+          'Collect evidence from witnesses for legal cases',
+        ],
+      },
+      refine: {
+        correct: 'Improve something by making small precise changes',
+        distractors: [
+          'Confirm truth or accuracy through careful checks',
+          'Find a way through a situation successfully',
+          'Remove errors found during final quality checks',
+        ],
+      },
+      formulate: {
+        correct: 'Create or express an idea in detail',
+        distractors: [
+          'Confirm truth or accuracy through careful checks',
+          'Explain or make clear using examples',
+          'Summarize key ideas without detailed explanations',
+        ],
+      },
+      illustrate: {
+        correct: 'Explain or make clear using examples',
+        distractors: [
+          'Create or express an idea in detail',
+          'Improve something by making small precise changes',
+          'List features without providing specific real-world examples',
+        ],
+      },
+      navigate: {
+        correct: 'Find a way through a situation successfully',
+        distractors: [
+          'Confirm truth or accuracy through careful checks',
+          'Create or express an idea in detail',
+          'Delay action until better options appear later',
+        ],
+      },
+    },
+    '17': {
+      alleviate: {
+        correct: 'To make pain or problems less severe',
+        distractors: [
+          'To make a difficult situation even worse',
+          'To describe something precisely and in detail',
+          'To postpone action until circumstances significantly improve',
+        ],
+      },
+      exacerbate: {
+        correct: 'To make a difficult situation even worse',
+        distractors: [
+          'To make pain or problems less severe',
+          'To help opposing sides reach an agreement',
+          'To measure progress using carefully defined indicators',
+        ],
+      },
+      ascertain: {
+        correct: 'To find out something with reliable certainty',
+        distractors: [
+          'To describe something precisely and in detail',
+          'To help opposing sides reach an agreement',
+          'To guess likely outcomes without firm evidence',
+        ],
+      },
+      delineate: {
+        correct: 'To describe something precisely and in detail',
+        distractors: [
+          'To find out something with reliable certainty',
+          'To make a difficult situation even worse',
+          'To organize ideas into logical priority order',
+        ],
+      },
+      mediate: {
+        correct: 'To help opposing sides reach an agreement',
+        distractors: [
+          'To find out something with reliable certainty',
+          'To make pain or problems less severe',
+          'To enforce rules strictly without any exceptions',
+        ],
+      },
+    },
+    '18': {
+      emphasize: {
+        correct: 'To give special importance or extra attention',
+        distractors: [
+          'To accept or admit the truth of something',
+          'To express doubt or challenge stated assumptions',
+          'To summarize main points without detailed evidence',
+        ],
+      },
+      acknowledge: {
+        correct: 'To accept or admit the truth of something',
+        distractors: [
+          'To change to suit new conditions or uses',
+          'To make up for loss or damage',
+          'To repeat information without evaluating its accuracy',
+        ],
+      },
+      adapt: {
+        correct: 'To change to suit new conditions or uses',
+        distractors: [
+          'To give special importance or extra attention',
+          'To accept or admit the truth of something',
+          'To remove features that are no longer relevant',
+        ],
+      },
+      compensate: {
+        correct: 'To make up for loss or damage',
+        distractors: [
+          'To express doubt or challenge stated assumptions',
+          'To give special importance or extra attention',
+          'To provide extra resources to match new expectations',
+        ],
+      },
+      question: {
+        correct: 'To express doubt or challenge stated assumptions',
+        distractors: [
+          'To change to suit new conditions or uses',
+          'To accept or admit the truth of something',
+          'To collect statements supporting a particular conclusion',
+        ],
+      },
+    },
+    '19': {
+      expedite: {
+        correct: 'To make a process happen faster',
+        distractors: [
+          'To make progress difficult or slow',
+          'To support and maintain rules or decisions',
+          'To begin an activity or process',
+        ],
+      },
+      hamper: {
+        correct: 'To make progress difficult or slow',
+        distractors: [
+          'To make a process happen faster',
+          'To argue or claim something is true',
+          'To reduce something in extent or amount',
+        ],
+      },
+      contend: {
+        correct: 'To argue or claim something is true',
+        distractors: [
+          'To make a process happen faster',
+          'To support and maintain rules or decisions',
+          'To express doubt about accepted assumptions',
+        ],
+      },
+      dispel: {
+        correct: 'To make something disappear, especially doubts',
+        distractors: [
+          'To argue or claim something is true',
+          'To make progress difficult or slow',
+          'To gather and combine information coherently',
+        ],
+      },
+      uphold: {
+        correct: 'To support and maintain rules or decisions',
+        distractors: [
+          'To make something disappear, especially doubts',
+          'To make a process happen faster',
+          'To formally approve a plan after review',
+        ],
+      },
+    },
+    '20': {
+      evaluate: {
+        correct: 'Judge something’s value, quality, or effectiveness',
+        distractors: [
+          'Represent something in words, pictures, or symbols',
+          'Publicly approve or support someone, product, or idea',
+          'Collect information without forming any judgement or conclusion',
+        ],
+      },
+      depict: {
+        correct: 'Represent something in words, pictures, or symbols',
+        distractors: [
+          'Leave out something, either accidentally or deliberately',
+          'Act against something; argue it should not happen',
+          'Summarize events briefly without describing visual details',
+        ],
+      },
+      omit: {
+        correct: 'Leave out something, either accidentally or deliberately',
+        distractors: [
+          'Judge something’s value, quality, or effectiveness',
+          'Include everything, even irrelevant or repeated information',
+          'Record each detail carefully for future reference',
+        ],
+      },
+      oppose: {
+        correct: 'Act against something; argue it should not happen',
+        distractors: [
+          'Represent something in words, pictures, or symbols',
+          'Publicly approve or support someone, product, or idea',
+          'Consider both sides without taking a position',
+        ],
+      },
+      endorse: {
+        correct: 'Publicly approve or support someone, product, or idea',
+        distractors: [
+          'Leave out something, either accidentally or deliberately',
+          'Criticize publicly to discourage others from participating',
+          'Question claims to test their logical consistency',
+        ],
+      },
+    },
+    '21': {
+      allege: {
+        correct: 'To claim something as true without proof',
+        distractors: [
+          'To mention evidence as support in argument',
+          'To encourage the development of something positive',
+          'To present formal charges in a court',
+        ],
+      },
+      cite: {
+        correct: 'To mention evidence as support in argument',
+        distractors: [
+          'To claim something as true without proof',
+          'To remove references during the final editing stage',
+          'To list sources without evaluating their credibility',
+        ],
+      },
+      foster: {
+        correct: 'To encourage the development of something positive',
+        distractors: [
+          'To discourage someone from acting through fear',
+          'To make something more varied in type',
+          'To provide temporary resources during urgent emergencies',
+        ],
+      },
+      deter: {
+        correct: 'To discourage someone from acting through fear',
+        distractors: [
+          'To encourage the development of something positive',
+          'To enforce rules strictly across all situations',
+          'To block entry by installing stronger barriers',
+        ],
+      },
+      diversify: {
+        correct: 'To make something more varied in type',
+        distractors: [
+          'To mention evidence as support in argument',
+          'To specialize narrowly in one chosen area',
+          'To combine parts into one unified whole',
+        ],
+      },
+    },
+    '22': {
+      investigate: {
+        correct: 'To examine a subject carefully for facts',
+        distractors: [
+          'To reach a conclusion from available evidence',
+          'To suggest possible explanations without certain proof',
+          'To record results neatly in organized tables',
+        ],
+      },
+      deduce: {
+        correct: 'To reach a conclusion from available evidence',
+        distractors: [
+          'To examine a subject carefully for facts',
+          'To suggest possible explanations without certain proof',
+          'To compare cases and list main differences',
+        ],
+      },
+      speculate: {
+        correct: 'To suggest possible explanations without certain proof',
+        distractors: [
+          'To reach a conclusion from available evidence',
+          'To gather opinions or data from many people',
+          'To present tested claims with strong evidence',
+        ],
+      },
+      probe: {
+        correct: 'To explore something deeply to discover information',
+        distractors: [
+          'To examine a subject carefully for facts',
+          'To gather opinions or data from many people',
+          'To map findings onto a visual diagram',
+        ],
+      },
+      survey: {
+        correct: 'To gather opinions or data from many people',
+        distractors: [
+          'To explore something deeply to discover information',
+          'To reach a conclusion from available evidence',
+          'To distribute forms requesting signatures from neighbors',
+        ],
+      },
+    },
+    '23': {
+      streamline: {
+        correct: 'To simplify a process for greater efficiency',
+        distractors: [
+          'To make a task operate by itself',
+          'To combine separate parts into one stronger whole',
+          'To publish steps without enforcing consistent procedures',
+        ],
+      },
+      automate: {
+        correct: 'To make a task operate by itself',
+        distractors: [
+          'To simplify a process for greater efficiency',
+          'To make procedures consistent according to set rules',
+          'To repeat steps to improve each version',
+        ],
+      },
+      consolidate: {
+        correct: 'To combine separate parts into one stronger whole',
+        distractors: [
+          'To make a task operate by itself',
+          'To repeat steps to improve each version',
+          'To enforce formatting without checking actual outcomes',
+        ],
+      },
+      standardize: {
+        correct: 'To make procedures consistent according to set rules',
+        distractors: [
+          'To combine separate parts into one stronger whole',
+          'To simplify a process for greater efficiency',
+          'To measure outcomes without changing any inputs',
+        ],
+      },
+      iterate: {
+        correct: 'To repeat steps to improve each version',
+        distractors: [
+          'To simplify a process for greater efficiency',
+          'To make procedures consistent according to set rules',
+          'To make a task operate by itself',
+        ],
+      },
+    },
+    '24': {
+      paraphrase: {
+        correct: 'To express the same meaning using different words',
+        distractors: [
+          'To present main points briefly and clearly',
+          'To add detail to explain more fully',
+          'To refer indirectly without stating something directly',
+        ],
+      },
+      summarize: {
+        correct: 'To present main points briefly and clearly',
+        distractors: [
+          'To express the same meaning using different words',
+          'To say something again for clarity',
+          'To refer indirectly without stating something directly',
+        ],
+      },
+      elaborate: {
+        correct: 'To add detail to explain more fully',
+        distractors: [
+          'To present main points briefly and clearly',
+          'To say something again for clarity',
+          'To refer indirectly without stating something directly',
+        ],
+      },
+      allude: {
+        correct: 'To refer indirectly without stating something directly',
+        distractors: [
+          'To present main points briefly and clearly',
+          'To express the same meaning using different words',
+          'To add detail to explain more fully',
+        ],
+      },
+      reiterate: {
+        correct: 'To say something again for clarity',
+        distractors: [
+          'To refer indirectly without stating something directly',
+          'To add detail to explain more fully',
+          'To present main points briefly and clearly',
+        ],
+      },
+    },
+    '25': {
+      authorize: {
+        correct: 'To officially permit or approve an action',
+        distractors: [
+          'To formally forbid an action by rule',
+          'To officially require that something be done',
+          'To choose not to enforce a right',
+        ],
+      },
+      prohibit: {
+        correct: 'To formally forbid an action by rule',
+        distractors: [
+          'To officially require that something be done',
+          'To choose not to enforce a right',
+          'To officially permit or approve an action',
+        ],
+      },
+      mandate: {
+        correct: 'To officially require that something be done',
+        distractors: [
+          'To formally forbid an action by rule',
+          'To choose not to enforce a right',
+          'To free someone from a required duty',
+        ],
+      },
+      exempt: {
+        correct: 'To free someone from a required duty',
+        distractors: [
+          'To choose not to enforce a right',
+          'To formally forbid an action by rule',
+          'To officially permit or approve an action',
+        ],
+      },
+      waive: {
+        correct: 'To choose not to enforce a right',
+        distractors: [
+          'To officially require that something be done',
+          'To formally forbid an action by rule',
+          'To free someone from a required duty',
+        ],
+      },
+    },
+    '26': {
+      invest: {
+        correct: 'To commit money to earn future returns',
+        distractors: [
+          'To sell assets or withdraw from holdings',
+          'To obtain needed goods or services',
+          'To repay someone for incurred expenses',
+        ],
+      },
+      divest: {
+        correct: 'To sell assets or withdraw from holdings',
+        distractors: [
+          'To commit money to earn future returns',
+          'To reduce financial risk by balancing positions',
+          'To obtain needed goods or services',
+        ],
+      },
+      procure: {
+        correct: 'To obtain needed goods or services',
+        distractors: [
+          'To repay someone for incurred expenses',
+          'To sell assets or withdraw from holdings',
+          'To reduce financial risk by balancing positions',
+        ],
+      },
+      reimburse: {
+        correct: 'To repay someone for incurred expenses',
+        distractors: [
+          'To obtain needed goods or services',
+          'To commit money to earn future returns',
+          'To reduce financial risk by balancing positions',
+        ],
+      },
+      hedge: {
+        correct: 'To reduce financial risk by balancing positions',
+        distractors: [
+          'To sell assets or withdraw from holdings',
+          'To repay someone for incurred expenses',
+          'To commit money to earn future returns',
+        ],
+      },
+    },
+    '27': {
+      deploy: {
+        correct: 'To put a system or resource into use',
+        distractors: [
+          'To set options so something works correctly',
+          'To find and fix problems in operation',
+          'To return something to its previous state',
+        ],
+      },
+      configure: {
+        correct: 'To set options so something works correctly',
+        distractors: [
+          'To return something to its previous state',
+          'To put a system or resource into use',
+          'To find and fix problems in operation',
+        ],
+      },
+      troubleshoot: {
+        correct: 'To find and fix problems in operation',
+        distractors: [
+          'To make things happen at the same time',
+          'To set options so something works correctly',
+          'To return something to its previous state',
+        ],
+      },
+      restore: {
+        correct: 'To return something to its previous state',
+        distractors: [
+          'To put a system or resource into use',
+          'To make things happen at the same time',
+          'To find and fix problems in operation',
+        ],
+      },
+      synchronize: {
+        correct: 'To make things happen at the same time',
+        distractors: [
+          'To return something to its previous state',
+          'To put a system or resource into use',
+          'To set options so something works correctly',
+        ],
+      },
+    },
+    '28': {
+      conserve: {
+        correct: 'To protect and use resources carefully to last',
+        distractors: [
+          'To control activities through rules and oversight',
+          'To support costs with money from authorities',
+          'To encourage actions by offering benefits or rewards',
+        ],
+      },
+      regulate: {
+        correct: 'To control activities through rules and oversight',
+        distractors: [
+          'To limit what people can do legally',
+          'To support costs with money from authorities',
+          'To protect and use resources carefully to last',
+        ],
+      },
+      subsidize: {
+        correct: 'To support costs with money from authorities',
+        distractors: [
+          'To encourage actions by offering benefits or rewards',
+          'To control activities through rules and oversight',
+          'To limit what people can do legally',
+        ],
+      },
+      incentivize: {
+        correct: 'To encourage actions by offering benefits or rewards',
+        distractors: [
+          'To limit what people can do legally',
+          'To support costs with money from authorities',
+          'To protect and use resources carefully to last',
+        ],
+      },
+      restrict: {
+        correct: 'To limit what people can do legally',
+        distractors: [
+          'To control activities through rules and oversight',
+          'To encourage actions by offering benefits or rewards',
+          'To support costs with money from authorities',
+        ],
+      },
+    },
+    '29': {
+      reassure: {
+        correct: 'To comfort someone and reduce their anxiety',
+        distractors: [
+          'To understand and share another person’s feelings',
+          'To face a difficult issue directly and firmly',
+          'To make someone less likely to try',
+        ],
+      },
+      empathize: {
+        correct: 'To understand and share another person’s feelings',
+        distractors: [
+          'To comfort someone and reduce their anxiety',
+          'To make someone less likely to try',
+          'To respect and appreciate someone’s good qualities',
+        ],
+      },
+      discourage: {
+        correct: 'To make someone less likely to try',
+        distractors: [
+          'To face a difficult issue directly and firmly',
+          'To comfort someone and reduce their anxiety',
+          'To understand and share another person’s feelings',
+        ],
+      },
+      confront: {
+        correct: 'To face a difficult issue directly and firmly',
+        distractors: [
+          'To understand and share another person’s feelings',
+          'To make someone less likely to try',
+          'To comfort someone and reduce their anxiety',
+        ],
+      },
+      admire: {
+        correct: 'To respect and appreciate someone’s good qualities',
+        distractors: [
+          'To comfort someone and reduce their anxiety',
+          'To face a difficult issue directly and firmly',
+          'To understand and share another person’s feelings',
+        ],
+      },
+    },
+    '30': {
+      curate: {
+        correct: 'To select and organize content for an audience',
+        distractors: [
+          'To manage discussion and keep it respectful',
+          'To add notes that explain or comment',
+          'To transmit information widely by media channels',
+        ],
+      },
+      moderate: {
+        correct: 'To manage discussion and keep it respectful',
+        distractors: [
+          'To add notes that explain or comment',
+          'To select and organize content for an audience',
+          'To transmit information widely by media channels',
+        ],
+      },
+      annotate: {
+        correct: 'To add notes that explain or comment',
+        distractors: [
+          'To transmit information widely by media channels',
+          'To manage discussion and keep it respectful',
+          'To select and organize content for an audience',
+        ],
+      },
+      broadcast: {
+        correct: 'To transmit information widely by media channels',
+        distractors: [
+          'To add notes that explain or comment',
+          'To select and organize content for an audience',
+          'To manage discussion and keep it respectful',
+        ],
+      },
+      caption: {
+        correct: 'To add brief text describing an image',
+        distractors: [
+          'To transmit information widely by media channels',
+          'To manage discussion and keep it respectful',
+          'To select and organize content for an audience',
+        ],
+      },
+    },
   },
 };
 
@@ -696,7 +1924,10 @@ const typedFallbacks = (setTitle: string, pos: 'verb'|'noun'|'adjective'): strin
   return ['A general concept related to subject'];
 };
 
-export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange }: MCQProps) {
+export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange, wordsOverride }: MCQProps) {
+  const themeName = useAppStore(s => s.theme);
+  const colors = getTheme(themeName);
+  const isLight = themeName === 'light';
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [displayScore, setDisplayScore] = useState(sharedScore);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -717,9 +1948,9 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
   const questionStartRef = useRef<number>(Date.now());
 
   useEffect(() => {
-    console.log('MCQComponent - useEffect triggered:', { setId, levelId });
+    console.log('MCQComponent - useEffect triggered:', { setId, levelId, wordRange, hasOverride: !!wordsOverride });
     generateQuestions();
-  }, [setId, levelId]);
+  }, [setId, levelId, wordRange?.start, wordRange?.end, wordsOverride && (wordsOverride as any).length]);
 
   useEffect(() => {
     setDisplayScore(sharedScore);
@@ -754,14 +1985,14 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
     
     const level = levels.find(l => l.id === levelId);
     console.log('MCQComponent - Found level:', level?.name);
-    if (!level) return;
+    if (!level && !wordsOverride) return;
 
-    const set = level.sets.find(s => s.id.toString() === setId);
+    const set = level?.sets.find(s => s.id.toString() === setId);
     console.log('MCQComponent - Found set:', set?.title);
-    if (!set || !set.words) return;
+    if (!wordsOverride && (!set || !set.words)) return;
 
     // Apply word range if specified
-    let words = set.words;
+    let words = (wordsOverride as any) || set?.words || [];
     if (wordRange) {
       words = words.slice(wordRange.start, wordRange.end);
       console.log('MCQComponent - Using word range:', wordRange, 'Words:', words.length);
@@ -784,7 +2015,7 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
 
     const generatedQuestions: Question[] = words.map(word => {
       // Check for exact override first
-      const override = MCQ_OVERRIDES[levelId || '']?.[String(set.id)]?.[word.word.toLowerCase()];
+      const override = set ? MCQ_OVERRIDES[levelId || '']?.[String(set.id)]?.[word.word.toLowerCase()] : undefined;
       if (override) {
         const allOptions = [override.correct, ...override.distractors];
         const shuffledOptions = allOptions
@@ -816,7 +2047,10 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
       
       while (distractors.length < 3 && attempts < maxAttempts) {
         const type = types[distractors.length % types.length];
-        const distractor = clampPhrase(generateDistractor(shortDefinition, type, word.word, set.title || ''));
+        const setTitle = (set && (set as any).title) ? (set as any).title : '';
+        const distractor = clampPhrase(
+          generateDistractor(shortDefinition, type, word.word, setTitle)
+        );
         
         // Only add if unique
         if (!usedOptions.has(distractor)) {
@@ -1469,8 +2703,14 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
 
   if (questions.length === 0) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading questions...</Text>
+      <View style={[styles.loadingContainer, isLight && { backgroundColor: colors.background }]}>
+        <LottieView
+          source={require('../../../assets/lottie/loading.json')}
+          autoPlay
+          loop
+          style={{ width: 140, height: 140 }}
+        />
+        <Text style={[styles.loadingText, isLight && { color: '#6B7280' }]}>Loading questions...</Text>
       </View>
     );
   }
@@ -1519,11 +2759,11 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isLight && { backgroundColor: colors.background }]}>
       {/* Header with Progress and Score */}
       <View style={styles.header}>
         <View style={styles.progressContainer}>
-          <Text style={styles.progressText}>
+          <Text style={[styles.progressText, (mcqThemeHack as any).theme === 'light' && { color: '#6B7280' }]}>
             Word {currentWordIndex + 1} of {questions.length}
           </Text>
           <View style={styles.scoreWrapper}>
@@ -1541,7 +2781,7 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
             <Text style={styles.scoreText}>{displayScore}</Text>
           </View>
         </View>
-        <View style={styles.progressBar}>
+        <View style={[styles.progressBar, isLight && { backgroundColor: '#E5E7EB' }]}>
           <Animated.View 
             style={[
               styles.progressFill, 
@@ -1567,12 +2807,12 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
         }}
       >
         <View style={styles.wordHeader}>
-          <Text style={styles.wordText}>{currentQuestion.word}</Text>
-          <Text style={styles.ipaText}>{currentQuestion.ipa}</Text>
-          <Text style={styles.exampleInline}>
+          <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{currentQuestion.word}</Text>
+          <Text style={[styles.ipaText, isLight && { color: '#6B7280' }]}>{currentQuestion.ipa}</Text>
+          <Text style={[styles.exampleInline, isLight && { color: '#6B7280' }]}>
             {renderSentenceWithHighlight(currentQuestion.example, currentQuestion.word)}
           </Text>
-        </View>
+       </View>
 
         <View style={styles.optionsContainer}>
           {currentQuestion.options.map((option, index) => {
@@ -1592,13 +2832,16 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
                 <TouchableOpacity
                 style={[
                   styles.optionButton,
-                  (showFeedback && index === currentQuestion.correctAnswer) && styles.correctOption,
-                  (showFeedback && isSelected && !isCorrectOption) && styles.wrongOption,
+                  // Keep light card color even after feedback so unselected options don't darken
+                  isLight && styles.optionLight,
+                  (!showFeedback && isSelected) && (isLight ? styles.selectedOptionLight : styles.selectedOption),
+                  (showFeedback && index === currentQuestion.correctAnswer) && (isLight ? styles.correctOptionLight : styles.correctOption),
+                  (showFeedback && isSelected && !isCorrectOption) && (isLight ? styles.wrongOptionLight : styles.wrongOption),
                 ]}
                 onPress={() => handleAnswerSelect(index)}
                 disabled={isAnswered}
               >
-                  <Text style={styles.optionText}>
+                  <Text style={[styles.optionText, isLight && { color: '#111827' }]}>
                   {option}
                 </Text>
               </TouchableOpacity>
@@ -1714,12 +2957,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 72,
   },
-  correctOption: {
-    backgroundColor: '#437F76',
-  },
-  wrongOption: {
-    backgroundColor: '#924646',
-  },
+  // Light mode card color to match Learn cards
+  optionLight: { backgroundColor: '#F9F1E7', borderWidth: StyleSheet.hairlineWidth, borderColor: '#F9F1E7' },
+  // Brighter selected state before feedback (dark and light variants)
+  selectedOption: { backgroundColor: 'rgba(242, 147, 92, 0.18)', borderWidth: 2, borderColor: '#F2935C' },
+  selectedOptionLight: { backgroundColor: '#FBE8DB', borderWidth: 2, borderColor: '#F2935C' },
+  // Reveal states
+  // Dark theme strong colors
+  correctOption: { backgroundColor: '#437F76' },
+  wrongOption: { backgroundColor: '#924646' },
+  // Light theme soft, less saturated colors (≈50% tint)
+  correctOptionLight: { backgroundColor: '#A1BFBA' },
+  wrongOptionLight: { backgroundColor: '#C9A3A3' },
   optionText: {
     fontSize: 16,
     color: '#fff',

@@ -13,6 +13,10 @@ Directories and files discovered under configured roots:
   - vault-folder.tsx
   - vault.tsx
   - word-sprint.tsx
+- app/components
+  - OnboardingModal.tsx
+- app/journal
+  - [id].tsx
 - app/placement
   - index.tsx
   - result.tsx
@@ -28,6 +32,7 @@ Directories and files discovered under configured roots:
   - word-intro.tsx
 - app/quiz/components
   - AnimatedNextButton.tsx
+  - ErrorBoundary.tsx
   - SetCard.tsx
   - SuccessCelebration.tsx
   - WordIntro.tsx
@@ -49,6 +54,7 @@ Directories and files discovered under configured roots:
   - StoryExercise.tsx
   - _layout.tsx
 - lib
+  - launch.ts
   - store.ts
   - supabase.ts
   - theme.ts

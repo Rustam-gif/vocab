@@ -17,6 +17,8 @@ import SynonymComponent from './components/synonym';
 import SentenceUsageComponent from './components/sentence-usage';
 import MissingLetters from './components/missing-letters';
 import { levels } from './data/levels';
+import { useAppStore } from '../../lib/store';
+import { getTheme } from '../../lib/theme';
 import { analyticsService } from '../../services/AnalyticsService';
 import { SetProgressService } from '../../services/SetProgressService';
 
@@ -35,6 +37,9 @@ interface Phase {
 export default function AtlasPracticeIntegrated() {
   const router = useRouter();
   const { setId, levelId } = useLocalSearchParams<{ setId: string; levelId: string }>();
+  const themeName = useAppStore(s => s.theme);
+  const colors = getTheme(themeName);
+  const isLight = themeName === 'light';
   
   // Debug logging
   console.log('AtlasPracticeIntegrated - Received params:', { setId, levelId });
@@ -42,7 +47,29 @@ export default function AtlasPracticeIntegrated() {
   // Check if this is a quiz type
   const level = useMemo(() => levels.find(l => l.id === levelId), [levelId]);
   const set = useMemo(() => level?.sets.find(s => s.id.toString() === setId), [level, setId]);
-  const isQuiz = set?.type === 'quiz';
+
+  // Compute dynamic quiz words for Upper-Intermediate when set is not found
+  const computedQuizWords = useMemo(() => {
+    if (!level || level.id !== 'upper-intermediate') return null;
+    if (set) return null; // exists statically
+    if (!setId || !/^quiz-\d+$/.test(String(setId))) return null;
+    // Rebuild the same visible list used in Learn: drop first 10 numeric sets, exclude quizzes
+    const baseSets = level.sets.filter(s => {
+      const n = Number(s.id);
+      return (isNaN(n) || n > 10) && (s as any).type !== 'quiz';
+    });
+    const groupIndex = Math.max(1, parseInt(String(setId).split('-')[1], 10));
+    const start = (groupIndex - 1) * 4;
+    const group = baseSets.slice(start, start + 4);
+    if (group.length < 1) return null;
+    const words: any[] = [];
+    group.forEach(g => {
+      words.push(...(g.words || []).slice(0, 5));
+    });
+    return words.length ? words : null;
+  }, [level, set, setId]);
+
+  const isQuiz = (set?.type === 'quiz') || !!computedQuizWords;
   
   const [currentPhase, setCurrentPhase] = useState(0);
   const [phases, setPhases] = useState<Phase[]>(
@@ -166,16 +193,24 @@ export default function AtlasPracticeIntegrated() {
     const phase = phases[currentPhase];
     if (!phase) return null;
 
-    const Component = phase.component;
+    const Component = phase.component as any;
     
     // Determine word range for quiz mode
-    // For quizzes: MCQ & Synonym use words 0-4, Usage & Letters use words 5-9
+    // Recap rule: every 4 prior sets → 5 words per exercise
+    //   MCQ:     words 0..4   (from Set A)
+    //   Synonym: words 5..9   (from Set B)
+    //   Usage:   words 10..14 (from Set C)
+    //   Letters: words 15..19 (from Set D)
     let wordRange: { start: number; end: number } | undefined;
     if (isQuiz) {
-      if (phase.id === 'mcq' || phase.id === 'synonym') {
-        wordRange = { start: 0, end: 5 }; // First 5 words
-      } else if (phase.id === 'usage' || phase.id === 'letters') {
-        wordRange = { start: 5, end: 10 }; // Next 5 words
+      if (phase.id === 'mcq') {
+        wordRange = { start: 0, end: 5 };
+      } else if (phase.id === 'synonym') {
+        wordRange = { start: 5, end: 10 };
+      } else if (phase.id === 'usage') {
+        wordRange = { start: 10, end: 15 };
+      } else if (phase.id === 'letters') {
+        wordRange = { start: 15, end: 20 };
       }
     }
     
@@ -187,15 +222,16 @@ export default function AtlasPracticeIntegrated() {
           levelId={levelId || ''}
           onComplete={() => handlePhaseComplete(0, 0)}
           wordRange={wordRange}
+          wordsOverride={computedQuizWords || undefined}
         />
       );
     }
     
     // Special wiring for Missing Letters (new API: single-word component)
     if (phase.id === 'letters') {
-      const level = levels.find(l => l.id === (levelId || ''));
-      const currentSet = level?.sets.find(s => s.id.toString() === String(setId));
-      let words = currentSet?.words ?? [];
+      const levelObj = levels.find(l => l.id === (levelId || ''));
+      const currentSet = levelObj?.sets.find(s => s.id.toString() === String(setId));
+      let words = computedQuizWords || currentSet?.words || [];
       
       // Apply word range if specified
       if (wordRange) {
@@ -217,7 +253,7 @@ export default function AtlasPracticeIntegrated() {
           word={w.word}
           ipa={w.phonetic}
           clue={w.definition}
-          theme="dark"
+          theme={isLight ? 'light' : 'dark'}
           wordIndex={mlIndex}
           totalWords={words.length}
           sharedScore={totalScore}
@@ -258,22 +294,23 @@ export default function AtlasPracticeIntegrated() {
         sharedScore={totalScore}
         onScoreShare={setTotalScore}
         wordRange={wordRange}
+        wordsOverride={computedQuizWords || undefined}
       />
     );
   };
 
   if (!setId || !levelId) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Missing set or level information</Text>
+          <Text style={[styles.errorText, isLight && { color: '#6B7280' }]}>Missing set or level information</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -286,7 +323,7 @@ export default function AtlasPracticeIntegrated() {
             router.back();
           }}
         >
-          <ArrowLeft size={24} color="#fff" />
+          <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
         </TouchableOpacity>
 
         <View
@@ -316,7 +353,8 @@ export default function AtlasPracticeIntegrated() {
                 <Text
                   style={[
                     styles.exerciseName,
-                    currentPhase === index && styles.exerciseNameActive,
+                    { color: isLight ? '#6B7280' : '#6B7280' },
+                    currentPhase === index && { color: isLight ? '#111827' : '#FFFFFF', fontWeight: '700' },
                   ]}
                 >
                   {phase.name}

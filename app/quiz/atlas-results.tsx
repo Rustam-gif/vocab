@@ -13,6 +13,8 @@ const CORRECT_COLOR = '#437F76';
 export default function AtlasResults() {
   const router = useRouter();
   const { loadProgress } = useAppStore();
+  const themeName = useAppStore(s => s.theme);
+  const isLight = themeName === 'light';
   const { score, totalQuestions, setId, levelId, points, exerciseType } = useLocalSearchParams<{
     score?: string;
     totalQuestions?: string;
@@ -187,7 +189,7 @@ export default function AtlasResults() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
       <View style={styles.content}>
         {!hideLottie ? (
           <Animated.View
@@ -242,8 +244,8 @@ export default function AtlasResults() {
           </Animated.View>
         )}
         <View style={styles.scoreSection}>
-          <Text style={styles.pointsText}>{displayPoints}</Text>
-          <Text style={styles.label}>Score Achieved</Text>
+          <Text style={[styles.pointsText, isLight && styles.pointsTextLight]}>{displayPoints}</Text>
+          <Text style={[styles.label, isLight && styles.labelLight]}>Score Achieved</Text>
         </View>
         <View style={styles.buttonContainer}>
           {showDoneButton ? (
@@ -284,6 +286,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1E1E1E',
   },
+  containerLight: {
+    backgroundColor: '#F2E3D0',
+  },
   content: {
     flex: 1,
     alignItems: 'center',
@@ -308,10 +313,16 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
+  labelLight: {
+    color: '#6B7280',
+  },
   pointsText: {
     fontSize: 38,
     fontWeight: '700',
     color: ACCENT,
+  },
+  pointsTextLight: {
+    color: '#e28743',
   },
   scoreSection: {
     alignItems: 'center',

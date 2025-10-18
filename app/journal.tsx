@@ -15,8 +15,9 @@ import { Story } from '../types';
 
 export default function JournalScreen() {
   const router = useRouter();
-  const { savedStories, loadStories } = useAppStore();
+  const { savedStories, loadStories, theme, deleteStory } = useAppStore();
   const [stories, setStories] = useState<Story[]>([]);
+  const isLight = theme === 'light';
 
   // FIXED: Load stories only once on component mount
   // The original code had an infinite loop because:
@@ -56,9 +57,8 @@ export default function JournalScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            // FIXED: Only update local state, don't call store functions
-            // This prevents potential infinite loops from store updates
-            setStories(prev => prev.filter(story => story.id !== storyId));
+            // Update store + persistent storage
+            deleteStory(storyId);
           },
         },
       ]
@@ -71,30 +71,30 @@ export default function JournalScreen() {
 
   if (stories.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
+      <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
+        <View style={[styles.header, isLight && styles.headerLight]}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
           >
-            <ArrowLeft size={24} color="#fff" />
+            <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
           </TouchableOpacity>
-          <Text style={styles.title}>Journal</Text>
+          <Text style={[styles.title, isLight && styles.titleLight]}>Journal</Text>
           <View style={styles.placeholder} />
         </View>
 
         <View style={styles.emptyState}>
-          <FileText size={64} color="#a0a0a0" />
-          <Text style={styles.emptyTitle}>No stories yet</Text>
-          <Text style={styles.emptySubtitle}>
+          <FileText size={64} color={isLight ? '#6B7280' : '#a0a0a0'} />
+          <Text style={[styles.emptyTitle, isLight && styles.emptyTitleLight]}>No stories yet</Text>
+          <Text style={[styles.emptySubtitle, isLight && styles.emptySubtitleLight]}>
             Complete story exercises to save them here
           </Text>
           <TouchableOpacity
-            style={styles.createStoryButton}
-            onPress={() => router.push('/story-exercise')}
+            style={[styles.createStoryButton, isLight && styles.createStoryButtonLight]}
+            onPress={() => router.push('/story/StoryExercise')}
           >
             <BookOpen size={20} color="#fff" />
-            <Text style={styles.createStoryButtonText}>Start Story Exercise</Text>
+            <Text style={[styles.createStoryButtonText, isLight && styles.createStoryButtonTextLight]}>Start Story Exercise</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -102,26 +102,31 @@ export default function JournalScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
+      <View style={[styles.header, isLight && styles.headerLight]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <ArrowLeft size={24} color="#fff" />
+          <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
         </TouchableOpacity>
-        <Text style={styles.title}>Journal</Text>
-        <View style={styles.storyCount}>
-          <Text style={styles.storyCountText}>{stories.length}</Text>
+        <Text style={[styles.title, isLight && styles.titleLight]}>Journal</Text>
+        <View style={[styles.storyCount, isLight && styles.storyCountLight]}>
+          <Text style={[styles.storyCountText, isLight && styles.storyCountTextLight]}>{stories.length}</Text>
         </View>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.storiesList}>
           {stories.map((story) => (
-            <View key={story.id} style={styles.storyCard}>
+            <TouchableOpacity
+              key={story.id}
+              style={[styles.storyCard, isLight && styles.storyCardLight]}
+              activeOpacity={0.85}
+              onPress={() => router.push(`/journal/${story.id}`)}
+            >
               <View style={styles.storyHeader}>
-                <Text style={styles.storyTitle}>{story.title}</Text>
+                <Text style={[styles.storyTitle, isLight && styles.storyTitleLight]}>{story.title}</Text>
                 <TouchableOpacity
                   style={styles.deleteButton}
                   onPress={() => handleDeleteStory(story.id)}
@@ -130,19 +135,19 @@ export default function JournalScreen() {
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.storyPreview}>
+              <Text style={[styles.storyPreview, isLight && styles.storyPreviewLight]}>
                 {getStoryPreview(story.content)}
               </Text>
 
               <View style={styles.storyFooter}>
                 <View style={styles.storyInfo}>
                   <Calendar size={14} color="#a0a0a0" />
-                  <Text style={styles.storyDate}>
+                  <Text style={[styles.storyDate, isLight && styles.storyDateLight]}>
                     {formatDate(story.createdAt)}
                   </Text>
                 </View>
                 <View style={styles.wordsInfo}>
-                  <Text style={styles.wordsText}>
+                  <Text style={[styles.wordsText, isLight && styles.wordsTextLight]}>
                     {story.words.length} words practiced
                   </Text>
                 </View>
@@ -153,7 +158,7 @@ export default function JournalScreen() {
                   <Text style={styles.completedText}>Completed</Text>
                 </View>
               )}
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       </ScrollView>
@@ -166,6 +171,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#252525',
   },
+  containerLight: {
+    backgroundColor: '#F2E3D0',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -175,6 +183,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#2c2f2f',
   },
+  headerLight: {
+    borderBottomColor: '#E5DED3',
+  },
   backButton: {
     padding: 8,
   },
@@ -182,6 +193,9 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#fff',
+  },
+  titleLight: {
+    color: '#111827',
   },
   placeholder: {
     width: 40,
@@ -192,10 +206,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
+  storyCountLight: {
+    backgroundColor: '#187486',
+  },
   storyCountText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  storyCountTextLight: {
+    color: '#fff',
   },
   content: {
     flex: 1,
@@ -214,11 +234,17 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 8,
   },
+  emptyTitleLight: {
+    color: '#111827',
+  },
   emptySubtitle: {
     fontSize: 16,
     color: '#a0a0a0',
     textAlign: 'center',
     marginBottom: 24,
+  },
+  emptySubtitleLight: {
+    color: '#6B7280',
   },
   createStoryButton: {
     backgroundColor: '#e28743',
@@ -228,11 +254,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 25,
   },
+  createStoryButtonLight: {
+    backgroundColor: '#187486',
+  },
   createStoryButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  createStoryButtonTextLight: {
+    color: '#fff',
   },
   storiesList: {
     gap: 16,
@@ -242,6 +274,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 20,
     position: 'relative',
+  },
+  storyCardLight: {
+    backgroundColor: '#F9F1E7',
   },
   storyHeader: {
     flexDirection: 'row',
@@ -256,6 +291,9 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
+  storyTitleLight: {
+    color: '#111827',
+  },
   deleteButton: {
     padding: 4,
   },
@@ -264,6 +302,9 @@ const styles = StyleSheet.create({
     color: '#e0e0e0',
     lineHeight: 24,
     marginBottom: 16,
+  },
+  storyPreviewLight: {
+    color: '#2B2B2B',
   },
   storyFooter: {
     flexDirection: 'row',
@@ -279,6 +320,9 @@ const styles = StyleSheet.create({
     color: '#a0a0a0',
     marginLeft: 4,
   },
+  storyDateLight: {
+    color: '#6B7280',
+  },
   wordsInfo: {
     flex: 1,
     alignItems: 'flex-end',
@@ -286,6 +330,9 @@ const styles = StyleSheet.create({
   wordsText: {
     fontSize: 12,
     color: '#a0a0a0',
+  },
+  wordsTextLight: {
+    color: '#6B7280',
   },
   completedBadge: {
     position: 'absolute',
