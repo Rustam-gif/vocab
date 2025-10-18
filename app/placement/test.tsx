@@ -96,6 +96,9 @@ export default function PlacementTest() {
     setCurrent(next);
   };
 
+  const band = targetBandForIndex(index);
+  const bandAccent = (bandColors(band).text as any).color || '#187486';
+
   return (
     <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
       <View style={styles.header}>
@@ -103,16 +106,16 @@ export default function PlacementTest() {
           <Text style={[styles.headerTitle, isLight && styles.headerTitleLight]}>Placement Test</Text>
           <View style={styles.headerRight}>
             <View style={[styles.counterPill, isLight && styles.counterPillLight]}><Text style={[styles.counterText, isLight && styles.counterTextLight]}>{index + 1}/{TOTAL}</Text></View>
-            <View style={[styles.bandPill, bandColors(targetBandForIndex(index)).pill]}> 
-              <Text style={[styles.bandText, bandColors(targetBandForIndex(index)).text]}>{targetBandForIndex(index)}</Text>
+            <View style={[styles.bandPill, bandColors(band).pill]}> 
+              <Text style={[styles.bandText, bandColors(band).text]}>{band}</Text>
             </View>
           </View>
         </View>
         <View style={[styles.progressBar, isLight && styles.progressBarLight]}>
-          <Animated.View style={[styles.progressFill, { width: progressAnim.interpolate({ inputRange: [0,1], outputRange: ['0%', '100%'] }) }]} />
+          <Animated.View style={[styles.progressFill, { backgroundColor: isLight ? bandAccent : styles.progressFill.backgroundColor, width: progressAnim.interpolate({ inputRange: [0,1], outputRange: ['0%', '100%'] }) }]} />
         </View>
       </View>
-      <View style={[styles.questionCard, isLight && styles.questionCardLight]}>
+      <View style={[styles.questionCard, isLight && styles.questionCardLight, isLight && { borderTopWidth: 4, borderTopColor: bandAccent }]}>
         <Text style={[styles.word, isLight && styles.wordLight]}>{current.word}</Text>
         <Text style={[styles.prompt, isLight && styles.promptLight]}>{current.prompt}</Text>
         {current.meta?.example ? (
@@ -122,13 +125,18 @@ export default function PlacementTest() {
           {allOptions.map((opt, i) => (
             <TouchableOpacity
               key={`${current.id}-${i}`}
-              style={[styles.option, isLight && styles.optionLight, selected === i && styles.optionSelected]}
+              style={[
+                styles.option,
+                isLight && styles.optionLight,
+                selected === i && styles.optionSelected,
+                isLight && selected === i && [styles.optionSelectedLight, { borderLeftWidth: 3, borderLeftColor: bandAccent }],
+              ]}
               onPress={() => setSelected(i)}
               disabled={locked}
               activeOpacity={0.8}
             >
               <View style={styles.optionInnerRow}>
-                <View style={[styles.radio, isLight && styles.radioLight, selected === i && styles.radioActive]} />
+                <View style={[styles.radio, isLight && styles.radioLight, selected === i && styles.radioActive, isLight && selected === i && { borderColor: bandAccent, backgroundColor: bandAccent }]} />
                 <Text style={[styles.optionText, isLight && styles.optionTextLight]}>{opt}</Text>
               </View>
             </TouchableOpacity>
@@ -171,7 +179,7 @@ const styles = StyleSheet.create({
   progressBarLight: { backgroundColor: '#E9E6E0', borderColor: '#D7D3CB' },
   progressFill: { height: '100%', backgroundColor: '#187486', borderRadius: 6 },
   questionCard: { backgroundColor: 'rgba(44,47,47,0.9)', marginHorizontal: 16, borderRadius: 18, padding: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: '#3d474b', shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 12 }, elevation: 8, marginTop: 8 },
-  questionCardLight: { backgroundColor: '#F9F1E7', borderColor: '#E5E7EB', shadowOpacity: 0.15 },
+  questionCardLight: { backgroundColor: '#F7E8D8', borderColor: '#E6D7C7', shadowOpacity: 0.12 },
   word: { color: '#fff', fontSize: 26, fontWeight: '900' },
   wordLight: { color: '#111827' },
   prompt: { color: '#9CA3AF', marginTop: 8, marginBottom: 12, fontSize: 14 },
@@ -180,14 +188,15 @@ const styles = StyleSheet.create({
   exampleLight: { color: '#6B7280' },
   options: { gap: 10 },
   option: { backgroundColor: 'rgba(62,70,74,0.88)', borderWidth: StyleSheet.hairlineWidth, borderColor: '#4b555a', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14 },
-  optionLight: { backgroundColor: '#F3F4F6', borderColor: '#E5E7EB' },
+  optionLight: { backgroundColor: '#EFE4D6', borderColor: '#E0D2C1' },
+  optionSelectedLight: { backgroundColor: '#F7E2D3', borderColor: '#F0C9AC' },
   optionSelected: { borderColor: '#F2935C' },
   optionInnerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' },
   radio: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#6B7280', marginTop: 3 },
-  radioLight: { borderColor: '#9CA3AF' },
+  radioLight: { borderColor: '#BCA897' },
   radioActive: { borderColor: '#F2935C', backgroundColor: '#F2935C' },
   optionText: { color: '#E5E7EB', fontSize: 15, fontWeight: '600', flex: 1, flexShrink: 1, lineHeight: 20 },
-  optionTextLight: { color: '#111827' },
+  optionTextLight: { color: '#2B2621' },
   footer: { flexDirection: 'row', gap: 10, padding: 16 },
   btn: { flex: 1, borderRadius: 12, paddingVertical: 0, alignItems: 'center', overflow: 'hidden' },
   nextGradient: { width: '100%', borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, minHeight: 44 },

@@ -65,8 +65,17 @@ interface StoryData {
 const MAX_BLANKS = 5;
 
 const sanitizeWords = (words: string[]): string[] => {
-  const unique = Array.from(new Set(words.map(w => w.trim()).filter(Boolean)));
-  return unique.slice(0, MAX_BLANKS);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const w of words) {
+    const t = (w || '').trim();
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out.slice(0, MAX_BLANKS);
 };
 
 // Soft hyphen utility: inserts discretionary hyphen points so long words can
@@ -336,35 +345,60 @@ export default function StoryExerciseScreen() {
   const handleWordSelect = (word: string, blankId: string) => {
     if (!story) return;
 
-    // Remove word from available words
-    setSelectedWords(prev => new Set([...prev, word]));
+    // Determine previously assigned word (if any) for this blank
+    let previous: string | null = null;
+    for (const s of story.sentences) {
+      if (s.blank.id === blankId) { previous = s.blank.userAnswer || null; break; }
+      if (s.secondBlank && s.secondBlank.id === blankId) { previous = s.secondBlank.userAnswer || null; break; }
+    }
 
-    // Update the story with the selected word (don't check correctness yet)
+    // Update chosen set: free the previous word and lock the new one
+    setSelectedWords(prev => {
+      const next = new Set(prev);
+      if (previous && previous !== word) next.delete(previous);
+      next.add(word);
+      return next;
+    });
+
+    // Update the story with the selected word; also clear this word from any other blank to allow swapping
     setStory(prevStory => {
       if (!prevStory) return prevStory;
 
       const updatedSentences = prevStory.sentences.map(sentence => {
+        // If another blank currently uses the chosen word, clear it
+        const clearFirst = (b?: StoryBlank) => (b && b.userAnswer === word && b.id !== blankId)
+          ? { ...b, userAnswer: '', isCorrect: false }
+          : b;
+        const clearedSecond = (b?: StoryBlank) => (b && b.userAnswer === word && b.id !== blankId)
+          ? { ...b, userAnswer: '', isCorrect: false }
+          : b;
+
+        let s = sentence;
+        // clear in both blanks if they hold the target word
+        if (s.blank) s = { ...s, blank: clearFirst(s.blank)! };
+        if (s.secondBlank) s = { ...s, secondBlank: clearedSecond(s.secondBlank) } as any;
+
         if (sentence.blank.id === blankId) {
           return {
-            ...sentence,
+            ...s,
             blank: {
-              ...sentence.blank,
+              ...(s.blank as any),
               userAnswer: word,
-              isCorrect: false, // Don't check until "Check Answers" is clicked
+              isCorrect: false,
             },
           };
         }
-        if (sentence.secondBlank && sentence.secondBlank.id === blankId) {
+        if (s.secondBlank && s.secondBlank.id === blankId) {
           return {
-            ...sentence,
+            ...s,
             secondBlank: {
-              ...sentence.secondBlank,
+              ...(s.secondBlank as any),
               userAnswer: word,
-              isCorrect: false, // Don't check until "Check Answers" is clicked
+              isCorrect: false,
             },
           };
         }
-        return sentence;
+        return s;
       });
 
       return { ...prevStory, sentences: updatedSentences };
@@ -721,9 +755,19 @@ export default function StoryExerciseScreen() {
         </React.Fragment>
       );
     }
-  };  const getAvailableWords = () => {
+  };
+
+  const getAvailableWords = (forBlankId?: string) => {
     if (!story) return [];
-    return story.availableWords.filter(word => !selectedWords.has(word));
+    let currentWord: string | null = null;
+    if (forBlankId) {
+      for (const s of story.sentences) {
+        if (s.blank.id === forBlankId) { currentWord = (s.blank.userAnswer || null); break; }
+        if (s.secondBlank && s.secondBlank.id === forBlankId) { currentWord = (s.secondBlank.userAnswer || null); break; }
+      }
+    }
+    // Hide words that are already used, except the one currently assigned to this blank (so user can keep or clear it)
+    return story.availableWords.filter(w => !selectedWords.has(w) || w === currentWord);
   };
 
 const buildStoryFromContent = (
@@ -1376,7 +1420,16 @@ const buildStoryFromContent = (
                     (w.example || '').toLowerCase().includes(query)
                   );
                 }
-                return base;
+                // Deduplicate by word text so the picker doesn't show duplicates from different entries
+                const seen = new Set<string>();
+                const deduped = base.filter(w => {
+                  const key = (w.word || '').trim().toLowerCase();
+                  if (!key) return false;
+                  if (seen.has(key)) return false;
+                  seen.add(key);
+                  return true;
+                });
+                return deduped;
               })().map((word: Word) => {
                 const selected = tempSelection.includes(word.word);
                 const disabled = !selected && tempSelection.length >= MAX_BLANKS;
@@ -1435,7 +1488,7 @@ const buildStoryFromContent = (
             </ScrollView>
             <View style={styles.wordPickerFooter}>
               <Text style={[styles.wordPickerCount, !isDarkMode && styles.wordPickerCountLight]}>
-                {tempSelection.length} / {MAX_BLANKS} selected
+                {sanitizeWords(tempSelection).length} / {MAX_BLANKS} distinct
               </Text>
               <View style={styles.footerActions}>
                 <TouchableOpacity
@@ -1446,18 +1499,18 @@ const buildStoryFromContent = (
                   <Text style={[styles.modalResetText, !isDarkMode && styles.modalResetTextLight]}>Reset</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.modalPrimary, tempSelection.length !== MAX_BLANKS && styles.modalPrimaryDisabled]}
+                  style={[styles.modalPrimary, sanitizeWords(tempSelection).length < MAX_BLANKS && styles.modalPrimaryDisabled]}
                   onPress={() => {
-                    if (tempSelection.length !== MAX_BLANKS) {
-                      Alert.alert('Choose five words', 'Select exactly five words for the story.');
+                    const sanitized = sanitizeWords(tempSelection);
+                    if (sanitized.length < MAX_BLANKS) {
+                      Alert.alert('Choose five words', 'Select at least five distinct words for the story.');
                       return;
                     }
                     setWordPickerOpen(false);
-                    const sanitized = sanitizeWords(tempSelection);
                     setCurrentVocabulary(sanitized);
                     generateStory(sanitized);
                   }}
-                  disabled={tempSelection.length !== MAX_BLANKS || loading}
+                  disabled={sanitizeWords(tempSelection).length < MAX_BLANKS || loading}
                 >
                   {loading ? (
                     <ActivityIndicator color="#1E1E1E" />
@@ -1486,13 +1539,37 @@ const buildStoryFromContent = (
                 <X size={24} color={isDarkMode ? '#9CA3AF' : '#6B7280'} />
               </TouchableOpacity>
             </View>
+            {/* Clear current word (send back to bank) */}
+            {selectedBlankId ? (() => {
+              let current: string | null = null;
+              try {
+                for (const s of story?.sentences || []) {
+                  if (s.blank.id === selectedBlankId) { current = s.blank.userAnswer || null; break; }
+                  if (s.secondBlank && s.secondBlank.id === selectedBlankId) { current = s.secondBlank.userAnswer || null; break; }
+                }
+              } catch {}
+              return current ? (
+                <View style={styles.wordSelectionActions}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      handleRemoveWord(current!, selectedBlankId);
+                      setShowWordSelectionModal(false);
+                      setSelectedBlankId(null);
+                    }}
+                    style={[styles.clearPill, !isDarkMode && styles.clearPillLight]}
+                  >
+                    <Text style={[styles.clearPillText, !isDarkMode && styles.clearPillTextLight]}>Remove current word</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null;
+            })() : null}
             
             <ScrollView
               style={styles.wordSelectionList}
               contentContainerStyle={styles.wordSelectionListContent}
               showsVerticalScrollIndicator={false}
             >
-                {getAvailableWords().map((word) => (
+                {getAvailableWords(selectedBlankId || undefined).map((word) => (
                   <TouchableOpacity
                     key={word}
                     style={[styles.wordSelectionItem, !isDarkMode && styles.wordSelectionItemLight]}
@@ -1502,7 +1579,7 @@ const buildStoryFromContent = (
                   </TouchableOpacity>
                 ))}
                 
-                {getAvailableWords().length === 0 && (
+                {getAvailableWords(selectedBlankId || undefined).length === 0 && (
                   <View style={styles.noWordsAvailable}>
                     <Text style={[styles.noWordsText, !isDarkMode && styles.noWordsTextLight]}>No words available</Text>
                     <Text style={[styles.noWordsSubtext, !isDarkMode && styles.noWordsSubtextLight]}>All words are already used</Text>
@@ -2399,6 +2476,31 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#374151',
+  },
+  wordSelectionActions: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  clearPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginTop: 6,
+  },
+  clearPillLight: {
+    backgroundColor: '#EFE4D6',
+    borderColor: '#E0D2C1',
+  },
+  clearPillText: {
+    color: '#E5E7EB',
+    fontWeight: '600',
+  },
+  clearPillTextLight: {
+    color: '#374151',
   },
   wordSelectionHeaderLight: {
     borderBottomColor: '#E5E7EB',

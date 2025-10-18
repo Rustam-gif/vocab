@@ -50,8 +50,8 @@ export default function StoryExerciseScreen() {
 
   const handleGenerate = async () => {
     const sanitized = words.map(w => w.trim()).filter(Boolean);
-    if (sanitized.length !== 5) {
-      setError('Please provide exactly five words.');
+    if (sanitized.length < 5) {
+      setError('Please provide at least five words.');
       return;
     }
 

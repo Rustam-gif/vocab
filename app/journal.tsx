@@ -91,7 +91,7 @@ export default function JournalScreen() {
           </Text>
           <TouchableOpacity
             style={[styles.createStoryButton, isLight && styles.createStoryButtonLight]}
-            onPress={() => router.push('/story-exercise')}
+            onPress={() => router.push('/story/StoryExercise')}
           >
             <BookOpen size={20} color="#fff" />
             <Text style={[styles.createStoryButtonText, isLight && styles.createStoryButtonTextLight]}>Start Story Exercise</Text>
