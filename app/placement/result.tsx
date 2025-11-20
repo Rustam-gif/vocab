@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { levels } from '../quiz/data/levels';
+import { SetProgressService } from '../../services/SetProgressService';
 import { useAppStore } from '../../lib/store';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
@@ -32,6 +34,21 @@ export default function PlacementResult() {
         if (currentW >= 0 && currentW > existingW) {
           await AsyncStorage.setItem(HIGHEST_LEVEL_KEY, recommended);
         }
+
+        // Mark all lower core levels as completed so users don't have to replay them.
+        // Example: If recommended is B1 (intermediate), mark Beginner as completed.
+        await SetProgressService.initialize();
+        const recIndex = coreOrder.indexOf(recommended);
+        if (recIndex > 0) {
+          const toComplete = coreOrder.slice(0, recIndex);
+          for (const lvlId of toComplete) {
+            const lvl = levels.find(l => l.id === lvlId);
+            if (!lvl) continue;
+            for (const s of lvl.sets) {
+              try { await SetProgressService.markCompleted(lvl.id, s.id, 100); } catch {}
+            }
+          }
+        }
       } catch {}
     })();
   }, [recommended]);
@@ -43,7 +60,7 @@ export default function PlacementResult() {
         <Text style={[styles.level, isLight && styles.levelLight]}>{labelFor(recommended)}</Text>
         <Text style={[styles.caption, isLight && styles.captionLight]}>You can change it anytime in Learn.</Text>
         {early === '1' ? (
-          <Text style={[styles.caption, isLight && styles.captionLight, { color: '#F2AB27' }]}>We stopped early after 3 incorrect answers in a row (at question {q || '–'}). Try a quick review, then continue in Learn.</Text>
+          <Text style={[styles.caption, isLight && styles.captionLight, { color: '#F8B070' }]}>We stopped early after 3 incorrect answers in a row (at question {q || '–'}). Try a quick review, then continue in Learn.</Text>
         ) : null}
         <View style={styles.row}>
           <Text style={[styles.kvKey, isLight && styles.kvKeyLight]}>Estimated ability</Text>
@@ -75,9 +92,9 @@ function labelFor(id: string) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1E1E1E', padding: 20, justifyContent: 'center' },
-  containerLight: { backgroundColor: '#F2E3D0' },
+  containerLight: { backgroundColor: '#F8F8F8' },
   card: { backgroundColor: '#2C2C2C', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#333' },
-  cardLight: { backgroundColor: '#F9F1E7', borderColor: '#E5E7EB' },
+  cardLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
   title: { color: '#9CA3AF', fontWeight: '700', marginBottom: 8 },
   titleLight: { color: '#6B7280' },
   level: { color: '#fff', fontSize: 22, fontWeight: '800' },
@@ -89,7 +106,7 @@ const styles = StyleSheet.create({
   kvKeyLight: { color: '#6B7280' },
   kvVal: { color: '#E5E7EB', fontWeight: '700' },
   kvValLight: { color: '#111827', fontWeight: '700' },
-  cta: { backgroundColor: '#F2935C', marginTop: 8, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  cta: { backgroundColor: '#F8B070', marginTop: 8, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   ctaText: { color: '#fff', fontWeight: '800' },
   link: { marginTop: 10, alignItems: 'center' },
   linkText: { color: '#9CA3AF' },

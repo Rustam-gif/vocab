@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#252525',
   },
   containerLight: {
-    backgroundColor: '#F2E3D0',
+    backgroundColor: '#F8F8F8',
   },
   header: {
     flexDirection: 'row',
@@ -180,11 +180,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2c2f2f',
+    // remove bottom divider
   },
   headerLight: {
-    borderBottomColor: '#E5DED3',
+    // remove bottom divider in light
   },
   backButton: {
     padding: 8,
@@ -276,7 +275,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   storyCardLight: {
-    backgroundColor: '#F9F1E7',
+    backgroundColor: '#FFFFFF',
   },
   storyHeader: {
     flexDirection: 'row',

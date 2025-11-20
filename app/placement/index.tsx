@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { LinearGradient } from '../../lib/LinearGradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAppStore } from '../../lib/store';
@@ -38,9 +38,9 @@ export default function PlacementIntro() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#121415', padding: 20, justifyContent: 'center' },
-  containerLight: { backgroundColor: '#F2E3D0' },
+  containerLight: { backgroundColor: '#F8F8F8' },
   card: { backgroundColor: 'rgba(44,47,47,0.9)', borderRadius: 18, padding: 22, borderWidth: StyleSheet.hairlineWidth, borderColor: '#3d474b', shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 12 }, elevation: 8 },
-  cardLight: { backgroundColor: '#F9F1E7', borderColor: '#E5E7EB', shadowOpacity: 0.15 },
+  cardLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB', shadowOpacity: 0.15 },
   title: { color: '#fff', fontSize: 22, fontWeight: '900', marginBottom: 8 },
   titleLight: { color: '#111827' },
   subtitle: { color: '#9CA3AF', fontSize: 14, lineHeight: 22 },

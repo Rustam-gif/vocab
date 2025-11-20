@@ -1,88 +1,19 @@
 // aiService.ts
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+// No platform-specific networking anymore; direct HTTPS to OpenAI
+import { OPENAI_API_KEY as CFG_OPENAI_API_KEY, API_BASE_URL as CFG_API_BASE_URL } from '../lib/appConfig';
+import RNFS from 'react-native-fs';
+import { getCached, setCached } from '../lib/aiCache';
 
-const DEFAULT_PORT = '4000';
-const API_PORT =
-  (process.env.EXPO_PUBLIC_API_PORT as string | undefined) ||
-  ((Constants as any)?.expoConfig?.extra?.API_PORT as string | undefined) ||
-  DEFAULT_PORT;
+const OPENAI_MODEL = 'gpt-4o-mini';
 
-const OPENAI_BASE_URL = 'https://api.openai.com/v1';
-const OPENAI_MODEL = 'gpt-4o';
-
-function sanitizeBase(base: string | null): string | null {
-  if (!base) return null;
-  try {
-    const u = new URL(base);
-    const host = u.hostname;
-    // Physical devices cannot reach localhost/127.0.0.1 of the dev machine
-    if (Constants.isDevice && (host === 'localhost' || host === '127.0.0.1')) {
-      return null; // force fallback (direct API or other configured host)
-    }
-    // Android emulator uses 10.0.2.2 to reach host's localhost
-    if (!Constants.isDevice && Platform.OS === 'android' && (host === 'localhost' || host === '127.0.0.1')) {
-      return base.replace(host, '10.0.2.2');
-    }
-    return base;
-  } catch {
-    return base;
-  }
+function getApiBaseUrl(): string {
+  // Always use the configured HTTPS endpoint for production safety.
+  // If empty, default to OpenAI's chat completions endpoint.
+  const configured = (CFG_API_BASE_URL && CFG_API_BASE_URL.trim()) || '';
+  return configured || 'https://api.openai.com/v1/chat/completions';
 }
 
-function getApiBaseUrl(): string | null {
-  // 1) Prefer public env var (baked at build time)
-  const fromEnv = (process.env.EXPO_PUBLIC_API_BASE_URL as string | undefined) || null;
-  if (fromEnv) return sanitizeBase(fromEnv.replace(/\/$/, ''));
-
-  // 2) Try to infer a LAN host from Expo fields (works better for physical devices)
-  const anyC: any = Constants as any;
-  const candidates: Array<string | undefined> = [
-    anyC?.expoConfig?.hostUri,
-    anyC?.expoConfig?.debuggerHost,
-    anyC?.manifest?.debuggerHost,
-    anyC?.manifest2?.extra?.expoClient?.hostUri,
-    anyC?.expoGoConfig?.hostUri,
-    anyC?.expoGoConfig?.debuggerHost,
-  ];
-
-  const parseHost = (raw: string): string | null => {
-    try {
-      const withoutScheme = raw.includes('://') ? raw.split('://')[1] : raw;
-      const firstSegment = withoutScheme.split('/')[0];
-      const hostPart = firstSegment.split(':')[0];
-      if (!hostPart) return null;
-      if (Platform.OS === 'android' && (hostPart === 'localhost' || hostPart === '127.0.0.1')) {
-        return '10.0.2.2';
-      }
-      return hostPart;
-    } catch {
-      return null;
-    }
-  };
-
-  for (const cand of candidates) {
-    if (typeof cand === 'string' && cand.length) {
-      const host = parseHost(cand);
-      if (host) return sanitizeBase(`http://${host}:${API_PORT}`);
-    }
-  }
-
-  // 3) Prefer expo extra config (often localhost; best for simulators)
-  const extra = (Constants?.expoConfig?.extra as Record<string, string> | undefined) || undefined;
-  const fromExtra = extra?.API_BASE_URL || null;
-  if (fromExtra) return sanitizeBase(fromExtra.replace(/\/$/, ''));
-
-  // 4) Simulator-friendly fallback; avoid on real devices
-  if (__DEV__ && !Constants.isDevice) {
-    const simulatorHost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
-    return sanitizeBase(`http://${simulatorHost}:${API_PORT}`);
-  }
-
-  return null;
-}
-
-let loggedBaseOnce = false;
+//
 
 export interface Word {
   id: string;
@@ -264,18 +195,19 @@ class AIService {
   }
 
   private resolveApiKey(): string | null {
+    const fromGlobal = (globalThis as any).__OPENAI_API_KEY as string | undefined;
+    const fromConfig = (CFG_OPENAI_API_KEY && CFG_OPENAI_API_KEY.trim()) || '';
     const fromEnv = process.env.EXPO_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
-    const fromConfig = (Constants?.expoConfig?.extra as Record<string, string> | undefined)?.OPENAI_API_KEY;
-    return fromEnv || fromConfig || null;
+    return fromGlobal || fromConfig || fromEnv || null;
   }
 
   private ensureApiKey() {
     if (!this.apiKey) this.apiKey = this.resolveApiKey();
     if (!this.apiKey) {
       throw new Error(
-        'Missing OpenAI API key. Prefer using a proxy by setting EXPO_PUBLIC_API_BASE_URL (or extra.API_BASE_URL) to your server (e.g., http://<host>:4000). If you must call OpenAI directly, set EXPO_PUBLIC_OPENAI_API_KEY or OPENAI_API_KEY.'
+        'Missing OpenAI API key. For direct calls, set OPENAI_API_KEY (or EXPO_PUBLIC_OPENAI_API_KEY) or edit lib/appConfig.ts.'
       );
-    }
+  }
   }
 
   private async callOpenAI(payload: {
@@ -285,50 +217,129 @@ class AIService {
     presence_penalty?: number;
     frequency_penalty?: number;
     max_tokens?: number;
+    model?: string; // optional override per-call
   }) {
-    const base = getApiBaseUrl();
-    if (base) {
-      if (__DEV__ && !loggedBaseOnce) {
-        console.log('[AIService] Using proxy base URL:', base);
-        loggedBaseOnce = true;
-      }
-      const resp = await fetch(`${base.replace(/\/$/, '')}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: OPENAI_MODEL, ...payload }),
-      });
-      if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(`Proxy API error (${resp.status}): ${text}`);
-      }
-      const data = await resp.json();
-      const content: string | undefined = data?.content;
-      if (!content) throw new Error('Proxy API returned empty content.');
-      return content.trim();
-    }
-
-    if (__DEV__) {
-      console.warn('[AIService] No proxy base URL detected. Falling back to direct OpenAI call.');
-    }
+    const endpoint = getApiBaseUrl();
     this.ensureApiKey();
-    const response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ model: OPENAI_MODEL, ...payload }),
+      body: JSON.stringify({ model: payload.model || OPENAI_MODEL, ...payload }),
     });
 
     if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`OpenAI API error (${response.status}): ${errorBody}`);
+      // Safe fetch wrapper returns 599 on offline; map to friendly error
+      const errorBody = await response.text().catch(() => '');
+      const status = (response as any)?.status ?? 0;
+      if (status === 599) throw new Error('Network unavailable. Please check your connection.');
+      throw new Error(`OpenAI API error (${status}): ${errorBody}`);
     }
 
     const data = await response.json();
     const content: string | undefined = data?.choices?.[0]?.message?.content;
     if (!content) throw new Error('OpenAI API returned an empty response.');
     return content.trim();
+  }
+
+  /**
+   * Vision OCR using an inexpensive OpenAI model (gpt-4o-mini).
+   * Accepts a local image URI (e.g., file:///...) and returns an array of tokens/words.
+   */
+  async ocrImageWords(localUri: string): Promise<string[]> {
+    try {
+      this.ensureApiKey();
+      let path = localUri;
+      if (path.startsWith('file://')) path = path.replace('file://', '');
+      const base64 = await RNFS.readFile(path, 'base64');
+      const dataUri = `data:image/jpeg;base64,${base64}`;
+
+      const payload = {
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are an OCR engine. Extract only English words from the image. Return ONLY a JSON array of lowercase words (e.g., ["feedback","visual"]). Ignore numbers, punctuation, and non-words. Deduplicate and keep at most 200 items. Do not include any commentary or markdown.',
+          },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Return only JSON array of unique lowercase words.' },
+              { type: 'image_url', image_url: { url: dataUri } as any },
+            ] as any,
+          },
+        ],
+        temperature: 0,
+        max_tokens: 200,
+      } as any;
+
+      const endpoint = getApiBaseUrl();
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const t = await response.text().catch(() => '');
+        throw new Error(`OCR request failed (${(response as any)?.status ?? 0}): ${t}`);
+      }
+      const data = await response.json();
+      const content: string | undefined = data?.choices?.[0]?.message?.content;
+      if (!content) return [];
+      const parsed = parseJSONLoose(content);
+      const arr: string[] = Array.isArray(parsed) ? parsed.map((s) => String(s).toLowerCase()) : [];
+      return arr.slice(0, 200);
+    } catch (e) {
+      console.warn('AI OCR failed:', e);
+      throw e;
+    }
+  }
+
+  /**
+   * Translate a single English word to `targetLang` with aggressive caching.
+   * - Returns a lowercase translation string (best single-word equivalent).
+   * - Caches results in memory + AsyncStorage for 180 days.
+   */
+  async translateWord(word: string, targetLang: string): Promise<string | null> {
+    const w = (word || '').trim().toLowerCase();
+    if (!w) return null;
+    const lang = (targetLang || 'ru').trim().toLowerCase();
+    const cacheKey = `translate:${lang}:${encodeURIComponent(w)}`;
+    const cached = await getCached<string>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const content = await this.callOpenAI({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a precise bilingual dictionary. Return ONLY JSON: {"translation": string}. Use the most common single-word translation in the target language. Lowercase. No examples or extra fields.',
+          },
+          {
+            role: 'user',
+            content: `Translate the English word "${w}" into ${lang}. Return JSON only.`,
+          },
+        ],
+        temperature: 0,
+        max_tokens: 60,
+      });
+      const parsed = parseJSONLoose(content);
+      const t = String(parsed?.translation || '').trim().toLowerCase();
+      if (!t) return null;
+      await setCached(cacheKey, t);
+      return t;
+    } catch (e) {
+      console.warn('translateWord failed:', e);
+      return null;
+    }
   }
 
   async getWordDefinition(word: string): Promise<{
@@ -362,6 +373,72 @@ class AIService {
     } catch (error) {
       console.error('Failed to fetch word definition:', error);
       return null;
+    }
+  }
+
+  /**
+   * Fetch multiple candidate senses for a word so users can choose a specific meaning.
+   * Returns up to 5 concise senses with optional part of speech and example.
+   */
+  async getWordMeanings(word: string): Promise<Array<{ pos?: string; definition: string; example?: string }>> {
+    try {
+      const response = await this.callOpenAI({
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a precise dictionary assistant. Return ONLY JSON for multiple senses of a word. Keep each definition short and clear. Provide at most ONE sense per part of speech among: noun, verb, adjective, adverb. If a part of speech does not apply, omit it. Use the key "pos" with one of exactly: noun | verb | adjective | adverb | other. Do not include markdown or commentary.',
+          },
+          {
+            role: 'user',
+            content:
+              `Return ONLY a JSON array: [ { pos: 'noun|verb|adjective|adverb|other', definition: string, example?: string }, ... ] for the word "${word}". At most one item per part of speech (noun, verb, adjective, adverb). If none fit, include a single 'other'. Keep definitions brief; examples should be practical.`,
+          },
+        ],
+        temperature: 0.2,
+        max_tokens: 500,
+      });
+
+      const parsed = parseJSONLoose(response);
+      const arr: any[] = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.senses)
+          ? parsed.senses
+          : [];
+      // Normalize part-of-speech labels
+      const normalizePos = (s?: string): string => {
+        const t = (s || '').toString().trim().toLowerCase();
+        if (!t) return 'other';
+        if (/(^|\W)(v|verb|phrasal\s*verb)(\W|$)/.test(t)) return 'verb';
+        if (/(^|\W)(n|noun)(\W|$)/.test(t)) return 'noun';
+        if (/(^|\W)(adj|adjective)(\W|$)/.test(t)) return 'adjective';
+        if (/(^|\W)(adv|adverb)(\W|$)/.test(t)) return 'adverb';
+        return 'other';
+      };
+
+      const cleanedAll = arr
+        .map((it) => ({
+          pos: normalizePos(it?.pos),
+          definition: String(it?.definition || '').trim(),
+          example: it?.example ? String(it.example).trim() : undefined,
+        }))
+        .filter((it) => it.definition);
+
+      // Keep at most one per POS in preferred order
+      const preferred: Array<'noun' | 'verb' | 'adjective' | 'adverb' | 'other'> = ['noun', 'verb', 'adjective', 'adverb', 'other'];
+      const seen = new Set<string>();
+      const deduped: Array<{ pos?: string; definition: string; example?: string }> = [];
+      for (const p of preferred) {
+        const first = cleanedAll.find((x) => x.pos === p);
+        if (first && !seen.has(p)) {
+          deduped.push(first);
+          seen.add(p);
+        }
+      }
+      return deduped;
+    } catch (error) {
+      console.warn('Failed to fetch meanings:', error);
+      return [];
     }
   }
 
@@ -437,17 +514,36 @@ Perspective: ${perspective}${perspective === 'third-person' ? `\nProtagonist nam
 Return only the JSON object.`;
 
     try {
-      const response = await this.callOpenAI({
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: USER_PROMPT },
-        ],
-        temperature: 0.8,
-        top_p: 0.95,
-        presence_penalty: 0.85,
-        frequency_penalty: 0.35,
-        max_tokens: maxTokens,
-      });
+      let response: string;
+      try {
+        // Prefer GPT-5 mini for story generation
+        response = await this.callOpenAI({
+          model: 'gpt-5-mini',
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: USER_PROMPT },
+          ],
+          temperature: 0.8,
+          top_p: 0.95,
+          presence_penalty: 0.85,
+          frequency_penalty: 0.35,
+          max_tokens: maxTokens,
+        });
+      } catch (primaryErr: any) {
+        // Fallback to default model if GPT-5 mini is unavailable
+        console.warn('Story generation with gpt-5-mini failed; falling back to default model.', primaryErr);
+        response = await this.callOpenAI({
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: USER_PROMPT },
+          ],
+          temperature: 0.8,
+          top_p: 0.95,
+          presence_penalty: 0.85,
+          frequency_penalty: 0.35,
+          max_tokens: maxTokens,
+        });
+      }
 
       const parsed = parseJSONLoose(response);
       if (!parsed?.content) {
@@ -455,7 +551,59 @@ Return only the JSON object.`;
       }
 
       // Fix broken lines and collapse duplicates (formatting only)
-      const cleaned = finalizeStoryContent(String(parsed.content || ''));
+      let cleaned = finalizeStoryContent(String(parsed.content || ''));
+
+      // Post-process: enforce that each target word appears exactly once wrapped as **word**
+      const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const ensureBoldOnce = (text: string): { text: string; ok: boolean } => {
+        let out = text;
+        let ok = true;
+        for (const w of targetWords) {
+          const reBold = new RegExp(`\\*\\*${esc(w)}\\*\\*`, 'gi');
+          const matches = out.match(reBold) || [];
+          if (matches.length === 0) {
+            // Try to find an unbolded occurrence to wrap
+            const rePlain = new RegExp(`\\b${esc(w)}\\b`, 'i');
+            if (rePlain.test(out)) {
+              out = out.replace(rePlain, (m) => `**${m.toLowerCase()}**`);
+            } else {
+              ok = false; // missing entirely
+            }
+          } else if (matches.length > 1) {
+            // Unbold all but the first occurrence
+            let seen = 0;
+            out = out.replace(reBold, (m) => {
+              seen += 1;
+              return seen === 1 ? m : m.replace(/\*\*/g, '');
+            });
+          }
+        }
+        return { text: out, ok };
+      };
+
+      let enforced = ensureBoldOnce(cleaned);
+      if (!enforced.ok) {
+        // One light repair pass with the model to include any missing target words
+        try {
+          const missing = targetWords.filter(w => !new RegExp(`\\*\\*${esc(w)}\\*\\*`, 'i').test(enforced.text) && !new RegExp(`\\b${esc(w)}\\b`, 'i').test(enforced.text));
+          const repair = await this.callOpenAI({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: 'Return ONLY JSON: {"content": string}. You will minimally revise a story so that each target word appears exactly once wrapped as **word**. Keep length and tone similar.' },
+              { role: 'user', content: `Story to repair:\n\n${cleaned}\n\nMissing target words (wrap them exactly once): ${missing.join(', ')}. Return only the JSON object.` },
+            ],
+            temperature: 0.4,
+            max_tokens: 500,
+          });
+          const repaired = parseJSONLoose(repair);
+          if (repaired?.content) {
+            cleaned = finalizeStoryContent(String(repaired.content));
+            enforced = ensureBoldOnce(cleaned);
+          }
+        } catch {}
+      }
+
+      cleaned = enforced.text;
 
       return {
         id: parsed.id || `story_${Date.now()}`,
@@ -466,6 +614,364 @@ Return only the JSON object.`;
       // Do not use any local templates; surface the error to the caller
       console.warn('Error generating story via OpenAI:', error);
       throw error;
+    }
+  }
+
+  /* ---------------- IELTS: Writing Grader (LLM with deterministic fallback) ---------------- */
+  private sanitizeHtml(input: string): string {
+    return String(input || '')
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&[a-z#0-9]+;/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private countWords(text: string): number {
+    const s = String(text || '')
+      .toLowerCase()
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[^a-zA-Z0-9\s'-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!s) return 0;
+    return s.split(/\s+/).length;
+  }
+
+  private computeBand(sub: { task_response: number; coherence: number; lexical: number; grammar: number }): number {
+    const clamp = (n: number) => Math.max(0, Math.min(9, n));
+    const w = 0.30 * clamp(sub.task_response) + 0.25 * clamp(sub.coherence) + 0.25 * clamp(sub.lexical) + 0.20 * clamp(sub.grammar);
+    return Math.round(w * 10) / 10;
+  }
+
+  private ruleScoreWriting(student: string, prompt: string) {
+    const text = this.sanitizeHtml(student);
+    const wordCount = this.countWords(text);
+
+    // Simple keyword coverage from prompt
+    const kws = Array.from(new Set((prompt.toLowerCase().match(/[a-z]{5,}/g) || []).slice(0, 10)));
+    const hit = kws.filter(k => new RegExp(`\\b${k}\\b`, 'i').test(text)).length;
+    const coverage = kws.length ? hit / kws.length : 0.6;
+
+    // Cohesion signals
+    const signals = ['however','moreover','therefore','in addition','furthermore','for example','for instance','on the other hand','consequently','thus','nevertheless'];
+    const cohHits = signals.reduce((acc, s) => acc + (new RegExp(`\\b${s}\\b`, 'i').test(text) ? 1 : 0), 0);
+    const paraCount = (text.match(/\n\n/g) || []).length + 1;
+
+    // Lexical variety via type-token ratio (rough)
+    const tokens = text.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(Boolean);
+    const types = new Set(tokens).size;
+    const ttr = tokens.length ? types / tokens.length : 0;
+
+    // Grammar proxy: commas and common mistakes
+    const commaRuns = (text.match(/,\s*,/g) || []).length;
+    const doubleSpaces = (text.match(/\s{2,}/g) || []).length;
+    const articleIssues = (text.match(/\b(a|an|the)\s+(a|an|the)\b/gi) || []).length;
+    const errorScore = commaRuns + doubleSpaces + articleIssues;
+
+    // Map heuristics to 0–9
+    const task_response = Math.max(0, Math.min(9, Math.round((coverage * 6 + (wordCount >= 250 ? 3 : wordCount >= 180 ? 2 : 1)) * 10) / 10));
+    const coherence = Math.max(0, Math.min(9, Math.round(((cohHits >= 4 ? 7 : cohHits >= 2 ? 6 : 5) + (paraCount >= 4 ? 1 : 0)) * 10) / 10));
+    const lexical = Math.max(0, Math.min(9, Math.round(((ttr > 0.6 ? 7 : ttr > 0.5 ? 6 : 5)) * 10) / 10));
+    const grammar = Math.max(0, Math.min(9, Math.round(((errorScore === 0 ? 7 : errorScore < 3 ? 6 : 5)) * 10) / 10));
+
+    const subs = { task_response, coherence, lexical, grammar } as const;
+    const band_estimate = this.computeBand(subs);
+
+    // Minimal tips and replacements
+    const action_tips = [
+      'Strengthen topic sentences',
+      'Vary linking devices',
+      'Replace vague verbs with precise ones',
+    ];
+    const phrase_replacements = [
+      { original: 'a lot of', suggestions: ['many', 'numerous', 'a large number of'] },
+      { original: 'very important', suggestions: ['crucial', 'vital', 'pivotal'] },
+      { original: 'make more', suggestions: ['increase', 'boost', 'raise'] },
+    ];
+
+    return { band_estimate, subscores: subs, word_count: wordCount, action_tips, phrase_replacements, fallback: true };
+  }
+
+  async gradeWriting(input: {
+    task_type: string;
+    prompt_text: string;
+    student_text: string;
+    prompt_id?: string;
+    elapsed_seconds?: number;
+  }): Promise<{
+    band_estimate: number;
+    subscores: { task_response: number; coherence: number; lexical: number; grammar: number };
+    word_count: number;
+    action_tips: string[];
+    phrase_replacements: Array<{ original: string; suggestions: string[] }>;
+    fallback: boolean;
+    latency_ms: number;
+  }> {
+    const start = Date.now();
+    const student = this.sanitizeHtml(input.student_text || '');
+    const wordCount = this.countWords(student);
+    const timeoutMs = 10000;
+    const mode = (process.env.EXPO_PUBLIC_GRADER_MODE || 'llm').toLowerCase();
+
+    const doFallback = () => {
+      const fb = this.ruleScoreWriting(student, input.prompt_text || '');
+      return {
+        band_estimate: fb.band_estimate,
+        subscores: fb.subscores,
+        word_count: fb.word_count,
+        action_tips: fb.action_tips,
+        phrase_replacements: fb.phrase_replacements,
+        fallback: true,
+        latency_ms: Date.now() - start,
+      } as const;
+    };
+
+    if (mode !== 'llm') return doFallback();
+
+    try {
+      const controller = new Promise<string>((resolve, reject) => {
+        this.callOpenAI({
+          model: OPENAI_MODEL,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are an IELTS Writing examiner. Grade deterministically. Output ONLY valid JSON with keys band_estimate, subscores{task_response,coherence,lexical,grammar}, word_count, action_tips[3], phrase_replacements(up to 6 each with suggestions[<=3]). Weights: 30/25/25/20. 1 decimal band. No extra text.',
+            },
+            {
+              role: 'user',
+              content:
+                `task_type: ${input.task_type}\nprompt_id: ${input.prompt_id || ''}\nprompt_text: ${input.prompt_text}\nstudent_text: ${student}\nReturn JSON only.`,
+            },
+          ],
+          temperature: 0,
+          max_tokens: 800,
+        })
+          .then(resolve)
+          .catch(reject);
+        setTimeout(() => reject(new Error('timeout')), timeoutMs);
+      });
+
+      const content = await controller;
+      const parsed = parseJSONLoose(content);
+      const subs = {
+        task_response: Number(parsed?.subscores?.task_response ?? 0),
+        coherence: Number(parsed?.subscores?.coherence ?? 0),
+        lexical: Number(parsed?.subscores?.lexical ?? 0),
+        grammar: Number(parsed?.subscores?.grammar ?? 0),
+      };
+      const band = this.computeBand(subs);
+      return {
+        band_estimate: Number.isFinite(parsed?.band_estimate) ? Number(parsed.band_estimate) : band,
+        subscores: subs,
+        word_count: wordCount,
+        action_tips: Array.isArray(parsed?.action_tips) ? parsed.action_tips.slice(0, 3).map(String) : [],
+        phrase_replacements: Array.isArray(parsed?.phrase_replacements)
+          ? parsed.phrase_replacements.slice(0, 6).map((p: any) => ({
+              original: String(p?.original || ''),
+              suggestions: Array.isArray(p?.suggestions) ? p.suggestions.slice(0, 3).map(String) : [],
+            }))
+          : [],
+        fallback: false,
+        latency_ms: Date.now() - start,
+      };
+    } catch (e) {
+      console.warn('gradeWriting LLM failed, using fallback:', e);
+      return doFallback();
+    }
+  }
+
+  /* ---------------- IELTS: Reading scorer (deterministic) ---------------- */
+  private lemma(s: string): string {
+    const t = (s || '').toLowerCase().trim();
+    // stripped endings basic
+    const rules: Array<[RegExp, string]> = [
+      [/ies$/i, 'y'],
+      [/ves$/i, 'f'],
+      [/ing$/i, ''],
+      [/ed$/i, ''],
+      [/s$/i, ''],
+    ];
+    let out = t.replace(/[^a-z]/g, '');
+    for (const [re, rep] of rules) out = out.replace(re, rep);
+    return out;
+  }
+
+  private summarySynonyms = new Map<string, string[]>([
+    ['biodiversity', ['diversity']],
+    ['crop', ['harvest', 'produce']],
+    ['yields', ['output', 'production']],
+    ['accept', ['tolerate', 'embrace', 'approve']],
+  ]);
+
+  private matchSynonym(student: string, gold: string): boolean {
+    const s = this.lemma(student);
+    const g = this.lemma(gold);
+    if (!s || !g) return false;
+    if (s === g) return true;
+    const alts = this.summarySynonyms.get(g) || [];
+    return alts.some((a) => this.lemma(a) === s);
+  }
+
+  async gradeReading(input: {
+    passage: string;
+    questions: Array<{ id: string | number; type: string; stem?: string; options?: string[]; answer: any; student: any; snippet?: string; rationale?: string }>;
+  }): Promise<{
+    score_total: number;
+    score_max: number;
+    percent: number;
+    items: Array<{ id: string | number; correct: boolean; correct_answer: any; student: any; snippet?: string; rationale?: string }>;
+    fallback: boolean;
+    latency_ms: number;
+  }> {
+    const start = Date.now();
+    const items = [] as Array<{ id: string | number; correct: boolean; correct_answer: any; student: any; snippet?: string; rationale?: string }>;
+    for (const q of input.questions || []) {
+      let correct = false;
+      const type = (q.type || '').toLowerCase();
+      if (type === 'summary_completion') {
+        const gold = Array.isArray(q.answer) ? q.answer : [q.answer];
+        correct = gold.some((g) => this.matchSynonym(String(q.student || ''), String(g || '')));
+      } else if (type === 'tfng') {
+        correct = String(q.student || '').trim().toUpperCase() === String(q.answer || '').trim().toUpperCase();
+      } else if (type === 'mcq_inference' || type === 'match_heading' || type === 'skim_scan' || type === 'vocab_in_context' || type === 'opinion_evidence') {
+        correct = String(q.student || '').trim().toLowerCase() === String(q.answer || '').trim().toLowerCase();
+      } else {
+        // default strict compare
+        correct = String(q.student || '').trim().toLowerCase() === String(q.answer || '').trim().toLowerCase();
+      }
+      items.push({ id: q.id, correct, correct_answer: q.answer, student: q.student, snippet: q.snippet, rationale: q.rationale });
+    }
+    const score_total = items.filter((i) => i.correct).length;
+    const score_max = items.length;
+    const percent = score_max ? Math.round((score_total / score_max) * 100) : 0;
+    return { score_total, score_max, percent, items, fallback: false, latency_ms: Date.now() - start };
+  }
+
+  // IELTS Writing Task 2 rich grader (JSON with annotations). Deterministic LLM with fallback.
+  async gradeIELTSWritingTask2Rich(input: {
+    prompt_text: string;
+    student_answer: string;
+    word_count: number;
+  }): Promise<{
+    band_estimate: number;
+    subscores: { task_response: number; coherence: number; lexical: number; grammar: number };
+    word_count: number;
+    annotated_html: string;
+    corrections: Array<{ loc: string; original: string; correction: string; type: 'grammar'|'vocab'|'cohesion'|'punctuation'|'register'; reason: string; confidence: 'high'|'med'|'low' }>;
+    suggested_replacements: Array<{ original: string; alternatives: string[] }>;
+    three_tips: string[];
+    rewrite_example?: string;
+    fallback: boolean;
+    latency_ms: number;
+  }> {
+    const start = Date.now();
+    const prompt_text = this.sanitizeHtml(input.prompt_text || '');
+    const student_answer = this.sanitizeHtml(input.student_answer || '');
+    const wc = Number.isFinite(input.word_count) && input.word_count > 0 ? Math.round(input.word_count) : this.countWords(student_answer);
+
+    const SYSTEM = 'You are an expert IELTS Writing Task 2 assessor. Return ONLY one valid JSON object as the answer. No markdown, no commentary.';
+    const USER = [
+      'You will be given three inputs and must evaluate the essay and return ONLY JSON matching this schema.',
+      'Required output JSON keys and formats:',
+      '- band_estimate: float 0.0–9.0, 1 decimal (weighted by rubric).',
+      '- subscores: floats 0.0–9.0 for task_response, coherence, lexical, grammar.',
+      '- word_count: integer.',
+      '- annotated_html: minimal HTML with <p> and <mark class="error" data-correction=".." data-reason=".." data-confidence="high|med|low">original</mark>.',
+      '- corrections: up to 20 objects { loc:"P#S#", original, correction, type:"grammar|vocab|cohesion|punctuation|register", reason:"<=12 words", confidence:"high|med|low" }.',
+      '- suggested_replacements: up to 6 objects { original, alternatives:[opt1,opt2,opt3] }.',
+      '- three_tips: exactly 3 short actionable tips (<=12 words).',
+      '- rewrite_example: optional full rewrite string.',
+      'Rubric & rules:',
+      '- Weights: task_response 30%, coherence 25%, lexical 25%, grammar 20%; band_estimate is weighted average rounded to 1 decimal.',
+      '- Reasons/tips succinct (<=12 words).',
+      '- Confidence: high for clear grammar errors; med for style/word-choice; low for optional rewrites.',
+      '- annotated_html must reflect corrections with accurate data-correction and data-reason.',
+      '- Do not invent facts; only reference student text.',
+      'Inputs:',
+      `- prompt_text: ${prompt_text}`,
+      `- student_answer: ${student_answer}`,
+      `- word_count: ${wc}`,
+      'Return JSON only.',
+    ].join('\n');
+
+    try {
+      const content = await this.callOpenAI({
+        model: OPENAI_MODEL,
+        messages: [
+          { role: 'system', content: SYSTEM },
+          { role: 'user', content: USER },
+        ],
+        temperature: 0,
+        max_tokens: 1400,
+      });
+      const parsed = parseJSONLoose(content);
+      const subs = {
+        task_response: Number(parsed?.subscores?.task_response ?? 0),
+        coherence: Number(parsed?.subscores?.coherence ?? 0),
+        lexical: Number(parsed?.subscores?.lexical ?? 0),
+        grammar: Number(parsed?.subscores?.grammar ?? 0),
+      };
+      const computedBand = this.computeBand(subs);
+      return {
+        band_estimate: Number.isFinite(parsed?.band_estimate) ? Number(parsed.band_estimate) : computedBand,
+        subscores: subs,
+        word_count: Number.isFinite(parsed?.word_count) ? Number(parsed.word_count) : wc,
+        annotated_html: String(parsed?.annotated_html || `<p>${student_answer}</p>`),
+        corrections: Array.isArray(parsed?.corrections) ? parsed.corrections.slice(0, 20) : [],
+        suggested_replacements: Array.isArray(parsed?.suggested_replacements) ? parsed.suggested_replacements.slice(0, 6) : [],
+        three_tips: Array.isArray(parsed?.three_tips) ? parsed.three_tips.slice(0, 3) : [],
+        rewrite_example: parsed?.rewrite_example ? String(parsed.rewrite_example) : undefined,
+        fallback: false,
+        latency_ms: Date.now() - start,
+      };
+    } catch (e) {
+      console.warn('gradeIELTSWritingTask2Rich LLM failed, using fallback:', e);
+      const fb = this.ruleScoreWriting(student_answer, prompt_text);
+
+      // Heuristic annotation
+      const paragraphs = student_answer.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+      const corrections: Array<{ loc: string; original: string; correction: string; type: any; reason: string; confidence: any }> = [];
+      const mark = (pi: number, si: number, original: string, correction: string, type: any, reason: string, confidence: any) => {
+        if (corrections.length >= 20) return;
+        corrections.push({ loc: `P${pi + 1}S${si + 1}`, original, correction, type, reason, confidence });
+      };
+      const splitSents = (p: string) => p.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+/).filter(Boolean);
+      let annotated = '';
+      for (let pi = 0; pi < paragraphs.length; pi++) {
+        const sents = splitSents(paragraphs[pi]);
+        const ms = sents.map((s, si) => {
+          let out = s;
+          out = out.replace(/\balot\b/gi, (m) => { mark(pi, si, 'alot', 'a lot', 'vocab', 'misspelling', 'high'); return `<mark class="error" data-correction="a lot" data-reason="misspelling" data-confidence="high">${m}</mark>`; });
+          out = out.replace(/\bvery\s+very\b/gi, (m) => { mark(pi, si, m, 'very', 'lexical', 'redundant intensifier', 'med'); return `<mark class="error" data-correction="very" data-reason="redundant intensifier" data-confidence="med">${m}</mark>`; });
+          out = out.replace(/\bkind of\b/gi, (m) => { mark(pi, si, m, 'somewhat', 'register', 'vague phrase', 'low'); return `<mark class="error" data-correction="somewhat" data-reason="vague phrase" data-confidence="low">${m}</mark>`; });
+          return out;
+        });
+        annotated += `<p>${ms.join(' ')}</p>`;
+      }
+
+      return {
+        band_estimate: fb.band_estimate,
+        subscores: fb.subscores,
+        word_count: wc,
+        annotated_html: annotated || `<p>${student_answer}</p>`,
+        corrections,
+        suggested_replacements: [
+          { original: 'a lot of', alternatives: ['many', 'numerous', 'a large number of'] },
+          { original: 'very very', alternatives: ['extremely', 'highly', 'particularly'] },
+          { original: 'kind of', alternatives: ['somewhat', 'relatively', 'to some extent'] },
+        ],
+        three_tips: [
+          'Use precise academic collocations',
+          'Add clear topic sentences',
+          'Check articles and verb forms',
+        ],
+        fallback: true,
+        latency_ms: Date.now() - start,
+      };
     }
   }
 }

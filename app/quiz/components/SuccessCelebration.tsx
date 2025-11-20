@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import LottieView from 'lottie-react-native';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../../../lib/haptics';
 
 const SUCCESS_ANIMATION = require('../../../assets/lottie/completed.json');
 
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   continueButton: {
-    backgroundColor: '#F2935C',
+    backgroundColor: '#F8B070',
     borderRadius: 16,
     minWidth: 180,
     paddingVertical: 14,

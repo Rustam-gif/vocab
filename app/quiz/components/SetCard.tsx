@@ -1,6 +1,6 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Animated } from 'react-native';
+import { LinearGradient } from '../../../lib/LinearGradient';
 import { CheckCircle, Lock } from 'lucide-react-native';
 import { useAppStore } from '../../../lib/store';
 
@@ -27,7 +27,7 @@ export default function SetCard({ set, onPress }: SetCardProps) {
   const isInProgress = set.inProgress;
   const isLocked = set.locked;
 
-  const accent = '#F2935C';
+  const accent = '#F8B070';
   const success = '#437F76';
 
   const cleanTitle = (title: string) => {
@@ -125,13 +125,33 @@ export default function SetCard({ set, onPress }: SetCardProps) {
     return '#fff';
   };
 
+  // Press bounce animation (match Home tiles/pills)
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const handlePressIn = () => {
+    try { Animated.spring(scaleAnim, { toValue: 0.96, useNativeDriver: true, friction: 7, tension: 280 }).start(); } catch {}
+  };
+  const handlePressBounce = () => {
+    const v = scaleAnim;
+    try {
+      Animated.sequence([
+        Animated.spring(v, { toValue: 1.05, useNativeDriver: true, friction: 6, tension: 180 }),
+        Animated.spring(v, { toValue: 1, useNativeDriver: true, friction: 7, tension: 140 }),
+      ]).start();
+    } catch {
+      try { v.setValue(1); } catch {}
+    }
+  };
+
   return (
-    <TouchableOpacity 
-      style={[styles.container, isLocked && styles.lockedContainer, isLight && styles.containerLight]} 
-      onPress={onPress}
-      disabled={isLocked}
-      activeOpacity={isLocked ? 1 : 0.7}
-    >
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity 
+        style={[styles.container, isLocked && styles.lockedContainer, isLight && styles.containerLight]} 
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressBounce}
+        disabled={isLocked}
+        activeOpacity={isLocked ? 1 : 0.7}
+      >
       <View style={styles.headerRow}>
         <Image 
           source={getIconSource()} 
@@ -176,7 +196,13 @@ export default function SetCard({ set, onPress }: SetCardProps) {
 
       {/* Absolute action button overlay (vertically centered on the right) */}
       <View style={styles.actionOverlay}>
-        <TouchableOpacity onPress={onPress} activeOpacity={0.85} disabled={isLocked}>
+        <TouchableOpacity 
+          onPress={onPress} 
+          activeOpacity={0.85} 
+          disabled={isLocked}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressBounce}
+        >
           {(!isCompleted && !isInProgress && !isLocked) ? (
             <LinearGradient
               colors={['#1a8d87', '#3cb4ac']}
@@ -194,7 +220,8 @@ export default function SetCard({ set, onPress }: SetCardProps) {
           )}
         </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -207,9 +234,9 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   containerLight: {
-    backgroundColor: '#F9F1E7',
+    backgroundColor: '#FFFFFF',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#F9F1E7',
+    borderColor: '#FFFFFF',
   },
   headerRow: {
     flexDirection: 'row',
@@ -233,7 +260,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
     lineHeight: 18,
-    fontFamily: 'Ubuntu_700Bold',
+    fontFamily: 'Ubuntu-Bold',
   },
   wordsMeta: {
     fontSize: 12,
@@ -323,7 +350,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     marginTop: 1,
-    fontFamily: 'Ubuntu_400Regular',
+    fontFamily: 'Ubuntu-Regular',
     // Extra safety so preview never collides with the button
     paddingRight: 6,
   },
@@ -335,10 +362,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 9,
-    minWidth: 80,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999, // pill shape
+    minWidth: 92,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,

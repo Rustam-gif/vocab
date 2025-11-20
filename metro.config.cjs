@@ -1,14 +1,21 @@
-// Custom Metro config to ensure metro-runtime resolves to Expo's runtime.
-// This avoids ENOENT lookups like react-native/node_modules/metro-runtime.
-const { getDefaultConfig } = require('@expo/metro-config');
+// metro.config.cjs
+const path = require('path');
+const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
 
-const config = getDefaultConfig(__dirname);
+const defaultConfig = getDefaultConfig(__dirname);
 
-config.resolver = config.resolver || {};
-config.resolver.alias = {
-  ...(config.resolver.alias || {}),
-  'metro-runtime': require.resolve('@expo/metro-runtime'),
-};
-
-module.exports = config;
-
+module.exports = mergeConfig(defaultConfig, {
+  transformer: {
+    babelTransformerPath: require.resolve('react-native-svg-transformer'),
+  },
+  resolver: {
+    assetExts: defaultConfig.resolver.assetExts.filter(ext => ext !== 'svg'),
+    sourceExts: [...defaultConfig.resolver.sourceExts, 'svg'],
+    extraNodeModules: {
+      'expo-router': path.resolve(__dirname, 'lib/router'),
+      'react-native-sound': path.resolve(__dirname, 'lib/rnsound'),
+      'lottie-react-native': path.resolve(__dirname, 'lib/lottie-proxy'),
+      '@react-navigation/native': path.resolve(__dirname, 'lib/reactNavigation'),
+    },
+  },
+});

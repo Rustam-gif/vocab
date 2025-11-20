@@ -2,52 +2,39 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Text, TextInput, View, StyleSheet } from 'react-native';
-import { useFonts } from 'expo-font';
-import {
-  Ubuntu_400Regular,
-  Ubuntu_500Medium,
-  Ubuntu_700Bold,
-} from '@expo-google-fonts/ubuntu';
+// Fonts are bundled locally from assets/fonts and linked via react-native.config.js
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
 import LottieView from 'lottie-react-native';
 import { Launch } from '../lib/launch';
+import { usePathname } from 'expo-router';
 
 export default function RootLayout() {
-  // Try to load Lexend fonts if the package is installed; fall back silently.
-  let Lexend_400Regular: any, Lexend_500Medium: any, Lexend_700Bold: any;
-  try {
-    const mod = require('@expo-google-fonts/lexend');
-    Lexend_400Regular = mod?.Lexend_400Regular;
-    Lexend_500Medium = mod?.Lexend_500Medium;
-    Lexend_700Bold = mod?.Lexend_700Bold;
-  } catch {}
-
-  const [fontsLoaded] = useFonts({
-    Ubuntu_400Regular,
-    Ubuntu_500Medium,
-    Ubuntu_700Bold,
-    // Optional Lexend faces (present only if package available)
-    ...(Lexend_400Regular ? { Lexend_400Regular } : {}),
-    ...(Lexend_500Medium ? { Lexend_500Medium } : {}),
-    ...(Lexend_700Bold ? { Lexend_700Bold } : {}),
-  });
+  // No runtime font loading needed; fonts are available by name (e.g., 'Ubuntu-Regular').
   const themeName = useAppStore(s => s.theme);
   const initializeApp = useAppStore(s => s.initialize);
   const [showLaunch, setShowLaunch] = useState(true);
   const launchRef = useRef<LottieView>(null);
   const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const finishedRef = useRef(false);
+  // Global short loading overlay on route changes
+  const [routeLoading, setRouteLoading] = useState(false);
+  const path = usePathname();
+  const firstPathRef = useRef<string | null>(null);
 
   // Apply a global font family across the app after fonts load
   useEffect(() => {
-    if (!fontsLoaded) return;
     Text.defaultProps = Text.defaultProps || {};
-    Text.defaultProps.style = [Text.defaultProps.style, { fontFamily: 'Ubuntu_400Regular' }];
+    Text.defaultProps.style = [Text.defaultProps.style, { fontFamily: 'Ubuntu-Regular' }];
 
     TextInput.defaultProps = TextInput.defaultProps || {};
-    TextInput.defaultProps.style = [TextInput.defaultProps.style, { fontFamily: 'Ubuntu_400Regular' }];
-  }, [fontsLoaded]);
+    TextInput.defaultProps.style = [TextInput.defaultProps.style, { fontFamily: 'Ubuntu-Regular' }];
+    // Disable predictive text and auto-correction globally unless explicitly overridden
+    if (TextInput.defaultProps.autoCorrect === undefined) TextInput.defaultProps.autoCorrect = false as any;
+    if (TextInput.defaultProps.spellCheck === undefined) TextInput.defaultProps.spellCheck = false as any;
+    if (TextInput.defaultProps.autoCapitalize === undefined) TextInput.defaultProps.autoCapitalize = 'none' as any;
+    if (TextInput.defaultProps.autoComplete === undefined) TextInput.defaultProps.autoComplete = 'off' as any;
+  }, []);
 
   // Initialize services (vault, analytics, progress) once on app start
   useEffect(() => {
@@ -56,21 +43,24 @@ export default function RootLayout() {
 
   // Fallback: hide overlay if animation never finishes (e.g., 8s)
   useEffect(() => {
-    if (!fontsLoaded) return;
     fallbackTimerRef.current = setTimeout(() => setShowLaunch(false), 8000) as any;
-    return () => {
-      if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-    };
-  }, [fontsLoaded]);
+    return () => { if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current); };
+  }, []);
 
-  if (!fontsLoaded) {
-    return (
-      <>
-        <StatusBar style={themeName === 'light' ? 'dark' : 'light'} />
-        <View style={{ flex: 1, backgroundColor: getTheme(themeName).background }} />
-      </>
-    );
-  }
+  // Show a brief loading overlay on some route changes (skip when navigating to or from Home)
+  useEffect(() => {
+    if (firstPathRef.current === null) {
+      firstPathRef.current = path;
+      return;
+    }
+    const prev = firstPathRef.current;
+    firstPathRef.current = path;
+    const skip = path === '/' || prev === '/';
+    if (skip) return; // avoid dimming over Home to reduce perceived flicker
+    setRouteLoading(true);
+    const t = setTimeout(() => setRouteLoading(false), 380);
+    return () => clearTimeout(t);
+  }, [path]);
 
   return (
     <>
@@ -80,19 +70,34 @@ export default function RootLayout() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: getTheme(themeName).background },
-          animation: 'simple_push',
-          animationTypeForReplace: 'pop',
+          // Default: no transition animations across the app
+          animation: 'none',
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="vault" options={{ title: 'Vault' }} />
+        <Stack.Screen name="vault-word" options={{ title: 'Word' }} />
+        <Stack.Screen name="vault/word/[id]" options={{ title: 'Word' }} />
         <Stack.Screen name="quiz" options={{ headerShown: false }} />
-        <Stack.Screen name="story" options={{ headerShown: false }} />
+        {/**
+         * Story screens: slide in like a card so Home stays visible beneath
+         * and is not reloaded when going back. We override the default
+         * no-animation behavior only for this route.
+         */}
+        <Stack.Screen
+          name="story"
+          options={{
+            headerShown: false,
+            animation: 'slide_from_right',
+            gestureEnabled: true,
+          }}
+        />
         <Stack.Screen name="placement" options={{ headerShown: false }} />
         <Stack.Screen name="story-exercise" options={{ title: 'Story Exercise' }} />
         <Stack.Screen name="journal" options={{ title: 'Journal' }} />
         <Stack.Screen name="stats" options={{ title: 'Progress' }} />
         <Stack.Screen name="profile" options={{ title: 'Profile' }} />
+        <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
       </Stack>
 
       {showLaunch && (
@@ -123,6 +128,25 @@ export default function RootLayout() {
           />
         </View>
       )}
+
+      {routeLoading && !showLaunch && (
+        <View
+          style={[
+            styles.routeOverlay,
+          ]}
+          pointerEvents="none"
+        >
+          <LottieView
+            source={require('../assets/lottie/loading.json')}
+            autoPlay
+            loop
+            // Play at a gentle speed matching the screenshot feel
+            speed={1}
+            style={{ width: 200, height: 200, alignSelf: 'center' }}
+          />
+          <Text style={[styles.routeText, themeName === 'light' && { color: '#6B7280' }]}>Loading...</Text>
+        </View>
+      )}
     </>
   );
 }
@@ -142,5 +166,23 @@ const styles = StyleSheet.create({
   launchLottie: {
     width: 220,
     height: 220,
+  },
+  routeOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'flex-end',
+    paddingBottom: 80,
+    zIndex: 999,
+    // Softer dim to minimize visual flash
+    backgroundColor: 'rgba(0,0,0,0.14)',
+  },
+  routeText: {
+    textAlign: 'center',
+    color: '#9CA3AF',
+    fontSize: 16,
+    marginTop: 6,
   },
 });

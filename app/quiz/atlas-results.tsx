@@ -7,7 +7,7 @@ import { ProgressService } from '../../services/ProgressService';
 import { useAppStore } from '../../lib/store';
 import { levels } from './data/levels';
 
-const ACCENT = '#F2935C';
+const ACCENT = '#F8B070';
 const CORRECT_COLOR = '#437F76';
 
 export default function AtlasResults() {
@@ -96,6 +96,12 @@ export default function AtlasResults() {
     sequence.start(() => {
       // Start from the beginning reliably
       playLottieFromStart();
+      // Fallback: if Lottie never calls onAnimationFinish (e.g., device glitch), reveal UI anyway
+      const fallback = setTimeout(() => {
+        setHideLottie(true);
+        setShowDoneButton(true);
+      }, 2500);
+      return () => clearTimeout(fallback);
     });
     
     return () => {
@@ -256,11 +262,11 @@ export default function AtlasResults() {
               ]}
             >
               <TouchableOpacity style={styles.primaryButton} onPress={handleDone}>
-                <Text style={styles.primaryButtonText}>Done</Text>
+                <Text style={[styles.primaryButtonText, isLight && { color: '#111827' }]}>Done</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.storyButton} onPress={handleCreateStory}>
-                <BookOpen size={22} color="#FFFFFF" />
-                <Text style={styles.storyButtonText}>Create Story with These Words</Text>
+                <BookOpen size={22} color={isLight ? '#111827' : '#FFFFFF'} />
+                <Text style={[styles.storyButtonText, isLight && { color: '#111827' }]}>Create Story with These Words</Text>
               </TouchableOpacity>
             </Animated.View>
           ) : (
@@ -287,7 +293,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E1E1E',
   },
   containerLight: {
-    backgroundColor: '#F2E3D0',
+    backgroundColor: '#F8F8F8',
   },
   content: {
     flex: 1,

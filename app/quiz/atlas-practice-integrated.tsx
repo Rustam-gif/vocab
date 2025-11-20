@@ -22,7 +22,7 @@ import { getTheme } from '../../lib/theme';
 import { analyticsService } from '../../services/AnalyticsService';
 import { SetProgressService } from '../../services/SetProgressService';
 
-const ACCENT = '#F2935C';
+const ACCENT = '#F8B070';
 const TAB_WIDTH = 88;
 
 interface Phase {
@@ -38,25 +38,28 @@ export default function AtlasPracticeIntegrated() {
   const router = useRouter();
   const { setId, levelId } = useLocalSearchParams<{ setId: string; levelId: string }>();
   const themeName = useAppStore(s => s.theme);
+  const recordResult = useAppStore(s => s.recordExerciseResult);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
-  
-  // Debug logging
-  console.log('AtlasPracticeIntegrated - Received params:', { setId, levelId });
   
   // Check if this is a quiz type
   const level = useMemo(() => levels.find(l => l.id === levelId), [levelId]);
   const set = useMemo(() => level?.sets.find(s => s.id.toString() === setId), [level, setId]);
 
-  // Compute dynamic quiz words for Upper-Intermediate when set is not found
+  // Compute dynamic quiz words for any level when set is not found
   const computedQuizWords = useMemo(() => {
-    if (!level || level.id !== 'upper-intermediate') return null;
-    if (set) return null; // exists statically
+    if (!level) return null;
+    // If a static quiz set exists in data, no need to compute
+    if (set) return null;
     if (!setId || !/^quiz-\d+$/.test(String(setId))) return null;
-    // Rebuild the same visible list used in Learn: drop first 10 numeric sets, exclude quizzes
+    // Rebuild the same visible list used in Learn:
+    // - For Upper-Intermediate: drop first 10 numeric sets
+    // - For others: include all sets
+    // - Always exclude existing quiz-type sets
     const baseSets = level.sets.filter(s => {
       const n = Number(s.id);
-      return (isNaN(n) || n > 10) && (s as any).type !== 'quiz';
+      const dropFirstTen = level.id === 'upper-intermediate' ? (isNaN(n) || n > 10) : true;
+      return dropFirstTen && (s as any).type !== 'quiz';
     });
     const groupIndex = Math.max(1, parseInt(String(setId).split('-')[1], 10));
     const start = (groupIndex - 1) * 4;
@@ -69,7 +72,9 @@ export default function AtlasPracticeIntegrated() {
     return words.length ? words : null;
   }, [level, set, setId]);
 
-  const isQuiz = (set?.type === 'quiz') || !!computedQuizWords;
+  // Treat any dynamically-inserted quiz id as a quiz, or static quiz type sets
+  const isQuizId = (!!setId && /^quiz-\d+$/.test(String(setId)));
+  const isQuiz = (set?.type === 'quiz') || !!computedQuizWords || isQuizId;
   
   const [currentPhase, setCurrentPhase] = useState(0);
   const [phases, setPhases] = useState<Phase[]>(
@@ -249,7 +254,7 @@ export default function AtlasPracticeIntegrated() {
       const w = words[Math.min(mlIndex, words.length - 1)];
 
       return (
-        <MissingLetters
+      <MissingLetters
           word={w.word}
           ipa={w.phonetic}
           clue={w.definition}
@@ -259,12 +264,14 @@ export default function AtlasPracticeIntegrated() {
           sharedScore={totalScore}
           onResult={({ mistakes, usedReveal }) => {
             const rawPenalty = Math.max(0, mistakes) + (usedReveal ? 3 : 0);
-            const penalty = Math.max(5, rawPenalty || 5);
-            setTotalScore(prev => Math.max(0, prev - penalty));
+            const penalty = rawPenalty === 0 ? 0 : Math.max(5, rawPenalty);
+            if (penalty > 0) {
+              setTotalScore(prev => Math.max(0, prev - penalty));
+            }
             // Record analytics for Missing Letters
             try {
               const isCorrect = (mistakes || 0) === 0 && !usedReveal;
-              analyticsService.recordResult({
+              recordResult({
                 wordId: w.word,
                 exerciseType: 'letters',
                 correct: isCorrect,
@@ -344,11 +351,9 @@ export default function AtlasPracticeIntegrated() {
             ]}
           >
             {phases.map((phase, index) => (
-              <TouchableOpacity
+              <View
                 key={phase.id}
-                onPress={() => setCurrentPhase(index)}
                 style={styles.exerciseNameTouchable}
-                activeOpacity={0.8}
               >
                 <Text
                   style={[
@@ -359,7 +364,7 @@ export default function AtlasPracticeIntegrated() {
                 >
                   {phase.name}
                 </Text>
-              </TouchableOpacity>
+              </View>
             ))}
           </Animated.View>
         </View>
@@ -394,7 +399,7 @@ function PhaseTab({ index, title, currentIndex, onPress, animatedIndex }: PhaseT
   
   const color = animatedIndex.interpolate({
     inputRange: [index - 1, index, index + 1],
-    outputRange: ['#6B7280', '#F2935C', '#6B7280'],
+    outputRange: ['#6B7280', '#F8B070', '#6B7280'],
     extrapolate: 'clamp',
   });
   
@@ -473,10 +478,12 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     letterSpacing: 0.2,
     textAlign: 'center',
+    fontFamily: 'Ubuntu-Medium',
   },
   exerciseNameActive: {
     color: '#FFFFFF',
     fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
   },
   headerSpacer: {
     width: 32,

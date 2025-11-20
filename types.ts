@@ -24,6 +24,7 @@ export interface Word {
   example: string;
   phonetics?: string;
   savedAt: Date;
+  source?: 'scan' | 'manual' | 'sets' | 'import';
   notes?: string;
   tags?: string[];
   score: number;
@@ -46,6 +47,7 @@ export interface NewWordPayload {
   level?: string;
   category?: string;
   folderId?: string;
+  source?: 'scan' | 'manual' | 'sets' | 'import';
 }
 
 export interface ExerciseStats {

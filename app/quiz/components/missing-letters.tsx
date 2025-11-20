@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { getTheme } from '../../../lib/theme';
 import { Easing } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '../../../lib/haptics';
 import type { TextInput as TextInputRef } from 'react-native';
 import AnimatedNextButton from './AnimatedNextButton';
 
@@ -48,7 +48,7 @@ const DARK_COLORS = {
   slotNeutral: '#2F2F2F',
   slotCorrect: '#437F76',
   slotWrong: '#924646',
-  accent: '#F2935C',
+  accent: '#F8B070',
   border: '#3A3A3A',
   hint: '#353535',
 };
@@ -61,7 +61,7 @@ const LIGHT_COLORS = {
   slotNeutral: LIGHT_THEME.surface, // '#F9F1E7'
   slotCorrect: '#A1BFBA',          // soft green
   slotWrong: '#C9A3A3',            // soft red
-  accent: LIGHT_THEME.accent,      // '#F2935C'
+  accent: LIGHT_THEME.accent,      // '#F8B070'
   border: LIGHT_THEME.border,      // '#F9F1E7'
   hint: '#E5E7EB',
 };
@@ -397,6 +397,8 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
                 style={themeStyles.input}
                 autoCapitalize="characters"
                 autoCorrect={false}
+                spellCheck={false}
+                autoComplete="off"
                 keyboardType="default"
                 placeholder={s.isHint ? undefined : ''}
                 placeholderTextColor={pal.sub}
@@ -434,6 +436,7 @@ const darkStyles = StyleSheet.create({
     fontSize: 14,
     color: DARK_COLORS.sub,
     fontWeight: '500',
+    fontFamily: 'Ubuntu-Medium',
   },
   scoreWrapper: {
     alignItems: 'center',
@@ -446,11 +449,13 @@ const darkStyles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#F87171',
+    fontFamily: 'Ubuntu-Bold',
   },
   scoreText: {
     fontSize: 16,
     fontWeight: '600',
     color: DARK_COLORS.accent,
+    fontFamily: 'Ubuntu-Bold',
   },
   progressBar: {
     height: 6,
@@ -473,11 +478,13 @@ const darkStyles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
+    fontFamily: 'Ubuntu-Bold',
   },
   ipa: {
     marginTop: 6,
     color: DARK_COLORS.sub,
     fontSize: 14,
+    fontFamily: 'Ubuntu-Regular',
   },
   slotsRow: {
     position: 'absolute',
@@ -512,6 +519,7 @@ const darkStyles = StyleSheet.create({
     color: DARK_COLORS.text,
     fontSize: 20,
     fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
   },
   button: {
     backgroundColor: DARK_COLORS.accent,
@@ -531,6 +539,7 @@ const darkStyles = StyleSheet.create({
     color: DARK_COLORS.text,
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
   },
 });
 
@@ -552,6 +561,7 @@ const lightStyles = StyleSheet.create({
     fontSize: 14,
     color: LIGHT_COLORS.sub,
     fontWeight: '500',
+    fontFamily: 'Ubuntu-Medium',
   },
   scoreWrapper: {
     alignItems: 'center',
@@ -564,11 +574,13 @@ const lightStyles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#F87171',
+    fontFamily: 'Ubuntu-Bold',
   },
   scoreText: {
     fontSize: 16,
     fontWeight: '600',
     color: LIGHT_COLORS.accent,
+    fontFamily: 'Ubuntu-Bold',
   },
   progressBar: {
     height: 6,
@@ -591,11 +603,13 @@ const lightStyles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
+    fontFamily: 'Ubuntu-Bold',
   },
   ipa: {
     marginTop: 6,
     color: LIGHT_COLORS.sub,
     fontSize: 14,
+    fontFamily: 'Ubuntu-Regular',
   },
   slotsRow: {
     position: 'absolute',
@@ -630,6 +644,7 @@ const lightStyles = StyleSheet.create({
     color: LIGHT_COLORS.text,
     fontSize: 20,
     fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
   },
   button: {
     backgroundColor: LIGHT_COLORS.accent,
@@ -649,5 +664,6 @@ const lightStyles = StyleSheet.create({
     color: LIGHT_COLORS.text,
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
   },
 });

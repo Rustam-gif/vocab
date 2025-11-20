@@ -16,7 +16,7 @@ import { analyticsService } from '../../../services/AnalyticsService';
 import { levels } from '../data/levels';
 import AnimatedNextButton from './AnimatedNextButton';
 
-const ACCENT_COLOR = '#F2935C';
+const ACCENT_COLOR = '#F8B070';
 const CORRECT_COLOR = '#437F76';
 const INCORRECT_COLOR = '#924646';
 
@@ -1276,6 +1276,7 @@ interface OptionRow {
 }
 
 export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange, wordsOverride }: SentenceUsageProps) {
+  const recordResult = useAppStore(s => s.recordExerciseResult);
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
@@ -1576,7 +1577,7 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
     // Track analytics for this item
     try {
       const timeSpent = Math.max(0, Math.round((Date.now() - itemStartRef.current) / 1000));
-      analyticsService.recordResult({
+      recordResult({
         wordId: item.word,
         exerciseType: 'usage',
         correct: chosen.isCorrect,
@@ -1669,12 +1670,14 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
             cardStyle.push(styles.cardSelected);
           }
 
-          if (revealed && isSelected) {
-            cardStyle.push(isCorrect ? (isLight ? styles.cardCorrectLight : styles.cardCorrect) : (isLight ? styles.cardIncorrectLight : styles.cardIncorrect));
-          }
-
-          if (revealed && !isSelected && isCorrect && selected !== null) {
-            textStyle.push(styles.correctText);
+          if (revealed) {
+            if (isCorrect) {
+              // Always highlight the correct option with green background
+              cardStyle.push(isLight ? styles.cardCorrectLight : styles.cardCorrect);
+            } else if (isSelected) {
+              // Selected but incorrect → red background
+              cardStyle.push(isLight ? styles.cardIncorrectLight : styles.cardIncorrect);
+            }
           }
 
           return (
@@ -1721,6 +1724,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     fontWeight: '500',
+    fontFamily: 'Ubuntu-Medium',
   },
   scoreWrapper: {
     alignItems: 'center',
@@ -1733,11 +1737,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#F87171',
+    fontFamily: 'Ubuntu-Bold',
   },
   scoreText: {
     fontSize: 16,
     fontWeight: '600',
     color: ACCENT_COLOR,
+    fontFamily: 'Ubuntu-Bold',
   },
   progressBar: {
     height: 6,
@@ -1756,11 +1762,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 1,
+    fontFamily: 'Ubuntu-Bold',
   },
   subHeaderText: {
     color: '#9CA3AF',
     fontSize: 14,
     marginTop: 4,
+    fontFamily: 'Ubuntu-Regular',
   },
   wordHeader: {
     alignItems: 'center',
@@ -1771,11 +1779,13 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '700',
     color: '#fff',
+    fontFamily: 'Ubuntu-Bold',
   },
   ipaText: {
     fontSize: 16,
     color: '#9CA3AF',
     fontStyle: 'italic',
+    fontFamily: 'Ubuntu-Regular',
   },
   optionsWrapper: {
     gap: 12,
@@ -1790,9 +1800,9 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   optionLight: {
-    backgroundColor: '#F9F1E7',
+    backgroundColor: '#FFFFFF',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#F9F1E7',
+    borderColor: '#FFFFFF',
   },
   cardSelected: {
     // Make selection clearer on dark cards
@@ -1803,6 +1813,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     lineHeight: 22,
+    fontFamily: 'Ubuntu-Regular',
   },
   cardCorrect: {
     backgroundColor: CORRECT_COLOR,
@@ -1831,6 +1842,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
     lineHeight: 26,
+    fontFamily: 'Ubuntu-Regular',
   },
   footer: {
     marginTop: 32,
@@ -1848,6 +1860,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Bold',
   },
   disabledButton: {
     opacity: 0.5,

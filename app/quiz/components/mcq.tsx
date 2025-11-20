@@ -41,6 +41,12 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // Tiny holder to access theme in inline style closures without rerender churn
 const mcqThemeHack: { theme?: string; colors?: any } = {};
 
+// Global-ish context for Advanced enforcement inside generator fallbacks
+let __ADV_CTX: { isAdvanced: boolean; words: Array<{ word: string; definition: string }> } = {
+  isAdvanced: false,
+  words: [],
+};
+
 const shortenPhrase = (phrase: string): string => {
   let trimmed = phrase.trim();
   if (trimmed.toLowerCase().startsWith('to ')) {
@@ -1983,8 +1989,9 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
   const generateQuestions = () => {
     console.log('MCQComponent - generateQuestions called with:', { setId, levelId, wordRange });
     
-    const level = levels.find(l => l.id === levelId);
-    console.log('MCQComponent - Found level:', level?.name);
+    const levelKey = String(levelId || '').toLowerCase();
+    const level = levels.find(l => (l.id || '').toLowerCase() === levelKey) || levels.find(l => (l.name || '').toLowerCase() === levelKey);
+    console.log('MCQComponent - Found level:', level?.name, 'levelId:', levelId, 'cefr:', level?.cefr);
     if (!level && !wordsOverride) return;
 
     const set = level?.sets.find(s => s.id.toString() === setId);
@@ -1996,6 +2003,96 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
     if (wordRange) {
       words = words.slice(wordRange.start, wordRange.end);
       console.log('MCQComponent - Using word range:', wordRange, 'Words:', words.length);
+    }
+
+    // Advanced/Beginner rule: use ONLY definitions from other words in the same set
+    // as distractors (no made-up options). Each regular set has 5 words, so for
+    // each question we have 4 candidate distractors from peer definitions.
+    const cefrUpper = String(level?.cefr || '').toUpperCase();
+    // Treat Proficient (C2) like Advanced for distractor rules
+    const isAdvancedB2C1 =
+      /advanced/i.test(String(levelId || '')) ||
+      /advanced/i.test(String(level?.name || '')) ||
+      cefrUpper.includes('B2-C1') ||
+      cefrUpper.includes('C1+') ||
+      cefrUpper.includes('C2') ||
+      /proficient/i.test(String(level?.name || '')) ||
+      String(level?.id || '').toLowerCase() === 'proficient';
+    const isBeginnerA1A2 = /(^|\b)beginner(\b|$)/i.test(String(levelId || '')) || /(^|\b)beginner(\b|$)/i.test(String(level?.name || '')) || cefrUpper.includes('A1-A2') || cefrUpper.includes('A1') || cefrUpper.includes('A2');
+    const isIntermediateB1 = (String(levelId || '').toLowerCase() === 'intermediate') || (String(level?.id || '').toLowerCase() === 'intermediate') || (String(level?.name || '').toLowerCase() === 'intermediate') || (cefrUpper === 'B1');
+    if (isAdvancedB2C1 || isBeginnerA1A2 || isIntermediateB1) {
+      const mode = isAdvancedB2C1 ? 'Advanced' : isBeginnerA1A2 ? 'Beginner' : 'Intermediate';
+      console.log(`MCQComponent - Using ${mode} peer-definition mode`);
+      // Seed advanced context for any deeper fallback paths
+      __ADV_CTX = { isAdvanced: true, words: (words as any[]).map(w => ({ word: w.word, definition: w.definition })) };
+      const advQuestions: Question[] = words.map(w => {
+        // Use the exact definitions as written in content for Advanced
+        const correct = String(w.definition || '').trim();
+        // Candidate distractors = definitions of other words in this set/range
+        const candidates = (words as any[])
+          .filter(x => x.word !== w.word)
+          .map(x => String(x.definition || '').trim())
+          .filter(d => d && d !== correct);
+        // Deduplicate while preserving order
+        const seen = new Set<string>();
+        const unique = candidates.filter(d => {
+          const key = d.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        // Randomize and take 3
+        const distractors = unique
+          .map(option => ({ option, sort: Math.random() }))
+          .sort((a, b) => a.sort - b.sort)
+          .map(({ option }) => option)
+          .slice(0, 3);
+        console.log('MCQComponent - PEER word:', w.word, 'correct:', correct, 'peer distractors:', distractors);
+
+        // Fallback (very rare: if fewer than 3 after dedupe), pad with any remaining uniques
+        while (distractors.length < 3 && unique.length > distractors.length) {
+          const next = unique[distractors.length];
+          if (next && !distractors.includes(next) && next !== correct) distractors.push(next);
+          else break;
+        }
+
+        const allOptions = [correct, ...distractors];
+        const shuffledOptions = allOptions
+          .map(option => ({ option, sort: Math.random() }))
+          .sort((a, b) => a.sort - b.sort)
+          .map(({ option }) => option);
+        const correctIndex = shuffledOptions.indexOf(correct);
+
+        return {
+          word: w.word,
+          ipa: w.phonetic,
+          definition: correct,
+          example: w.example,
+          options: shuffledOptions,
+          correctAnswer: correctIndex,
+          synonyms: w.synonyms || [],
+        } as Question;
+      });
+
+      setQuestions(advQuestions);
+      // Clear context so it doesn't leak into non-advanced sets later
+      __ADV_CTX = { isAdvanced: false, words: [] };
+      // Initialize option animation values for the first question to avoid a flash
+      const firstOptions = advQuestions[0]?.options || [];
+      optionAnims.current = firstOptions.map(() => new Animated.Value(0));
+      if (firstOptions.length) {
+        const anims = optionAnims.current.map((v, i) =>
+          Animated.timing(v, {
+            toValue: 1,
+            duration: 360,
+            delay: i * 60,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          })
+        );
+        Animated.stagger(40, anims).start();
+      }
+      return;
     }
 
     // Clamp phrases to a concise, readable length without adding filler words.
@@ -2013,6 +2110,8 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
       return t.charAt(0).toUpperCase() + t.slice(1);
     };
 
+    // Seed context for generic path too (defensive)
+    __ADV_CTX = { isAdvanced: (level?.id === 'advanced') || /advanced/i.test(level?.name || '') || ((level?.cefr || '').toUpperCase().includes('B2-C1')), words: (words as any[]).map(w => ({ word: w.word, definition: w.definition })) };
     const generatedQuestions: Question[] = words.map(word => {
       // Check for exact override first
       const override = set ? MCQ_OVERRIDES[levelId || '']?.[String(set.id)]?.[word.word.toLowerCase()] : undefined;
@@ -2038,7 +2137,39 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
       
       // Generate unique distractors by ensuring no duplicates
       const usedOptions = new Set<string>([shortDefinition]);
-      const distractors: string[] = [];
+      let distractors: string[] = [];
+
+      // Strong fallback for Advanced (B2–C1): prefer peer definitions from the same set
+      const cefrUp2 = String(level?.cefr || '').toUpperCase();
+      const isAdvancedLoose =
+        /advanced/i.test(String(level?.id || '')) ||
+        /advanced/i.test(level?.name || '') ||
+        cefrUp2.includes('B2-C1') ||
+        cefrUp2.includes('C1+') ||
+        cefrUp2.includes('C2') ||
+        /proficient/i.test(String(level?.name || '')) ||
+        String(level?.id || '').toLowerCase() === 'proficient';
+      const isBeginnerLoose = /(^|\b)beginner(\b|$)/i.test(String(level?.id || '')) || /(^|\b)beginner(\b|$)/i.test(level?.name || '') || cefrUp2.includes('A1') || cefrUp2.includes('A2');
+      const isIntermediateLoose = (String(level?.id || '').toLowerCase() === 'intermediate') || (String(level?.name || '').toLowerCase() === 'intermediate') || (cefrUp2 === 'B1');
+      if ((isAdvancedLoose || isBeginnerLoose || isIntermediateLoose) && set && Array.isArray(words) && words.length > 1) {
+        const peerDefs = (words as any[])
+          .filter(w => w.word !== word.word)
+          .map(w => String(w.definition || '').trim())
+          .filter(d => d && d.toLowerCase() !== shortDefinition.toLowerCase());
+        const seenPeer = new Set<string>();
+        const uniquePeers = peerDefs.filter(d => {
+          const key = d.toLowerCase();
+          if (seenPeer.has(key)) return false;
+          seenPeer.add(key);
+          return true;
+        });
+        distractors = uniquePeers
+          .map(option => ({ option, sort: Math.random() }))
+          .sort((a, b) => a.sort - b.sort)
+          .map(({ option }) => option)
+          .slice(0, 3);
+        console.log('MCQComponent - ADV prefill peers for', word.word, ':', distractors);
+      }
       const types = ['opposite', 'similar', 'unrelated'];
       
       // Try to get 3 unique distractors
@@ -2096,6 +2227,29 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
         }
       }
       
+      // Final enforcement: for Advanced (B2–C1), ensure distractors are peer definitions
+      if (isAdvancedLoose && set && Array.isArray(words) && words.length > 1) {
+        const peerDefs = (words as any[])
+          .filter(w => w.word !== word.word)
+          .map(w => String(w.definition || '').trim())
+          .filter(d => d && d.toLowerCase() !== shortDefinition.toLowerCase());
+        const seen = new Set<string>();
+        const uniquePeers = peerDefs.filter(d => {
+          const key = d.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        if (uniquePeers.length >= 3) {
+          distractors = uniquePeers
+            .map(option => ({ option, sort: Math.random() }))
+            .sort((a, b) => a.sort - b.sort)
+            .map(({ option }) => option)
+            .slice(0, 3);
+          console.log('MCQComponent - ADV final enforcement for', word.word, ':', distractors);
+        }
+      }
+
       const options = [shortDefinition, ...distractors];
 
       const shuffledOptions = [...options]
@@ -2116,6 +2270,8 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
     });
 
     setQuestions(generatedQuestions);
+    // Clear context after generating
+    __ADV_CTX = { isAdvanced: false, words: [] };
     // Initialize option animation values for the first question to avoid a flash
     const firstOptions = generatedQuestions[0]?.options || [];
     optionAnims.current = firstOptions.map(() => new Animated.Value(0));
@@ -2611,20 +2767,38 @@ const getTopicDistracts = (setTitle: string) => {
 };
 
 const generateDistractor = (correctDef: string, type: string, wordContext: string, setTitle: string): string => {
+  // Advanced enforcement: if advanced context is active, return peer definitions only
+  if (__ADV_CTX.isAdvanced && __ADV_CTX.words.length) {
+    const peers = __ADV_CTX.words
+      .filter(w => (w.word || '').toLowerCase() !== (wordContext || '').toLowerCase())
+      .map(w => String(w.definition || '').trim())
+      .filter(d => d && d.toLowerCase() !== (correctDef || '').toLowerCase());
+    if (peers.length) {
+      const unique: string[] = [];
+      const seen = new Set<string>();
+      for (const d of peers) {
+        const k = d.toLowerCase();
+        if (!seen.has(k)) { seen.add(k); unique.push(d); }
+      }
+      if (unique.length) {
+        return unique[Math.floor(Math.random() * unique.length)];
+      }
+    }
+  }
+
+  // Topic-based generic fallback (non-Advanced or if peers missing)
   const topicDistracts = getTopicDistracts(setTitle);
-  
   const distractors = {
     opposite: topicDistracts.opposite,
     similar: topicDistracts.similar,
     unrelated: topicDistracts.unrelated
   };
-
-    const typeDistractors = distractors[type as keyof typeof distractors] || distractors.unrelated;
+  const typeDistractors = distractors[type as keyof typeof distractors] || distractors.unrelated;
   const selected = typeDistractors[Math.floor(Math.random() * typeDistractors.length)];
-  
   return selected;
-  };
+};
 
+  const recordResult = useAppStore(s => s.recordExerciseResult);
   const handleAnswerSelect = (answerIndex: number) => {
     if (isAnswered) return; // Prevent multiple selections
 
@@ -2637,7 +2811,7 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
     // Track analytics for this question
     try {
       const timeSpent = Math.max(0, Math.round((Date.now() - questionStartRef.current) / 1000));
-      analyticsService.recordResult({
+      recordResult({
         wordId: questions[currentWordIndex]?.word || String(currentWordIndex + 1),
         exerciseType: 'mcq',
         correct,
@@ -2876,6 +3050,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: '#9CA3AF',
+    fontFamily: 'Ubuntu-Regular',
   },
   header: {
     paddingHorizontal: 20,
@@ -2891,6 +3066,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     fontWeight: '500',
+    fontFamily: 'Ubuntu-Medium',
   },
   scoreWrapper: {
     alignItems: 'center',
@@ -2903,11 +3079,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#F87171',
+    fontFamily: 'Ubuntu-Bold',
   },
   scoreText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#F2935C',
+    color: '#F8B070',
+    fontFamily: 'Ubuntu-Bold',
   },
   progressBar: {
     height: 6,
@@ -2918,7 +3096,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#F2935C',
+    backgroundColor: '#F8B070',
     borderRadius: 3,
   },
   wordHeader: {
@@ -2930,11 +3108,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 8,
+    fontFamily: 'Ubuntu-Bold',
   },
   ipaText: {
     fontSize: 18,
     color: '#9CA3AF',
     fontStyle: 'italic',
+    fontFamily: 'Ubuntu-Regular',
   },
   exampleInline: {
     marginTop: 8,
@@ -2942,6 +3122,7 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontStyle: 'italic',
     textAlign: 'center',
+    fontFamily: 'Ubuntu-Regular',
   },
   optionsContainer: {
     marginBottom: 20,
@@ -2958,10 +3139,10 @@ const styles = StyleSheet.create({
     minHeight: 72,
   },
   // Light mode card color to match Learn cards
-  optionLight: { backgroundColor: '#F9F1E7', borderWidth: StyleSheet.hairlineWidth, borderColor: '#F9F1E7' },
+  optionLight: { backgroundColor: '#FFFFFF', borderWidth: StyleSheet.hairlineWidth, borderColor: '#FFFFFF' },
   // Brighter selected state before feedback (dark and light variants)
-  selectedOption: { backgroundColor: 'rgba(242, 147, 92, 0.18)', borderWidth: 2, borderColor: '#F2935C' },
-  selectedOptionLight: { backgroundColor: '#FBE8DB', borderWidth: 2, borderColor: '#F2935C' },
+  selectedOption: { backgroundColor: 'rgba(248, 176, 112, 0.18)', borderWidth: 2, borderColor: '#F8B070' },
+  selectedOptionLight: { backgroundColor: '#FBE8DB', borderWidth: 2, borderColor: '#F8B070' },
   // Reveal states
   // Dark theme strong colors
   correctOption: { backgroundColor: '#437F76' },
@@ -2975,14 +3156,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontWeight: '500',
     textAlignVertical: 'center',
+    fontFamily: 'Ubuntu-Medium',
   },
   highlightedWord: {
     fontWeight: 'bold',
-    color: '#F2935C',
+    color: '#F8B070',
+    fontFamily: 'Ubuntu-Bold',
   },
   nextButton: {
     marginTop: 16,
-    backgroundColor: '#F2935C',
+    backgroundColor: '#F8B070',
     borderRadius: 20,
     paddingVertical: 18,
     paddingHorizontal: 32,
@@ -2994,6 +3177,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Bold',
   },
   nextButtonDisabled: {
     opacity: 0.6,

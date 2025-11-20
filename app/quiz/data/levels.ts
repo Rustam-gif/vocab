@@ -2333,6 +2333,114 @@ export const levels: Level[] = [
           { word: 'ephemeral', definition: 'Lasting for a very short time', example: 'Fame can be ephemeral', phonetic: '/ɪˈfemərəl/', synonyms: ['temporary', 'transient'] }
         ],
         completed: false
+      },
+      {
+        id: 2,
+        title: 'Proficient — Precision Verbs I',
+        words: [
+          { word: 'elucidate', phonetic: '/ɪˈluːsɪdeɪt/', definition: 'To make something clear by thorough explanation', example: 'The expert elucidated the mechanism with elegant diagrams and analogies.', synonyms: ['clarify', 'explain', 'illuminate'] },
+          { word: 'delineate', phonetic: '/dɪˈlɪnieɪt/', definition: 'To describe something precisely and in detail', example: 'The protocol delineates roles, timelines, and escalation thresholds clearly.', synonyms: ['describe', 'outline', 'depict'] },
+          { word: 'circumvent', phonetic: '/ˌsɜːkəmˈvɛnt/', definition: 'To find a way around a problem', example: 'They circumvented bottlenecks by decentralizing approvals temporarily.', synonyms: ['evade', 'bypass', 'sidestep'] },
+          { word: 'extrapolate', phonetic: '/ɪkˈstræpəleɪt/', definition: 'To infer unknown values from known trends', example: 'Analysts extrapolated demand from three years of regional data.', synonyms: ['infer', 'project', 'extend'] },
+          { word: 'substantiate', phonetic: '/səbˈstænʃieɪt/', definition: 'To provide evidence to support a claim', example: 'The team substantiated the hypothesis using blinded trials.', synonyms: ['verify', 'corroborate', 'validate'] }
+        ],
+        completed: false
+      },
+      {
+        id: 3,
+        title: 'Proficient — Precision Verbs II',
+        words: [
+          { word: 'exacerbate', phonetic: '/ɪɡˈzæsəbeɪt/', definition: 'To make a problem worse or more severe', example: 'Cutting support would exacerbate inequality in remote districts.', synonyms: ['worsen', 'aggravate', 'intensify'] },
+          { word: 'ameliorate', phonetic: '/əˈmiːliəreɪt/', definition: 'To make something better or more tolerable', example: 'Targeted tutoring ameliorated achievement gaps noticeably.', synonyms: ['improve', 'mitigate', 'relieve'] },
+          { word: 'obviate', phonetic: '/ˈɒbvɪeɪt/', definition: 'To remove a need by effective action', example: 'Automation obviated manual checks in routine cases.', synonyms: ['remove', 'forestall', 'eliminate'] },
+          { word: 'preclude', phonetic: '/prɪˈkluːd/', definition: 'To prevent something from happening at all', example: 'Conflicts of interest preclude reviewers from participating.', synonyms: ['prevent', 'rule out', 'bar'] },
+          { word: 'expedite', phonetic: '/ˈɛkspɪdaɪt/', definition: 'To speed up a process or action', example: 'Additional staff expedited the backlog before holidays.', synonyms: ['hasten', 'accelerate', 'quicken'] }
+        ],
+        completed: false
+      },
+      {
+        id: 4,
+        title: 'Proficient — Evaluative Adjectives',
+        words: [
+          { word: 'intractable', phonetic: '/ɪnˈtræktəbəl/', definition: 'Hard to control or solve effectively', example: 'The region faces intractable disputes over water rights.', synonyms: ['unmanageable', 'stubborn', 'unruly'] },
+          { word: 'ubiquitous', phonetic: '/juːˈbɪkwɪtəs/', definition: 'Present everywhere, common in many places', example: 'Smartphones are ubiquitous even in rural districts now.', synonyms: ['omnipresent', 'pervasive', 'widespread'] },
+          { word: 'tenuous', phonetic: '/ˈtɛnjʊəs/', definition: 'Very weak, slight, or lacking real substance', example: 'The link between metrics and outcomes was tenuous.', synonyms: ['fragile', 'flimsy', 'insubstantial'] },
+          { word: 'superfluous', phonetic: '/suːˈpɜːfluəs/', definition: 'Unnecessary because more than what’s needed', example: 'Cut superfluous steps to streamline compliance checks.', synonyms: ['unnecessary', 'redundant', 'excessive'] },
+          { word: 'seminal', phonetic: '/ˈsɛmɪnəl/', definition: 'Strongly influential and shaping later developments', example: 'Her seminal paper reframed the entire discipline.', synonyms: ['influential', 'foundational', 'groundbreaking'] }
+        ],
+        completed: false
+      },
+      {
+        id: 5,
+        title: 'Proficient — Abstract Nouns I',
+        words: [
+          { word: 'equivocation', phonetic: '/ɪˌkwɪvəˈkeɪʃən/', definition: 'Deliberate vagueness to avoid giving truth', example: 'The spokesperson’s equivocation eroded public confidence quickly.', synonyms: ['evasiveness', 'ambiguity', 'hedging'] },
+          { word: 'prerogative', phonetic: '/prɪˈrɒɡətɪv/', definition: 'Exclusive right or privilege of a person', example: 'Staffing decisions are the director’s prerogative under bylaws.', synonyms: ['privilege', 'entitlement', 'right'] },
+          { word: 'verisimilitude', phonetic: '/ˌvɛrɪsɪˈmɪlɪtjuːd/', definition: 'Appearance of being true or real', example: 'The novel’s detail gives scenes striking verisimilitude.', synonyms: ['realism', 'authenticity', 'plausibility'] },
+          { word: 'alacrity', phonetic: '/əˈlækrɪti/', definition: 'Cheerful readiness and brisk prompt willingness', example: 'She accepted the invitation with unusual alacrity.', synonyms: ['eagerness', 'readiness', 'willingness'] },
+          { word: 'recourse', phonetic: '/rɪˈkɔːs/', definition: 'Help or protection turned to in difficulty', example: 'When negotiations failed, courts were our recourse.', synonyms: ['resort', 'refuge', 'aid'] }
+        ],
+        completed: false
+      },
+      {
+        id: 6,
+        title: 'Proficient — Argumentation Verbs',
+        words: [
+          { word: 'refute', phonetic: '/rɪˈfjuːt/', definition: 'To prove a statement is completely wrong', example: 'The replication refuted claims of extraordinary accuracy.', synonyms: ['disprove', 'rebut', 'invalidate'] },
+          { word: 'concede', phonetic: '/kənˈsiːd/', definition: 'To admit something is true after resistance', example: 'The minister conceded delays were partly avoidable.', synonyms: ['admit', 'yield', 'acknowledge'] },
+          { word: 'corroborate', phonetic: '/kəˈrɒbəreɪt/', definition: 'To confirm with additional independent supporting evidence', example: 'Multiple labs corroborated the surprising findings independently.', synonyms: ['confirm', 'validate', 'substantiate'] },
+          { word: 'contend', phonetic: '/kənˈtɛnd/', definition: 'To argue firmly that something is true', example: 'Scholars contend that context alters perceived fairness.', synonyms: ['argue', 'maintain', 'assert'] },
+          { word: 'postulate', phonetic: '/ˈpɒstjʊleɪt/', definition: 'To suggest a theory as a basic premise', example: 'The authors postulate a hidden variable driving variance.', synonyms: ['propose', 'posit', 'hypothesize'] }
+        ],
+        completed: false
+      },
+      {
+        id: 7,
+        title: 'Proficient — Nuanced Adjectives II',
+        words: [
+          { word: 'fastidious', phonetic: '/fæˈstɪdiəs/', definition: 'Very attentive to detail and cleanliness', example: 'A fastidious editor catches tone shifts and ambiguities.', synonyms: ['meticulous', 'scrupulous', 'punctilious'] },
+          { word: 'obsequious', phonetic: '/əbˈsiːkwɪəs/', definition: 'Excessively eager to please more powerful people', example: 'Obsequious praise undermined honest feedback in meetings.', synonyms: ['servile', 'sycophantic', 'fawning'] },
+          { word: 'magnanimous', phonetic: '/mæɡˈnænɪməs/', definition: 'Generous toward a rival or offender', example: 'In victory, she was magnanimous toward critics.', synonyms: ['generous', 'forgiving', 'big-hearted'] },
+          { word: 'parsimonious', phonetic: '/ˌpɑːsɪˈməʊniəs/', definition: 'Extremely unwilling to spend money; very frugal', example: 'A parsimonious budget risks underfunding maintenance.', synonyms: ['stingy', 'miserly', 'tight-fisted'] },
+          { word: 'obdurate', phonetic: '/ˈɒbdjʊrət/', definition: 'Stubbornly refusing to change one’s opinion', example: 'Negotiators met an obdurate stance on key clauses.', synonyms: ['stubborn', 'unyielding', 'inflexible'] }
+        ],
+        completed: false
+      },
+      {
+        id: 8,
+        title: 'Proficient — Abstract Nouns II',
+        words: [
+          { word: 'perspicacity', phonetic: '/ˌpɜːspɪˈkæsɪti/', definition: 'Keen insight and quick understanding of situations', example: 'Her perspicacity revealed hidden assumptions immediately.', synonyms: ['insight', 'acuity', 'shrewdness'] },
+          { word: 'temerity', phonetic: '/tɪˈmɛrɪti/', definition: 'Excessive confidence or boldness showing rashness', example: 'He had the temerity to dismiss peer review.', synonyms: ['audacity', 'recklessness', 'boldness'] },
+          { word: 'probity', phonetic: '/ˈprəʊbɪti/', definition: 'Strong moral principles; honesty and integrity', example: 'Public probity depends on transparent procurement.', synonyms: ['integrity', 'honesty', 'uprightness'] },
+          { word: 'effrontery', phonetic: '/ɪˈfrʌntəri/', definition: 'Shameless boldness shown in insulting behavior', example: 'He spoke with effrontery about ignoring regulations.', synonyms: ['impudence', 'brazenness', 'cheek'] },
+          { word: 'equanimity', phonetic: '/ˌiːkwəˈnɪmɪti/', definition: 'Calmness and composure under stressful pressure', example: 'She handled the crisis with admirable equanimity.', synonyms: ['calm', 'composure', 'serenity'] }
+        ],
+        completed: false
+      },
+      {
+        id: 9,
+        title: 'Proficient — Science/Logic Adjectives',
+        words: [
+          { word: 'spurious', phonetic: '/ˈspjʊərɪəs/', definition: 'Not genuine; false or lacking authentic origin', example: 'Controls exposed spurious correlations in the dataset.', synonyms: ['false', 'bogus', 'counterfeit'] },
+          { word: 'ineluctable', phonetic: '/ˌɪnɪˈlʌktəbl/', definition: 'Impossible to avoid or escape entirely', example: 'Ageing is an ineluctable aspect of biology.', synonyms: ['inevitable', 'unavoidable', 'inescapable'] },
+          { word: 'inchoate', phonetic: '/ɪnˈkəʊeɪt/', definition: 'Just begun and not yet fully formed', example: 'Their inchoate plan lacked milestones and owners.', synonyms: ['rudimentary', 'nascent', 'embryonic'] },
+          { word: 'axiomatic', phonetic: '/ˌæksɪəˈmætɪk/', definition: 'Self-evident and accepted without requiring proof', example: 'It’s axiomatic that incentives shape behavior.', synonyms: ['self-evident', 'unquestionable', 'obvious'] },
+          { word: 'orthogonal', phonetic: '/ɔːˈθɒɡənl/', definition: 'Statistically independent or unrelated in effect', example: 'The variables were orthogonal across all cohorts.', synonyms: ['independent', 'uncorrelated', 'perpendicular'] }
+        ],
+        completed: false
+      },
+      {
+        id: 10,
+        title: 'Proficient — Economics & Philosophy Nouns',
+        words: [
+          { word: 'externality', phonetic: '/ˌɛkstɜːˈnælɪti/', definition: 'Indirect cost or benefit affecting others', example: 'Congestion pricing internalizes transport externalities efficiently.', synonyms: ['side effect', 'spillover', 'indirect effect'] },
+          { word: 'tautology', phonetic: '/tɔːˈtɒlədʒi/', definition: 'Needless repetition; statement true by definition', example: '“Free gift” is a common tautology in ads.', synonyms: ['redundancy', 'repetition', 'circular definition'] },
+          { word: 'hegemony', phonetic: '/hɪˈdʒɛməni/', definition: 'Dominant leadership or influence over others', example: 'Cultural hegemony shapes taste and aspiration.', synonyms: ['dominance', 'supremacy', 'ascendancy'] },
+          { word: 'anomie', phonetic: '/ˈænəmi/', definition: 'Social instability from breakdown of norms', example: 'Rapid change can trigger anomie across communities.', synonyms: ['normlessness', 'social breakdown', 'alienation'] },
+          { word: 'teleology', phonetic: '/ˌtɛlɪˈɒlədʒi/', definition: 'Explanation by purposes rather than causes', example: 'The essay critiques teleology in evolutionary narratives.', synonyms: ['final cause', 'purpose-based account', 'ends-based view'] }
+        ],
+        completed: false
       }
     ]
   }

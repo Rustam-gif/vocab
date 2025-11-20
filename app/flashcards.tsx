@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, PanResponder, Dimensions } from 'react-native';
+import { X, Eye, CheckCircle2 } from 'lucide-react-native';
+import LottieView from 'lottie-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppStore } from '../lib/store';
@@ -9,7 +11,7 @@ import { getTheme } from '../lib/theme';
 export default function Flashcards() {
   const router = useRouter();
   const { folderId, title } = useLocalSearchParams<{ folderId: string; title?: string }>();
-  const { words, loadWords, getDueWords, gradeWordSrs, resetSrs } = useAppStore();
+  const { words, loadWords, getDueWords, gradeWordSrs } = useAppStore();
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
@@ -22,6 +24,8 @@ export default function Flashcards() {
   const panX = useRef(new Animated.Value(0)).current;
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
   const [feedback, setFeedback] = useState<'know' | 'dont' | null>(null);
+  // 3s gesture coach overlay (Lottie hand swipe)
+  const [showCoach, setShowCoach] = useState(true);
 
   const knowDragOpacity = useMemo(
     () =>
@@ -43,6 +47,13 @@ export default function Flashcards() {
   );
 
   useEffect(() => { (async () => { await loadWords(); })(); }, [loadWords]);
+
+  // Coach overlay just shows the Lottie hand for ~3 seconds
+  useEffect(() => {
+    if (!showCoach) return;
+    const to = setTimeout(() => setShowCoach(false), 3000);
+    return () => clearTimeout(to);
+  }, [showCoach]);
 
 
   // Build a session queue prioritized by due SRS (initialize only when folder changes or word count changes)
@@ -89,7 +100,7 @@ export default function Flashcards() {
     () =>
       panX.interpolate({
         inputRange: [-CARD_W, 0, CARD_W],
-        outputRange: [0.97, 0.95, 0.97],
+        outputRange: [0.965, 0.955, 0.965],
         extrapolate: 'clamp'
       }),
     [panX]
@@ -99,7 +110,7 @@ export default function Flashcards() {
     () =>
       panX.interpolate({
         inputRange: [-CARD_W, 0, CARD_W],
-        outputRange: [12, 16, 12],
+        outputRange: [18, 24, 18],
         extrapolate: 'clamp'
       }),
     [panX]
@@ -109,7 +120,18 @@ export default function Flashcards() {
     () =>
       panX.interpolate({
         inputRange: [-CARD_W, 0, CARD_W],
-        outputRange: [-8, 0, 8],
+        outputRange: [-10, 0, 10],
+        extrapolate: 'clamp'
+      }),
+    [panX]
+  );
+
+  // Peek visibility for the next card's word
+  const nextPeekOpacity = useMemo(
+    () =>
+      panX.interpolate({
+        inputRange: [-CARD_W, 0, CARD_W],
+        outputRange: [0.5, 0.28, 0.5],
         extrapolate: 'clamp'
       }),
     [panX]
@@ -192,8 +214,8 @@ export default function Flashcards() {
             Animated.spring(panX, { toValue: 0, useNativeDriver: true }).start();
             return;
           }
-          const goLeft = g.dx <= -threshold;
-          const goRight = g.dx >= threshold;
+          const goLeft = g.dx <= -threshold; // left = again
+          const goRight = g.dx >= threshold; // right = knew it
           if (!goLeft && !goRight) {
             Animated.spring(panX, { toValue: 0, useNativeDriver: true }).start();
             return;
@@ -210,9 +232,10 @@ export default function Flashcards() {
             if (!finished) {
               return;
             }
+            // Per request: LEFT = I know, RIGHT = I don't know
             if (goLeft) {
               handleKnowRef.current();
-            } else {
+            } else if (goRight) {
               handleDontKnowRef.current();
             }
           });
@@ -232,9 +255,14 @@ export default function Flashcards() {
 
   if (!current) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.center}> 
-          <Text style={styles.empty}>All done for now.</Text>
+      <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
+        <View style={styles.doneHeader}>
+          <TouchableOpacity onPress={() => router.back()} style={[styles.closeBtn, isLight && { backgroundColor: '#E5E7EB' }]}>
+            <X size={20} color={isLight ? '#111827' : '#FFFFFF'} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.center}>
+          <Text style={[styles.empty, isLight && { color: '#6B7280' }]}>All done for now.</Text>
         </View>
       </SafeAreaView>
     );
@@ -255,10 +283,13 @@ export default function Flashcards() {
     <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
       <View style={[styles.header, isLight && { borderBottomColor: '#E5E7EB' }]}>
         <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, isLight && { backgroundColor: '#E5E7EB' }]}><Text style={[styles.backTxt, isLight && { color: '#111827' }]}>Back</Text></TouchableOpacity>
-        <Text style={[styles.title, isLight && { color: '#111827' }]}>{title || 'Flashcards'}</Text>
-        <Text style={[styles.counter, isLight && { color: '#6B7280' }]}>{`${Math.min(index + 1, items.length)}/${items.length}`}</Text>
+        <View style={styles.headerCenter}>
+          <Text style={[styles.title, isLight && { color: '#111827' }]}>{title || 'Common Phrasal Verbs'}</Text>
+          <Text style={[styles.subLabel, isLight && { color: '#6B7280' }]}>Tap to reveal • {`${Math.min(index + 1, items.length)}/${items.length}`}</Text>
+        </View>
+        <View style={{ width: 48 }} />
       </View>
-      <View style={styles.dotsBar}>
+      <View style={[styles.dotsBar, { marginTop: 2 }]}>
         {dotsIndices.map((i, idx) => {
           const isActive = idx === centerPos; // fixed center position
           const isOutOfRange = i < 0 || i >= totalDots;
@@ -273,12 +304,22 @@ export default function Flashcards() {
         })}
       </View>
       <View style={styles.body}>
-        <TouchableOpacity style={[styles.resetBtn, isLight && { backgroundColor: '#E5E7EB' }]} onPress={() => resetSrs(folderId as string)}>
-          <Text style={[styles.resetTxt, isLight && { color: '#111827' }]}>Reset SRS</Text>
-        </TouchableOpacity>
         <Animated.View key={`card-${current.id}-${index}`} style={[styles.cardWrap, appearStyle]}>
           {thirdCard && (
-            <View pointerEvents="none" style={[styles.deckCard, styles.deckCardThird, isLight && { backgroundColor: '#F9F1E7', borderColor: '#E5E7EB', shadowOpacity: 0.15 }]} />
+            <View
+              pointerEvents="none"
+              style={[
+                styles.deckCard,
+                styles.deckCardThird,
+                isLight && { backgroundColor: '#F2F4F7', borderColor: '#E5E7EB', shadowOpacity: 0.14 }
+              ]}
+            >
+              <View style={styles.deckCardContent}>
+                <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.peekWordThird, isLight && styles.peekWordLight]}>
+                  {String(thirdCard.word || '')}
+                </Text>
+              </View>
+            </View>
           )}
           {nextCard && (
             <Animated.View
@@ -286,6 +327,7 @@ export default function Flashcards() {
               style={[
                 styles.deckCard,
                 styles.deckCardNext,
+                isLight && { backgroundColor: '#F7F8FA', borderColor: '#E5E7EB', shadowOpacity: 0.14 },
                 {
                   transform: [
                     { translateY: nextCardTranslateY },
@@ -294,83 +336,131 @@ export default function Flashcards() {
                   ]
                 }
               ]}
-            />
+            >
+              <View style={styles.deckCardContent}>
+                <Animated.Text numberOfLines={1} ellipsizeMode="tail" style={[styles.peekWord, isLight && styles.peekWordLight, { opacity: nextPeekOpacity }]}>
+                  {String(nextCard.word || '')}
+                </Animated.Text>
+              </View>
+            </Animated.View>
           )}
+          {/* stack base shadow to enhance separation */}
+          <View style={[styles.stackShadow, isLight && styles.stackShadowLight]} />
           <Animated.View style={[styles.activeCardContainer, swipeStyle]}>
             {/* Front */}
-            <Animated.View style={[styles.card, styles.cardFront, styles.cardElevated, isLight && { backgroundColor: '#F9F1E7', borderColor: '#E5E7EB' }, { transform: [{ rotateY: frontRotate }] }]}
+            <Animated.View style={[styles.card, styles.cardFront, styles.cardElevated, isLight && { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' }, { transform: [{ rotateY: frontRotate }] }]}
               collapsable={false}
             >
               <View style={styles.cardHeaderStripe}>
-                <Text style={[styles.cardLabel, isLight && { color: '#6B7280' }]}>Word</Text>
+                <Text style={[styles.cardLabel, isLight && { color: '#6B7280' }]}>PHRASAL VERB</Text>
               </View>
               <Text style={[styles.word, isLight && { color: '#111827', textShadowColor: 'transparent' }]}>{current.word}</Text>
-              <Text style={[styles.hint, isLight && { color: '#6B7280' }]}>Tap to see meaning</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                <Eye size={16} color={isLight ? '#6B7280' : '#93a3af'} />
+                <Text style={[styles.hint, isLight && { color: '#6B7280' }]}>  Tap to see meaning</Text>
+              </View>
             </Animated.View>
             {/* Back */}
-            <Animated.View style={[styles.card, styles.cardBack, styles.cardBackSurface, styles.cardElevated, isLight && { backgroundColor: '#F9F1E7' }, { transform: [{ rotateY: backRotate }] }]}> 
+            <Animated.View style={[styles.card, styles.cardBack, styles.cardBackSurface, styles.cardElevated, isLight && { backgroundColor: '#FFFFFF' }, { transform: [{ rotateY: backRotate }] }]}> 
               <Text style={[styles.definition, isLight && { color: '#111827' }]}>{current.definition}</Text>
               {!!current.example && (
                 <Text style={[styles.example, isLight && { color: '#6B7280' }]}>"{current.example}"</Text>
               )}
             </Animated.View>
+            {/* Coach overlay (Lottie) */}
+            {showCoach && (
+              <View pointerEvents="none" style={styles.coachLottieWrap}>
+                <LottieView
+                  source={require('../assets/lottie/HandSwipe.json')}
+                  autoPlay
+                  loop
+                  style={{ width: 140, height: 140 }}
+                />
+              </View>
+            )}
             <Animated.View pointerEvents="none" style={[styles.feedbackOverlay, styles.feedbackKnow, { opacity: knowDragOpacity }]} />
             <Animated.View pointerEvents="none" style={[styles.feedbackOverlay, styles.feedbackDont, { opacity: dontDragOpacity }]} />
             {feedback && (
-              <Animated.View pointerEvents="none" style={[styles.feedbackOverlay, feedback === 'know' ? styles.feedbackKnow : styles.feedbackDont, { opacity: feedbackOpacity }]} />
+              <Animated.View pointerEvents="none" style={[styles.feedbackOverlay, feedback === 'know' ? styles.feedbackKnow : styles.feedbackDont, { opacity: feedbackOpacity }]}>
+                {feedback === 'know' ? (
+                  <CheckCircle2 size={56} color={'#22c55e'} style={styles.feedbackIcon} />
+                ) : (
+                  <X size={56} color={'#ef4444'} style={styles.feedbackIcon} />
+                )}
+              </Animated.View>
             )}
             <View style={styles.tapCatcher} {...panResponder.panHandlers} />
           </Animated.View>
         </Animated.View>
-        
       </View>
+      {/* Tabs moved to Home screen as requested */}
     </SafeAreaView>
   );
 }
 
-const CARD_W = 340;
-const CARD_H = 240;
+const SW = Dimensions.get('window').width;
+const SH = Dimensions.get('window').height;
+const CARD_W = Math.min(380, SW - 48);
+const CARD_H = Math.min(500, Math.round(SH * 0.48));
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1E1E1E' },
+  doneHeader: { paddingHorizontal: 16, paddingTop: 12, alignItems: 'flex-end' },
+  closeBtn: { padding: 8, borderRadius: 10, backgroundColor: '#2c2f2f' },
   header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerCenter: { alignItems: 'center', justifyContent: 'center' },
   backBtn: { paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#2c2f2f', borderRadius: 8 },
   backTxt: { color: '#fff' },
   title: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  counter: { color: '#9CA3AF', fontSize: 12 },
+  subLabel: { color: '#9CA3AF', fontSize: 12, marginTop: 2 },
   dotsContainer: { },
   dotsBar: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingBottom: 8 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2f3436', marginHorizontal: 3 },
-  dotActive: { backgroundColor: '#f59f46', width: 8, height: 8, borderRadius: 4 },
+  dotActive: { backgroundColor: '#F8B070', width: 8, height: 8, borderRadius: 4 },
   dotDim: { opacity: 0.35 },
   body: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  cardWrap: { width: CARD_W, height: CARD_H, marginBottom: 18, position: 'relative', overflow: 'visible' },
+  cardWrap: { width: CARD_W, height: CARD_H, marginBottom: 12, position: 'relative', overflow: 'visible' },
   swipeContainer: { position: 'absolute', width: CARD_W, height: CARD_H },
-  card: { position: 'absolute', width: CARD_W, height: CARD_H, backfaceVisibility: 'hidden', borderRadius: 18, alignItems: 'center', justifyContent: 'center', padding: 24, overflow: 'hidden' },
+  card: { position: 'absolute', width: CARD_W, height: CARD_H, backfaceVisibility: 'hidden', borderRadius: 22, alignItems: 'center', justifyContent: 'center', padding: 24, overflow: 'hidden' },
   cardFront: { backgroundColor: '#273034', borderWidth: StyleSheet.hairlineWidth, borderColor: '#394145' },
-  cardElevated: { shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 18, shadowOffset: { width: 0, height: 14 }, elevation: 12 },
+  cardElevated: { shadowColor: '#000', shadowOpacity: 0.28, shadowRadius: 18, shadowOffset: { width: 0, height: 14 }, elevation: 12 },
   cardBack: { transform: [{ rotateY: '180deg' }] },
   cardBackSurface: { backgroundColor: '#1f2629' },
   word: { color: '#f4f6f8', fontSize: 30, fontWeight: '800', textAlign: 'center', letterSpacing: 0.4, textShadowColor: 'rgba(0,0,0,0.25)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6, marginTop: 12 },
   hint: { marginTop: 10, color: '#93a3af', fontSize: 13, letterSpacing: 0.5 },
   definition: { color: '#e3e8eb', fontSize: 16, lineHeight: 24, textAlign: 'center', paddingHorizontal: 10, marginTop: 12 },
   example: { color: '#8f9baa', marginTop: 10, fontStyle: 'italic', textAlign: 'center' },
-  cardHeaderStripe: { position: 'absolute', top: 0, left: 0, right: 0, height: 48, backgroundColor: 'rgba(255,255,255,0.05)', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#3b4549', justifyContent: 'center', paddingHorizontal: 18 },
+  cardHeaderStripe: { position: 'absolute', top: 0, left: 0, right: 0, height: 44, backgroundColor: 'transparent', borderBottomWidth: 0, justifyContent: 'center', paddingHorizontal: 18 },
   cardLabel: { color: '#9fb4bc', fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1.8 },
   tapCatcher: { position: 'absolute', width: CARD_W, height: CARD_H },
   controls: { flexDirection: 'row', gap: 12 },
   ctrlBtn: { backgroundColor: '#e28743', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
   ctrlTxt: { color: '#fff', fontWeight: '600' },
-  resetBtn: { position: 'absolute', top: -44, right: 16, backgroundColor: '#2c2f2f', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  resetTxt: { color: '#9CA3AF', fontSize: 12 },
+  // resetBtn removed
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   empty: { color: '#9CA3AF' },
-  feedbackOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 18 },
+  feedbackOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  feedbackIcon: { shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8 },
   feedbackKnow: { backgroundColor: 'rgba(34,197,94,0.32)' },
   feedbackDont: { backgroundColor: 'rgba(239,68,68,0.32)' },
-  deckCard: { position: 'absolute', top: 0, left: 0, width: CARD_W, height: CARD_H, borderRadius: 18, backgroundColor: '#202629', overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: '#2e3437', shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 10 }, elevation: 6 },
-  deckCardNext: { opacity: 0.9, backgroundColor: '#21282b', borderColor: '#30383b' },
-  deckCardThird: { opacity: 0.7, transform: [{ translateY: 24 }, { translateX: 4 }, { scale: 0.93 }], backgroundColor: '#1a2023', borderColor: '#272e31' },
-  activeCardContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 18, overflow: 'hidden' },
+  deckCard: { position: 'absolute', top: 0, left: 0, width: CARD_W, height: CARD_H, borderRadius: 22, backgroundColor: '#202629', overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: '#2e3437', shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 10 }, elevation: 6 },
+  deckCardNext: { opacity: 0.95, backgroundColor: '#21282b', borderColor: '#30383b' },
+  deckCardThird: { opacity: 0.85, transform: [{ translateY: 34 }, { translateX: 8 }, { scale: 0.93 }], backgroundColor: '#1a2023', borderColor: '#272e31' },
+  activeCardContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 22, overflow: 'hidden' },
+  stackShadow: { position: 'absolute', bottom: -6, left: 18, right: 18, height: 18, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.12)' },
+  stackShadowLight: { backgroundColor: 'rgba(17,24,39,0.08)' },
+  deckCardContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
+  peekWord: { fontSize: 22, fontWeight: '800', color: '#e5e7eb' },
+  peekWordThird: { fontSize: 18, fontWeight: '800', color: 'rgba(229,231,235,0.6)', opacity: 0.18 },
+  peekWordLight: { color: '#1f2937' },
+  tabBar: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 54, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#2F3436', flexDirection: 'row', backgroundColor: 'rgba(17,17,17,0.9)' },
+  tabBarLight: { backgroundColor: '#FFFFFF', borderTopColor: '#E5E7EB' },
+  tabBtn: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  tabBtnActive: { },
+  tabTxt: { color: '#9CA3AF', fontWeight: '700' },
+  tabTxtActive: { color: '#E5E7EB', fontWeight: '900' },
+  // Coach overlay (Lottie) styles
+  coachLottieWrap: { position: 'absolute', left: 0, right: 0, bottom: 10, alignItems: 'center', justifyContent: 'center' },
+  // footer controls removed per request
   
 });

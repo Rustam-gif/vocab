@@ -64,10 +64,12 @@ class VaultService {
   static readonly DEFAULT_FOLDER_USER_ID = 'folder-user-default';
   static readonly DEFAULT_FOLDER_PHRASAL_ID = 'folder-phrasal-default';
   static readonly DEFAULT_FOLDER_DAILY_ID = 'folder-daily-default';
+  static readonly DEFAULT_FOLDER_TRANSLATED_ID = 'folder-translated-default';
   static readonly DEFAULT_FOLDER_SETS_TITLE = 'Saved from Sets';
   static readonly DEFAULT_FOLDER_USER_TITLE = 'My Saved Words';
   static readonly DEFAULT_FOLDER_PHRASAL_TITLE = 'Common Phrasal Verbs';
   static readonly DEFAULT_FOLDER_DAILY_TITLE = 'Daily Essentials';
+  static readonly DEFAULT_FOLDER_TRANSLATED_TITLE = 'Translated Words';
 
   async initialize() {
     try {
@@ -95,6 +97,7 @@ class VaultService {
           { id: VaultService.DEFAULT_FOLDER_USER_ID, title: VaultService.DEFAULT_FOLDER_USER_TITLE, createdAt: new Date().toISOString() },
           { id: VaultService.DEFAULT_FOLDER_PHRASAL_ID, title: VaultService.DEFAULT_FOLDER_PHRASAL_TITLE, createdAt: new Date().toISOString() },
           { id: VaultService.DEFAULT_FOLDER_DAILY_ID, title: VaultService.DEFAULT_FOLDER_DAILY_TITLE, createdAt: new Date().toISOString() },
+          { id: VaultService.DEFAULT_FOLDER_TRANSLATED_ID, title: VaultService.DEFAULT_FOLDER_TRANSLATED_TITLE, createdAt: new Date().toISOString() },
         ];
         await this.saveWords();
       }
@@ -119,6 +122,7 @@ class VaultService {
     const hasUser = this.folders.some(f => f.id === VaultService.DEFAULT_FOLDER_USER_ID || f.title === VaultService.DEFAULT_FOLDER_USER_TITLE);
     const hasPhrasal = this.folders.some(f => f.id === VaultService.DEFAULT_FOLDER_PHRASAL_ID || f.title === VaultService.DEFAULT_FOLDER_PHRASAL_TITLE);
     const hasDaily = this.folders.some(f => f.id === VaultService.DEFAULT_FOLDER_DAILY_ID || f.title === VaultService.DEFAULT_FOLDER_DAILY_TITLE);
+    const hasTranslated = this.folders.some(f => f.id === VaultService.DEFAULT_FOLDER_TRANSLATED_ID || f.title === VaultService.DEFAULT_FOLDER_TRANSLATED_TITLE);
     
     if (!hasSets) {
       this.folders.push({ id: VaultService.DEFAULT_FOLDER_SETS_ID, title: VaultService.DEFAULT_FOLDER_SETS_TITLE, createdAt: new Date().toISOString() });
@@ -152,6 +156,10 @@ class VaultService {
       });
       changed = true;
     }
+    if (!hasTranslated) {
+      this.folders.push({ id: VaultService.DEFAULT_FOLDER_TRANSLATED_ID, title: VaultService.DEFAULT_FOLDER_TRANSLATED_TITLE, createdAt: new Date().toISOString() });
+      changed = true;
+    }
     return changed;
   }
 
@@ -168,6 +176,7 @@ class VaultService {
       ...word,
       id: Date.now().toString(),
       savedAt: new Date(),
+      source: word.source,
       score: 0,
       practiceCount: 0,
       correctCount: 0,
@@ -203,16 +212,28 @@ class VaultService {
   }
 
   async deleteFolder(folderId: string): Promise<boolean> {
-    // Protect default folders
-    if (
-      folderId === VaultService.DEFAULT_FOLDER_SETS_ID ||
-      folderId === VaultService.DEFAULT_FOLDER_USER_ID
-    ) {
-      return false;
-    }
+    // Protect all default/system folders by id or title
+    const blockById = new Set([
+      VaultService.DEFAULT_FOLDER_SETS_ID,
+      VaultService.DEFAULT_FOLDER_USER_ID,
+      VaultService.DEFAULT_FOLDER_PHRASAL_ID,
+      VaultService.DEFAULT_FOLDER_DAILY_ID,
+      VaultService.DEFAULT_FOLDER_TRANSLATED_ID,
+    ]);
+    if (blockById.has(folderId)) return false;
 
     const index = this.folders.findIndex(f => f.id === folderId);
     if (index === -1) return false;
+
+    const f = this.folders[index];
+    const blockByTitle = new Set([
+      VaultService.DEFAULT_FOLDER_SETS_TITLE,
+      VaultService.DEFAULT_FOLDER_USER_TITLE,
+      VaultService.DEFAULT_FOLDER_PHRASAL_TITLE,
+      VaultService.DEFAULT_FOLDER_DAILY_TITLE,
+      VaultService.DEFAULT_FOLDER_TRANSLATED_TITLE,
+    ]);
+    if (blockByTitle.has(f.title)) return false;
 
     // Move words to "My Saved Words" by default
     const fallbackId = VaultService.DEFAULT_FOLDER_USER_ID;

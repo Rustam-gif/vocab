@@ -71,7 +71,7 @@ export default function AuthCallback() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#f59f46" />
+      <ActivityIndicator size="large" color="#F8B070" />
     </View>
   );
 }

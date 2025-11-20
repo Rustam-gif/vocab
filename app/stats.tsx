@@ -13,8 +13,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, BarChart3, TrendingUp, CalendarDays, Award, CheckCircle2, AlertTriangle, Clock3, ChevronDown } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { ArrowLeft, TrendingUp, CalendarDays, CheckCircle2, AlertTriangle, Clock3, ChevronDown } from 'lucide-react-native';
+import LottieView from 'lottie-react-native';
+import { LinearGradient } from '../lib/LinearGradient';
 import { useAppStore } from '../lib/store';
 import { analyticsService } from '../services/AnalyticsService';
 import { vaultService } from '../services/VaultService';
@@ -51,7 +52,9 @@ export default function StatsScreen() {
     if (!analytics?.accuracyByType) return null;
 
     const exerciseTypes = Object.keys(analytics.accuracyByType);
-    const maxAccuracy = Math.max(...Object.values(analytics.accuracyByType).map(v => Number(v)));
+    // Scale bars to absolute accuracy (0–100%), not relative to the current max,
+    // so a single non‑zero category does not fill the entire height.
+    const MAX_BAR_PX = 100;
 
     return (
       <View style={[styles.card, isLight && styles.cardLight]}>
@@ -59,11 +62,11 @@ export default function StatsScreen() {
         <View style={styles.barChart}>
           {exerciseTypes.map((type, index) => {
             const accuracy = analytics.accuracyByType[type];
-            const height = Math.max(6, (accuracy / (maxAccuracy || 1)) * 120);
+            const height = Math.max(6, (Number(accuracy) / 100) * MAX_BAR_PX);
             const gradient = accuracy >= 80
               ? ['#2e7d32', '#4CAF50']
               : accuracy >= 60
-              ? ['#b36b00', '#F2AB27']
+              ? ['#b36b00', '#F8B070']
               : ['#c62828', '#F87171'];
 
             return (
@@ -85,7 +88,7 @@ export default function StatsScreen() {
     if (!analytics?.recommendations || analytics.recommendations.length === 0) return null;
     const items = analytics.recommendations.slice(0, 3);
     const iconFor = (k: string) => k === 'srs' ? <Clock3 size={16} color="#FFFFFF" /> : k === 'weak' ? <AlertTriangle size={16} color="#FFFFFF" /> : <CheckCircle2 size={16} color="#FFFFFF" />;
-    const bgFor = (k: string) => k === 'srs' ? '#187486' : k === 'weak' ? '#F2AB27' : '#4CAF50';
+    const bgFor = (k: string) => k === 'srs' ? '#187486' : k === 'weak' ? '#F8B070' : '#4CAF50';
     return (
       <View style={[styles.card, isLight && styles.cardLight]}>
         <Text style={[styles.cardTitle, isLight && styles.cardTitleLight]}>Recommendations</Text>
@@ -151,7 +154,7 @@ export default function StatsScreen() {
       <View style={[styles.card, isLight && styles.cardLight]}>
         <Text style={[styles.chartTitle, isLight && styles.chartTitleLight]}>SRS Health</Text>
         <View style={styles.row}><Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>Due now</Text><Text style={[styles.rowRight, isLight && styles.rowRightLight]}>{ob.today || 0}</Text></View>
-        <View style={styles.row}><Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>Overdue</Text><Text style={[styles.rowRight, isLight && styles.rowRightLight, { color: overdueOther > 0 ? '#F2AB27' : (isLight ? '#6B7280' : '#9CA3AF') }]}>{overdueOther}</Text></View>
+        <View style={styles.row}><Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>Overdue</Text><Text style={[styles.rowRight, isLight && styles.rowRightLight, { color: overdueOther > 0 ? '#F8B070' : (isLight ? '#6B7280' : '#9CA3AF') }]}>{overdueOther}</Text></View>
         <View style={styles.row}><Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>Avg EF</Text><Text style={[styles.rowRight, isLight && styles.rowRightLight]}>{srs.avgEaseFactor}</Text></View>
         <View style={styles.row}><Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>Avg Interval</Text><Text style={[styles.rowRight, isLight && styles.rowRightLight]}>{srs.avgInterval} d</Text></View>
         {srs.topLapses?.length ? (
@@ -209,7 +212,7 @@ export default function StatsScreen() {
         {analytics.weakWords.slice(0, 8).map((w: any, idx: number) => (
           <View key={`${w.word}-${idx}`} style={styles.row}>
             <Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>{w.word}</Text>
-            <Text style={[styles.rowRight, isLight && styles.rowRightLight, { color: w.accuracy < 50 ? '#F87171' : '#F2AB27' }]}>{w.accuracy}% • {w.attempts}x</Text>
+            <Text style={[styles.rowRight, isLight && styles.rowRightLight, { color: w.accuracy < 50 ? '#F87171' : '#F8B070' }]}>{w.accuracy}% • {w.attempts}x</Text>
           </View>
         ))}
       </View>
@@ -275,27 +278,7 @@ export default function StatsScreen() {
       <View style={styles.summaryContainer}>
         <View style={[styles.summaryCard, isLight && styles.summaryCardLight]}>
           <View style={[styles.summaryIcon, isLight && styles.summaryIconLight]}>
-            <TrendingUp size={24} color="#4CAF50" />
-          </View>
-          <View style={styles.summaryContent}>
-            <Text style={[styles.summaryValue, isLight && styles.summaryValueLight]}>{analytics.streak}</Text>
-            <Text style={[styles.summaryLabel, isLight && styles.summaryLabelLight]}>Day Streak</Text>
-          </View>
-        </View>
-
-        <View style={[styles.summaryCard, isLight && styles.summaryCardLight]}>
-          <View style={[styles.summaryIcon, isLight && styles.summaryIconLight]}>
-            <CalendarDays size={24} color="#F2AB27" />
-          </View>
-          <View style={styles.summaryContent}>
-            <Text style={[styles.summaryValue, isLight && styles.summaryValueLight]}>{counts.today}</Text>
-            <Text style={[styles.summaryLabel, isLight && styles.summaryLabelLight]}>Exercises Today</Text>
-          </View>
-        </View>
-
-        <View style={[styles.summaryCard, isLight && styles.summaryCardLight]}>
-          <View style={[styles.summaryIcon, isLight && styles.summaryIconLight]}>
-            <BarChart3 size={24} color="#2196F3" />
+            <LottieView source={require('../assets/lottie/growth_progress.json')} autoPlay loop style={{ width: 40, height: 40 }} />
           </View>
           <View style={styles.summaryContent}>
             <Text style={[styles.summaryValue, isLight && styles.summaryValueLight]}>{counts.total}</Text>
@@ -305,7 +288,7 @@ export default function StatsScreen() {
 
         <View style={[styles.summaryCard, isLight && styles.summaryCardLight]}>
           <View style={[styles.summaryIcon, isLight && styles.summaryIconLight]}>
-            <Award size={24} color="#e28743" />
+            <LottieView source={require('../assets/lottie/Bestseller.json')} autoPlay loop style={{ width: 40, height: 40 }} />
           </View>
           <View style={styles.summaryContent}>
             <Text style={[styles.summaryValue, isLight && styles.summaryValueLight]}>{recordStreak}</Text>
@@ -392,7 +375,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#252525',
   },
   containerLight: {
-    backgroundColor: '#F2E3D0',
+    backgroundColor: '#F8F8F8',
   },
   header: {
     flexDirection: 'row',
@@ -400,11 +383,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2c2f2f',
+    // remove bottom divider
   },
   headerLight: {
-    borderBottomColor: '#E5DED3',
+    // remove divider in light as well
   },
   backButton: {
     padding: 8,
@@ -412,7 +394,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     color: '#fff',
-    fontFamily: 'Ubuntu_700Bold',
+    fontFamily: 'Ubuntu-Bold',
   },
   titleLight: { color: '#111827' },
   placeholder: {
@@ -428,7 +410,7 @@ const styles = StyleSheet.create({
   resetText: {
     color: '#e05f2a',
     fontSize: 12,
-    fontFamily: 'Ubuntu_500Medium',
+    fontFamily: 'Ubuntu-Medium',
   },
   resetTextLight: { color: '#c24d1f' },
   content: {
@@ -450,31 +432,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  summaryCardLight: { backgroundColor: '#F9F1E7' },
+  summaryCardLight: { backgroundColor: '#FFFFFF' },
   summaryIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#3A3A3A',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  summaryIconLight: { backgroundColor: '#E9E6E0' },
+  summaryIconLight: { backgroundColor: 'transparent' },
   summaryContent: {
     flex: 1,
   },
   summaryValue: {
     fontSize: 20,
     color: '#fff',
-    fontFamily: 'Ubuntu_700Bold',
+    fontFamily: 'Ubuntu-Bold',
   },
   summaryValueLight: { color: '#111827' },
   summaryLabel: {
     fontSize: 12,
     color: '#a0a0a0',
     marginTop: 2,
-    fontFamily: 'Ubuntu_400Regular',
+    fontFamily: 'Ubuntu-Regular',
   },
   summaryLabelLight: { color: '#6B7280' },
   chartContainer: {
@@ -483,7 +465,7 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 20,
   },
-  chartContainerLight: { backgroundColor: '#F9F1E7' },
+  chartContainerLight: { backgroundColor: '#FFFFFF' },
   deepToggleRow: {
     marginTop: 4,
     marginBottom: 12,
@@ -504,7 +486,7 @@ const styles = StyleSheet.create({
   deepToggleText: {
     color: '#E5E7EB',
     fontSize: 13,
-    fontFamily: 'Ubuntu_700Bold',
+    fontFamily: 'Ubuntu-Bold',
   },
   deepToggleTextLight: { color: '#374151' },
   deepContent: {
@@ -514,12 +496,12 @@ const styles = StyleSheet.create({
     height: 0,
   },
   card: { backgroundColor: '#2C2C2C', borderRadius: 12, padding: 16, marginBottom: 20 },
-  cardLight: { backgroundColor: '#F9F1E7' },
-  cardTitle: { fontSize: 16, color: '#fff', marginBottom: 12, fontFamily: 'Ubuntu_700Bold' },
+  cardLight: { backgroundColor: '#FFFFFF' },
+  cardTitle: { fontSize: 16, color: '#fff', marginBottom: 12, fontFamily: 'Ubuntu-Bold' },
   cardTitleLight: { color: '#111827' },
   recoRow: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 6 },
   recoIcon: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  recoText: { color: '#E5E7EB', fontSize: 14, flex: 1, fontFamily: 'Ubuntu_400Regular' },
+  recoText: { color: '#E5E7EB', fontSize: 14, flex: 1, fontFamily: 'Ubuntu-Regular' },
   recoTextLight: { color: '#374151' },
   card: {
     backgroundColor: '#2c2f2f',
@@ -533,17 +515,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 6,
   },
-  rowLeft: { color: '#E5E7EB', fontSize: 14, fontFamily: 'Ubuntu_500Medium' },
-  rowRight: { color: '#9CA3AF', fontSize: 14, fontFamily: 'Ubuntu_500Medium' },
+  rowLeft: { color: '#E5E7EB', fontSize: 14, fontFamily: 'Ubuntu-Medium' },
+  rowRight: { color: '#9CA3AF', fontSize: 14, fontFamily: 'Ubuntu-Medium' },
   splitRow: { flexDirection: 'row', gap: 16 },
   splitCol: { flex: 1 },
-  subheading: { color: '#9CA3AF', fontSize: 13, marginBottom: 6, fontFamily: 'Ubuntu_700Bold' },
+  subheading: { color: '#9CA3AF', fontSize: 13, marginBottom: 6, fontFamily: 'Ubuntu-Bold' },
   chartTitle: {
     fontSize: 18,
     color: '#fff',
     marginBottom: 16,
     textAlign: 'center',
     fontFamily: 'Ubuntu_700Bold',
+  },
+  chartTitleLight: {
+    color: '#111827',
   },
   barChart: {
     flexDirection: 'row',
@@ -556,7 +541,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   barWrapper: {
-    height: 120,
+    height: 100,
     justifyContent: 'flex-end',
     marginBottom: 8,
   },
@@ -569,14 +554,14 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#a0a0a0',
     textAlign: 'center',
-    fontFamily: 'Ubuntu_400Regular',
+    fontFamily: 'Ubuntu-Regular',
   },
   barLabelLight: { color: '#6B7280' },
   barValue: {
     fontSize: 12,
     color: '#fff',
     marginTop: 4,
-    fontFamily: 'Ubuntu_700Bold',
+    fontFamily: 'Ubuntu-Bold',
   },
   barValueLight: { color: '#111827' },
   trendChart: {
@@ -620,7 +605,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#a0a0a0',
     textAlign: 'center',
-    fontFamily: 'Ubuntu_400Regular',
+    fontFamily: 'Ubuntu-Regular',
   },
   trendLabelLight: { color: '#6B7280' },
   donutChart: {
@@ -642,13 +627,13 @@ const styles = StyleSheet.create({
   donutValue: {
     fontSize: 24,
     color: '#fff',
-    fontFamily: 'Ubuntu_700Bold',
+    fontFamily: 'Ubuntu-Bold',
   },
   donutValueLight: { color: '#111827' },
   donutLabel: {
     fontSize: 12,
     color: '#a0a0a0',
-    fontFamily: 'Ubuntu_400Regular',
+    fontFamily: 'Ubuntu-Regular',
   },
   donutLabelLight: { color: '#6B7280' },
   donutLegend: {
@@ -667,7 +652,7 @@ const styles = StyleSheet.create({
   legendText: {
     fontSize: 14,
     color: '#e0e0e0',
-    fontFamily: 'Ubuntu_400Regular',
+    fontFamily: 'Ubuntu-Regular',
   },
   legendTextLight: { color: '#374151' },
   rowLeftLight: { color: '#111827' },

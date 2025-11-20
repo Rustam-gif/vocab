@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ExerciseResult, AnalyticsData } from '../types';
 import { vaultService } from './VaultService';
 import { supabase } from '../lib/supabase';
+import { REMOTE_SYNC } from '../lib/appConfig';
 
 const ANALYTICS_KEY = 'vocab_analytics';
 const ANALYTICS_BACKUP_KEY = 'vocab_analytics_backup';
@@ -36,14 +37,23 @@ class AnalyticsService {
 
     let user: any = null;
     let remote: ExerciseResult[] = [];
-    try {
-      const resp = await supabase.auth.getUser();
-      user = resp?.data?.user ?? null;
-      remote = (user?.user_metadata?.analytics ? this.normalize(user.user_metadata.analytics) : []) as ExerciseResult[];
-    } catch (e) {
-      // Do not wipe local data if network/auth fails
-      console.warn('Analytics: skipped remote merge (offline or auth issue)');
+    if (!REMOTE_SYNC) {
+      // Local-first only; skip remote read entirely to avoid network fetch on screen open
+      try {
+        const { data } = await supabase.auth.getSession();
+        user = data?.session?.user ?? null;
+      } catch {}
       remote = [];
+    } else {
+      try {
+        const resp = await supabase.auth.getUser();
+        user = resp?.data?.user ?? null;
+        remote = (user?.user_metadata?.analytics ? this.normalize(user.user_metadata.analytics) : []) as ExerciseResult[];
+      } catch (e) {
+        // Do not wipe local data if network/auth fails
+        console.warn('Analytics: skipped remote merge (offline or auth issue)');
+        remote = [];
+      }
     }
 
     const merged = this.mergeResults(local, remote);
@@ -58,7 +68,7 @@ class AnalyticsService {
     } catch (e) {
       console.warn('Analytics: failed to write local cache', e);
     }
-    if (user) {
+    if (user && REMOTE_SYNC) {
       try {
         await supabase.auth.updateUser({ data: { analytics: this.results } });
       } catch (e) {
@@ -149,12 +159,14 @@ class AnalyticsService {
     );
 
     // Calculate accuracy by exercise type (ensure all main types show up even if 0)
+    // Exclude placement test from analytics visuals
     const accuracyByType: Record<string, number> = {};
     const baseTypes = ['mcq', 'synonym', 'usage', 'letters', 'sprint'];
-    const exerciseTypes = [...new Set([...baseTypes, ...recentResults.map(r => r.exerciseType)])];
+    const filtered = recentResults.filter(r => r.exerciseType !== 'placement');
+    const exerciseTypes = [...new Set([...baseTypes, ...filtered.map(r => r.exerciseType)])];
     
     exerciseTypes.forEach(type => {
-      const typeResults = recentResults.filter(r => r.exerciseType === type);
+      const typeResults = filtered.filter(r => r.exerciseType === type);
       const correctCount = typeResults.filter(r => r.correct).length;
       accuracyByType[type] = typeResults.length > 0 
         ? Math.round((correctCount / typeResults.length) * 100) 
@@ -383,6 +395,31 @@ class AnalyticsService {
   clearData() {
     this.results = [];
     return this.saveResults(true);
+  }
+
+  // Force a remote merge after a successful sign-in.
+  // Best-effort: if offline, it quietly keeps local data.
+  async refreshFromRemote() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const remote = (user?.user_metadata?.analytics ? this.normalize(user.user_metadata.analytics) : []) as ExerciseResult[];
+      if (!remote.length) return; // nothing to merge
+      // Load local (ensure we have the latest persisted)
+      try {
+        const stored = await AsyncStorage.getItem(ANALYTICS_KEY);
+        const local = stored ? this.normalize(JSON.parse(stored)) : [];
+        const merged = this.mergeResults(local, remote);
+        this.results = merged;
+        const json = JSON.stringify(this.results);
+        await AsyncStorage.setItem(ANALYTICS_KEY, json);
+        await AsyncStorage.setItem(ANALYTICS_BACKUP_KEY, json);
+      } catch (e) {
+        // Fallback: at least set current in-memory to remote so UI can reflect it
+        this.results = remote;
+      }
+    } catch (e) {
+      // offline or auth error; ignore
+    }
   }
 
   // --- helpers ---

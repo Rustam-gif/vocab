@@ -8,8 +8,11 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Animated,
 } from 'react-native';
+import LottieView from 'lottie-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Plus, Search, BookOpen, Trash2 } from 'lucide-react-native';
@@ -17,10 +20,11 @@ import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
 import { Word } from '../types';
 import { aiService } from '../services/AIService';
+import { useFocusEffect } from '../lib/reactNavigation';
 
 export default function VaultScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ add?: string }>();
+  const params = useLocalSearchParams<{ add?: string; create?: string }>();
   const { words, loading, loadWords, addWord, searchWords, getFolders, createFolder, moveWordToFolder, deleteFolder } = useAppStore();
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
@@ -34,6 +38,62 @@ export default function VaultScreen() {
   const [showFolderCreate, setShowFolderCreate] = useState(false);
   const [newFolderTitle, setNewFolderTitle] = useState('');
   const [selectedModalFolderId, setSelectedModalFolderId] = useState<string | null>(null);
+  // Meanings selection when adding a word
+  const [meanings, setMeanings] = useState<Array<{ pos?: string; definition: string; example?: string }>>([]);
+  const [meaningsLoading, setMeaningsLoading] = useState(false);
+  const [selectedMeaningIndex, setSelectedMeaningIndex] = useState<number | null>(null);
+
+  // Derived folders list for rendering (hide "My Saved Words")
+  const baseFiltered = (folders || []).filter(f => f.id !== 'folder-user-default' && !/my\s+saved/i.test(f.title));
+  const foldersToShow = searchQuery
+    ? baseFiltered.filter(f => f.title.toLowerCase().includes(searchQuery.toLowerCase()))
+    : baseFiltered;
+
+  // Bubble entrance animation for rows (New Folder + each folder)
+  const [animRowCount, setAnimRowCount] = React.useState(1);
+  const animsRef = React.useRef<Animated.Value[]>([]);
+
+  const ensureAnimCount = React.useCallback((count: number) => {
+    // Keep exactly `count` Animated.Values
+    if (animsRef.current.length !== count) {
+      const next: Animated.Value[] = Array.from({ length: count }, (_, i) => animsRef.current[i] ?? new Animated.Value(0));
+      // @ts-ignore
+      animsRef.current = next;
+    }
+    setAnimRowCount(count);
+  }, []);
+
+  const playEntrance = React.useCallback(() => {
+    const values = animsRef.current;
+    try {
+      values.forEach(v => v.setValue(0));
+      Animated.stagger(
+        60,
+        values.map(v =>
+          Animated.spring(v, {
+            toValue: 1,
+            useNativeDriver: true,
+            friction: 6,
+            tension: 120,
+          })
+        )
+      ).start();
+    } catch {}
+  }, []);
+
+  // Update anim rows and run animation when data changes
+  useEffect(() => {
+    const count = (Array.isArray(foldersToShow) ? foldersToShow.length : 0);
+    ensureAnimCount(count);
+    playEntrance();
+  }, [foldersToShow.length, ensureAnimCount, playEntrance]);
+
+  // Also re-run when screen regains focus
+  useFocusEffect(() => {
+    // Refresh folders when screen regains focus (new folders may be created elsewhere)
+    try { setFolders(getFolders()); } catch {}
+    playEntrance();
+  });
 
   useEffect(() => {
     (async () => {
@@ -54,30 +114,80 @@ export default function VaultScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params?.add]);
 
+  // Auto-open Create Folder modal when navigated with ?create=1
+  useEffect(() => {
+    if (params?.create === '1' && !showFolderCreate) {
+      setShowFolderCreate(true);
+    }
+  }, [params?.create, showFolderCreate]);
+
+  // Fetch meanings as user types in the Add Word modal (debounced)
+  useEffect(() => {
+    if (!isAddModalOpen) return;
+    const w = newWord.trim();
+    if (w.length < 2) {
+      setMeanings([]); setSelectedMeaningIndex(null); return;
+    }
+    setMeaningsLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const arr = await aiService.getWordMeanings(w);
+        // Client-side guard: keep at most one per POS (noun, verb, adjective, adverb, other)
+        const order = ['noun','verb','adjective','adverb','other'];
+        const idxByPos: Record<string, number> = {};
+        const picked: typeof arr = [] as any;
+        for (const pos of order) idxByPos[pos] = -1;
+        arr.forEach((m) => {
+          const pos = (m.pos || 'other').toLowerCase();
+          const norm = order.includes(pos) ? pos : 'other';
+          if (idxByPos[norm] === -1) {
+            idxByPos[norm] = picked.push({ ...m, pos: norm }) - 1;
+          }
+        });
+        const compact = order.map((p) => (idxByPos[p] >= 0 ? picked[idxByPos[p]] : null)).filter(Boolean) as typeof arr;
+        setMeanings(compact);
+        // Reset selection when results change
+        setSelectedMeaningIndex(compact.length ? 0 : null);
+      } catch {}
+      setMeaningsLoading(false);
+    }, 350);
+    return () => { try { clearTimeout(t); } catch {} };
+  }, [isAddModalOpen, newWord]);
+
   const handleAddWord = async () => {
     if (!newWord.trim()) return;
 
     setIsAdding(true);
     try {
-      const definition = await aiService.getWordDefinition(newWord.trim());
-      
-      if (definition) {
-        const wordData = {
-          word: newWord.trim(),
-          definition: definition.definition,
-          example: definition.example,
-          phonetics: definition.phonetics,
-          notes: '',
-          tags: [],
-          folderId: selectedModalFolderId || undefined,
-        };
-
-        await addWord(wordData);
-        setNewWord('');
-        setIsAddModalOpen(false);
-        Alert.alert('Success', 'Word added to vault!');
+      const w = newWord.trim();
+      let chosenDef: { definition: string; example?: string } | null = null;
+      if (meanings && meanings.length) {
+        const idx = selectedMeaningIndex == null ? 0 : selectedMeaningIndex;
+        const pick = meanings[idx] || meanings[0];
+        chosenDef = { definition: pick.definition, example: pick.example };
       } else {
-        Alert.alert('Word Not Found', 'Sorry, we couldn\'t find this word in the dictionary.');
+        const def = await aiService.getWordDefinition(w);
+        if (def) chosenDef = { definition: def.definition, example: def.example };
+      }
+
+      // Always add the word, even if AI fails; use a minimal placeholder
+      const wordData = {
+        word: w,
+        definition: chosenDef?.definition || 'Definition pending',
+        example: chosenDef?.example || 'Example will appear once generated.',
+        phonetics: undefined,
+        notes: '',
+        tags: [],
+        folderId: selectedModalFolderId || undefined,
+      } as any;
+
+      await addWord(wordData);
+      setNewWord('');
+      setIsAddModalOpen(false);
+      if (!chosenDef) {
+        Alert.alert('Added', 'Word saved. Definition will be generated when your API key is set.');
+      } else {
+        Alert.alert('Success', 'Word added to vault!');
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to add word. Please try again.');
@@ -86,10 +196,9 @@ export default function VaultScreen() {
     }
   };
 
-  const baseFiltered = folders;
-  const foldersToShow = searchQuery
-    ? baseFiltered.filter(f => f.title.toLowerCase().includes(searchQuery.toLowerCase()))
-    : baseFiltered;
+  // baseFiltered/foldersToShow defined above
+
+  // No animated entrance here to avoid layout issues
 
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString();
@@ -127,12 +236,34 @@ export default function VaultScreen() {
           onPress={() => {
             setIsAddModalOpen(true);
             if (!selectedModalFolderId) {
-              const guess = folders.find(f => f.title.toLowerCase().includes('my saved'))?.id || folders[0]?.id || null;
-              setSelectedModalFolderId(guess);
+              // Prefer "Saved from Sets" if present, otherwise first visible folder
+              const prefer = folders.find(f => f.id === 'folder-sets-default')?.id
+                || baseFiltered[0]?.id || null;
+              setSelectedModalFolderId(prefer);
             }
           }}
         >
           <Plus size={24} color={isLight ? '#111827' : '#fff'} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Guide: suggest creating useful folders */}
+      <View style={[styles.guideCard, isLight && styles.guideCardLight]}>
+        <View style={{ width: 36, height: 36, marginRight: 10 }}>
+          <LottieView
+            source={require('../assets/foldericons/add_folder.json')}
+            autoPlay
+            loop={false}
+            __stableKey="folder-icon:add-folder"
+            style={{ width: 36, height: 36 }}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.guideTitle, isLight && { color: '#111827' }]}>Organize your vault</Text>
+          <Text style={[styles.guideText, isLight && { color: '#4B5563' }]}>Create folders like “Travel”, “Work”, “Phrasal Verbs”, or “Daily Practice”.</Text>
+        </View>
+        <TouchableOpacity onPress={() => setShowFolderCreate(true)} style={[styles.guideBtn, isLight && styles.guideBtnLight]}>
+          <Text style={[styles.guideBtnText, isLight && { color: '#0D3B4A' }]}>Create</Text>
         </TouchableOpacity>
       </View>
 
@@ -144,6 +275,12 @@ export default function VaultScreen() {
           placeholderTextColor={isLight ? '#6B7280' : '#a0a0a0'}
           value={searchQuery}
           onChangeText={setSearchQuery}
+          autoCorrect
+          spellCheck
+          autoCapitalize="none"
+          autoComplete="off"
+          keyboardAppearance={isLight ? 'light' : 'dark'}
+          
         />
       </View>
 
@@ -158,37 +295,56 @@ export default function VaultScreen() {
           </View>
         ) : (
           <View style={styles.wordsList}>
-            <TouchableOpacity style={[styles.newFolderRow, isLight && styles.surfaceCard]} onPress={() => setShowFolderCreate(true)}>
-              <Image source={require('../assets/foldericons/add_folder.png')} style={styles.folderIconSmall} />
-              <Text style={[styles.newFolderText, isLight && { color: '#111827' }]}>New Folder</Text>
-            </TouchableOpacity>
-            {foldersToShow.map((f) => {
+            {foldersToShow.map((f, idx) => {
               const count = words.filter(w => w.folderId === f.id).length;
               // Check if this is a default folder (don't allow deletion)
-              const isDefaultFolder = ['folder-sets-default', 'folder-user-default', 'folder-phrasal-default', 'folder-daily-default'].includes(f.id);
+              const isDefaultFolder = (
+                ['folder-sets-default', 'folder-phrasal-default', 'folder-daily-default', 'folder-translated-default'].includes(f.id)
+                || /translated\s+words/i.test(f.title)
+              );
               
               return (
-                <TouchableOpacity key={f.id} style={[styles.folderRow, isLight && styles.surfaceCard]} onPress={() => router.push({ pathname: '/vault-folder', params: { id: f.id, title: f.title } })}>
-                  <Image source={require('../assets/foldericons/foldericon.png')} style={styles.folderIcon} />
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[styles.folderTitle, isLight && { color: '#111827' }]}>{f.title}</Text>
-                    <Text style={[styles.folderSubtitle, isLight && { color: '#4B5563' }]}>{count} {count === 1 ? 'word' : 'words'}</Text>
-                  </View>
-                  {!isDefaultFolder && (
-                    <TouchableOpacity
-                      onPress={async (e) => {
-                        e.stopPropagation();
-                        const ok = await deleteFolder(f.id);
-                        if (ok) {
-                          setFolders(getFolders());
-                        }
-                      }}
-                      style={{ padding: 6 }}
-                    >
-                      <Trash2 size={18} color={isLight ? '#6B7280' : '#a0a0a0'} />
-                    </TouchableOpacity>
-                  )}
-                </TouchableOpacity>
+                <Animated.View
+                  key={f.id}
+                  style={{
+                    transform: [
+                      {
+                        scale: animsRef.current[idx]?.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) ?? 1,
+                      },
+                      {
+                        translateY: animsRef.current[idx]?.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) ?? 0,
+                      },
+                    ],
+                  }}
+                >
+                  <TouchableOpacity style={[styles.folderRow, isLight && styles.surfaceCard]} onPress={() => router.push({ pathname: '/vault-folder', params: { id: f.id, title: f.title } })}>
+                    <LottieView
+                      source={require('../assets/foldericons/foldericon.json')}
+                      autoPlay
+                      loop={false}
+                      __stableKey="folder-icon:folder"
+                      style={styles.folderIcon}
+                    />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={[styles.folderTitle, isLight && { color: '#111827' }]}>{f.title}</Text>
+                      <Text style={[styles.folderSubtitle, isLight && { color: '#4B5563' }]}>{count} {count === 1 ? 'word' : 'words'}</Text>
+                    </View>
+                    {!isDefaultFolder && (
+                      <TouchableOpacity
+                        onPress={async (e) => {
+                          e.stopPropagation();
+                          const ok = await deleteFolder(f.id);
+                          if (ok) {
+                            setFolders(getFolders());
+                          }
+                        }}
+                        style={{ padding: 6 }}
+                      >
+                        <Trash2 size={18} color={isLight ? '#6B7280' : '#a0a0a0'} />
+                      </TouchableOpacity>
+                    )}
+                  </TouchableOpacity>
+                </Animated.View>
               );
             })}
           </View>
@@ -198,6 +354,7 @@ export default function VaultScreen() {
       {/* Add Word Modal */}
       {isAddModalOpen && (
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={80} style={{ width: '100%', alignItems: 'center' }}>
           <View style={[styles.modalContent, isLight && styles.surfaceCard]}>
             <Text style={[styles.modalTitle, isLight && { color: '#111827' }]}>Add New Word</Text>
             <TextInput
@@ -207,11 +364,17 @@ export default function VaultScreen() {
               value={newWord}
               onChangeText={setNewWord}
               autoFocus
+              autoCorrect
+              spellCheck
+              autoCapitalize="none"
+              autoComplete="off"
+              keyboardAppearance={isLight ? 'light' : 'dark'}
+              
             />
             <View style={{ marginBottom: 16 }}>
               <Text style={[styles.modalSectionLabel, isLight && { color: '#6B7280' }]}>Save to</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-                {folders.map(f => (
+                {folders.filter(f => f.id !== 'folder-user-default' && !/my\s+saved/i.test(f.title)).map(f => (
                   <TouchableOpacity
                     key={f.id}
                     style={[styles.folderChip, isLight && styles.folderChipLight, selectedModalFolderId === f.id && styles.folderChipActive]}
@@ -221,6 +384,41 @@ export default function VaultScreen() {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
+            </View>
+
+            {/* Meanings chooser */}
+            <View style={{ marginBottom: 12 }}>
+              <Text style={[styles.modalSectionLabel, isLight && { color: '#6B7280' }]}>Choose a meaning</Text>
+              {meaningsLoading && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                  <ActivityIndicator size="small" color={colors.accent} />
+                  <Text style={[{ color: '#a0a0a0' }, isLight && { color: '#6B7280' }]}>Fetching meanings…</Text>
+                </View>
+              )}
+              {!meaningsLoading && meanings.length > 0 && (
+                <View style={{ marginTop: 8 }}>
+                  {meanings.map((m, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      onPress={() => setSelectedMeaningIndex(i)}
+                      style={[
+                        styles.meaningCard,
+                        isLight && styles.meaningCardLight,
+                        selectedMeaningIndex === i && styles.meaningCardActive,
+                      ]}
+                    >
+                      <Text style={[styles.meaningDef, isLight && styles.meaningDefLight]}>
+                        {m.pos ? `(${m.pos}) ` : ''}{m.definition}
+                      </Text>
+                      {!!m.example && (
+                        <Text style={[styles.meaningExample, isLight && styles.meaningExampleLight]}>
+                          “{m.example}”
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -245,12 +443,14 @@ export default function VaultScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          </KeyboardAvoidingView>
         </View>
       )}
 
       {/* Create Folder Modal */}
       {showFolderCreate && (
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={80} style={{ width: '100%', alignItems: 'center' }}>
           <View style={[styles.modalContent, isLight && styles.surfaceCard]}>
             <Text style={[styles.modalTitle, isLight && { color: '#111827' }]}>Create Folder</Text>
             <TextInput
@@ -260,6 +460,11 @@ export default function VaultScreen() {
               value={newFolderTitle}
               onChangeText={setNewFolderTitle}
               autoFocus
+              autoCorrect
+              spellCheck
+              autoCapitalize="none"
+              autoComplete="off"
+              keyboardAppearance={isLight ? 'light' : 'dark'}
             />
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -284,6 +489,7 @@ export default function VaultScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          </KeyboardAvoidingView>
         </View>
       )}
     </SafeAreaView>
@@ -304,6 +510,7 @@ const styles = StyleSheet.create({
     color: '#a0a0a0',
     marginTop: 16,
     fontSize: 16,
+    fontFamily: 'Ubuntu-Regular',
   },
   header: {
     flexDirection: 'row',
@@ -311,12 +518,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2c2f2f',
+    // Removed bottom divider line
   },
   headerLight: {
-    borderBottomColor: '#E5E7EB',
+    // no divider in light mode either
   },
+  meaningCard: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  meaningCardLight: { backgroundColor: '#FFFFFF' },
+  meaningCardActive: { borderColor: '#F8B070', backgroundColor: 'rgba(248,176,112,0.15)' },
+  meaningDef: { color: '#E5E7EB', fontWeight: '700' },
+  meaningDefLight: { color: '#111827' },
+  meaningExample: { color: '#9CA3AF', marginTop: 4, fontStyle: 'italic' },
+  meaningExampleLight: { color: '#6B7280' },
   backButton: {
     padding: 8,
   },
@@ -324,6 +544,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     color: '#fff',
+    fontFamily: 'Ubuntu-Bold',
   },
   titleLight: { color: '#111827' },
   addButtonIcon: {
@@ -339,9 +560,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   surfaceCard: {
-    backgroundColor: '#F9F1E7',
-    borderColor: '#F9F1E7',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
   },
+  // Guide styles
+  guideCard: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginTop: 8, marginBottom: 6, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, padding: 12 },
+  guideCardLight: { backgroundColor: '#FFFFFF', borderWidth: StyleSheet.hairlineWidth, borderColor: '#E5E7EB' },
+  guideTitle: { color: '#E5E7EB', fontWeight: '800' },
+  guideText: { color: '#9CA3AF', marginTop: 2, fontSize: 12 },
+  guideBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: '#B6E0E2' },
+  guideBtnLight: { backgroundColor: '#B6E0E2' },
+  guideBtnText: { color: '#0D3B4A', fontWeight: '800' },
   searchIcon: {
     marginRight: 12,
   },
@@ -350,6 +579,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     paddingVertical: 12,
+    fontFamily: 'Ubuntu-Regular',
   },
   content: {
     flex: 1,
@@ -367,11 +597,13 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginTop: 16,
     marginBottom: 8,
+    fontFamily: 'Ubuntu-Bold',
   },
   emptySubtitle: {
     fontSize: 16,
     color: '#a0a0a0',
     textAlign: 'center',
+    fontFamily: 'Ubuntu-Regular',
   },
   wordsList: {
     paddingBottom: 20,
@@ -393,6 +625,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     flex: 1,
+    fontFamily: 'Ubuntu-Bold',
   },
   scoreContainer: {
     flexDirection: 'row',
@@ -402,18 +635,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 4,
+    fontFamily: 'Ubuntu-Medium',
   },
   definitionText: {
     fontSize: 16,
     color: '#e0e0e0',
     marginBottom: 8,
     lineHeight: 22,
+    fontFamily: 'Ubuntu-Regular',
   },
   exampleText: {
     fontSize: 14,
     color: '#a0a0a0',
     fontStyle: 'italic',
     marginBottom: 12,
+    fontFamily: 'Ubuntu-Regular',
   },
   wordFooter: {
     flexDirection: 'row',
@@ -432,6 +668,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Medium',
   },
   folderChip: {
     flexDirection: 'row',
@@ -463,6 +700,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Medium',
   },
   folderChipTextLight: {
     color: '#111827',
@@ -473,6 +711,7 @@ const styles = StyleSheet.create({
   practiceText: {
     fontSize: 12,
     color: '#a0a0a0',
+    fontFamily: 'Ubuntu-Regular',
   },
   dateInfo: {
     flexDirection: 'row',
@@ -482,6 +721,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#a0a0a0',
     marginLeft: 4,
+    fontFamily: 'Ubuntu-Regular',
   },
   modalOverlay: {
     position: 'absolute',
@@ -506,6 +746,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 20,
     textAlign: 'center',
+    fontFamily: 'Ubuntu-Bold',
   },
   modalInput: {
     backgroundColor: '#3A3A3A',
@@ -515,12 +756,14 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     marginBottom: 20,
+    fontFamily: 'Ubuntu-Regular',
   },
   modalSectionLabel: {
     color: '#a0a0a0',
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.3,
+    fontFamily: 'Ubuntu-Medium',
   },
   modalButtons: {
     flexDirection: 'row',
@@ -542,6 +785,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Medium',
   },
   cancelButtonTextLight: {
     color: '#374151',
@@ -553,6 +797,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Bold',
   },
   newFolderRow: {
     flexDirection: 'row',
@@ -575,6 +820,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Medium',
   },
   folderRow: {
     flexDirection: 'row',
@@ -588,10 +834,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Medium',
   },
   folderSubtitle: {
     color: '#a0a0a0',
     fontSize: 13,
     marginTop: 2,
+    fontFamily: 'Ubuntu-Regular',
   },
 });

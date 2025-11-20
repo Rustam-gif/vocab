@@ -22,8 +22,12 @@ export default function LevelSelectScreen() {
     let mounted = true;
     AsyncStorage.getItem(SELECTED_LEVEL_KEY).then(stored => {
       if (!mounted) return;
-      if (stored) setSelectedLevel(stored);
-      else if (levels.length > 0) setSelectedLevel(levels[0].id);
+      // Exclude Advanced Plus from selection; normalize any stored value
+      const availableLevels = levels.filter(l => l.id !== 'advanced-plus');
+      const defaultId = availableLevels[0]?.id || null;
+      const isValidStored = stored && availableLevels.some(l => l.id === stored);
+      if (isValidStored) setSelectedLevel(stored as string);
+      else if (defaultId) setSelectedLevel(defaultId);
     });
     AsyncStorage.getItem(HIGHEST_LEVEL_KEY).then(v => {
       if (!mounted) return;
@@ -33,6 +37,9 @@ export default function LevelSelectScreen() {
       mounted = false;
     };
   }, []);
+
+  // Do not auto-upgrade highestLevel on selection; it should only
+  // reflect placement results or actual completions.
 
   const handleLevelSelect = (levelId: string) => {
     setSelectedLevel(levelId);
@@ -65,15 +72,17 @@ export default function LevelSelectScreen() {
     );
   }
 
-  const accent = '#F2935C';
+  const accent = '#F8B070';
 
   // Desired ordering for core CEFR levels
+  // Build list excluding Advanced Plus
+  const availableLevels = levels.filter(l => l.id !== 'advanced-plus');
+
   const coreOrder = [
     'beginner',
     'intermediate',
     'upper-intermediate',
     'advanced',
-    'advanced-plus',
     'proficient',
   ];
   const coreSet = new Set(coreOrder);
@@ -83,7 +92,7 @@ export default function LevelSelectScreen() {
     // Specialized and other levels go after core, sorted by name
     return 100 + id.charCodeAt(0);
   };
-  const sortedLevels = [...levels].sort((a, b) => weight(a.id) - weight(b.id));
+  const sortedLevels = [...availableLevels].sort((a, b) => weight(a.id) - weight(b.id));
   const firstSpecialIndex = sortedLevels.findIndex(l => !coreSet.has(l.id));
 
   const getLevelIcon = (id: string) => {
@@ -91,15 +100,14 @@ export default function LevelSelectScreen() {
       case 'beginner':
         return require('../../assets/levelicons/beginner.png');
       case 'ielts':
-        return require('../../assets/levelicons/ielts-topics.png');
+        return require('../../assets/levelicons/ielts-vocabulary.png');
       case 'intermediate':
         return require('../../assets/levelicons/intermediate.png');
       case 'upper-intermediate':
         return require('../../assets/levelicons/upper-intermediate.png');
       case 'advanced':
-        return require('../../assets/levelicons/advanced-mountain.png');
-      case 'advanced-plus':
-        return require('../../assets/levelicons/advanced-plus.png');
+        return require('../../assets/levelicons/advanced.png');
+      // 'advanced-plus' intentionally hidden from selection
       case 'proficient':
         return require('../../assets/levelicons/proficient.png');
       default:
@@ -109,7 +117,7 @@ export default function LevelSelectScreen() {
 
   const renderLevelItem = ({ item }: { item: Level }) => {
     const isSelected = selectedLevel === item.id;
-    const coreOrder = ['beginner', 'intermediate', 'upper-intermediate', 'advanced', 'advanced-plus', 'proficient'];
+    const coreOrder = ['beginner', 'intermediate', 'upper-intermediate', 'advanced', 'proficient'];
     const weight = (id: string) => {
       const i = coreOrder.indexOf(id);
       return i >= 0 ? i : 999;
@@ -117,6 +125,7 @@ export default function LevelSelectScreen() {
     const isCore = coreOrder.includes(item.id);
     const isCompleted = isCore && highestLevel != null && weight(item.id) <= weight(highestLevel);
     const isCurrent = isCore && highestLevel === item.id;
+    const isPassed = isCore && highestLevel != null && weight(item.id) < weight(highestLevel);
     
     return (
       <TouchableOpacity
@@ -125,11 +134,16 @@ export default function LevelSelectScreen() {
           isLight && styles.levelCardLight,
           isSelected && (isLight ? styles.selectedCardLight : styles.selectedCard),
           isSelected && { borderColor: accent },
-          isCompleted && styles.completedCard,
-          isCompleted && isLight && styles.completedCardLight,
+          isPassed && styles.completedCard,
+          isPassed && isLight && styles.completedCardLight,
         ]}
         onPress={() => handleLevelSelect(item.id)}
       >
+        {isPassed && (
+          <View style={[styles.ribbon, isLight && styles.ribbonLight]}>
+            <Text style={[styles.ribbonText, isLight && styles.ribbonTextLight]}>PASSED</Text>
+          </View>
+        )}
         <View style={styles.levelHeader}>
           <View style={styles.levelInfo}>
             <Image source={getLevelIcon(item.id)} style={styles.levelImage} resizeMode="contain" />
@@ -223,7 +237,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     flex: 1,
     textAlign: 'center',
-    fontFamily: 'Ubuntu_500Medium',
+    fontFamily: 'Ubuntu-Medium',
   },
   placeholder: {
     width: 40,
@@ -240,7 +254,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 4,
     marginLeft: 4,
-    fontFamily: 'Ubuntu_700Bold',
+    fontFamily: 'Ubuntu-Bold',
   },
   levelCard: {
     backgroundColor: '#2A2A2A',
@@ -257,14 +271,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    position: 'relative',
   },
-  levelCardLight: { backgroundColor: '#F9F1E7', borderColor: '#F9F1E7' },
+  levelCardLight: { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' },
   selectedCard: {
     backgroundColor: '#3A3A3A',
   },
   selectedCardLight: {
     backgroundColor: '#F3E6D7', // slightly deeper than surface for focus
-    borderColor: '#F2935C',
+    borderColor: '#F8B070',
     borderWidth: 2,
   },
   completedCard: { borderWidth: 2, borderColor: '#10B981' },
@@ -293,29 +308,44 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
     marginBottom: 4,
-    fontFamily: 'Ubuntu_500Medium',
+    fontFamily: 'Ubuntu-Medium',
   },
   levelDescription: {
     fontSize: 14, // reduced ~10%
     color: '#9CA3AF',
     marginBottom: 2,
-    fontFamily: 'Ubuntu_400Regular',
+    fontFamily: 'Ubuntu-Regular',
   },
   levelCefr: {
     fontSize: 12, // reduced ~10%
-    color: '#F2935C',
+    color: '#F8B070',
     fontWeight: '500',
-    fontFamily: 'Ubuntu_500Medium',
+    fontFamily: 'Ubuntu-Medium',
   },
   completedBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(16,185,129,0.12)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
   completedBadgeLight: { backgroundColor: 'rgba(16,185,129,0.15)' },
   completedText: { color: '#A7F3D0', fontWeight: '800', fontSize: 12 },
   completedTextLight: { color: '#065F46' },
+  ribbon: {
+    position: 'absolute',
+    top: 12,
+    left: -10,
+    backgroundColor: 'rgba(16,185,129,0.9)',
+    paddingVertical: 4,
+    paddingHorizontal: 14,
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
+    transform: [{ rotate: '-3deg' }],
+    zIndex: 2,
+  },
+  ribbonLight: { backgroundColor: 'rgba(16,185,129,0.85)' },
+  ribbonText: { color: '#ffffff', fontWeight: '800', fontSize: 10, letterSpacing: 0.6 },
+  ribbonTextLight: { color: '#ffffff' },
   checkContainer: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F2935C',
+    backgroundColor: '#F8B070',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -328,7 +358,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   continueButton: {
-    backgroundColor: '#F2935C',
+    backgroundColor: '#F8B070',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',

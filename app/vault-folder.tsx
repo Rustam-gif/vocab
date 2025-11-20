@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Easing } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, Calendar, Star } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { useLocalSearchParams, useRouter, Link } from 'expo-router';
+import { ArrowLeft, Calendar, Star, Volume2 } from 'lucide-react-native';
 import { useAppStore } from '../lib/store';
+import Speech from '../lib/speech';
 import { getTheme } from '../lib/theme';
 import { Word } from '../types';
 
@@ -15,7 +16,7 @@ export default function VaultFolderScreen() {
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
   const [loading, setLoading] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [speakingFor, setSpeakingFor] = useState<string | null>(null);
 
   useEffect(() => {
     // Load only if not already in store to avoid flicker
@@ -24,9 +25,8 @@ export default function VaultFolderScreen() {
         setLoading(true);
         try { await loadWords(); } finally { setLoading(false); }
       }
-      Animated.timing(fadeAnim, { toValue: 1, duration: 180, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
     })();
-  }, [loadWords, words, fadeAnim]);
+  }, [loadWords, words]);
 
   const items: Word[] = useMemo(() => {
     return words.filter(w => w.folderId === id);
@@ -63,7 +63,7 @@ export default function VaultFolderScreen() {
         </View>
       </View>
 
-      <Animated.ScrollView style={[styles.content, { opacity: fadeAnim }]} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {items.length === 0 && !loading ? (
           <View style={styles.emptyState}>
             <Text style={[styles.emptyTitle, isLight && { color: '#111827' }]}>No words here yet</Text>
@@ -72,12 +72,46 @@ export default function VaultFolderScreen() {
         ) : (
           <View style={styles.wordsList}>
             {items.map(word => (
-              <View key={word.id} style={[styles.wordCard, isLight && styles.wordCardLight]}>
-                <View style={styles.wordHeader}>
+              <Link key={word.id} href={{ pathname: '/vault/word/[id]', params: { id: String(word.id) } }} asChild>
+                <TouchableOpacity style={[styles.wordCard, isLight && styles.wordCardLight]} activeOpacity={0.9}>
+                  <View style={styles.wordHeader}>
                   <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{word.word}</Text>
-                  <View style={styles.scoreContainer}>
-                    <Star size={16} color={getScoreColor(word.score)} fill={getScoreColor(word.score)} />
-                    <Text style={[styles.scoreText, { color: getScoreColor(word.score) }]}>{word.score}</Text>
+                  <View style={styles.headerRight}>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={`Play pronunciation for ${word.word}`}
+                      onPress={() => {
+                        try {
+                          if (speakingFor === word.id) {
+                            Speech.stop?.();
+                            setSpeakingFor(null);
+                            return;
+                          }
+                          Speech.stop?.();
+                          setSpeakingFor(word.id);
+                          Speech.speak?.(word.word, {
+                            language: 'en-US',
+                            rate: 1.0,
+                            onDone: () => setSpeakingFor(prev => (prev === word.id ? null : prev)),
+                            onStopped: () => setSpeakingFor(prev => (prev === word.id ? null : prev)),
+                            onError: () => setSpeakingFor(prev => (prev === word.id ? null : prev)),
+                          });
+                        } catch {}
+                      }}
+                      style={[styles.speakBtn, speakingFor === word.id && styles.speakBtnActive, isLight && styles.speakBtnLight]}
+                    >
+                      <Volume2 size={18} color={speakingFor === word.id ? '#F8B070' : (isLight ? '#111827' : '#F8B070')} />
+                    </TouchableOpacity>
+                    {(() => {
+                      const sprintCorrect = (word as any)?.exerciseStats?.sprint?.correct || 0;
+                      const starColor = sprintCorrect > 0 ? '#437F76' : '#E06262';
+                      return (
+                        <View style={styles.scoreContainer}>
+                          <Star size={16} color={starColor} fill={starColor} />
+                          <Text style={[styles.scoreText, { color: starColor }]}>{sprintCorrect}</Text>
+                        </View>
+                      );
+                    })()}
                   </View>
                 </View>
                 <Text style={[styles.definitionText, isLight && { color: '#1F2937' }]}>{word.definition}</Text>
@@ -89,11 +123,12 @@ export default function VaultFolderScreen() {
                     <Text style={[styles.dateText, isLight && { color: '#6B7280' }]}>{formatDate(word.savedAt)}</Text>
                   </View>
                 </View>
-              </View>
+                </TouchableOpacity>
+              </Link>
             ))}
           </View>
         )}
-      </Animated.ScrollView>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -103,15 +138,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#252525',
   },
-  headerLight: { borderBottomColor: '#E5E7EB' },
+  headerLight: { },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2c2f2f',
+    // remove bottom divider
   },
   backButton: {
     padding: 8,
@@ -122,6 +156,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     flex: 1,
     marginRight: 12,
+    fontFamily: 'Ubuntu-Bold',
   },
   titleLight: { color: '#111827' },
   practiceActions: {
@@ -139,18 +174,20 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     minWidth: 110,
   },
-  practiceButtonLight: { backgroundColor: '#F2935C' },
+  practiceButtonLight: { backgroundColor: '#F8B070' },
   practiceButtonTextLight: { color: '#111827' },
   practiceButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 13,
     letterSpacing: 0.2,
+    fontFamily: 'Ubuntu-Medium',
   },
   practiceMeta: {
     color: '#a0a0a0',
     fontSize: 12,
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Medium',
   },
   content: {
     flex: 1,
@@ -165,11 +202,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 8,
+    fontFamily: 'Ubuntu-Bold',
   },
   emptySubtitle: {
     color: '#a0a0a0',
     fontSize: 14,
     textAlign: 'center',
+    fontFamily: 'Ubuntu-Regular',
   },
   wordsList: {
     paddingBottom: 20,
@@ -180,18 +219,38 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
-  wordCardLight: { backgroundColor: '#F9F1E7' },
+  wordCardLight: { backgroundColor: '#FFFFFF' },
   wordHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   wordText: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#fff',
     flex: 1,
+    fontFamily: 'Ubuntu-Bold',
+  },
+  speakBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  speakBtnLight: {
+    backgroundColor: '#E5E7EB',
+    borderColor: '#E5E7EB',
+  },
+  speakBtnActive: {
+    backgroundColor: 'rgba(248,176,112,0.12)',
+    borderColor: 'rgba(248,176,112,0.35)',
   },
   scoreContainer: {
     flexDirection: 'row',
@@ -201,18 +260,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 4,
+    fontFamily: 'Ubuntu-Medium',
   },
   definitionText: {
     fontSize: 16,
     color: '#e0e0e0',
     marginBottom: 8,
     lineHeight: 22,
+    fontFamily: 'Ubuntu-Regular',
   },
   exampleText: {
     fontSize: 14,
     color: '#a0a0a0',
     fontStyle: 'italic',
     marginBottom: 12,
+    fontFamily: 'Ubuntu-Regular',
   },
   wordFooter: {
     flexDirection: 'row',
@@ -222,6 +284,7 @@ const styles = StyleSheet.create({
   practiceText: {
     color: '#a0a0a0',
     fontSize: 12,
+    fontFamily: 'Ubuntu-Regular',
   },
   dateInfo: {
     flexDirection: 'row',
@@ -231,5 +294,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#a0a0a0',
     marginLeft: 4,
+    fontFamily: 'Ubuntu-Regular',
   },
 });

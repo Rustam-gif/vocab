@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { TouchableOpacity, StyleSheet, ViewStyle, View, Text } from 'react-native';
+import { useAppStore } from '../../../lib/store';
 import LottieView from 'lottie-react-native';
 
 interface AnimatedNextButtonProps {
@@ -15,6 +16,8 @@ interface AnimatedNextButtonProps {
  */
 export default function AnimatedNextButton({ onPress, disabled = false, style, label = 'NEXT' }: AnimatedNextButtonProps) {
   const animationRef = useRef<LottieView>(null);
+  const theme = useAppStore(s => s.theme);
+  const isLight = theme === 'light';
 
   useEffect(() => {
     if (!disabled) {
@@ -52,7 +55,7 @@ export default function AnimatedNextButton({ onPress, disabled = false, style, l
           autoPlay={!disabled}
           resizeMode="cover"
         />
-        <Text style={styles.buttonText}>{label}</Text>
+        <Text style={[styles.buttonText, isLight && { color: '#111827' }]}>{label}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -73,6 +76,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    
   },
   buttonDisabled: {
     opacity: 0.5,
@@ -88,6 +92,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 1,
     zIndex: 1,
+    fontFamily: 'Ubuntu-Bold',
   },
 });
-

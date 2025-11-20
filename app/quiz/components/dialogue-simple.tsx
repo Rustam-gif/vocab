@@ -100,7 +100,7 @@ export default function DialogueSimple({ onPhaseComplete, sharedScore, onScoreSh
               backgroundColor = '#EF4444';
             }
           } else if (isSelected) {
-            backgroundColor = '#F2935C';
+            backgroundColor = '#F8B070';
           }
 
           return (
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   nextButton: {
-    backgroundColor: '#F2935C',
+    backgroundColor: '#F8B070',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',

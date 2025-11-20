@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,14 +13,17 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Edit, Sparkles, Layers, ChevronRight } from 'lucide-react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback } from 'react';
+import { ArrowLeft, Edit, Sparkles, Layers, ChevronRight, Lock } from 'lucide-react-native';
 import { generateStory, StoryLevel } from '../services/StoryGenerator';
+import { SubscriptionService } from '../services/SubscriptionService';
 
 const COLORS = {
   background: '#1E1E1E',
   surface: '#262626',
   surfaceAlt: '#2F2F2F',
-  accent: '#F2935C',
+  accent: '#F8B070',
   muted: '#9CA3AF',
   text: '#FFFFFF',
 };
@@ -42,6 +45,17 @@ export default function StoryExerciseScreen() {
   const [error, setError] = useState<string | null>(null);
   const [fillMode, setFillMode] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [locked, setLocked] = useState<boolean>(true);
+
+  useEffect(() => {
+    SubscriptionService.getStatus().then(s => setLocked(!s.active)).catch(() => setLocked(true));
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      SubscriptionService.getStatus().then(s => setLocked(!s.active)).catch(() => setLocked(true));
+    }, [])
+  );
 
   const activeStory = useMemo(() => {
     if (!rawStory || !storyWithBlanks) return null;
@@ -49,6 +63,11 @@ export default function StoryExerciseScreen() {
   }, [rawStory, storyWithBlanks, fillMode]);
 
   const handleGenerate = async () => {
+    const status = await SubscriptionService.getStatus().catch(() => ({ active: false } as any));
+    if (!status.active) {
+      router.push({ pathname: '/profile', params: { paywall: '1' } });
+      return;
+    }
     const sanitized = words.map(w => w.trim()).filter(Boolean);
     if (sanitized.length < 5) {
       setError('Please provide at least five words.');
@@ -85,7 +104,7 @@ export default function StoryExerciseScreen() {
           <ArrowLeft size={22} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Story Builder</Text>
-        <TouchableOpacity onPress={() => setIsModalOpen(true)} style={styles.iconButton}>
+        <TouchableOpacity onPress={() => (locked ? router.push({ pathname: '/profile', params: { paywall: '1' } }) : setIsModalOpen(true))} style={styles.iconButton}>
           <Edit size={22} color={COLORS.text} />
         </TouchableOpacity>
       </View>
@@ -118,6 +137,15 @@ export default function StoryExerciseScreen() {
           </View>
 
           <View style={styles.storyBody}>
+            {locked && (
+              <View style={styles.lockOverlay}>
+                <Lock size={18} color={COLORS.accent} />
+                <Text style={styles.lockText}>Premium required to generate stories</Text>
+                <TouchableOpacity onPress={() => router.push({ pathname: '/profile', params: { paywall: '1' } })} style={styles.lockButton}>
+                  <Text style={styles.lockButtonText}>Unlock</Text>
+                </TouchableOpacity>
+              </View>
+            )}
             {loading && (
               <View style={styles.placeholder}>
                 <ActivityIndicator color={COLORS.accent} />
@@ -149,7 +177,7 @@ export default function StoryExerciseScreen() {
           <Text style={styles.secondaryButtonText}>Add Words from Vault</Text>
           <ChevronRight size={18} color={COLORS.accent} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.primaryButton} onPress={() => setIsModalOpen(true)}>
+        <TouchableOpacity style={[styles.primaryButton, locked && { opacity: 0.6 }]} onPress={() => (locked ? router.push({ pathname: '/profile', params: { paywall: '1' } }) : setIsModalOpen(true))}>
           <Text style={styles.primaryButtonText}>Customize Story</Text>
         </TouchableOpacity>
       </View>
@@ -185,7 +213,10 @@ export default function StoryExerciseScreen() {
                         placeholderTextColor={COLORS.muted}
                         style={styles.input}
                         autoCapitalize="none"
-                        autoCorrect={false}
+                        autoCorrect
+                        spellCheck
+                        autoComplete="off"
+                        keyboardAppearance="dark"
                       />
                     </View>
                   ))}
@@ -344,6 +375,28 @@ const styles = StyleSheet.create({
     padding: 16,
     minHeight: 220,
   },
+  lockOverlay: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#3A3A3A',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+    backgroundColor: '#242424',
+  },
+  lockText: {
+    color: COLORS.muted,
+    flex: 1,
+  },
+  lockButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: COLORS.accent,
+    borderRadius: 999,
+  },
+  lockButtonText: { color: COLORS.background, fontWeight: '700' },
   storyText: {
     color: COLORS.text,
     fontSize: 15,
@@ -495,7 +548,7 @@ const styles = StyleSheet.create({
     borderColor: '#3A3A3A',
   },
   pillActive: {
-    backgroundColor: 'rgba(242, 147, 92, 0.12)',
+    backgroundColor: 'rgba(248, 176, 112, 0.12)',
     borderColor: COLORS.accent,
   },
   pillText: {

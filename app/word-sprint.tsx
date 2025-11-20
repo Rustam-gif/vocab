@@ -25,6 +25,7 @@ export default function WordSprint() {
   const [finished, setFinished] = useState(false);
   const [timeLeft, setTimeLeft] = useState(QUESTION_TIME_MS / 1000);
   const [xpAwarded, setXpAwarded] = useState(false);
+  const recordResult = useAppStore(s => s.recordExerciseResult);
   const barAnim = useRef(new Animated.Value(0)).current;
   const timerRef = useRef<Animated.CompositeAnimation | null>(null);
   const advanceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -46,7 +47,7 @@ export default function WordSprint() {
         const b = parseInt(h.slice(4, 6), 16) / 255;
         return [r, g, b] as [number, number, number];
       };
-      const ACCENT = toNorm('#F2935C'); // warm orange
+      const ACCENT = toNorm('#F8B070'); // warm orange
       const TEAL = toNorm('#187486');   // brand teal
       const LIGHT = toNorm('#E5E7EB');  // off-white
       const DARK = toNorm('#2A3033');   // dark slate
@@ -224,7 +225,7 @@ export default function WordSprint() {
     setTimeLeft(0);
   }, [barAnim]);
 
-  const handleReveal = useCallback((pickedIndex: number | null) => {
+  const handleReveal = useCallback(async (pickedIndex: number | null) => {
     if (revealedRef.current || finished) return;
     revealedRef.current = true;
     finishTimer();
@@ -233,7 +234,7 @@ export default function WordSprint() {
     const isCorrect = picked === currentWord;
     if (isCorrect) setCorrectCount(c => c + 1);
     try {
-      analyticsService.recordResult({
+      await recordResult({
         wordId: currentId,
         exerciseType: 'sprint',
         correct: !!isCorrect,
@@ -262,7 +263,7 @@ export default function WordSprint() {
       }
       advanceTimeoutRef.current = null;
     }, 900);
-  }, [finishTimer, options, currentWord, currentId, index, items.length, finished]);
+  }, [finishTimer, options, currentWord, currentId, index, items.length, finished, recordResult]);
 
   const startTimer = useCallback(() => {
     if (!items.length || finished) return;
@@ -350,7 +351,7 @@ export default function WordSprint() {
           </View>
           <View style={styles.headerMeta}>
             <View style={[styles.timerBadge, isLight && { backgroundColor: '#E5E7EB', borderColor: '#E5E7EB' }]}>
-              <Text style={[styles.timerIcon, isLight && { color: '#F2935C' }]}>⌚</Text>
+              <Text style={[styles.timerIcon, isLight && { color: '#F8B070' }]}>⌚</Text>
               <Text style={[styles.timerText, isLight && { color: '#111827' }]}>{timeLeft.toFixed(1)}s</Text>
             </View>
             <Text style={[styles.counter, isLight && { color: '#6B7280' }]}>{index + 1}/{items.length}</Text>
@@ -489,7 +490,7 @@ const styles = StyleSheet.create({
   closeBtnText: { color: '#f4f6f8', fontSize: 14, fontWeight: '800' },
   headerMeta: { flexDirection: 'row', alignItems: 'center' },
   timerBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(38,48,52,0.85)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: '#3f4a4f', marginRight: 8 },
-  timerIcon: { color: '#f59f46', fontSize: 14, marginRight: 4 },
+  timerIcon: { color: '#F8B070', fontSize: 14, marginRight: 4 },
   timerText: { color: '#f4f6f8', fontSize: 13, fontWeight: '600' },
   counter: { color: '#9CA3AF', fontSize: 12, fontWeight: '600' },
   body: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
@@ -501,7 +502,7 @@ const styles = StyleSheet.create({
   progressBackdrop: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', alignItems: 'stretch', zIndex: 0, backgroundColor: 'rgba(99,179,237,0.08)' },
   progressColumn: { backgroundColor: 'rgba(99,179,237,0.28)', borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.12)', shadowColor: '#60A5FA', shadowOpacity: 0.25, shadowRadius: 24, shadowOffset: { width: 0, height: -6 } },
   card: { width: '100%', backgroundColor: 'rgba(30,41,59,0.92)', borderRadius: 16, padding: 24, borderWidth: StyleSheet.hairlineWidth, borderColor: '#324357', shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 12 }, elevation: 8 },
-  cardLight: { backgroundColor: '#F9F1E7', borderColor: '#F9F1E7' },
+  cardLight: { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' },
   definition: { color: '#e0e0e0', fontSize: 16, lineHeight: 22, textAlign: 'center' },
   option: { backgroundColor: 'rgba(62,70,74,0.88)', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 12, marginTop: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#4b555a' },
   optionLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
@@ -514,11 +515,11 @@ const styles = StyleSheet.create({
   resultOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24, backgroundColor: 'rgba(18,20,21,0.8)', zIndex: 5 },
   resultCard: { width: '100%', maxWidth: 320, backgroundColor: 'rgba(38,43,46,0.96)', borderRadius: 20, paddingVertical: 28, paddingHorizontal: 24, alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: '#434d51', shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 18, shadowOffset: { width: 0, height: 12 } },
   resultTitle: { color: '#f4f6f8', fontSize: 24, fontWeight: '800' },
-  resultScore: { color: '#f59f46', fontSize: 20, fontWeight: '700', marginTop: 12 },
+  resultScore: { color: '#F8B070', fontSize: 20, fontWeight: '700', marginTop: 12 },
   resultSub: { color: '#9CA3AF', marginTop: 6 },
   resultButtons: { flexDirection: 'row', justifyContent: 'center', marginTop: 22 },
   resultButton: { paddingHorizontal: 22, paddingVertical: 12, borderRadius: 12, marginHorizontal: 6 },
-  resultPrimary: { backgroundColor: '#f59f46' },
+  resultPrimary: { backgroundColor: '#F8B070' },
   resultGhost: { backgroundColor: 'rgba(44,47,47,0.7)', borderWidth: StyleSheet.hairlineWidth, borderColor: '#5b6469' },
   resultButtonText: { color: '#121415', fontWeight: '700' },
   resultGhostText: { color: '#f4f6f8' },

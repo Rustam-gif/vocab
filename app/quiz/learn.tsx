@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Image, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Image, Animated, Easing, InteractionManager } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
 import { ArrowLeft, X } from 'lucide-react-native';
@@ -16,8 +16,8 @@ import { useAppStore } from '../../lib/store';
 import { getTheme } from '../../lib/theme';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
-// Temporary flag to unlock all sets regardless of previous completion
-const UNLOCK_ALL_SETS = true;
+// Unlock all sets for testing; set to false for progression-gated flow
+const UNLOCK_ALL_SETS = false;
 
 export default function LearnScreen() {
   const router = useRouter();
@@ -52,7 +52,10 @@ export default function LearnScreen() {
   }, [levelId]);
 
   useEffect(() => {
-    loadStoredLevel();
+    const t = InteractionManager.runAfterInteractions(() => {
+      loadStoredLevel();
+    });
+    return () => t.cancel?.();
   }, [loadStoredLevel]);
 
   useFocusEffect(
@@ -84,7 +87,7 @@ export default function LearnScreen() {
           })
         : level.sets;
 
-      // Auto-insert recap quizzes after every 4 visible sets (Upper-Intermediate)
+      // Auto-insert recap quizzes after every 4 visible sets (all levels)
       // Quiz words order: A(0-4), B(5-9), C(10-14), D(15-19)
       const buildWithQuizzes = (sets: VocabSet[]) => {
         const nonQuiz = sets.filter(s => (s as any).type !== 'quiz');
@@ -117,7 +120,8 @@ export default function LearnScreen() {
         return result;
       };
 
-      const withQuizzes = level.id === 'upper-intermediate' ? buildWithQuizzes(baseSets as any) : baseSets;
+      // Insert recap quizzes after every 4 visible sets for ALL levels
+      const withQuizzes = buildWithQuizzes(baseSets as any);
 
       const setsWithProgress = withQuizzes.map((set, index) => {
         // Overlay persisted status onto static level data
@@ -161,8 +165,11 @@ export default function LearnScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // Refresh data when returning, but do not replay the entrance animation
-      refreshLevel();
+      // Defer refresh until animations/gestures settle to avoid press lag
+      const task = InteractionManager.runAfterInteractions(() => {
+        refreshLevel();
+      });
+      return () => task.cancel?.();
     }, [refreshLevel])
   );
 
@@ -171,27 +178,21 @@ export default function LearnScreen() {
     if (!currentLevel?.sets) return;
     // Ensure we have one animated value per item, initialized to 0
     if (animatedValues.current.length !== currentLevel.sets.length) {
-      animatedValues.current = currentLevel.sets.map(() => new Animated.Value(1));
+      animatedValues.current = currentLevel.sets.map(() => new Animated.Value(0));
     }
 
-    // In development, play the entrance animation; in production keep items visible.
-    // Some standalone builds may skip animations, leaving values at 0 if initialized that way.
-    if (__DEV__) {
-      animatedValues.current.forEach(v => v.setValue(0));
-      const animations = animatedValues.current.map((v, i) =>
-        Animated.timing(v, {
-          toValue: 1,
-          duration: 420,
-          delay: i * 70,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        })
-      );
-      Animated.stagger(50, animations).start();
-    } else {
-      // Ensure fully visible in release
-      animatedValues.current.forEach(v => v.setValue(1));
-    }
+    // Always animate (Release and Debug)
+    animatedValues.current.forEach(v => v.setValue(0));
+    const animations = animatedValues.current.map((v, i) =>
+      Animated.timing(v, {
+        toValue: 1,
+        duration: 420,
+        delay: i * 70,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      })
+    );
+    Animated.stagger(50, animations).start();
   }, [currentLevel?.sets?.length, animSeed]);
 
   const handleSetPress = (set: VocabSet & { locked?: boolean }) => {
@@ -347,7 +348,7 @@ export default function LearnScreen() {
     );
   }
 
-  const accent = '#F2935C';
+  const accent = '#F8B070';
   const progressPercentage = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
 
   return (
@@ -394,12 +395,14 @@ export default function LearnScreen() {
               currentLevel.id === 'beginner'
                 ? require('../../assets/levelicons/beginner.png')
                 : currentLevel.id === 'ielts'
-                ? require('../../assets/levelicons/ielts-topics.png')
+                ? require('../../assets/levelicons/ielts-vocabulary.png')
                 : currentLevel.id === 'intermediate'
                 ? require('../../assets/levelicons/intermediate.png')
-                : currentLevel.id === 'advanced'
-                ? require('../../assets/levelicons/advanced-mountain.png')
-                : require('../../assets/levelicons/advanced-plus.png')
+                : currentLevel.id === 'upper-intermediate'
+                ? require('../../assets/levelicons/upper-intermediate.png')
+                : currentLevel.id === 'proficient'
+                ? require('../../assets/levelicons/proficient.png')
+                : require('../../assets/levelicons/advanced.png')
             }
             style={styles.levelImage}
             resizeMode="contain"
@@ -463,7 +466,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     flex: 1,
     textAlign: 'center',
-    fontFamily: 'Ubuntu_500Medium',
+    fontFamily: 'Ubuntu-Medium',
   },
   settingsButton: {
     padding: 8,
@@ -475,9 +478,9 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   levelInfoLight: {
-    backgroundColor: '#F9F1E7',
+    backgroundColor: '#FFFFFF',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#F9F1E7',
+    borderColor: '#FFFFFF',
   },
   levelHeader: {
     flexDirection: 'row',
@@ -496,14 +499,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
     marginBottom: 6,
-    fontFamily: 'Ubuntu_500Medium',
+    fontFamily: 'Ubuntu-Medium',
   },
   levelCefr: {
     fontSize: 16,
-    color: '#F2935C',
+    color: '#F8B070',
     fontWeight: '600',
     letterSpacing: 0.5,
-    fontFamily: 'Ubuntu_500Medium',
+    fontFamily: 'Ubuntu-Medium',
   },
   changeButton: {
     backgroundColor: 'transparent',
@@ -530,7 +533,7 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 16,
     color: '#D1D5DB',
-    fontFamily: 'Ubuntu_400Regular',
+    fontFamily: 'Ubuntu-Regular',
   },
   progressPercentage: {
     fontSize: 16,
@@ -538,7 +541,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 8,
-    backgroundColor: 'rgba(242, 147, 92, 0.16)',
+    backgroundColor: 'rgba(248, 176, 112, 0.16)',
     borderRadius: 8,
     overflow: 'hidden',
   },

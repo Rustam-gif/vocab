@@ -7,12 +7,12 @@ Users can now choose a custom avatar from 6 cartoon profile pictures during the 
 
 ### Avatar Options
 Located in `/assets/prof-pictures/`:
-- `cartoon 1.png`
-- `cartoon 2.png`
-- `cartoon 3.png`
-- `cartoon 4.png`
-- `cartoon 5.png`
-- `cartoon 6.png`
+- `cartoon-1.png`
+- `cartoon-2.png`
+- `cartoon-3.png`
+- `cartoon-4.png`
+- `cartoon-5.png`
+- `cartoon-6.png`
 
 ### User Flow
 
@@ -117,4 +117,3 @@ If not → Load remote URL or default
 **Created**: 2025-01-03
 **Version**: 1.0
 **Status**: Implemented and Active
-

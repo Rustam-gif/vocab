@@ -1,7 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { REMOTE_SYNC } from '../lib/appConfig';
 
 const PROGRESS_KEY = '@user_progress';
+const PENDING_REMOTE_KEY = '@user_progress_pending_remote';
 
 export interface UserProgress {
   xp: number;
@@ -43,27 +45,71 @@ export const XP_REWARDS = {
 
 class ProgressServiceClass {
   private progress: UserProgress | null = null;
+  
+  private async getStorageKey(): Promise<string> {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const uid = data?.session?.user?.id || 'guest';
+      return `${PROGRESS_KEY}:${uid}`;
+    } catch {
+      return `${PROGRESS_KEY}:guest`;
+    }
+  }
+  private async getPendingKey(): Promise<string> {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const uid = data?.session?.user?.id || 'guest';
+      return `${PENDING_REMOTE_KEY}:${uid}`;
+    } catch {
+      return `${PENDING_REMOTE_KEY}:guest`;
+    }
+  }
 
   async initialize(): Promise<void> {
     try {
-      // Try to load from Supabase first (if user is logged in)
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (user?.user_metadata?.progress) {
-        this.progress = user.user_metadata.progress;
-      } else {
-        // Fall back to local storage
-        const stored = await AsyncStorage.getItem(PROGRESS_KEY);
+      // Local-first when REMOTE_SYNC is false. This avoids overwriting local
+      // progress with stale Supabase metadata during development or offline use.
+      if (!REMOTE_SYNC) {
+        const { data } = await supabase.auth.getSession();
+        const uid = data?.session?.user?.id || null;
+        const key = await this.getStorageKey();
+        let stored = await AsyncStorage.getItem(key);
         if (stored) {
           this.progress = JSON.parse(stored);
         } else {
-          // Initialize new progress
-          this.progress = this.getDefaultProgress();
+          // Guest: migrate legacy unscoped key if present; signed-in users start fresh
+          if (!uid) {
+            const legacy = await AsyncStorage.getItem(PROGRESS_KEY);
+            if (legacy) {
+              this.progress = JSON.parse(legacy);
+              await AsyncStorage.setItem(key, legacy);
+              await AsyncStorage.removeItem(PROGRESS_KEY);
+            } else {
+              this.progress = this.getDefaultProgress();
+              try { await AsyncStorage.setItem(key, JSON.stringify(this.progress)); } catch {}
+            }
+          } else {
+            this.progress = this.getDefaultProgress();
+            try { await AsyncStorage.setItem(key, JSON.stringify(this.progress)); } catch {}
+          }
+        }
+      } else {
+        // Remote-enabled: prefer remote if present, otherwise local
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.user_metadata?.progress) {
+          this.progress = user.user_metadata.progress as UserProgress;
+          try { await AsyncStorage.setItem(await this.getStorageKey(), JSON.stringify(this.progress)); } catch {}
+        } else {
+          const stored = await AsyncStorage.getItem(await this.getStorageKey());
+          this.progress = stored ? JSON.parse(stored) : this.getDefaultProgress();
         }
       }
-      
-      // Update streak on launch
+
+      // Update streak on launch (idempotent per day)
       await this.updateStreak();
+
+      // Try to flush any pending remote writes (best-effort)
+      try { await this.flushPendingRemote(); } catch {}
     } catch (error) {
       console.error('Failed to initialize ProgressService:', error);
       this.progress = this.getDefaultProgress();
@@ -230,25 +276,86 @@ class ProgressServiceClass {
     
     try {
       // Save to local storage
-      await AsyncStorage.setItem(PROGRESS_KEY, JSON.stringify(this.progress));
+      await AsyncStorage.setItem(await this.getStorageKey(), JSON.stringify(this.progress));
       
       // Save to Supabase if logged in
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.auth.updateUser({
-          data: {
-            progress: this.progress,
-          },
-        });
+      const { data: { user } } = REMOTE_SYNC ? await supabase.auth.getUser() : await supabase.auth.getSession().then(r => ({ data: { user: r.data?.session?.user || null } as any }));
+      if (user && REMOTE_SYNC) {
+        try {
+          await supabase.auth.updateUser({ data: { progress: this.progress } });
+          // Clear any pending if this succeeds
+          await AsyncStorage.removeItem(await this.getPendingKey());
+        } catch (e) {
+          // Queue for later sync
+          await AsyncStorage.setItem(await this.getPendingKey(), JSON.stringify(this.progress));
+          console.warn('[ProgressService] queued progress for remote sync (offline?)');
+        }
       }
     } catch (error) {
       console.error('Failed to save progress:', error);
     }
   }
 
+  private async flushPendingRemote(): Promise<void> {
+    if (!REMOTE_SYNC) return; // Do not attempt remote flush if remote sync disabled
+    const pending = await AsyncStorage.getItem(await this.getPendingKey());
+    if (!pending) return;
+    try {
+      const parsed = JSON.parse(pending);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase.auth.updateUser({ data: { progress: parsed } });
+      await AsyncStorage.removeItem(await this.getPendingKey());
+      console.log('[ProgressService] pending progress synced.');
+    } catch (e) {
+      // Keep pending for next attempt
+      console.warn('[ProgressService] still pending sync:', e);
+    }
+  }
+
   async resetProgress(): Promise<void> {
     this.progress = this.getDefaultProgress();
     await this.saveProgress();
+  }
+
+  // After sign-in, prefer remote progress if available and persist locally.
+  async refreshFromRemote(): Promise<void> {
+    try {
+      if (!REMOTE_SYNC) {
+        // In local-only mode, switch storage context to the current user
+        const { data } = await supabase.auth.getSession();
+        const uid = data?.session?.user?.id || null;
+        const key = await this.getStorageKey();
+        let stored = await AsyncStorage.getItem(key);
+        if (!stored) {
+          // Only migrate legacy unscoped data for guest (not for signed-in users)
+          if (!uid) {
+            const legacy = await AsyncStorage.getItem(PROGRESS_KEY);
+            if (legacy) {
+              stored = legacy;
+              await AsyncStorage.setItem(key, legacy);
+              await AsyncStorage.removeItem(PROGRESS_KEY);
+            }
+          }
+        }
+        this.progress = stored ? JSON.parse(stored) : this.getDefaultProgress();
+        await AsyncStorage.setItem(key, JSON.stringify(this.progress));
+        return;
+      }
+      const { data: { user } } = await supabase.auth.getUser();
+      const remote = user?.user_metadata?.progress as UserProgress | undefined;
+      if (!remote) return;
+      let local: UserProgress | null = null;
+      try {
+        const stored = await AsyncStorage.getItem(await this.getStorageKey());
+        if (stored) local = JSON.parse(stored);
+      } catch {}
+      const next = remote || local || this.getDefaultProgress();
+      this.progress = next;
+      try { await AsyncStorage.setItem(await this.getStorageKey(), JSON.stringify(next)); } catch {}
+    } catch (e) {
+      // offline or auth error — ignore
+    }
   }
 
   // Get current stats for display

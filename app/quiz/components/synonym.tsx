@@ -729,18 +729,89 @@ const INCORRECT_COLOR = '#924646';
 // Soft light-theme variants (~50% less saturated/tinted)
 const CORRECT_COLOR_LIGHT = '#A1BFBA';
 const INCORRECT_COLOR_LIGHT = '#C9A3A3';
-const ACCENT_COLOR = '#F2935C';
+const ACCENT_COLOR = '#F8B070';
 
 export default function SynonymComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange, wordsOverride }: SynonymProps) {
   const themeName = useAppStore(s => s.theme);
+  const recordResult = useAppStore(s => s.recordExerciseResult);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
   // Get words from levels data
   const wordsData = useMemo(() => {
+    const levelKey = String(levelId || '').toLowerCase();
+    const level = levels.find(l => (l.id || '').toLowerCase() === levelKey) || levels.find(l => (l.name || '').toLowerCase() === levelKey);
+    const cefrUpper = String(level?.cefr || '').toUpperCase();
+    const isAdvancedByParam = /advanced/i.test(String(levelId || ''));
+    const isAdvancedByLevel =
+      /advanced/i.test(String(level?.name || '')) ||
+      cefrUpper.includes('B2-C1') ||
+      cefrUpper.includes('C1+') ||
+      cefrUpper.includes('C2') ||
+      /proficient/i.test(String(level?.name || '')) ||
+      String(level?.id || '').toLowerCase() === 'proficient';
+    const isAdvancedB2C1 = isAdvancedByParam || isAdvancedByLevel;
+    const isBeginnerA1A2 = /(^|\b)beginner(\b|$)/i.test(String(levelId || '')) || /(^|\b)beginner(\b|$)/i.test(String(level?.name || '')) || cefrUpper.includes('A1-A2') || cefrUpper.includes('A1') || cefrUpper.includes('A2');
+    const isIntermediateB1 = (String(levelId || '').toLowerCase() === 'intermediate') || (String(level?.id || '').toLowerCase() === 'intermediate') || (String(level?.name || '').toLowerCase() === 'intermediate') || (cefrUpper === 'B1');
+    try { console.log('SynonymComponent - params:', { setId, levelId, detectedLevel: level?.name, cefr: level?.cefr, isAdvancedB2C1, isBeginnerA1A2, isIntermediateB1 }); } catch {}
+
     // Use override when provided (dynamic quiz)
     if (wordsOverride && wordsOverride.length) {
       let words = wordsOverride;
       if (wordRange) words = words.slice(wordRange.start, wordRange.end);
+
+      // Advanced/Beginner/Intermediate enforcement also applies when using overrides
+      if (isAdvancedB2C1 || isBeginnerA1A2 || isIntermediateB1) {
+        const mode = isAdvancedB2C1 ? 'Advanced' : isBeginnerA1A2 ? 'Beginner' : 'Intermediate';
+        try { console.log(`SynonymComponent - Using ${mode} peer-synonym mode (override path)`); } catch {}
+        return words.map(w => {
+          const override = SYN_OVERRIDES[levelId || '']?.[String(setId)]?.[w.word.toLowerCase()];
+          const correct = (override?.correct && override.correct.length)
+            ? override.correct
+            : (w.synonyms || []).slice(0, 3);
+          const correctSet = new Set(correct.map(s => (s || '').toLowerCase().trim()));
+          const poolRaw = (words as any[])
+            .filter(x => x.word !== w.word)
+            .flatMap(x => (x.synonyms || []));
+          const seen = new Set<string>();
+          let incorrectPool = poolRaw
+            .map(s => String(s || '').trim())
+            .filter(s => s.length > 0)
+            .filter(s => !correctSet.has(s.toLowerCase()))
+            .filter(s => s.toLowerCase() !== (w.word || '').toLowerCase())
+            .filter(s => {
+              const key = s.toLowerCase();
+              if (seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            });
+          // Ensure at least 3
+          if (incorrectPool.length < 3) {
+            const more = (words as any[])
+              .flatMap(x => (x.synonyms || []))
+              .map(s => String(s || '').trim())
+              .filter(s => s.length > 0)
+              .filter(s => !correctSet.has(s.toLowerCase()))
+              .filter(s => s.toLowerCase() !== (w.word || '').toLowerCase());
+            for (const m of more) {
+              const key = m.toLowerCase();
+              if (seen.has(key)) continue;
+              incorrectPool.push(m);
+              seen.add(key);
+              if (incorrectPool.length >= 3) break;
+            }
+          }
+          const result: WordEntry = {
+            word: w.word,
+            ipa: w.phonetic,
+            correct,
+            incorrectPool: incorrectPool.length ? incorrectPool : ['other', 'different', 'alternative'],
+          };
+          try { console.log('Synonym PEER (override) for', w.word, 'correct:', result.correct, 'incorrectPool:', result.incorrectPool.slice(0, 6)); } catch {}
+          return result;
+        });
+      }
+
+      // Non-advanced override path (keep overrides when present; otherwise fallback generic)
       return words.map(w => {
         const override = SYN_OVERRIDES[levelId || '']?.[String(setId)]?.[w.word.toLowerCase()];
         return {
@@ -752,7 +823,6 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
       });
     }
 
-    const level = levels.find(l => l.id === levelId);
     if (!level) return [];
     const set = level.sets.find(s => s.id.toString() === setId);
     if (!set || !set.words) return [];
@@ -761,7 +831,7 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
     if (wordRange) {
       words = words.slice(wordRange.start, wordRange.end);
     }
-    
+
     // Convert to WordEntry format
     return words.map(w => {
       const override = SYN_OVERRIDES[levelId || '']?.[String(set.id)]?.[w.word.toLowerCase()];
@@ -773,6 +843,59 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
           incorrectPool: override.incorrect,
         } as WordEntry;
       }
+
+      // Advanced/Beginner/Intermediate rule: incorrect options should be real synonyms
+      // from other words in the same set (no invented distractors).
+      if (isAdvancedB2C1 || isBeginnerA1A2 || isIntermediateB1) {
+        const mode = isAdvancedB2C1 ? 'Advanced' : isBeginnerA1A2 ? 'Beginner' : 'Intermediate';
+        try { console.log(`SynonymComponent - Using ${mode} peer-synonym mode (set path)`); } catch {}
+        const correct = (w.synonyms || []).slice(0, 3);
+        const correctSet = new Set(correct.map(s => (s || '').toLowerCase().trim()));
+        // Aggregate synonyms from peer words in this set/range
+        const poolRaw = (words as any[])
+          .filter(x => x.word !== w.word)
+          .flatMap(x => (x.synonyms || []));
+        const seen = new Set<string>();
+        let incorrectPool = poolRaw
+          .map(s => String(s || '').trim())
+          .filter(s => s.length > 0)
+          .filter(s => !correctSet.has(s.toLowerCase()))
+          .filter(s => s.toLowerCase() !== (w.word || '').toLowerCase())
+          .filter(s => {
+            const key = s.toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+
+        // Ensure we have at least 3 incorrect options from peers when possible
+        if (incorrectPool.length < 3) {
+          const more = (words as any[])
+            .flatMap(x => (x.synonyms || []))
+            .map(s => String(s || '').trim())
+            .filter(s => s.length > 0)
+            .filter(s => !correctSet.has(s.toLowerCase()))
+            .filter(s => s.toLowerCase() !== (w.word || '').toLowerCase());
+          for (const m of more) {
+            const key = m.toLowerCase();
+            if (seen.has(key)) continue;
+            incorrectPool.push(m);
+            seen.add(key);
+            if (incorrectPool.length >= 3) break;
+          }
+        }
+
+        const result: WordEntry = {
+          word: w.word,
+          ipa: w.phonetic,
+          correct,
+          incorrectPool: incorrectPool.length ? incorrectPool : ['other', 'different', 'alternative'],
+        };
+        // Debug visibility in Xcode logs
+        try { console.log('Synonym PEER for', w.word, 'correct:', result.correct, 'incorrectPool:', result.incorrectPool.slice(0, 6)); } catch {}
+        return result;
+      }
+
       return {
         word: w.word,
         ipa: w.phonetic,
@@ -795,27 +918,28 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
   const currentWord = useMemo(() => wordsData[currentIndex], [wordsData, currentIndex]);
   const requiredCount = 3; // Always require 3 correct synonyms
 
-  const [options] = useState(() =>
-    wordsData.map(entry => {
+  const options = useMemo(() => {
+    const opts = wordsData.map(entry => {
       // If this entry has an exact override, use it as-is
       const exactThree = entry.correct.length === 3 && entry.incorrectPool.length === 3;
       const correctOptions = exactThree ? entry.correct : entry.correct.slice(0, 3);
       const incorrectOptions = exactThree
         ? entry.incorrectPool
         : [...entry.incorrectPool]
-        .map(option => ({ option, sort: Math.random() }))
-        .sort((a, b) => a.sort - b.sort)
+            .map(option => ({ option, sort: Math.random() }))
+            .sort((a, b) => a.sort - b.sort)
             .slice(0, 3)
-        .map(({ option }) => option);
+            .map(({ option }) => option);
 
       const combined = [...correctOptions, ...incorrectOptions];
-
       return combined
         .map(option => ({ option, sort: Math.random() }))
         .sort((a, b) => a.sort - b.sort)
         .map(({ option }) => option);
-    })
-  );
+    });
+    try { console.log('SynonymComponent - options recomputed for', opts.length, 'items'); } catch {}
+    return opts;
+  }, [wordsData]);
 
   useEffect(() => {
     setSelected([]);
@@ -900,7 +1024,7 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
     // Track analytics for this item
     try {
       const timeSpent = Math.max(0, Math.round((Date.now() - itemStartRef.current) / 1000));
-      analyticsService.recordResult({
+      recordResult({
         wordId: currentWord.word,
         exerciseType: 'synonym',
         correct: selectedCorrect,
@@ -1068,6 +1192,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     fontWeight: '500',
+    fontFamily: 'Ubuntu-Medium',
   },
   scoreWrapper: {
     alignItems: 'center',
@@ -1080,6 +1205,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#F87171',
+    fontFamily: 'Ubuntu-Bold',
   },
   progressBar: {
     height: 6,
@@ -1097,6 +1223,7 @@ const styles = StyleSheet.create({
     color: ACCENT_COLOR,
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Bold',
   },
   wordHeader: {
     alignItems: 'center',
@@ -1109,12 +1236,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     marginBottom: 12,
+    fontFamily: 'Ubuntu-Bold',
   },
   wordHighlight: {
     color: '#fff',
     fontWeight: '700',
     fontSize: 28,
     marginBottom: 12,
+    fontFamily: 'Ubuntu-Bold',
   },
   wordTitle: {
     marginTop: 12,
@@ -1122,6 +1251,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
     textAlign: 'center',
+    fontFamily: 'Ubuntu-Bold',
   },
   ipaText: {
     marginTop: 6,
@@ -1129,6 +1259,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     fontStyle: 'italic',
+    fontFamily: 'Ubuntu-Regular',
   },
   grid: {
     flexDirection: 'row',
@@ -1152,9 +1283,9 @@ const styles = StyleSheet.create({
   },
   optionLight: {
     // Match MCQ light card color for consistency
-    backgroundColor: '#F9F1E7',
+    backgroundColor: '#FFFFFF',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#F9F1E7',
+    borderColor: '#FFFFFF',
   },
   optionSelected: {
     borderColor: ACCENT_COLOR,
@@ -1189,6 +1320,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     textAlign: 'center',
+    fontFamily: 'Ubuntu-Medium',
   },
   footerButtons: {
     alignItems: 'center',
@@ -1206,6 +1338,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Bold',
   },
   buttonDisabled: {
     opacity: 0.5,

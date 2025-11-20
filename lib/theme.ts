@@ -15,17 +15,17 @@ const dark: Theme = {
   text: '#FFFFFF',
   subtext: '#9CA3AF',
   border: '#333333',
-  accent: '#F2935C',
+  accent: '#F8B070',
 };
 
 const light: Theme = {
-  // Updated palette for light mode
-  background: '#F2E3D0', // main screen color
-  surface: '#F9F1E7',    // card color
+  // Light mode aligned with new design
+  background: '#F8F8F8', // main screen color
+  surface: '#FFFFFF',    // card color
   text: '#111827',
   subtext: '#4B5563',
-  border: '#F9F1E7',
-  accent: '#F2935C',
+  border: '#FFFFFF',
+  accent: '#F8B070',
 };
 
 export const getTheme = (name: ThemeName): Theme => (name === 'light' ? light : dark);

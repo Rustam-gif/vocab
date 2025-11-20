@@ -21,13 +21,22 @@ import {
   Platform,
   KeyboardAvoidingView,
   BackHandler,
+  InteractionManager,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, X, Settings, Maximize2, Minimize2, Sun, Moon, Check, AlertCircle, ChevronDown, Search, Bookmark } from 'lucide-react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback } from 'react';
+import { X, Settings, Maximize2, Minimize2, Sun, Moon, Check, AlertCircle, ChevronDown, Search, Bookmark } from 'lucide-react-native';
 import { aiService } from '../../services/AIService';
 import { useAppStore } from '../../lib/store';
 import { Word } from '../../types';
 import LottieView from 'lottie-react-native';
+import { LinearGradient } from '../../lib/LinearGradient';
+import { SubscriptionService, SubscriptionProduct } from '../../services/SubscriptionService';
+import UsageLimitsService from '../../services/UsageLimitsService';
+import LimitModal from '../../lib/LimitModal';
+import { saveStory as saveStoryToRemote } from '../../services/dbClient';
+import { supabase } from '../../lib/supabase';
 
 // Story customization options
 interface StoryCustomization {
@@ -112,6 +121,22 @@ function hyphenateWord(word: string): string {
   return parts.join(SOFT_HYPHEN);
 }
 
+// Deterministic tiny jitter based on string id (prevents reordering on re-render)
+function stableJitter(id: string): number {
+  try {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) {
+      h = ((h << 5) - h) + id.charCodeAt(i);
+      h |= 0; // force 32-bit
+    }
+    // Map to [0, 1)
+    const u = (h >>> 0) / 0xFFFFFFFF;
+    return u;
+  } catch {
+    return 0;
+  }
+}
+
 // Inline one-shot dots animation for blanks (slower, visible jump; plays once)
 const InlineDotsOnce: React.FC<{ style?: any }> = ({ style }) => {
   const dots = [0, 1, 2, 3, 4, 5, 6].map(() => useRef(new Animated.Value(0)).current);
@@ -175,6 +200,18 @@ export default function StoryExerciseScreen() {
   const [isNormalMode, setIsNormalMode] = useState(false); // false = Fill-in-the-blanks, true = Normal
   const [isFullscreen, setIsFullscreen] = useState(false);
   const themeName = useAppStore(s => s.theme);
+  const currentUser = useAppStore(s => s.user);
+
+  const getActiveUserId = useCallback(async () => {
+    if (currentUser?.id) return currentUser.id;
+    try {
+      const { data } = await supabase.auth.getSession();
+      return data?.session?.user?.id ?? null;
+    } catch (err) {
+      console.warn('StoryExercise: unable to resolve Supabase session:', err);
+      return null;
+    }
+  }, [currentUser?.id]);
   const [isDarkMode, setIsDarkMode] = useState(true); // true = dark mode, false = light mode
   const [customization, setCustomization] = useState<StoryCustomization>({
     genre: 'adventure',
@@ -200,8 +237,21 @@ export default function StoryExerciseScreen() {
   const sparklesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Save toast
   const [saveToastVisible, setSaveToastVisible] = useState(false);
+  const [lastSavedId, setLastSavedId] = useState<string | null>(null);
   const saveToastAnim = useRef(new Animated.Value(0)).current;
   const saveToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [locked, setLocked] = useState<boolean>(true);
+  // Local paywall for direct access from this screen
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [showPurchaseSuccess, setShowPurchaseSuccess] = useState(false);
+  const [products, setProducts] = useState<SubscriptionProduct[] | null>(null);
+  const [limitOpen, setLimitOpen] = useState(false);
+  const [limitMessage, setLimitMessage] = useState(
+    "You reached today's free story limit. Subscribe to get unlimited story exercises."
+  );
+  const [showSignInPrompt, setShowSignInPrompt] = useState(false);
+  const [freeStoryRemaining, setFreeStoryRemaining] = useState<number | null>(null);
   
   // (Shine animation removed per request)
 
@@ -215,13 +265,87 @@ export default function StoryExerciseScreen() {
   // SRS-aware picker UI state
   const [pickerQuery, setPickerQuery] = useState('');
   const [pickerFilter, setPickerFilter] = useState<'recommended' | 'due' | 'weak' | 'all'>('recommended');
+  const [pickerFolderId, setPickerFolderId] = useState<string | null>(null);
   // SRS feedback banner
   const [showSrsBanner, setShowSrsBanner] = useState(false);
   const srsBannerAnim = useRef(new Animated.Value(0)).current;
+  const selectedSkuRef = useRef<string | null>(null);
+
+  // Ensure words are loaded, but defer heavy work so the sheet animation feels instant
+  useEffect(() => {
+    const state = useAppStore.getState();
+    if (Array.isArray(state.words) && state.words.length > 0) return;
+    const task = (InteractionManager as any).runAfterInteractions?.(() => {
+      try { loadWords(); } catch {}
+    });
+    return () => { try { (task as any)?.cancel?.(); } catch {}; };
+  }, [loadWords]);
+
+  // Check premium status on mount and when returning to this screen
+  const refreshStoryAccess = useCallback(async () => {
+    try {
+      const status = await SubscriptionService.getStatus();
+      if (status?.active) {
+        setLocked(false);
+        setFreeStoryRemaining(null);
+        return;
+      }
+    } catch (e) {
+      console.warn('StoryExercise: subscription status check failed:', e);
+    }
+    try {
+      const limit = await UsageLimitsService.check('story');
+      setFreeStoryRemaining(limit.remaining);
+      setLocked(!limit.ok && limit.reason === 'subscribe');
+    } catch (err) {
+      console.warn('StoryExercise: story limit check failed:', err);
+    }
+  }, []);
 
   useEffect(() => {
-    loadWords();
-  }, []);
+    refreshStoryAccess();
+  }, [refreshStoryAccess]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshStoryAccess();
+    }, [refreshStoryAccess])
+  );
+
+  // Preload products when opening the local paywall
+  useEffect(() => {
+    if (showPaywall && !products) {
+      SubscriptionService.initialize().then(() =>
+        SubscriptionService.getProducts(['com.royal.vocadoo.premium.months', 'com.royal.vocadoo.premium.annually']).then(setProducts).catch(() => setProducts([]))
+      );
+    }
+  }, [showPaywall, products]);
+
+  const handleContinuePurchaseLocal = async () => {
+    setIsPurchasing(true);
+    try {
+      let current = products || [];
+      if (!current.length) {
+        try { current = await SubscriptionService.getProducts(['com.royal.vocadoo.premium.months', 'com.royal.vocadoo.premium.annually']); setProducts(current); } catch {}
+      }
+      const fallbackSku = (current.find(p => p.duration === 'monthly')?.id) || current[0]?.id || 'com.royal.vocadoo.premium.months';
+      const sku = (selectedSkuRef.current) || fallbackSku;
+      const purchasePromise = SubscriptionService.purchase(sku);
+      const timeoutPromise = new Promise(async (resolve) => {
+        setTimeout(async () => {
+          try { resolve(await SubscriptionService.getStatus()); } catch { resolve({ active: false }); }
+        }, 20000);
+      });
+      const next: any = await Promise.race([purchasePromise, timeoutPromise]);
+      if (next?.active) {
+        setLocked(false);
+        setShowPurchaseSuccess(true);
+        setTimeout(() => { setShowPurchaseSuccess(false); setShowPaywall(false); }, 1400);
+      }
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
 
   // Sync initial mode with app theme; user can still toggle locally
   useEffect(() => {
@@ -257,6 +381,11 @@ export default function StoryExerciseScreen() {
   // Auto-generate story if words are passed via params
   useEffect(() => {
     if (params.words && !story && !loading) {
+      if (locked) {
+        // Redirect to paywall instead of auto-generating
+        setShowPaywall(true);
+        return;
+      }
       const wordsArray = params.words.split(',').map(w => w.trim()).filter(Boolean);
       if (wordsArray.length >= 5) {
         const wordsToUse = wordsArray.slice(0, 5);
@@ -271,6 +400,23 @@ export default function StoryExerciseScreen() {
   // (Quest progress UI removed per request)
 
   const generateStory = async (overrideWords?: string[]) => {
+    if (locked) {
+      setShowPaywall(true);
+      return;
+    }
+    const gate = await UsageLimitsService.checkAndBump('story');
+    if (!gate.ok) {
+      const msg =
+        gate.reason === 'subscribe'
+          ? 'You have used all 5 free story generations. Subscribe to keep creating stories.'
+          : "You reached today's free story limit. Subscribe to get unlimited story exercises.";
+      setLimitMessage(msg);
+      setLimitOpen(true);
+      return;
+    }
+    if (!gate.subscribed) {
+      refreshStoryAccess();
+    }
     const fallbackWords = story ? story.availableWords : currentVocabulary;
     const vocabularySource = overrideWords ?? fallbackWords;
     const vocabularyList = sanitizeWords(vocabularySource);
@@ -558,23 +704,61 @@ export default function StoryExerciseScreen() {
       const save = useAppStore.getState().saveStory;
       const level = customization.difficulty;
       const title = headerTitle || 'Story';
+      const newId = `story_${Date.now()}`;
       await save({
-        id: `story_${Date.now()}`,
+        id: newId,
         title,
         content,
         level,
         words: story.availableWords,
         createdAt: new Date(),
       });
+      setLastSavedId(newId);
+
+      // Sync to Supabase if the user is authenticated
+      try {
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        if (__DEV__) {
+          console.log('[StoryExercise] session debug:', {
+            sessionError,
+            sessionUserId: data?.session?.user?.id,
+            hasSession: !!data?.session,
+            expiresAt: data?.session?.expires_at,
+          });
+        }
+        const sessionUserId = data?.session?.user?.id;
+        if (!sessionUserId) {
+          if (__DEV__) console.log('[StoryExercise] save skipped (no Supabase session)');
+          setShowSignInPrompt(true);
+          return;
+        }
+        if (__DEV__) console.log('[StoryExercise] syncing story for user', sessionUserId);
+        const { error } = await saveStoryToRemote(content, {
+          local_story_id: newId,
+          title,
+          difficulty: level,
+          words: story.availableWords,
+          mode: isNormalMode ? 'normal' : 'fill-in',
+        });
+        if (error) throw error;
+      } catch (remoteError) {
+        console.warn('Failed to sync story to Supabase:', remoteError);
+      }
 
       // Fancy toast instead of system alert
-      if (saveToastTimerRef.current) clearTimeout(saveToastTimerRef.current);
-      setSaveToastVisible(true);
-      saveToastAnim.setValue(0);
-      Animated.timing(saveToastAnim, { toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-      saveToastTimerRef.current = setTimeout(() => {
-        Animated.timing(saveToastAnim, { toValue: 0, duration: 180, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => setSaveToastVisible(false));
-      }, 2000);
+      // Navigate directly to the full story view after saving
+      try {
+        router.push(`/journal/${newId}`);
+      } catch {
+        // Fallback: show toast with a link
+        if (saveToastTimerRef.current) clearTimeout(saveToastTimerRef.current);
+        setSaveToastVisible(true);
+        saveToastAnim.setValue(0);
+        Animated.timing(saveToastAnim, { toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+        saveToastTimerRef.current = setTimeout(() => {
+          Animated.timing(saveToastAnim, { toValue: 0, duration: 180, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => setSaveToastVisible(false));
+        }, 2000);
+      }
     } catch (e) {
       console.warn('Failed to save story:', e);
       Alert.alert('Save Failed', 'Could not save the story. Please try again.');
@@ -888,6 +1072,21 @@ const buildStoryFromContent = (
   };
 };
 
+  // Ensure sheet overlay can drag down when content is at top
+  useEffect(() => {
+    try {
+      (globalThis as any).__SHEET_MAIN_Y = 0;
+      (globalThis as any).__SHEET_RECENT_Y = 0;
+      (globalThis as any).__SHEET_AT_TOP = true;
+    } catch {}
+  }, []);
+
+  // Lock parent sheet drag while the word picker is open
+  useEffect(() => {
+    try { (globalThis as any).__SHEET_LOCKED = !!wordPickerOpen; } catch {}
+    return () => { try { (globalThis as any).__SHEET_LOCKED = false; } catch {} };
+  }, [wordPickerOpen]);
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, !isDarkMode && styles.containerLight]}>
@@ -909,15 +1108,7 @@ const buildStoryFromContent = (
       {/* Header - Hidden in fullscreen */}
       {!isFullscreen && (
         <View style={[styles.header, !isDarkMode && styles.headerLight]}>
-          <TouchableOpacity onPress={() => {
-            if (params.from === 'results') {
-              router.replace('/');
-            } else {
-              router.back();
-            }
-          }} style={styles.backButton}>
-            <ArrowLeft size={24} color={isDarkMode ? "#FFFFFF" : "#111827"} />
-          </TouchableOpacity>
+          {/* Back button removed; close is handled by the sheet overlay's X */}
           <View style={styles.headerCenter}>
             <Text style={[styles.headerTitle, !isDarkMode && styles.headerTitleLight]}>{headerTitle}</Text>
             {headerSubtitle ? (
@@ -961,6 +1152,10 @@ const buildStoryFromContent = (
             <TouchableOpacity
               style={styles.dockItem}
               onPress={() => {
+                if (locked) {
+                  setShowPaywall(true);
+                  return;
+                }
                 if (!vaultWords.length) {
                   Alert.alert('Vault Empty', 'Add words to your vault to build a custom story.');
                   return;
@@ -977,7 +1172,13 @@ const buildStoryFromContent = (
             {/* Customize */}
             <TouchableOpacity
               style={styles.dockItem}
-              onPress={() => setShowCustomizeModal(true)}
+              onPress={() => {
+                if (locked) {
+                  setShowPaywall(true);
+                  return;
+                }
+                setShowCustomizeModal(true);
+              }}
               activeOpacity={0.85}
             >
               <Settings size={12} color={isDarkMode ? "#E5E7EB" : "#374151"} />
@@ -1009,6 +1210,16 @@ const buildStoryFromContent = (
             isFullscreen && !isDarkMode && styles.contentFullscreenLight,
           ]} 
           showsVerticalScrollIndicator={false}
+          onScroll={(e) => {
+            try {
+              const y = e.nativeEvent.contentOffset?.y || 0;
+              (globalThis as any).__SHEET_MAIN_Y = y;
+              const recent = (globalThis as any).__SHEET_RECENT_Y || 0;
+              (globalThis as any).__SHEET_AT_TOP = (y <= 2) && (recent <= 2);
+              (globalThis as any).__SHEET_RECENT_Y = y;
+            } catch {}
+          }}
+          scrollEventThrottle={16}
         >
           {/* Paper-like reading card when a story is present */}
           <>
@@ -1025,20 +1236,7 @@ const buildStoryFromContent = (
               }
             </TouchableOpacity>
 
-            {/* Theme toggle */}
-            <TouchableOpacity
-              style={styles.themeIconBtn}
-              onPress={() => setIsDarkMode(prev => !prev)}
-              accessibilityRole="button"
-              accessibilityLabel={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-              activeOpacity={0.85}
-            >
-              {isDarkMode ? (
-                <Sun size={14} color="#F3F4F6" />
-              ) : (
-                <Moon size={14} color="#111827" />
-              )}
-            </TouchableOpacity>
+            {/* Theme toggle removed per request */}
 
             <Animated.View
               style={[
@@ -1072,6 +1270,12 @@ const buildStoryFromContent = (
                 </Text>
               ) : (
                 <View style={styles.storyPlaceholder}>
+                  <LottieView
+                    source={require('../../assets/lottie/se_animation.json')}
+                    autoPlay
+                    loop={false}
+                    style={{ width: 220, height: 220, marginBottom: 8 }}
+                  />
                   <Text style={[styles.storyPlaceholderTitle, !isDarkMode && styles.storyPlaceholderTitleLight]}>Ready when you are</Text>
                   <Text style={[styles.storyPlaceholderBody, !isDarkMode && styles.storyPlaceholderBodyLight]}>
                     Choose five words, tweak the story settings, then tap Generate to craft a new narrative.
@@ -1105,12 +1309,15 @@ const buildStoryFromContent = (
       {/* Footer Buttons - Hidden in fullscreen */}
       {!isFullscreen && (
         <View style={styles.footer}>
-          <TouchableOpacity
-            style={styles.regenerateButton}
-            onPress={() => generateStory()}
-            disabled={loading}
-          >
-            <Text style={styles.regenerateButtonText}>Generate</Text>
+          <TouchableOpacity onPress={() => generateStory()} disabled={loading} style={{ flex: 1 }} activeOpacity={0.9}>
+            <LinearGradient
+              colors={["#F8B070", "#F8B070"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.regenerateButton, loading && { opacity: 0.7 }]}
+            >
+              <Text style={styles.regenerateButtonText}>Generate</Text>
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1152,7 +1359,7 @@ const buildStoryFromContent = (
               <TouchableOpacity
                 onPress={() => {
                   Animated.timing(saveToastAnim, { toValue: 0, duration: 140, useNativeDriver: true }).start(() => setSaveToastVisible(false));
-                  router.push('/journal');
+                  if (lastSavedId) router.push(`/journal/${lastSavedId}`); else router.push('/journal');
                 }}
                 style={[styles.saveToastBtn, styles.saveToastPrimary]}
               >
@@ -1186,10 +1393,10 @@ const buildStoryFromContent = (
         animationType="slide"
         onRequestClose={() => setShowCustomizeModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View style={[styles.modalOverlay, !isDarkMode && styles.modalOverlayLight]}>
+          <View style={[styles.modalContent, !isDarkMode && styles.modalContentLight]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Customize Story</Text>
+              <Text style={[styles.modalTitle, !isDarkMode && styles.modalTitleLight]}>Customize Story</Text>
               <TouchableOpacity onPress={() => setShowCustomizeModal(false)}>
                 <X size={24} color="#9CA3AF" />
               </TouchableOpacity>
@@ -1197,20 +1404,22 @@ const buildStoryFromContent = (
 
             {/* Genre Selection */}
             <View style={styles.optionSection}>
-              <Text style={styles.optionTitle}>Genre</Text>
+              <Text style={[styles.optionTitle, !isDarkMode && styles.optionTitleLight]}>Genre</Text>
               <View style={styles.optionRow}>
                 {['sci-fi', 'romance', 'adventure', 'mystery', 'fantasy', 'comedy', 'drama'].map((genre) => (
                   <TouchableOpacity
                     key={genre}
                     style={[
                       styles.optionPill,
-                      customization.genre === genre && styles.optionPillSelected
+                      !isDarkMode && styles.optionPillLight,
+                      customization.genre === genre && (isDarkMode ? styles.optionPillSelected : styles.optionPillSelectedLight)
                     ]}
                     onPress={() => setCustomization(prev => ({ ...prev, genre: genre as any }))}
                   >
                     <Text style={[
                       styles.optionPillText,
-                      customization.genre === genre && styles.optionPillTextSelected
+                      !isDarkMode && styles.optionPillTextLight,
+                      customization.genre === genre && (isDarkMode ? styles.optionPillTextSelected : styles.optionPillTextSelectedLight)
                     ]}>
                       {genre.charAt(0).toUpperCase() + genre.slice(1)}
                     </Text>
@@ -1221,20 +1430,22 @@ const buildStoryFromContent = (
 
             {/* Difficulty Selection */}
             <View style={styles.optionSection}>
-              <Text style={styles.optionTitle}>Difficulty</Text>
+              <Text style={[styles.optionTitle, !isDarkMode && styles.optionTitleLight]}>Difficulty</Text>
               <View style={styles.optionRow}>
                 {['easy', 'medium', 'hard'].map((difficulty) => (
                   <TouchableOpacity
                     key={difficulty}
                     style={[
                       styles.optionPill,
-                      customization.difficulty === difficulty && styles.optionPillSelected
+                      !isDarkMode && styles.optionPillLight,
+                      customization.difficulty === difficulty && (isDarkMode ? styles.optionPillSelected : styles.optionPillSelectedLight)
                     ]}
                     onPress={() => setCustomization(prev => ({ ...prev, difficulty: difficulty as any }))}
                   >
                     <Text style={[
                       styles.optionPillText,
-                      customization.difficulty === difficulty && styles.optionPillTextSelected
+                      !isDarkMode && styles.optionPillTextLight,
+                      customization.difficulty === difficulty && (isDarkMode ? styles.optionPillTextSelected : styles.optionPillTextSelectedLight)
                     ]}>
                       {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
                     </Text>
@@ -1245,20 +1456,22 @@ const buildStoryFromContent = (
 
             {/* Length Selection */}
             <View style={styles.optionSection}>
-              <Text style={styles.optionTitle}>Story Length</Text>
+              <Text style={[styles.optionTitle, !isDarkMode && styles.optionTitleLight]}>Story Length</Text>
               <View style={styles.optionRow}>
                 {['short', 'medium', 'long'].map((length) => (
                   <TouchableOpacity
                     key={length}
                     style={[
                       styles.optionPill,
-                      customization.length === length && styles.optionPillSelected
+                      !isDarkMode && styles.optionPillLight,
+                      customization.length === length && (isDarkMode ? styles.optionPillSelected : styles.optionPillSelectedLight)
                     ]}
                     onPress={() => setCustomization(prev => ({ ...prev, length: length as any }))}
                   >
                     <Text style={[
                       styles.optionPillText,
-                      customization.length === length && styles.optionPillTextSelected
+                      !isDarkMode && styles.optionPillTextLight,
+                      customization.length === length && (isDarkMode ? styles.optionPillTextSelected : styles.optionPillTextSelectedLight)
                     ]}>
                       {length.charAt(0).toUpperCase() + length.slice(1)}
                     </Text>
@@ -1280,9 +1493,20 @@ const buildStoryFromContent = (
         </View>
       </Modal>
 
+      {/* Local Paywall for direct access (when not routed through Profile) */}
+      <LocalPaywall
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        onContinue={handleContinuePurchaseLocal}
+        isPurchasing={isPurchasing}
+        hasTrial={(() => { const list = products || []; const selId = selectedSkuRef.current; const sel = list.find(p => p.id === selId) || list[0]; return !!sel?.hasFreeTrial; })()}
+        products={products || []}
+        onSelectSku={(sku: string) => { selectedSkuRef.current = sku; }}
+      />
+
       <Modal
         visible={wordPickerOpen}
-        transparent={false}
+        transparent
         animationType="slide"
         onRequestClose={() => setWordPickerOpen(false)}
       >
@@ -1321,15 +1545,15 @@ const buildStoryFromContent = (
                   style={styles.autoPickButton}
                   onPress={() => {
                     const now = new Date();
-                    // Rank due/overdue with a weight so it doesn't just take the first 5
-                    const dueRaw = (getDueWords ? getDueWords(9999) : []) as Word[];
+                    // Use a capped pool of due words for speed; getDueWords already orders by priority
+                    const dueRaw = (getDueWords ? getDueWords(200, pickerFolderId || undefined) : []) as Word[];
                     const rankDue = (w: Word) => {
                       const dueAt = w.srs?.dueAt ? new Date(w.srs.dueAt) : new Date(0);
                       const overdueDays = Math.max(0, Math.floor((now.getTime() - dueAt.getTime()) / (1000 * 60 * 60 * 24)));
                       const lapses = w.srs?.lapses ?? 0;
                       const weakBoost = w.isWeak ? 15 : 0;
-                      // Higher is better; tiny noise breaks ties
-                      return 100 + overdueDays * 3 + lapses * 4 + weakBoost + Math.random();
+                      // Higher is better; tiny deterministic noise breaks ties
+                      return 100 + overdueDays * 3 + lapses * 4 + weakBoost + stableJitter(w.id);
                     };
                     const due = [...dueRaw].sort((a, b) => rankDue(b) - rankDue(a));
                     const pickedIds = new Set<string>();
@@ -1347,14 +1571,14 @@ const buildStoryFromContent = (
                     // Then weak by lapses desc
                     if (picks.length < MAX_BLANKS) {
                       const weak = vaultWords
-                        .filter(w => w.isWeak && !pickedIds.has(w.id))
+                        .filter(w => w.isWeak && !pickedIds.has(w.id) && (!pickerFolderId || w.folderId === pickerFolderId))
                         .sort((a, b) => (b.srs?.lapses ?? 0) - (a.srs?.lapses ?? 0));
                       take(weak);
                     }
                     // Then recent (randomized within top 20 to avoid always-first)
                     if (picks.length < MAX_BLANKS) {
                       const recent = vaultWords
-                        .filter(w => !pickedIds.has(w.id))
+                        .filter(w => !pickedIds.has(w.id) && (!pickerFolderId || w.folderId === pickerFolderId))
                         .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
                       const top = recent.slice(0, 20).sort(() => Math.random() - 0.5);
                       take(top);
@@ -1374,9 +1598,48 @@ const buildStoryFromContent = (
                   value={pickerQuery}
                   onChangeText={setPickerQuery}
                   style={[styles.searchInput, !isDarkMode && styles.searchInputLight]}
+                  autoCorrect
+                  spellCheck
+                  autoCapitalize="none"
+                  autoComplete="off"
+                  keyboardAppearance={isDarkMode ? 'dark' : 'light'}
                 />
               </View>
+              {/* Secondary actions removed per request */}
             </View>
+
+            {/* Vault folders filter */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={[{ marginTop: 6 }, styles.folderChipsScroller]}
+              contentContainerStyle={styles.folderChipsContent}
+            >
+              {(() => {
+                try {
+                  const folders = useAppStore.getState().getFolders();
+                  const allChip = (
+                    <TouchableOpacity
+                      key={'__all__'}
+                      style={[styles.folderChip, !isDarkMode && styles.folderChipLight, !pickerFolderId && styles.folderChipActive]}
+                      onPress={() => setPickerFolderId(null)}
+                    >
+                      <Text style={[styles.folderChipText, !isDarkMode && styles.folderChipTextLight]}>All Folders</Text>
+                    </TouchableOpacity>
+                  );
+                  const chips = folders.map((f) => (
+                    <TouchableOpacity
+                      key={f.id}
+                      style={[styles.folderChip, !isDarkMode && styles.folderChipLight, pickerFolderId === f.id && styles.folderChipActive]}
+                      onPress={() => setPickerFolderId(prev => (prev === f.id ? null : f.id))}
+                    >
+                      <Text style={[styles.folderChipText, !isDarkMode && styles.folderChipTextLight]}>{f.title}</Text>
+                    </TouchableOpacity>
+                  ));
+                  return [allChip, ...chips];
+                } catch { return null; }
+              })()}
+            </ScrollView>
 
             <ScrollView
               style={styles.wordPickerList}
@@ -1389,29 +1652,21 @@ const buildStoryFromContent = (
                 const query = pickerQuery.trim().toLowerCase();
                 let base: Word[] = [];
                 if (pickerFilter === 'recommended') {
-                  const dueRaw = (getDueWords ? getDueWords(9999) : []) as Word[];
-                  const rankDue = (w: Word) => {
-                    const dueAt = w.srs?.dueAt ? new Date(w.srs.dueAt) : new Date(0);
-                    const overdueDays = Math.max(0, Math.floor((now.getTime() - dueAt.getTime()) / (1000 * 60 * 60 * 24)));
-                    const lapses = w.srs?.lapses ?? 0;
-                    const weakBoost = w.isWeak ? 15 : 0;
-                    return 100 + overdueDays * 3 + lapses * 4 + weakBoost + Math.random();
-                  };
-                  const due = [...dueRaw].sort((a, b) => rankDue(b) - rankDue(a));
+                  // Use a capped pool of due words for speed; rely on getDueWords ordering
+                  const due = (getDueWords ? getDueWords(200, pickerFolderId || undefined) : []) as Word[];
                   const dueIds = new Set(due.map(d => d.id));
                   const weak = vaultWords
-                    .filter(w => w.isWeak && !dueIds.has(w.id))
+                    .filter(w => w.isWeak && !dueIds.has(w.id) && (!pickerFolderId || w.folderId === pickerFolderId))
                     .sort((a, b) => (b.srs?.lapses ?? 0) - (a.srs?.lapses ?? 0));
                   const rest = vaultWords
-                    .filter(w => !dueIds.has(w.id) && !weak.some(ww => ww.id === w.id))
-                    .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+                    .filter(w => !dueIds.has(w.id) && !weak.some(ww => ww.id === w.id) && (!pickerFolderId || w.folderId === pickerFolderId));
                   base = [...due, ...weak, ...rest];
                 } else if (pickerFilter === 'due') {
-                  base = (getDueWords ? getDueWords(9999) : []) as Word[];
+                  base = (getDueWords ? getDueWords(200, pickerFolderId || undefined) : []) as Word[];
                 } else if (pickerFilter === 'weak') {
-                  base = vaultWords.filter(w => w.isWeak);
+                  base = vaultWords.filter(w => w.isWeak && (!pickerFolderId || w.folderId === pickerFolderId));
                 } else {
-                  base = [...vaultWords];
+                  base = pickerFolderId ? vaultWords.filter(w => w.folderId === pickerFolderId) : [...vaultWords];
                 }
                 if (query) {
                   base = base.filter(w =>
@@ -1460,8 +1715,8 @@ const buildStoryFromContent = (
                       <Text style={[styles.wordPickerWord, !isDarkMode && styles.wordPickerWordLight]}>{hyphenateWord(word.word)}</Text>
                       <View style={styles.wordBadgeRow}>
                         {word.isWeak ? (
-                          <View style={[styles.statusPill, { backgroundColor: 'rgba(242,147,92,0.15)', borderColor: 'rgba(242,147,92,0.35)' }]}>
-                            <Text style={[styles.statusPillText, { color: '#F2935C' }]}>Weak</Text>
+                          <View style={[styles.statusPill, { backgroundColor: 'rgba(248,176,112,0.15)', borderColor: 'rgba(248,176,112,0.35)' }]}>
+                            <Text style={[styles.statusPillText, { color: '#F8B070' }]}>Weak</Text>
                           </View>
                         ) : null}
                         <View style={[styles.statusPill, isDue ? styles.duePill : styles.futurePill]}>
@@ -1590,16 +1845,131 @@ const buildStoryFromContent = (
         </View>
       </Modal>
 
+      <LimitModal
+        visible={limitOpen}
+        message={limitMessage}
+        onClose={() => setLimitOpen(false)}
+        onSubscribe={() => { setLimitOpen(false); try { router.push('/profile?paywall=1'); } catch {} }}
+        primaryText="Subscribe"
+        secondaryText="Not now"
+      />
+      <Modal visible={showSignInPrompt} transparent animationType="fade" onRequestClose={() => setShowSignInPrompt(false)}>
+        <View style={styles.signInOverlay}>
+          <View style={[styles.signInCard, !isDarkMode && styles.signInCardLight]}>
+            <Text style={[styles.signInTitle, !isDarkMode && styles.signInTitleLight]}>Sign in required</Text>
+            <Text style={[styles.signInSubtitle, !isDarkMode && styles.signInSubtitleLight]}>
+              Saving and generating stories requires an account. It only takes a minute!
+            </Text>
+            <View style={styles.signInButtons}>
+              <TouchableOpacity style={styles.signInSecondary} onPress={() => setShowSignInPrompt(false)}>
+                <Text style={styles.signInSecondaryText}>Maybe later</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.signInPrimary}
+                onPress={() => {
+                  setShowSignInPrompt(false);
+                  try { router.push('/profile'); } catch {}
+                }}
+              >
+                <Text style={styles.signInPrimaryText}>Go to sign in</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
+
+// Local Paywall Modal (reusable inside this screen)
+const LocalPaywall: React.FC<{
+  visible: boolean;
+  onClose: () => void;
+  onContinue: () => void;
+  isPurchasing?: boolean;
+  hasTrial?: boolean;
+  products?: SubscriptionProduct[];
+  onSelectSku?: (sku: string) => void;
+}> = ({ visible, onClose, onContinue, isPurchasing, hasTrial, products = [], onSelectSku }) => {
+  const themeName = useAppStore(s => s.theme);
+  const isLight = themeName === 'light';
+  const [selected, setSelected] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      const monthly = (products || []).find(p => p.duration === 'monthly')?.id;
+      const def = monthly || products?.[0]?.id || null;
+      setSelected(def);
+      if (def) onSelectSku?.(def);
+    } catch {}
+  }, [products]);
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={[styles.paywallContainer, isLight && styles.paywallContainerLight]}>
+        <View style={styles.paywallHeaderRow}>
+          <TouchableOpacity onPress={onClose}>
+            <Text style={[styles.paywallCancel, isLight && styles.paywallCancelLight]}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.paywallHeader}>
+          <View style={styles.paywallBadge}><Text style={{ color: '#0D3B4A', fontWeight: '800' }}>👑</Text></View>
+          <Text style={[styles.paywallTitle, isLight && styles.paywallTitleLight]}>Get Vocadoo Premium</Text>
+          <Text style={[styles.paywallHeadline, isLight && styles.paywallHeadlineLight]}>Unlock everything</Text>
+          {hasTrial && (<View style={styles.trialChip}><Text style={styles.trialChipText}>7 days free trial</Text></View>)}
+        </View>
+        <View style={styles.paywallBullets}>
+          <Text style={[styles.paywallBullet, isLight && styles.paywallBulletLight]}>✓ Learn faster with focused practice</Text>
+          <Text style={[styles.paywallBullet, isLight && styles.paywallBulletLight]}>✓ Save unlimited stories</Text>
+          <Text style={[styles.paywallBullet, isLight && styles.paywallBulletLight]}>✓ Detailed analytics & progress</Text>
+          <Text style={[styles.paywallBullet, isLight && styles.paywallBulletLight]}>✓ Cancel anytime from your Apple ID</Text>
+        </View>
+        <View style={styles.paywallPlansRow}>
+          {(() => {
+            const list = [...(products || [])].sort((a,b) => (a.duration === 'monthly' ? -1 : 1));
+            return list.map(p => (
+              <TouchableOpacity key={p.id} activeOpacity={0.9} onPress={() => { setSelected(p.id); onSelectSku?.(p.id); }} style={[styles.planCard, selected === p.id && styles.planCardActive]}>
+                <Text style={styles.planTitle}>{p.duration === 'yearly' ? 'Yearly' : 'Monthly'}</Text>
+                <Text style={styles.planPrice}>{p.localizedPrice}/{p.duration === 'yearly' ? 'year' : 'month'}</Text>
+                {!!p.hasFreeTrial && (<Text style={styles.planTrialText}>Includes free trial</Text>)}
+              </TouchableOpacity>
+            ));
+          })()}
+        </View>
+        <TouchableOpacity
+          disabled={isPurchasing}
+          onPress={onContinue}
+          activeOpacity={0.9}
+          style={[styles.paywallCta, isPurchasing && { opacity: 0.7 }]}
+        >
+          {isPurchasing ? (
+            <ActivityIndicator color="#0D3B4A" />
+          ) : (
+            <Text style={styles.paywallCtaText}>{hasTrial ? 'Start Free Trial' : 'Continue'}</Text>
+          )}
+        </TouchableOpacity>
+        {hasTrial && (
+          <Text style={{ marginTop: 8, textAlign: 'center', color: isLight ? '#374151' : '#D1D5DB', fontSize: 12 }}>
+            After the 7‑day trial, your subscription renews at $4.99/month unless canceled at least 24 hours before renewal.
+          </Text>
+        )}
+        <View style={styles.paywallFooterRow}>
+          <Text style={[styles.paywallLink, isLight && styles.paywallLinkLight]}>Restore</Text>
+          <Text style={[styles.paywallDot, isLight && styles.paywallLinkLight]}>•</Text>
+          <Text style={[styles.paywallLink, isLight && styles.paywallLinkLight]}>Terms & Conditions</Text>
+          <Text style={[styles.paywallDot, isLight && styles.paywallLinkLight]}>•</Text>
+          <Text style={[styles.paywallLink, isLight && styles.paywallLinkLight]}>Privacy Policy</Text>
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+};
 
 // Magical sparkles overlay (fallback): star-shaped sparkles (smaller, lighter, more of them)
 const MagicSparkles: React.FC<{ progress: Animated.Value; dark?: boolean }> = ({ progress, dark }) => {
   const width = Dimensions.get('window').width - 40; // roughly card width minus padding
   const areaH = 220; // cover a taller portion near the top of the card
-  const color = dark ? 'rgba(242,147,92,0.5)' : 'rgba(15,23,42,0.5)';
-  const dimColor = dark ? 'rgba(242,147,92,0.25)' : 'rgba(15,23,42,0.25)';
+  const color = dark ? 'rgba(248,176,112,0.5)' : 'rgba(15,23,42,0.5)';
+  const dimColor = dark ? 'rgba(248,176,112,0.25)' : 'rgba(15,23,42,0.25)';
   const peakOpacity = 0.5; // 50% max opacity as requested
   // More, smaller stars across the upper third of the card
   const points = [
@@ -1676,7 +2046,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E1E1E',
   },
   containerLight: {
-    backgroundColor: '#F2E3D0',
+    backgroundColor: '#F8F8F8',
   },
   header: {
     flexDirection: 'row',
@@ -1684,11 +2054,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#374151',
+    // remove bottom divider line
   },
   headerLight: {
-    borderBottomColor: '#E5E7EB',
+    // no divider in light mode
     backgroundColor: 'transparent',
   },
   backButton: {
@@ -1702,14 +2071,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
+    fontFamily: 'Ubuntu-Bold',
   },
   headerTitleLight: {
     color: '#111827',
+    fontFamily: 'Ubuntu-Bold',
   },
   headerSubtitle: {
     fontSize: 12,
     color: '#9CA3AF',
     marginTop: 2,
+    fontFamily: 'Ubuntu-Regular',
   },
   headerSubtitleLight: {
     color: '#6B7280',
@@ -1725,7 +2097,8 @@ const styles = StyleSheet.create({
   scoreText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#F2935C',
+    color: '#F8B070',
+    fontFamily: 'Ubuntu-Bold',
   },
   toggleContainer: {
     alignItems: 'center',
@@ -1746,7 +2119,7 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   toggleTrackActive: {
-    backgroundColor: '#F2935C',
+    backgroundColor: '#F8B070',
   },
   toggleThumb: {
     width: 20,
@@ -1763,9 +2136,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     fontWeight: '500',
+    fontFamily: 'Ubuntu-Medium',
   },
   toggleLabelLight: {
     color: '#111827',
+    fontFamily: 'Ubuntu-Medium',
   },
   wordBankContainer: {
     paddingHorizontal: 20,
@@ -1790,7 +2165,7 @@ const styles = StyleSheet.create({
   modeSegLeft: { borderRightWidth: 1, borderRightColor: '#374151' },
   modeSegRight: {},
   modeSegActive: { backgroundColor: '#187486' },
-  modeSegText: { color: '#9CA3AF', fontWeight: '700', fontSize: 12 },
+  modeSegText: { color: '#9CA3AF', fontWeight: '700', fontSize: 12, fontFamily: 'Ubuntu-Bold' },
   modeSegTextActive: { color: '#FFFFFF' },
   toolbarGrid: {
     display: 'none',
@@ -1813,7 +2188,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  toolText: { color: '#E5E7EB', fontWeight: '700', fontSize: 12 },
+  toolText: { color: '#E5E7EB', fontWeight: '700', fontSize: 12, fontFamily: 'Ubuntu-Bold' },
   toolsDock: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1839,7 +2214,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   dockItemDisabled: { opacity: 0.5 },
-  dockText: { color: '#E5E7EB', fontSize: 12, fontWeight: '700' },
+  dockText: { color: '#E5E7EB', fontSize: 12, fontWeight: '700', fontFamily: 'Ubuntu-Bold' },
   dockTextLight: { color: '#374151' },
   wordBank: {
     flexDirection: 'row',
@@ -1863,6 +2238,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
     fontWeight: '500',
+    fontFamily: 'Ubuntu-Medium',
   },
   wordBankButtonRow: {
     flexDirection: 'row',
@@ -1877,12 +2253,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
   },
-  pickWordsText: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
+  pickWordsText: { fontSize: 12, color: '#9CA3AF', fontWeight: '500', textAlign: 'center', fontFamily: 'Ubuntu-Regular' },
   wordBankActionButton: {
     backgroundColor: '#374151',
     borderRadius: 8,
@@ -1892,12 +2263,7 @@ const styles = StyleSheet.create({
   wordBankActionButtonDisabled: {
     opacity: 0.4,
   },
-  wordBankActionText: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
+  wordBankActionText: { fontSize: 12, color: '#9CA3AF', fontWeight: '500', textAlign: 'center', fontFamily: 'Ubuntu-Regular' },
   content: {
     flex: 1,
     paddingHorizontal: 20,
@@ -1911,10 +2277,9 @@ const styles = StyleSheet.create({
     top: 4, // Super close to top corner
     right: 4, // Super close to right corner
     zIndex: 15,
-    backgroundColor: '#2C2C2C',
+    backgroundColor: 'transparent',
     borderRadius: 4,
     padding: 4,
-    // Removed borderWidth and borderColor
   },
   contentFullscreen: {
     position: 'absolute',
@@ -1928,7 +2293,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   contentFullscreenLight: {
-    backgroundColor: '#F2E3D0',
+    backgroundColor: '#F8F8F8',
   },
   storyContentCard: {
     backgroundColor: 'transparent',
@@ -1978,15 +2343,14 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 32,
     color: '#FFFFFF',
-    // Use Lexend for story reading when available (loaded in _layout). Falls back if missing.
-    fontFamily: 'Lexend_400Regular',
+    fontFamily: 'Ubuntu-Regular',
     letterSpacing: 0.2,
   },
   sentenceTextPaper: {
     color: '#2B2B2B',
     fontSize: 22,
     lineHeight: 32,
-    fontFamily: 'Lexend_400Regular',
+    fontFamily: 'Ubuntu-Regular',
     letterSpacing: 0.2,
   },
   controlsToggleWrap: {
@@ -2005,7 +2369,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  controlsToggleText: { fontSize: 12, fontWeight: '800', color: '#FFFFFF' },
+  controlsToggleText: { fontSize: 12, fontWeight: '800', color: '#FFFFFF', fontFamily: 'Ubuntu-Bold' },
   cardChipsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2051,16 +2415,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#2D3537',
     borderColor: '#3B4547',
   },
-  themeChipText: { fontSize: 12, fontWeight: '800' },
+  themeChipText: { fontSize: 12, fontWeight: '800', fontFamily: 'Ubuntu-Bold' },
   sentenceTextLight: {
     color: '#1F2937',
   },
   completedWord: {
     color: '#437F76',
     // Keep weight same as body to avoid width spikes near wrap points
-    // (inherits Lexend_400Regular from parent)
     // Match parent letter spacing so the inline run lays out identically
     letterSpacing: 0.2,
+    fontFamily: 'Ubuntu-Bold',
   },
   inlineBlank: {
     alignSelf: 'baseline',
@@ -2085,20 +2449,13 @@ const styles = StyleSheet.create({
   blankText: {
     fontSize: 22,
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Bold',
   },
-  blankTextCorrect: {
-    color: '#10B981', // Green for correct answers
-  },
-  blankTextIncorrect: {
-    color: '#EF4444', // Red for incorrect answers
-  },
-  blankTextFilled: {
-    color: '#FFB380', // Pale orange for filled but not checked
-  },
+  blankTextCorrect: { color: '#10B981', fontFamily: 'Ubuntu-Bold' },
+  blankTextIncorrect: { color: '#EF4444', fontFamily: 'Ubuntu-Bold' },
+  blankTextFilled: { color: '#FFB380', fontFamily: 'Ubuntu-Medium' },
   // Darker variant used in light mode for better contrast
-  blankTextFilledLight: {
-    color: '#D17A45',
-  },
+  blankTextFilledLight: { color: '#D17A45', fontFamily: 'Ubuntu-Medium' },
   emptyBlank: {
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -2111,15 +2468,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     alignItems: 'center',
   },
-  emptyBlankText: {
-    fontSize: 22,
-    color: '#9CA3AF',
-    fontWeight: '600',
-    letterSpacing: 1,
-    textAlign: 'center',
-    textAlignVertical: 'bottom',
-    marginBottom: -6,
-  },
+  emptyBlankText: { fontSize: 22, color: '#9CA3AF', fontWeight: '600', letterSpacing: 1, textAlign: 'center', textAlignVertical: 'bottom', marginBottom: -6, fontFamily: 'Ubuntu-Medium' },
   // Inline blank styles for proper text flow
   blankPillInline: {
     backgroundColor: 'transparent',
@@ -2129,6 +2478,7 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     fontSize: 22,
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Medium',
     textAlign: 'center',
     marginHorizontal: 0,
     marginBottom: 0,
@@ -2141,6 +2491,7 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     fontSize: 21,
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Medium',
     textDecorationLine: 'none',
     borderWidth: 0,
     borderColor: 'transparent',
@@ -2163,8 +2514,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#374151',
+    borderTopWidth: 0,
+    borderTopColor: 'transparent',
   },
   buttonRow: {
     flexDirection: 'row',
@@ -2173,7 +2524,7 @@ const styles = StyleSheet.create({
   },
   regenerateButton: {
     flex: 1,
-    backgroundColor: '#F2935C',
+    backgroundColor: 'transparent',
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
@@ -2186,17 +2537,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#F2935C',
+    borderColor: '#F8B070',
     minWidth: 56,
   },
   regenerateButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+    fontFamily: 'Ubuntu-Bold',
   },
   checkButton: {
     flex: 1,
-    backgroundColor: '#187486',
+    backgroundColor: '#88BBF5',
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
@@ -2204,12 +2556,13 @@ const styles = StyleSheet.create({
   checkButtonDisabled: {
     // Keep the button bright even when disabled so it doesn't look dimmed
     opacity: 1,
-    backgroundColor: '#187486',
+    backgroundColor: '#88BBF5',
   },
   checkButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+    fontFamily: 'Ubuntu-Bold',
   },
   // Save toast styles
   saveToastWrap: {
@@ -2243,6 +2596,7 @@ const styles = StyleSheet.create({
     color: '#F3F4F6',
     fontWeight: '700',
     fontSize: 15,
+    fontFamily: 'Ubuntu-Bold',
   },
   saveToastTitleLight: {
     color: '#111827',
@@ -2251,6 +2605,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     color: '#CBD5E1',
     fontSize: 13,
+    fontFamily: 'Ubuntu-Regular',
   },
   saveToastTextLight: {
     color: '#4B5563',
@@ -2271,18 +2626,20 @@ const styles = StyleSheet.create({
     color: '#E5E7EB',
     fontWeight: '600',
     fontSize: 13,
+    fontFamily: 'Ubuntu-Medium',
   },
   saveToastBtnTextLight: {
     color: '#374151',
   },
   saveToastPrimary: {
-    backgroundColor: '#F2935C',
+    backgroundColor: '#F8B070',
   },
   saveToastPrimaryText: {
     color: '#111827',
     fontWeight: '800',
     fontSize: 13,
     paddingHorizontal: 2,
+    fontFamily: 'Ubuntu-Bold',
   },
   srsBanner: {
     position: 'absolute',
@@ -2305,6 +2662,7 @@ const styles = StyleSheet.create({
   srsBannerText: {
     color: '#FFFFFF',
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Bold',
   },
   loadingContainer: {
     flex: 1,
@@ -2335,6 +2693,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
+    fontFamily: 'Ubuntu-Bold',
   },
   storyPlaceholderTitleLight: {
     color: '#111827',
@@ -2344,13 +2703,14 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     textAlign: 'center',
     lineHeight: 20,
+    fontFamily: 'Ubuntu-Regular',
   },
   storyPlaceholderBodyLight: {
     color: '#4B5563',
   },
   storyPlaceholderButton: {
     marginTop: 18,
-    backgroundColor: '#F2935C',
+    backgroundColor: '#F8B070',
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 10,
@@ -2359,6 +2719,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#1E1E1E',
+    fontFamily: 'Ubuntu-Bold',
   },
   bottomSpacing: {
     height: 20,
@@ -2383,6 +2744,9 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
+  // Light variants for customize modal
+  modalOverlayLight: { backgroundColor: 'rgba(0,0,0,0.35)' },
+  modalContentLight: { backgroundColor: '#FFFFFF' },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2393,6 +2757,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
+    fontFamily: 'Ubuntu-Bold',
   },
   optionSection: {
     marginBottom: 14,
@@ -2402,7 +2767,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
     marginBottom: 6,
+    fontFamily: 'Ubuntu-Medium',
   },
+  optionTitleLight: { color: '#111827' },
   optionRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -2417,20 +2784,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#374151',
   },
+  optionPillLight: { backgroundColor: '#F3F4F6', borderColor: '#E5E7EB' },
   optionPillSelected: {
-    backgroundColor: '#F2935C',
-    borderColor: '#F2935C',
+    backgroundColor: '#F8B070',
+    borderColor: '#F8B070',
   },
+  optionPillSelectedLight: { backgroundColor: '#F8B070', borderColor: '#F8B070' },
   optionPillText: {
     fontSize: 12,
     color: '#9CA3AF',
+    fontFamily: 'Ubuntu-Bold',
   },
+  optionPillTextLight: { color: '#374151' },
   optionPillTextSelected: {
     color: '#FFFFFF',
     fontWeight: '500',
+    fontFamily: 'Ubuntu-Bold',
   },
+  optionPillTextSelectedLight: { color: '#111827', fontWeight: '700', fontFamily: 'Ubuntu-Bold' },
   applyButton: {
-    backgroundColor: '#F2935C',
+    backgroundColor: '#F8B070',
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',
@@ -2440,6 +2813,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#FFFFFF',
+    fontFamily: 'Ubuntu-Bold',
   },
   // Word Selection Modal Styles
   wordSelectionOverlay: {
@@ -2458,15 +2832,15 @@ const styles = StyleSheet.create({
     width: '90%',
     maxHeight: '60%',
     // Glow on the card
-    shadowColor: '#F2935C',
+    shadowColor: '#F8B070',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 20,
     elevation: 8,
   },
   wordSelectionModalLight: {
-    backgroundColor: '#F9F1E7',
-    shadowColor: '#F2935C',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#F8B070',
   },
   wordSelectionHeader: {
     flexDirection: 'row',
@@ -2474,8 +2848,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#374151',
+    // remove divider
   },
   wordSelectionActions: {
     paddingHorizontal: 20,
@@ -2543,6 +2916,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#FFFFFF',
     textAlign: 'center',
+    fontFamily: 'Ubuntu-Medium',
   },
   wordSelectionTextLight: {
     color: '#111827',
@@ -2556,29 +2930,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#9CA3AF',
     marginBottom: 4,
+    fontFamily: 'Ubuntu-Bold',
   },
   noWordsTextLight: { color: '#6B7280' },
   noWordsSubtext: {
     fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
+    fontFamily: 'Ubuntu-Regular',
   },
   noWordsSubtextLight: { color: '#9CA3AF' },
   // Word Picker (Choose exactly five words) Styles
   wordPickerOverlay: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
-    justifyContent: 'flex-start',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'flex-end',
     alignItems: 'stretch',
   },
   wordPickerContent: {
-    flex: 1,
     backgroundColor: '#1E1E1E',
-    borderRadius: 0,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 12,
+    paddingTop: 16,
+    paddingBottom: 24,
     width: '100%',
+    height: '92%',
   },
   wordPickerHeader: {
     flexDirection: 'row',
@@ -2590,6 +2967,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     marginBottom: 12,
+    fontFamily: 'Ubuntu-Regular',
   },
   wordPickerControls: {
     gap: 10,
@@ -2611,21 +2989,56 @@ const styles = StyleSheet.create({
     backgroundColor: '#2D2D2D',
   },
   filterChipActive: {
-    borderColor: '#F2935C',
-    backgroundColor: 'rgba(242,147,92,0.15)'
+    borderColor: '#F8B070',
+    backgroundColor: 'rgba(248,176,112,0.15)'
   },
   filterChipText: { color: '#9CA3AF', fontSize: 12, fontWeight: '600' },
-  filterChipTextActive: { color: '#F2935C' },
+  filterChipText: { color: '#9CA3AF', fontSize: 12, fontWeight: '600', fontFamily: 'Ubuntu-Medium' },
+  filterChipTextActive: { color: '#F8B070' },
   autoPickButton: {
-    backgroundColor: '#187486',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
     alignSelf: 'flex-end',
     marginTop: 6,
     marginLeft: 'auto',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#187486',
   },
-  autoPickButtonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 12 },
+  autoPickButtonText: { color: '#187486', fontWeight: '800', fontSize: 12, fontFamily: 'Ubuntu-Bold' },
+  secondaryActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 6,
+  },
+  textLink: { color: '#9CA3AF', fontSize: 12, fontFamily: 'Ubuntu-Medium' },
+  dotSep: { color: '#6B7280' },
+  folderChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'transparent',
+    marginRight: 8,
+    alignSelf: 'flex-start',
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  folderChipLight: { backgroundColor: 'transparent', borderColor: 'transparent' },
+  folderChipActive: { borderColor: '#F8B070', backgroundColor: 'rgba(248,176,112,0.10)' },
+  folderChipText: { color: '#9CA3AF', fontWeight: '700', fontSize: 12 },
+  folderChipTextLight: { color: '#374151' },
+  folderChipsContent: {
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  folderChipsScroller: {
+    maxHeight: 36,
+  },
   searchInputWrap: {
     borderRadius: 10,
     borderWidth: 1,
@@ -2688,16 +3101,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+    fontFamily: 'Ubuntu-Bold',
   },
   wordPickerDefinition: {
     fontSize: 13,
     color: '#D1D5DB',
+    fontFamily: 'Ubuntu-Regular',
   },
   wordPickerExample: {
     marginTop: 6,
     fontSize: 12,
     color: '#9CA3AF',
     fontStyle: 'italic',
+    fontFamily: 'Ubuntu-Regular',
   },
   emptyState: {
     paddingVertical: 24,
@@ -2708,11 +3124,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
     marginBottom: 4,
+    fontFamily: 'Ubuntu-Bold',
   },
   emptySubtitle: {
     fontSize: 13,
     color: '#9CA3AF',
     textAlign: 'center',
+    fontFamily: 'Ubuntu-Regular',
   },
   wordPickerFooter: {
     marginTop: 12,
@@ -2740,10 +3158,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#E5E7EB',
+    fontFamily: 'Ubuntu-Medium',
   },
   // Light mode variants for word picker
-  wordPickerOverlayLight: { backgroundColor: '#F2E3D0' },
-  wordPickerContentLight: { backgroundColor: '#F2E3D0' },
+  wordPickerOverlayLight: { backgroundColor: 'rgba(0,0,0,0.35)' },
+  wordPickerContentLight: { backgroundColor: '#FFFFFF' },
   modalTitleLight: { color: '#111827' },
   wordPickerSubtitleLight: { color: '#6B7280' },
   filterChipLight: { borderColor: '#E5E7EB', backgroundColor: '#FFFFFF' },
@@ -2763,7 +3182,7 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
   },
   modalPrimary: {
-    backgroundColor: '#F2935C',
+    backgroundColor: '#F8B070',
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 16,
@@ -2775,6 +3194,70 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#1E1E1E',
+    fontFamily: 'Ubuntu-Bold',
+  },
+  signInOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  signInCard: {
+    width: '100%',
+    borderRadius: 24,
+    padding: 24,
+    backgroundColor: '#0F1B2B',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  signInCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E0E7FF',
+  },
+  signInTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FDFDFD',
+    marginBottom: 8,
+  },
+  signInTitleLight: {
+    color: '#0F172A',
+  },
+  signInSubtitle: {
+    fontSize: 15,
+    color: '#CBD5F5',
+    marginBottom: 20,
+  },
+  signInSubtitleLight: {
+    color: '#475569',
+  },
+  signInButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  signInSecondary: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.4)',
+    alignItems: 'center',
+  },
+  signInSecondaryText: {
+    color: '#FDFDFD',
+    fontWeight: '600',
+  },
+  signInPrimary: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#7C3AED',
+    alignItems: 'center',
+  },
+  signInPrimaryText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   incorrectIcon: {
     color: '#EF4444',
@@ -2794,4 +3277,37 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
   },
+  // Local paywall styles (match profile paywall, ensure full height)
+  paywallContainer: {
+    flex: 1,
+    backgroundColor: '#0D1117',
+    paddingHorizontal: 20,
+  },
+  paywallContainerLight: { backgroundColor: '#F3F4F6' },
+  paywallHeaderRow: { paddingTop: 10, paddingBottom: 6 },
+  paywallCancel: { color: '#C7D2FE', fontWeight: '600' },
+  paywallCancelLight: { color: '#111827' },
+  paywallHeader: { alignItems: 'center', paddingVertical: 10 },
+  paywallBadge: { width: 58, height: 58, borderRadius: 16, backgroundColor: '#B6E0E2', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+  paywallTitle: { fontSize: 20, fontWeight: '800', color: '#E5E7EB' },
+  paywallTitleLight: { color: '#111827' },
+  paywallHeadline: { fontSize: 26, fontWeight: '800', color: '#E5E7EB', marginTop: 6 },
+  paywallHeadlineLight: { color: '#111827' },
+  paywallBullets: { marginTop: 16, gap: 8 },
+  paywallBullet: { color: '#D1D5DB', fontSize: 16 },
+  paywallBulletLight: { color: '#374151' },
+  paywallPlansRow: { flexDirection: 'row', gap: 12, marginTop: 18 },
+  planCard: { flex: 1, backgroundColor: '#E5E7EB', borderRadius: 16, padding: 14 },
+  planCardActive: { backgroundColor: '#B6E0E2' },
+  planTitle: { fontSize: 14, color: '#0D3B4A' },
+  planPrice: { fontSize: 18, fontWeight: '800', color: '#0D3B4A', marginTop: 2 },
+  planTrialText: { marginTop: 4, color: '#0D3B4A', fontWeight: '600' },
+  trialChip: { marginTop: 8, alignSelf: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  trialChipText: { color: '#92400E', fontWeight: '800' },
+  paywallCta: { marginTop: 18, backgroundColor: '#B6E0E2', borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
+  paywallCtaText: { color: '#0D3B4A', fontWeight: '800', fontSize: 18 },
+  paywallFooterRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 14 },
+  paywallLink: { color: '#9CA3AF' },
+  paywallLinkLight: { color: '#374151' },
+  paywallDot: { color: '#9CA3AF' },
 });

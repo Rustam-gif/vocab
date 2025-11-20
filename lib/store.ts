@@ -51,6 +51,10 @@ interface AppState {
   loadProgress: () => Promise<void>;
   updateProgress: (xp: number, exercisesCompleted?: number) => Promise<void>;
   
+  // Preferences
+  languagePreferences: string[]; // e.g., ['ru']
+  setLanguagePreferences: (langs: string[]) => Promise<void>;
+  
   // Theme
   theme: ThemeName;
   setTheme: (t: ThemeName) => Promise<void>;
@@ -69,6 +73,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   words: [],
   loading: false,
   loadWords: async () => {
+    const state = get();
+    if (Array.isArray(state.words) && state.words.length > 0) {
+      // Already loaded in this session; avoid re-initializing from storage.
+      return;
+    }
     set({ loading: true });
     try {
       await vaultService.initialize();
@@ -290,6 +299,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.error('Failed to load progress:', error);
     }
   },
+  
+  // Preferences
+  languagePreferences: [],
+  setLanguagePreferences: async (langs: string[]) => {
+    try { await AsyncStorage.setItem('@engniter.langs', JSON.stringify(langs)); } catch {}
+    set({ languagePreferences: langs });
+  },
   updateProgress: async (xp, exercisesCompleted) => {
     try {
       const progress = await ProgressService.getProgress();
@@ -348,7 +364,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         try { await AsyncStorage.setItem('@engniter.theme', themePref); } catch {}
       }
 
-      set({ words, analytics, userProgress, theme: themePref });
+      // Load language preferences
+      let langs: string[] = [];
+      try {
+        const s = await AsyncStorage.getItem('@engniter.langs');
+        langs = s ? JSON.parse(s) : [];
+      } catch {}
+
+      set({ words, analytics, userProgress, theme: themePref, languagePreferences: langs });
     } catch (error) {
       console.error('Failed to initialize app:', error);
     }

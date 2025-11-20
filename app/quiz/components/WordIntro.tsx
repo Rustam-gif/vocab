@@ -8,18 +8,14 @@ import {
   Dimensions,
 } from 'react-native';
 import { Volume2 } from 'lucide-react-native';
-let Speech: any = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  Speech = require('expo-speech');
-} catch {}
+import Speech from '../../../lib/speech';
 import LottieView from 'lottie-react-native';
 import { levels } from '../data/levels';
 import { useAppStore } from '../../../lib/store';
 import type { NewWordPayload } from '../../../types';
 import AnimatedNextButton from './AnimatedNextButton';
 
-const ACCENT_COLOR = '#F2935C';
+const ACCENT_COLOR = '#F8B070';
 const SYNONYM_BG = '#3A3A3A';
 const SYNONYM_TEXT = '#E5E7EB';
 const BUTTON_SAVED_BG = '#437F76';
@@ -350,8 +346,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.12)',
   },
   speakerBtnActive: {
-    backgroundColor: 'rgba(242,147,92,0.12)',
-    borderColor: 'rgba(242,147,92,0.35)',
+    backgroundColor: 'rgba(248,176,112,0.12)',
+    borderColor: 'rgba(248,176,112,0.35)',
   },
   wordSection: {
     alignItems: 'center',

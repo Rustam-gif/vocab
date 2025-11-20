@@ -16,6 +16,7 @@ type ProgressDB = Record<string, Record<string | number, SetProgress>>; // level
 class SetProgressServiceClass {
   private db: ProgressDB = {};
   private ready = false;
+  private saveTimer: any = null;
 
   async initialize(): Promise<void> {
     if (this.ready) return;
@@ -36,6 +37,14 @@ class SetProgressServiceClass {
     } catch (e) {
       console.error('[SetProgressService] Failed to save progress:', e);
     }
+  }
+
+  private scheduleSave() {
+    if (this.saveTimer) return;
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      this.save().catch(() => {});
+    }, 400);
   }
 
   private ensurePath(levelId: string, setId: string | number) {
@@ -68,7 +77,7 @@ class SetProgressServiceClass {
       lastPhase,
       updatedAt: new Date().toISOString(),
     };
-    await this.save();
+    this.scheduleSave();
   }
 
   async markCompleted(levelId: string, setId: string | number, score: number): Promise<void> {
@@ -80,7 +89,7 @@ class SetProgressServiceClass {
       score: Math.max(0, Math.round(score)),
       updatedAt: new Date().toISOString(),
     };
-    await this.save();
+    this.scheduleSave();
   }
 
   // Convenience to read UI flags for a list item
@@ -96,4 +105,3 @@ class SetProgressServiceClass {
 
 export const SetProgressService = new SetProgressServiceClass();
 export default SetProgressService;
-

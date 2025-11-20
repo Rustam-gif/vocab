@@ -23,7 +23,7 @@ interface OptionItem {
   index: number;
 }
 
-const ACCENT_COLOR = '#F2935C';
+const ACCENT_COLOR = '#F8B070';
 const CORRECT_COLOR = '#437F76';
 const INCORRECT_COLOR = '#924646';
 

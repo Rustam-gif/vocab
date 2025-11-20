@@ -1,16 +1,38 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { useAppStore } from '../../lib/store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function JournalDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { savedStories, theme } = useAppStore();
+  const { savedStories, theme, loadStories } = useAppStore();
   const isLight = theme === 'light';
-  const story = savedStories.find(s => s.id === id);
+  const [fallbackStory, setFallbackStory] = useState<any | null>(null);
+  const story = savedStories.find(s => s.id === id) || fallbackStory;
+
+  // Ensure stories are loaded when landing directly on this page
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!savedStories.length) {
+          await loadStories();
+        }
+        // If still not found, read directly from storage as a safety net
+        if (!savedStories.find(s => s.id === id)) {
+          const raw = await AsyncStorage.getItem('@engniter.stories');
+          if (raw) {
+            const arr = JSON.parse(raw);
+            const hit = Array.isArray(arr) ? arr.find((s: any) => s.id === id) : null;
+            if (hit) setFallbackStory(hit);
+          }
+        }
+      } catch {}
+    })();
+  }, [id]);
 
   return (
     <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
@@ -47,7 +69,7 @@ export default function JournalDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#252525' },
-  containerLight: { backgroundColor: '#F2E3D0' },
+  containerLight: { backgroundColor: '#F8F8F8' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -71,4 +93,3 @@ const styles = StyleSheet.create({
   missingText: { color: '#E5E7EB' },
   missingTextLight: { color: '#374151' },
 });
-

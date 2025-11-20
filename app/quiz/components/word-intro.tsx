@@ -6,19 +6,18 @@ import {
   TouchableOpacity,
   Dimensions,
   Animated,
+  Modal,
+  ScrollView,
 } from 'react-native';
-import { ArrowLeft, ArrowRight, Volume2, Bookmark, Check, Sparkles } from 'lucide-react-native';
+import { ArrowLeft, ArrowRight, Volume2, Bookmark, Check, Sparkles, Globe } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
-let Speech: any = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  Speech = require('expo-speech');
-} catch {}
+import Speech from '../../../lib/speech';
 import { useRouter } from 'expo-router';
 import { useAppStore } from '../../../lib/store';
 import { getTheme } from '../../../lib/theme';
 import { levels } from '../data/levels';
 import AnimatedNextButton from './AnimatedNextButton';
+import { TranslationService } from '../../../services/TranslationService';
 
 interface WordIntroProps {
   setId: string;
@@ -37,7 +36,7 @@ interface Word {
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = Math.round(SCREEN_WIDTH * 0.86);
 // Smaller, responsive height so cards never get cropped by header/nav
-const CARD_HEIGHT = Math.min(520, Math.round(SCREEN_HEIGHT * 0.52));
+const CARD_HEIGHT = Math.min(520, Math.round(SCREEN_HEIGHT * 0.50));
 const CARD_SPACING = 16;
 const SIDE_PADDING = Math.round((SCREEN_WIDTH - CARD_WIDTH) / 2);
 
@@ -52,6 +51,14 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
   const [savingWords, setSavingWords] = useState<Set<string>>(new Set());
   const TOTAL_CARDS = words.length + 1; // words + 1 CTA card
+  const languagePrefs = useAppStore(s => s.languagePreferences);
+  const targetLang = languagePrefs?.[0] || '';
+  const [translation, setTranslation] = useState<any | null>(null);
+  const [loadingTr, setLoadingTr] = useState(false);
+  const [trMap, setTrMap] = useState<Record<string, any>>({});
+  const [showTrModal, setShowTrModal] = useState(false);
+  const [modalWord, setModalWord] = useState<string | null>(null);
+  const trAnim = useRef(new Animated.Value(0)).current;
 
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollerRef = useRef<any>(null);
@@ -116,6 +123,31 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
       setCurrentIndex(prev => prev - 1);
     }
   };
+
+  // Translation fetch
+  useEffect(() => {
+    const w = words[Math.min(currentIndex, Math.max(0, words.length - 1))]?.word;
+    if (!w || !targetLang) { setTranslation(null); return; }
+    // If we already have a cached translation for this word, use it immediately
+    if (trMap[w]) {
+      setTranslation(trMap[w]);
+      return;
+    }
+    let alive = true;
+    setLoadingTr(true);
+    TranslationService.translate(w, targetLang)
+      .then(res => {
+        if (!alive) return;
+        if (res) {
+          setTrMap(prev => ({ ...prev, [w]: res }));
+          setTranslation(res);
+        } else {
+          setTranslation(null);
+        }
+      })
+      .finally(() => { if (alive) setLoadingTr(false); });
+    return () => { alive = false; };
+  }, [currentIndex, words, targetLang]);
 
   const handleSaveWord = async (wordText: string) => {
     if (savingWords.has(wordText) || savedWords.has(wordText)) return;
@@ -189,10 +221,8 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
     <View style={[styles.container, isLight && { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>{isCtaIndex ? 'All set' : 'Word Introduction'}</Text>
-        <Text style={styles.subtitle}>
-          {Math.min(currentIndex + 1, words.length)} of {words.length}
-        </Text>
+        <Text style={[styles.title, isLight && { color: '#111827' }]}>{isCtaIndex ? 'All set' : 'Word Introduction'}</Text>
+        {/* Removed numeric progress per request */}
       </View>
 
       {/* Progress Dots */}
@@ -229,38 +259,42 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
           {words.map((w, idx) => (
             <View key={w.word + idx} style={[styles.wordCard, isLight && styles.wordCardLight, { width: CARD_WIDTH, marginRight: CARD_SPACING }]}>
               <View style={styles.cardContent}>
+                <ScrollView
+                  contentContainerStyle={styles.cardBodyContent}
+                  showsVerticalScrollIndicator={false}
+                >
                 {/* Word Header */}
                 <View style={styles.wordHeader}>
                   <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{w.word}</Text>
-                  <TouchableOpacity
-                    style={[styles.audioButton, isLight && { backgroundColor: '#E5E7EB' }, speakingWord === w.word && { backgroundColor: '#ecd2bf' }]}
-                    onPress={() => {
-                      try {
-                        // Toggle if the same word is already speaking
-                        if (speakingWord === w.word) {
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <TouchableOpacity
+                      style={[styles.circleBtn, isLight && { backgroundColor: '#E5E7EB' }, speakingWord === w.word && { backgroundColor: '#ecd2bf' }]}
+                      onPress={() => {
+                        try {
+                          if (speakingWord === w.word) {
+                            Speech?.stop?.();
+                            setSpeakingWord(null);
+                            return;
+                          }
                           Speech?.stop?.();
-                          setSpeakingWord(null);
-                          return;
-                        }
-                        // Stop any current speech, then speak this word in US English
-                        Speech?.stop?.();
-                        setSpeakingWord(w.word);
-                        Speech?.speak?.(w.word, {
-                          language: 'en-US',
-                          voice: voiceIdRef.current,
-                          rate: 0.98,
-                          pitch: 1.0,
-                          onDone: () => setSpeakingWord(prev => (prev === w.word ? null : prev)),
-                          onStopped: () => setSpeakingWord(prev => (prev === w.word ? null : prev)),
-                          onError: () => setSpeakingWord(prev => (prev === w.word ? null : prev)),
-                        });
-                      } catch {}
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Play American English pronunciation for ${w.word}`}
-                  >
-                    <Volume2 size={24} color={speakingWord === w.word ? '#F2935C' : '#F2935C'} />
-                  </TouchableOpacity>
+                          setSpeakingWord(w.word);
+                          Speech?.speak?.(w.word, {
+                            language: 'en-US',
+                            voice: voiceIdRef.current,
+                            rate: 0.98,
+                            pitch: 1.0,
+                            onDone: () => setSpeakingWord(prev => (prev === w.word ? null : prev)),
+                            onStopped: () => setSpeakingWord(prev => (prev === w.word ? null : prev)),
+                            onError: () => setSpeakingWord(prev => (prev === w.word ? null : prev)),
+                          });
+                        } catch {}
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Play American English pronunciation for ${w.word}`}
+                    >
+                      <Volume2 size={20} color={'#F8B070'} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 {/* Phonetic */}
@@ -303,41 +337,61 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
                   </View>
                 ) : null}
 
-                {/* Reserve space so the fixed Save button doesn't overlap content */}
-                <View style={styles.bottomGutter} />
-              </View>
-
-              {/* Fixed Save Button */}
-              <TouchableOpacity
-                style={[
-                  styles.saveButton,
-                  styles.saveButtonFixed,
-                  savedWords.has(w.word) && styles.savedButton
-                ]}
-                onPress={() => handleSaveWord(w.word)}
-                disabled={savingWords.has(w.word) || savedWords.has(w.word)}
-              >
-                {savingWords.has(w.word) ? (
-                  <Text style={styles.saveButtonText}>Saving...</Text>
-                ) : savedWords.has(w.word) ? (
-                  <>
-                    <Check size={20} color="#fff" />
-                    <Text style={styles.saveButtonText}>Saved!</Text>
-                  </>
-                ) : (
-                  <>
-                    <Bookmark size={20} color="#fff" />
-                    <Text style={styles.saveButtonText}>Save to Vault</Text>
-                  </>
+                {/* Translation pop-up button */}
+                {!!targetLang && (
+                  <TouchableOpacity
+                    style={styles.trBtn}
+                    onPress={async () => {
+                      if (!trMap[w.word]) {
+                        setLoadingTr(true);
+                        const res = await TranslationService.translate(w.word, targetLang);
+                        if (res) setTrMap(prev => ({ ...prev, [w.word]: res }));
+                        setLoadingTr(false);
+                      }
+                      setModalWord(w.word);
+                      setShowTrModal(true);
+                      trAnim.setValue(0);
+                      Animated.timing(trAnim, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+                    }}
+                  >
+                    <Globe size={16} color={'#F8B070'} />
+                    <Text style={styles.trBtnText}>{loadingTr && !trMap[w.word] ? 'Translating…' : 'Show Translation'}</Text>
+                  </TouchableOpacity>
                 )}
-              </TouchableOpacity>
+
+                <View style={styles.bottomGutter} />
+                </ScrollView>
+
+                {/* Save to Vault (fixed inside card, slightly above bottom) */}
+                <View style={styles.saveButtonContainer} pointerEvents="box-none">
+                  <TouchableOpacity
+                    style={[styles.saveButton, savedWords.has(w.word) && styles.savedButton]}
+                    onPress={() => handleSaveWord(w.word)}
+                    disabled={savingWords.has(w.word) || savedWords.has(w.word)}
+                  >
+                    {savingWords.has(w.word) ? (
+                      <Text style={styles.saveButtonText}>Saving...</Text>
+                    ) : savedWords.has(w.word) ? (
+                      <>
+                        <Check size={20} color="#fff" />
+                        <Text style={styles.saveButtonText}>Saved!</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Bookmark size={20} color="#fff" />
+                        <Text style={styles.saveButtonText}>Save to Vault</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
           ))}
 
           {/* CTA Final Card */}
           <View key="cta-card" style={[styles.wordCard, styles.ctaCard, isLight && styles.wordCardLight, { width: CARD_WIDTH, marginRight: CARD_SPACING }]}>
             <View style={[styles.ctaIconWrap, isLight && { backgroundColor: '#E5E7EB' }]}>
-              <Sparkles size={28} color="#F2935C" />
+              <Sparkles size={28} color="#F8B070" />
             </View>
             <Text style={[styles.ctaTitle, isLight && { color: '#111827' }]}>You're ready!</Text>
             <Text style={[styles.ctaText, isLight && { color: '#6B7280' }]}>You've seen all {words.length} words. When you’re ready, start practicing.</Text>
@@ -348,26 +402,38 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
         </Animated.ScrollView>
       </View>
 
-      {/* Navigation Controls */}
-      <View style={[styles.navigationContainer, isLight && { backgroundColor: 'transparent' }]}>
-        <TouchableOpacity
-          style={[styles.navButton, isLight && { backgroundColor: '#E5E7EB' }, currentIndex === 0 && (isLight ? styles.disabledButtonLight : styles.disabledButton)]}
-          onPress={goToPrevious}
-          disabled={currentIndex === 0}
-        >
-          <ArrowLeft size={24} color={currentIndex === 0 ? (isLight ? '#9CA3AF' : '#666') : '#F2935C'} />
-        </TouchableOpacity>
+      {/* Navigation Controls removed per request */}
 
-        <View style={styles.navSpacer} />
+      {/* Fixed Save dock removed — button is inside each card */}
 
-        <TouchableOpacity
-          style={[styles.navButton, isLight && { backgroundColor: '#E5E7EB' }, currentIndex === TOTAL_CARDS - 1 && (isLight ? styles.disabledButtonLight : styles.disabledButton)]}
-          onPress={goToNext}
-          disabled={currentIndex === TOTAL_CARDS - 1}
-        >
-          <ArrowRight size={24} color={currentIndex === TOTAL_CARDS - 1 ? (isLight ? '#9CA3AF' : '#666') : '#F2935C'} />
-        </TouchableOpacity>
-      </View>
+      {/* Translation modal */}
+      <Modal visible={showTrModal} transparent animationType="none" onRequestClose={() => setShowTrModal(false)}>
+        <View style={styles.trModalOverlay}>
+          {/* Tap outside to dismiss */}
+          <TouchableOpacity style={styles.trModalBackdrop} activeOpacity={1} onPress={() => setShowTrModal(false)} />
+          <Animated.View style={[styles.trSheet, isLight && styles.trSheetLight, { opacity: trAnim, transform: [{ translateY: trAnim.interpolate({ inputRange: [0,1], outputRange: [40, 0] }) }] }]}>
+            <Text style={[styles.sectionTitle, isLight && { color: '#111827' }]}>Translation {targetLang ? flagFor(targetLang) : ''}</Text>
+            <ScrollView style={{ maxHeight: 320 }}>
+              {modalWord && trMap[modalWord] ? (
+                <View>
+                  <Text style={[styles.translationText, isLight && { color: '#1F2937' }]}>• {trMap[modalWord].translation}</Text>
+                  {trMap[modalWord].synonyms?.length ? (
+                    <Text style={[styles.translationText, isLight && { color: '#1F2937' }]}>• Synonyms: {trMap[modalWord].synonyms.join(', ')}</Text>
+                  ) : null}
+                  {trMap[modalWord].example ? (
+                    <Text style={[styles.translationExample, isLight && { color: '#374151' }]}>“{trMap[modalWord].example}”</Text>
+                  ) : null}
+                </View>
+              ) : (
+                <Text style={[styles.translationText, isLight && { color: '#6B7280' }]}>No translation</Text>
+              )}
+            </ScrollView>
+            <TouchableOpacity onPress={() => { Animated.timing(trAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => setShowTrModal(false)); }} style={[styles.saveButton, { marginTop: 12 }]}> 
+              <Text style={styles.saveButtonText}>Close</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -386,6 +452,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
     color: '#9CA3AF',
+    fontFamily: 'Ubuntu-Regular',
   },
   header: {
     paddingHorizontal: 20,
@@ -398,6 +465,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 4,
+    fontFamily: 'Ubuntu-Bold',
   },
   subtitle: {
     fontSize: 14,
@@ -417,7 +485,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   activeDot: {
-    backgroundColor: '#F2935C',
+    backgroundColor: '#F8B070',
     width: 24,
   },
   completedDot: {
@@ -425,15 +493,16 @@ const styles = StyleSheet.create({
   },
   cardContainer: {
     flex: 1,
-    justifyContent: 'center',
-    paddingBottom: 8,
+    justifyContent: 'flex-start',
+    paddingTop: 4,
+    paddingBottom: 32,
   },
   wordCard: {
-    height: CARD_HEIGHT,
+    minHeight: CARD_HEIGHT,
     backgroundColor: '#2a2a2a',
     borderRadius: 20,
     padding: 20,
-    marginVertical: 6,
+    marginVertical: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -442,19 +511,17 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     position: 'relative',
   },
-  wordCardLight: { backgroundColor: '#F9F1E7', borderWidth: StyleSheet.hairlineWidth, borderColor: '#F9F1E7' },
+  wordCardLight: { backgroundColor: '#FFFFFF', borderWidth: StyleSheet.hairlineWidth, borderColor: '#FFFFFF' },
   cardContent: {
     flexGrow: 1,
-    paddingBottom: 96
+    // Keep a small bottom padding; reclaim space for content
+    paddingBottom: 16
   },
-  saveButtonFixed: {
-    position: 'absolute',
-    bottom: 20,
-    alignSelf: 'center',
-    minWidth: 180,
-  },
+  cardBodyScroll: {},
+  cardBodyContent: { paddingBottom: 12 },
+  saveButtonFull: { alignSelf: 'stretch', marginTop: 10 },
   bottomGutter: {
-    height: 96
+    height: 0
   },
   ctaCard: {
     justifyContent: 'center',
@@ -488,17 +555,27 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     flex: 1,
+    fontFamily: 'Ubuntu-Bold',
   },
   audioButton: {
     padding: 8,
     borderRadius: 20,
     backgroundColor: '#333',
   },
+  circleBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#333',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   phoneticText: {
     fontSize: 16,
     color: '#9CA3AF',
     fontStyle: 'italic',
     marginBottom: 24,
+    fontFamily: 'Ubuntu-Regular',
   },
   definitionSection: {
     marginBottom: 24,
@@ -512,24 +589,64 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#F2935C',
+    color: '#F8B070',
     marginBottom: 8,
+    fontFamily: 'Ubuntu-Medium',
   },
   definitionText: {
     fontSize: 16,
     color: '#fff',
     lineHeight: 23,
+    fontFamily: 'Ubuntu-Regular',
   },
   exampleText: {
     fontSize: 14,
     color: '#fff',
     lineHeight: 22,
     fontStyle: 'italic',
+    fontFamily: 'Ubuntu-Regular',
   },
   highlightedWord: {
     fontWeight: 'bold',
-    color: '#F2935C',
+    color: '#F8B070',
+    fontFamily: 'Ubuntu-Bold',
   },
+  cardBodyScrollWrap: { flexGrow: 1 },
+  cardBodyScroll: { maxHeight: CARD_HEIGHT - 120 },
+  cardBodyContent: { paddingBottom: 8 },
+  translationSection: {
+    marginBottom: 20,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 12,
+    padding: 12,
+  },
+  translationText: {
+    color: '#E5E7EB',
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 4,
+    fontFamily: 'Ubuntu-Regular',
+  },
+  translationExample: {
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+    marginTop: 6,
+    fontFamily: 'Ubuntu-Regular',
+  },
+  trBtn: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(248,176,112,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(248,176,112,0.45)',
+    borderRadius: 999,
+    marginBottom: 24,
+  },
+  trBtnText: { color: '#111827', fontWeight: '700', fontFamily: 'Ubuntu-Bold' },
   synonymsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -544,17 +661,28 @@ const styles = StyleSheet.create({
   synonymText: {
     fontSize: 13,
     color: '#fff',
+    fontFamily: 'Ubuntu-Regular',
   },
   saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F2935C',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    backgroundColor: '#F8B070',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 24,
     gap: 8,
+    // Make the button a bit narrower than full width
+    alignSelf: 'center',
+    minWidth: 180,
+    maxWidth: 280,
+    width: '60%',
   },
+  saveButtonContainer: {
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  // saveDock removed
   savedButton: {
     backgroundColor: '#427F75',
   },
@@ -562,7 +690,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+    fontFamily: 'Ubuntu-Bold',
   },
+  trModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
+  trModalBackdrop: { flex: 1 },
+  trSheet: { width: '100%', backgroundColor: '#2A2A2A', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, paddingBottom: 24 },
+  trSheetLight: { backgroundColor: '#FFFFFF' },
+  // saveBar removed – button lives inside card
   navigationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -592,7 +726,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   startPracticeButton: {
-    backgroundColor: '#F2935C',
+    backgroundColor: '#F8B070',
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 12,
@@ -621,3 +755,43 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 });
+
+function flagFor(lang: string): string {
+  const m: Record<string, string> = {
+    zh: '🇨🇳',
+    es: '🇪🇸',
+    hi: '🇮🇳',
+    ar: '🇸🇦',
+    bn: '🇧🇩',
+    pt: '🇧🇷',
+    ru: '🇷🇺',
+    ja: '🇯🇵',
+    pa: '🇮🇳',
+    de: '🇩🇪',
+    jv: '🇮🇩',
+    ko: '🇰🇷',
+    fr: '🇫🇷',
+    te: '🇮🇳',
+    mr: '🇮🇳',
+    ta: '🇮🇳',
+    ur: '🇵🇰',
+    tr: '🇹🇷',
+    vi: '🇻🇳',
+    it: '🇮🇹',
+    fa: '🇮🇷',
+    pl: '🇵🇱',
+    uk: '🇺🇦',
+    nl: '🇳🇱',
+    th: '🇹🇭',
+    id: '🇮🇩',
+    he: '🇮🇱',
+    el: '🇬🇷',
+    sv: '🇸🇪',
+    ro: '🇷🇴',
+    // Keep older codes for compatibility
+    uz: '🇺🇿',
+    az: '🇦🇿',
+    kk: '🇰🇿',
+  };
+  return m[lang] || '🌐';
+}

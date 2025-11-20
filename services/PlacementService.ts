@@ -245,10 +245,20 @@ export function pickNextItem(bank: PlacementItem[], session: PlacementSession, f
 }
 
 export function updateAbility(session: PlacementSession, item: PlacementItem, correct: boolean) {
-  // Simple step logic for MVP: move ability toward/away from item band
+  // Revised step logic:
+  // - Correct on same/harder band bumps ability up by 1
+  // - Correct on easier band does not reduce ability
+  // - Incorrect on easier/same band drops ability by 1
+  // - Incorrect on harder band does not reduce ability (no harsh penalty)
   const target = bandToIndex(item.band);
-  const delta = correct ? Math.sign(target - session.ability) || 1 : -1;
-  session.ability = Math.max(-1, Math.min(2, session.ability + delta));
+  let delta = 0;
+  if (correct) {
+    delta = target >= session.ability ? 1 : 0;
+  } else {
+    delta = target <= session.ability ? -1 : 0;
+  }
+  // Allow full range A1 (-2) .. C1 (2)
+  session.ability = Math.max(-2, Math.min(2, session.ability + delta));
 }
 
 export function recommendedLevelFromAbility(ability: number): string {

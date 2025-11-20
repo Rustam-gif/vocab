@@ -8,9 +8,17 @@ import {
   Alert,
   Image,
   TextInput,
+  Modal,
+  ActivityIndicator,
+  Linking,
+  InteractionManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BACKEND_BASE_URL } from '../lib/appConfig';
+import { useRouter, useLocalSearchParams, Link } from 'expo-router';
+import { useCallback, useRef } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ArrowLeft,
   User as UserIcon,
@@ -20,28 +28,44 @@ import {
   Award,
   LogOut,
   Check,
+  Crown,
+  CheckCircle2,
+  ChevronRight,
 } from 'lucide-react-native';
-import { supabase } from '../lib/supabase';
+import LottieView from 'lottie-react-native';
+import { supabase, localSignOutHard } from '../lib/supabase';
+import { LinearGradient } from '../lib/LinearGradient';
+import { SubscriptionService, SubscriptionProduct } from '../services/SubscriptionService';
+import NotificationService from '../services/NotificationService';
 import { analyticsService } from '../services/AnalyticsService';
+import { ProgressService } from '../services/ProgressService';
 import { useAppStore } from '../lib/store';
+import { LANGUAGES_WITH_FLAGS } from '../lib/languages';
 
-// Avatar images
+// Avatar images (static requires so Metro bundles them). Filenames without spaces to avoid any URL encoding quirks.
 const AVATAR_OPTIONS = [
-  { id: 1, source: require('../assets/prof-pictures/cartoon 1.png') },
-  { id: 2, source: require('../assets/prof-pictures/cartoon 2.png') },
-  { id: 3, source: require('../assets/prof-pictures/cartoon 3.png') },
-  { id: 4, source: require('../assets/prof-pictures/cartoon 4.png') },
-  { id: 5, source: require('../assets/prof-pictures/cartoon 5.png') },
-  { id: 6, source: require('../assets/prof-pictures/cartoon 6.png') },
+  { id: 1, source: require('../assets/prof-pictures/cartoon-1.png') },
+  { id: 2, source: require('../assets/prof-pictures/cartoon-2.png') },
+  { id: 3, source: require('../assets/prof-pictures/cartoon-3.png') },
+  { id: 4, source: require('../assets/prof-pictures/cartoon-4.png') },
+  { id: 5, source: require('../assets/prof-pictures/cartoon-5.png') },
+  { id: 6, source: require('../assets/prof-pictures/cartoon-6.png') },
 ];
 
-const DEFAULT_AVATAR = 'https://ui-avatars.com/api/?name=Vocab+Learner';
+// Helper to look up avatar by numeric ID
+const getLocalAvatarById = (id: number) => {
+  const match = AVATAR_OPTIONS.find(a => a.id === id);
+  return match?.source;
+};
+
+// Use a bundled local avatar as default to avoid network fetches
+const DEFAULT_AVATAR = 'avatar_1';
 
 const mapSupabaseUser = (user: any, progress?: any) => {
   const displayName = user?.user_metadata?.full_name ?? user?.email ?? 'Vocabulary Learner';
   
-  // Get avatar from metadata or use default
-  let avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}`;
+  // Get avatar from metadata or use default (local)
+  let avatar = DEFAULT_AVATAR;
   const avatarId = user?.user_metadata?.avatar_id;
   if (avatarId && avatarId >= 1 && avatarId <= 6) {
     // User selected a custom avatar - we'll use the ID to load it locally
@@ -78,11 +102,136 @@ export default function ProfileScreen() {
   const [fullName, setFullName] = useState('');
   const [isSignUp, setIsSignUp] = useState(true);
   const [selectedAvatar, setSelectedAvatar] = useState<number>(1);
+  const [subStatus, setSubStatus] = useState<{ active: boolean; productId?: string } | null>(null);
+  const [products, setProducts] = useState<SubscriptionProduct[]>([]);
+  const [selectedSku, setSelectedSku] = useState<string | null>(null);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const paywallParamConsumed = useRef(false);
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [showSignUpSuccess, setShowSignUpSuccess] = useState(false);
+  const [showPurchaseSuccess, setShowPurchaseSuccess] = useState(false);
+  // Notifications settings state
+  const [notifyEnabled, setNotifyEnabled] = useState<boolean>(false);
+  const [notifyFreq, setNotifyFreq] = useState<1 | 3 | 5>(1);
+  const [notifyBusy, setNotifyBusy] = useState(false);
+  // Language picker state
+  const [showLangModal, setShowLangModal] = useState(false);
+  const [langSearch, setLangSearch] = useState('');
+  // Expanded catalog (>=150 languages)
+  const langs = useMemo(() => LANGUAGES_WITH_FLAGS, []);
+  const filteredLangs = useMemo(() => langs.filter(l => (l.name + l.code).toLowerCase().includes(langSearch.toLowerCase())), [langs, langSearch]);
+
+  // Ensure local avatar images are warmed up to avoid any flicker/blank
+  useEffect(() => {
+    try {
+      if (showEmailAuth && isSignUp) {
+        AVATAR_OPTIONS.forEach(opt => {
+          try {
+            const resolved = Image.resolveAssetSource(opt.source as any);
+            // prefetch is primarily for remote images; resolve ensures a valid uri
+            if (resolved?.uri) {
+              Image.prefetch(resolved.uri).catch(() => {});
+            }
+          } catch {}
+        });
+      }
+    } catch {}
+  }, [showEmailAuth, isSignUp]);
 
   useEffect(() => {
-    // Load progress on mount
-    loadProgress();
+    // Defer heavier calls to avoid a "stuck" feeling when navigating in
+    const task = (InteractionManager as any).runAfterInteractions?.(() => {
+      loadProgress();
+      SubscriptionService.initialize().then(() => {
+        SubscriptionService.getStatus().then(s => setSubStatus(s));
+        SubscriptionService.getProducts(['com.royal.vocadoo.premium.months', 'com.royal.vocadoo.premium.annually'])
+          .then((list) => {
+            setProducts(list);
+            try {
+              const monthly = list.find(p => p.duration === 'monthly')?.id;
+              setSelectedSku(monthly || list[0]?.id || null);
+            } catch { setSelectedSku(list[0]?.id || null); }
+          })
+          .catch(() => {});
+      });
+    }) || { cancel: () => {} };
+    return () => (task as any).cancel?.();
   }, [loadProgress]);
+
+  // Load current notification settings
+  useEffect(() => {
+    NotificationService.getSettings().then(s => { setNotifyEnabled(!!s.enabled); setNotifyFreq(s.freq as any); }).catch(() => {});
+  }, []);
+
+  // Refresh subscription status whenever the screen regains focus (e.g., after sign-in/purchase)
+  useFocusEffect(
+    useCallback(() => {
+      SubscriptionService.getStatus().then(s => setSubStatus(s)).catch(() => {});
+    }, [])
+  );
+
+  useEffect(() => {
+    if (!paywallParamConsumed.current && (params as any)?.paywall === '1') {
+      paywallParamConsumed.current = true;
+      setShowPaywall(true);
+    }
+  }, [params]);
+
+  // No persisted flag — allow stat animations to run each time this screen mounts
+
+  const confirmAndSubscribe = () => {
+    setShowPaywall(true);
+  };
+
+  const handleContinuePurchase = async () => {
+    setIsPurchasing(true);
+    try {
+      // Ensure products are loaded (some builds may not resolve on first mount)
+      let current = products;
+      if (!current || current.length === 0) {
+        try {
+          const refreshed = await SubscriptionService.getProducts(['com.royal.vocadoo.premium.months', 'com.royal.vocadoo.premium.annually']);
+          setProducts(refreshed);
+          if (!selectedSku) {
+            const monthly = refreshed.find(p => p.duration === 'monthly')?.id;
+            setSelectedSku(monthly || refreshed[0]?.id || null);
+          }
+          current = refreshed;
+        } catch {}
+      }
+
+      const fallbackSku = (current.find(p => p.duration === 'monthly')?.id) || current[0]?.id || 'com.royal.vocadoo.premium.months';
+      const sku = selectedSku || fallbackSku;
+
+      // Start purchase but add a UI fail‑safe so the button doesn't appear stuck
+      const purchasePromise = SubscriptionService.purchase(sku);
+      const timeoutPromise = new Promise<any>(async (resolve) => {
+        // After 20s, resolve with whatever status we have so UI can recover
+        setTimeout(async () => {
+          try { resolve(await SubscriptionService.getStatus()); }
+          catch { resolve({ active: false }); }
+        }, 20000);
+      });
+
+      const next: any = await Promise.race([purchasePromise, timeoutPromise]);
+      setSubStatus(next);
+
+      if (next?.active) {
+        setShowPurchaseSuccess(true);
+        setTimeout(() => {
+          setShowPurchaseSuccess(false);
+          setShowPaywall(false);
+          if ((params as any)?.paywall === '1') {
+            try { router.replace('/profile'); } catch {}
+          }
+        }, 1400);
+      }
+    } catch (e) {
+      // Swallow and fall through to finally; UI will recover
+    } finally {
+      setIsPurchasing(false);
+    }
+  };
 
   useEffect(() => {
     // Handle auth callback success/error messages
@@ -106,11 +255,20 @@ export default function ProfileScreen() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        setUser(mapSupabaseUser(session.user, userProgress));
-        // Merge local analytics into account analytics on sign-in
-        analyticsService.initialize().catch(() => {});
+        try {
+          // Pull remote data after sign-in to restore analytics/progress
+          await Promise.all([
+            analyticsService.refreshFromRemote().catch(() => {}),
+            ProgressService.refreshFromRemote().catch(() => {}),
+          ]);
+          await loadProgress();
+          const current = await supabase.auth.getUser();
+          setUser(mapSupabaseUser(current.data.user, useAppStore.getState().userProgress));
+        } catch {}
+        // Try to flush any pending progress to Supabase (best-effort)
+        ProgressService.saveProgress().catch(() => {});
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
       }
@@ -144,6 +302,12 @@ export default function ProfileScreen() {
     }
 
     setIsSigningIn(true);
+    // Safety valve: never let the UI spin forever
+    let timeoutId: any = null;
+    try { timeoutId = setTimeout(() => {
+      try { setIsSigningIn(false); } catch {}
+      try { Alert.alert('Network Timeout', 'Signing in is taking too long. Please check your connection and try again.'); } catch {}
+    }, 15000); } catch {}
     try {
       if (isSignUp) {
         // Get the selected avatar source
@@ -167,13 +331,12 @@ export default function ProfileScreen() {
         if (error) {
           Alert.alert('Sign Up Error', error.message);
         } else if (data.user) {
-          Alert.alert('Success', 'Account created! Please check your email to verify your account.');
-          setEmail('');
+          // Improved in-app modal instead of system alert
+          setIsSignUp(false); // switch to sign-in mode
           setPassword('');
           setConfirmPassword('');
-          setFullName('');
-          setSelectedAvatar(1);
-          setShowEmailAuth(false);
+          setShowEmailAuth(true); // keep auth form visible for immediate sign-in
+          setShowSignUpSuccess(true);
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -184,14 +347,21 @@ export default function ProfileScreen() {
         if (error) {
           Alert.alert('Sign In Error', error.message);
         } else if (data.user) {
-          await loadProgress();
-          setUser(mapSupabaseUser(data.user, userProgress));
+          try {
+            await Promise.all([
+              analyticsService.refreshFromRemote().catch(() => {}),
+              ProgressService.refreshFromRemote().catch(() => {}),
+            ]);
+            await loadProgress();
+          } catch {}
+          setUser(mapSupabaseUser(data.user, useAppStore.getState().userProgress));
           setShowEmailAuth(false);
         }
       }
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Unknown error');
     } finally {
+      if (timeoutId) { try { clearTimeout(timeoutId); } catch {} }
       setIsSigningIn(false);
     }
   };
@@ -203,23 +373,58 @@ export default function ProfileScreen() {
         text: 'Sign Out',
         style: 'destructive',
         onPress: async () => {
-          supabase.auth
-            .signOut()
-            .then(({ error }) => {
-              if (error) {
-                console.error('Sign out error', error);
-                Alert.alert('Error', 'Failed to sign out. Please try again.');
-                return;
-              }
-              setUser(null);
-            })
-            .catch(error => {
-              console.error('Sign out error', error);
-              Alert.alert('Error', 'Failed to sign out. Please try again.');
-            });
+          await localSignOutHard();
+          // Switch progress context back to guest/local
+          try { await ProgressService.refreshFromRemote(); } catch {}
+          try { await loadProgress(); } catch {}
+          // Clear user locally regardless, so the UI updates immediately
+          setUser(null);
         },
       },
     ]);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account if you are signed in, and erase data on this device. Do you want to continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // If signed in, attempt remote account deletion via backend
+              try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const token = session?.access_token;
+                if (token && BACKEND_BASE_URL) {
+                  const resp = await fetch(`${BACKEND_BASE_URL.replace(/\/$/, '')}/api/delete-account`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  if (!resp.ok) {
+                    // If backend fails, continue with local cleanup; user may already be deleted
+                    console.warn('[Delete] backend returned', resp.status);
+                  }
+                }
+              } catch (e) {
+                console.warn('[Delete] remote delete skipped:', e);
+              }
+
+              // Best-effort local sign-out and full storage clear
+              await localSignOutHard();
+              await AsyncStorage.clear();
+            } catch {}
+            try { await ProgressService.refreshFromRemote(); } catch {}
+            try { await loadProgress(); } catch {}
+            setUser(null);
+            Alert.alert('Account Deleted', 'Your account and data have been removed.');
+          },
+        },
+      ]
+    );
   };
 
   const formatDate = (date?: Date) => {
@@ -244,6 +449,44 @@ export default function ProfileScreen() {
     const progress = ((safeXp - currentLevelXP) / (nextLevelXP - currentLevelXP)) * 100;
     return Math.min(100, Math.max(0, progress));
   };
+
+  // Derived values used by both views; compute before any return to keep hook order stable
+  const userAvatar = (user?.avatar ?? DEFAULT_AVATAR) as any;
+  const safeXp = userProgress?.xp ?? user?.xp ?? 0;
+  const safeStreak = userProgress?.streak ?? user?.streak ?? 0;
+  const lastActiveISO = (userProgress?.lastActiveDate ?? new Date().toISOString().slice(0,10)) as string;
+  const todayISO = new Date().toISOString().slice(0,10);
+  const maintainedToday = lastActiveISO === todayISO && safeStreak > 0;
+  const weekActivity = React.useMemo(() => {
+    try {
+      const active = new Set<string>();
+      const last = new Date(lastActiveISO);
+      const len = Math.max(0, Math.min(safeStreak, 7));
+      for (let i = 0; i < len; i++) {
+        const d = new Date(last);
+        d.setDate(last.getDate() - i);
+        active.add(d.toISOString().slice(0,10));
+      }
+      const now = new Date();
+      const dow = now.getDay();
+      const start = new Date(now);
+      start.setHours(0,0,0,0);
+      start.setDate(now.getDate() - dow);
+      const labels = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+      const days: { label: string; iso: string; active: boolean }[] = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        const iso = d.toISOString().slice(0,10);
+        days.push({ label: labels[i], iso, active: active.has(iso) });
+      }
+      return days;
+    } catch {
+      const labels = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+      return labels.map(l => ({ label: l, iso: '', active: false }));
+    }
+  }, [lastActiveISO, safeStreak]);
+  const safeExercises = userProgress?.exercisesCompleted ?? user?.exercisesCompleted ?? 0;
 
   if (!user) {
     return (
@@ -270,20 +513,32 @@ export default function ProfileScreen() {
                   <>
                     {/* Avatar Selection */}
                     <View style={styles.avatarSection}>
-                      <Text style={styles.avatarSectionTitle}>Choose Your Avatar</Text>
+                      <Text style={[styles.avatarSectionTitle, isLight && styles.avatarSectionTitleLight]}>Choose Your Avatar</Text>
                       <View style={styles.avatarGrid}>
                         {AVATAR_OPTIONS.map((avatarOption) => (
                           <TouchableOpacity
                             key={avatarOption.id}
                             style={[
                               styles.avatarOption,
+                              isLight && styles.avatarOptionLight,
                               selectedAvatar === avatarOption.id && styles.avatarOptionSelected
                             ]}
                             onPress={() => setSelectedAvatar(avatarOption.id)}
                           >
                             <Image
-                              source={avatarOption.source}
+                              // Resolve the local asset to an explicit URI to avoid any edge cases
+                              source={Image.resolveAssetSource(avatarOption.source as any)}
                               style={styles.avatarOptionImage}
+                              onError={(e) => {
+                                if (__DEV__) {
+                                  try {
+                                    const res = Image.resolveAssetSource(avatarOption.source as any);
+                                    console.warn('Avatar image failed to load:', { id: avatarOption.id, resolved: res });
+                                  } catch (err) {
+                                    console.warn('Avatar resolve failed:', avatarOption.id, err);
+                                  }
+                                }
+                              }}
                             />
                             {selectedAvatar === avatarOption.id && (
                               <View style={styles.avatarCheckmark}>
@@ -304,7 +559,9 @@ export default function ProfileScreen() {
                         value={fullName}
                         onChangeText={setFullName}
                         autoCapitalize="words"
-                        autoCorrect={false}
+                        autoCorrect
+                        spellCheck
+                        keyboardAppearance={isLight ? 'light' : 'dark'}
                       />
                     </View>
                   </>
@@ -321,6 +578,9 @@ export default function ProfileScreen() {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
+                    spellCheck={false}
+                    autoComplete="off"
+                    keyboardAppearance={isLight ? 'light' : 'dark'}
                   />
                 </View>
 
@@ -334,6 +594,10 @@ export default function ProfileScreen() {
                     onChangeText={setPassword}
                     secureTextEntry
                     autoCapitalize="none"
+                    autoCorrect={false}
+                    spellCheck={false}
+                    autoComplete="off"
+                    keyboardAppearance={isLight ? 'light' : 'dark'}
                   />
                 </View>
 
@@ -348,6 +612,10 @@ export default function ProfileScreen() {
                       onChangeText={setConfirmPassword}
                       secureTextEntry
                       autoCapitalize="none"
+                      autoCorrect={false}
+                      spellCheck={false}
+                      autoComplete="off"
+                      keyboardAppearance={isLight ? 'light' : 'dark'}
                     />
                   </View>
                 )}
@@ -399,24 +667,188 @@ export default function ProfileScreen() {
                 </Text>
               </View>
             )}
+
+            {/* Callout: Unlock vs Premium Active */}
+            {!subStatus?.active ? (
+              <TouchableOpacity
+                onPress={() => { setShowPaywall(true); SubscriptionService.getProducts(['com.royal.vocadoo.premium.months', 'com.royal.vocadoo.premium.annually']).then((list)=>{ setProducts(list); try { const m=list.find(p=>p.duration==='monthly')?.id; setSelectedSku(m||list[0]?.id||null);} catch { setSelectedSku(list[0]?.id||null);} }).catch(() => {}); }}
+                activeOpacity={0.9}
+                style={[styles.moreInfoCard, isLight ? styles.moreInfoCardLight : styles.moreInfoCardDark]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.moreInfoTitle, isLight && styles.moreInfoTitleLight]}>Unlock everything</Text>
+                  <Text style={[styles.moreInfoSubtitle, isLight && styles.moreInfoSubtitleLight]}>Access all stories, save unlimited, analytics, and more.</Text>
+                </View>
+                <View style={styles.moreInfoIconWrap}>
+                  <Crown color={isLight ? '#0C1116' : '#0D3B4A'} size={28} />
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <LinearGradient
+                colors={isLight ? ['#C3A1A9', '#5BA9B3'] : ['#452A31', '#0D3B4A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.premiumActiveCard]}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={styles.premiumActiveIcon}><Star color="#FFD166" size={24} /></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.premiumActiveTitle}>Your Account is Premium</Text>
+                    <Text style={styles.premiumActiveSubtitle}>All sets and features are available</Text>
+                  </View>
+                </View>
+              </LinearGradient>
+            )}
+
+            {/* Removed duplicate in-page premium card; use banner + modal paywall */}
+
+        {/* Paywall Modal */}
+        <Modal visible={showPaywall} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => {
+          setShowPaywall(false);
+          if ((params as any)?.paywall === '1') {
+            try { router.replace('/profile'); } catch {}
+          }
+        }}>
+          <SafeAreaView style={[styles.paywallContainer, isLight && styles.paywallContainerLight]}>
+            <View style={styles.paywallHeaderRow}>
+              <TouchableOpacity onPress={() => {
+                setShowPaywall(false);
+                if ((params as any)?.paywall === '1') {
+                  try { router.replace('/profile'); } catch {}
+                }
+              }}>
+                <Text style={[styles.paywallCancel, isLight && styles.paywallCancelLight]}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.paywallHeader}>
+              <View style={styles.paywallBadge}><Crown color="#0D3B4A" size={30} /></View>
+              <Text style={[styles.paywallTitle, isLight && styles.paywallTitleLight]}>Get Vocadoo Premium</Text>
+              <Text style={[styles.paywallHeadline, isLight && styles.paywallHeadlineLight]}>Unlock everything</Text>
+              {(() => {
+                const sel = (products || []).find(p => p.id === selectedSku) || (products || [])[0];
+                return sel?.hasFreeTrial ? (
+                  <View style={styles.trialChip}><Text style={styles.trialChipText}>7 days free trial</Text></View>
+                ) : null;
+              })()}
+            </View>
+            <View style={styles.paywallBullets}>
+              <Text style={[styles.paywallBullet, isLight && styles.paywallBulletLight]}>✓ Learn faster with focused practice</Text>
+              <Text style={[styles.paywallBullet, isLight && styles.paywallBulletLight]}>✓ Save unlimited stories</Text>
+              <Text style={[styles.paywallBullet, isLight && styles.paywallBulletLight]}>✓ Detailed analytics & progress</Text>
+              <Text style={[styles.paywallBullet, isLight && styles.paywallBulletLight]}>✓ Cancel anytime from your Apple ID</Text>
+            </View>
+            <View style={styles.paywallPlansRow}>
+              {(() => {
+                const list = [...(products || [])].sort((a,b) => (a.duration === 'monthly' ? -1 : 1));
+                return list.map(p => (
+                  <TouchableOpacity key={p.id} activeOpacity={0.9} onPress={() => setSelectedSku(p.id)} style={[styles.planCard, selectedSku === p.id && styles.planCardActive]}>
+                    <Text style={styles.planTitle}>{p.duration === 'yearly' ? 'Yearly' : 'Monthly'}</Text>
+                    <Text style={styles.planPrice}>{p.localizedPrice}/{p.duration === 'yearly' ? 'year' : 'month'}</Text>
+                    {!!p.hasFreeTrial && (<Text style={styles.planTrialText}>Includes free trial</Text>)}
+                  </TouchableOpacity>
+                ));
+              })()}
+            </View>
+            <TouchableOpacity
+              disabled={isPurchasing}
+              onPress={handleContinuePurchase}
+              activeOpacity={0.9}
+              style={[styles.paywallCta, isPurchasing && { opacity: 0.7 }]}
+            >
+              {isPurchasing ? (
+                <ActivityIndicator color="#0D3B4A" />
+              ) : (
+                <Text style={styles.paywallCtaText}>{(() => {
+                  const sel = (products || []).find(p => p.id === selectedSku);
+                  return sel?.hasFreeTrial ? 'Start Free Trial' : 'Continue';
+                })()}</Text>
+              )}
+            </TouchableOpacity>
+            <View style={styles.paywallFooterRow}>
+              <TouchableOpacity onPress={async () => { const restored = await SubscriptionService.restore(); setSubStatus(restored); }}>
+                <Text style={[styles.paywallLink, isLight && styles.paywallLinkLight]}>Restore</Text>
+              </TouchableOpacity>
+              <Text style={[styles.paywallDot, isLight && styles.paywallLinkLight]}>•</Text>
+              {/* Manage removed as per request */}
+              <TouchableOpacity onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>
+                <Text style={[styles.paywallLink, isLight && styles.paywallLinkLight]}>Terms & Conditions</Text>
+              </TouchableOpacity>
+              <Text style={[styles.paywallDot, isLight && styles.paywallLinkLight]}>•</Text>
+              <TouchableOpacity onPress={() => Linking.openURL('https://docs.google.com/document/d/1dj2k7y2ogm8sRcD5RxuiP7zqJ_cPKEhFvLfNboaWkwA/edit?tab=t.0')}>
+                <Text style={[styles.paywallLink, isLight && styles.paywallLinkLight]}>Privacy Policy</Text>
+              </TouchableOpacity>
+            </View>
+
+            {showPurchaseSuccess && (
+              <View style={styles.successOverlay} pointerEvents="auto">
+                <View style={[styles.successCard, isLight && styles.successCardLight]}>
+                  <CheckCircle2 size={24} color={isLight ? '#0D3B4A' : '#B6E0E2'} />
+                  <Text style={[styles.successTitle, isLight && styles.successTitleLight]}>You’re all set</Text>
+                  <Text style={[styles.successText, isLight && styles.successTextLight]}>Premium unlocked on this device.</Text>
+                </View>
+              </View>
+            )}
+          </SafeAreaView>
+        </Modal>
+            {/* Quick access rows visible even when logged out */}
+            <TouchableOpacity onPress={() => router.push('/settings')} activeOpacity={0.8} style={[styles.infoCard, isLight && styles.infoCardLight, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }]}>
+              <Text style={[styles.settingsRowTitle, isLight && styles.userNameLight]}>Settings</Text>
+              <ChevronRight size={20} color={isLight ? '#111827' : '#E5E7EB'} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/report')} activeOpacity={0.8} style={[styles.infoCard, isLight && styles.infoCardLight, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }]}>
+              <Text style={[styles.settingsRowTitle, isLight && styles.userNameLight]}>Report an Issue</Text>
+              <ChevronRight size={20} color={isLight ? '#111827' : '#E5E7EB'} />
+            </TouchableOpacity>
+
+            {/* Streak card (read-only preview) */}
+            <View style={[styles.streakCard, { marginTop: 16 }]}>
+              <View style={styles.streakHeaderRow}>
+                <View style={styles.streakFlameWrap}>
+                  <LottieView source={require('../assets/lottie/flame.json')} autoPlay loop style={{ width: 48, height: 48 }} />
+                  <View style={styles.streakCountBadge}><Text style={styles.streakCountText}>{safeStreak}</Text></View>
+                </View>
+                <Text style={[styles.streakTitle, isLight && styles.streakTitleLight]}>Your streak</Text>
+                <View style={{ width: 32 }} />
+              </View>
+              <View style={styles.streakWeekRow}>
+                {weekActivity.map(({ label, active }) => (
+                  <View key={label} style={[styles.streakDay, isLight && styles.streakDayLight]}>
+                    <Text style={[styles.streakDayLabel, isLight && styles.streakDayLabelLight]}>{label}</Text>
+                    <View style={[styles.streakDot, active && styles.streakDotActive]} />
+                  </View>
+                ))}
+              </View>
+            </View>
           </ScrollView>
         </View>
       </SafeAreaView>
     );
   }
 
-  const userAvatar = user.avatar ?? DEFAULT_AVATAR;
-  const safeXp = userProgress?.xp ?? user.xp ?? 0;
-  const safeStreak = userProgress?.streak ?? user.streak ?? 0;
-  const safeExercises = userProgress?.exercisesCompleted ?? user.exercisesCompleted ?? 0;
+  
 
-  // Get avatar source - either local image or remote URL
+  // Get avatar source - supports local IDs and stored keys like "avatar_1"
   const getAvatarSource = () => {
+    // 1) Explicit numeric avatarId
     if (user.avatarId && user.avatarId >= 1 && user.avatarId <= 6) {
-      const avatarOption = AVATAR_OPTIONS.find(a => a.id === user.avatarId);
-      return avatarOption ? avatarOption.source : { uri: DEFAULT_AVATAR };
+      const local = getLocalAvatarById(user.avatarId);
+      if (local) return local as any;
     }
-    return { uri: userAvatar };
+    // 2) Stored string key like "avatar_3"
+    if (typeof userAvatar === 'string') {
+      const localMatch = /^(?:avatar_|local:avatar_)([1-6])$/.exec(userAvatar);
+      if (localMatch) {
+        const id = Number(localMatch[1]);
+        const local = getLocalAvatarById(id);
+        if (local) return local as any;
+      }
+      // 3) Remote URL fallback
+      if (/^https?:\/\//i.test(userAvatar)) {
+        return { uri: userAvatar } as const;
+      }
+    }
+    // 4) Final fallback to avatar #1
+    return getLocalAvatarById(1) as any;
   };
 
   return (
@@ -453,69 +885,219 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Appearance */}
-        <View style={[styles.infoCard, isLight && styles.infoCardLight]}>
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, isLight && styles.infoLabelLight]}>Theme</Text>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="Toggle theme"
-              onPress={toggleTheme}
-              activeOpacity={0.85}
-              style={[styles.themeToggle, themeName === 'light' && styles.themeToggleActive, isLight && styles.themeToggleLight]}
-            >
-              <View style={[styles.themeThumb, themeName === 'light' && styles.themeThumbOn]} />
-              <Text style={[styles.themeToggleText, isLight && styles.themeToggleTextLight]}>{themeName === 'light' ? 'Light' : 'Dark'}</Text>
+        {/* Subscription status/CTA for signed-in users */}
+        {!subStatus?.active ? (
+          <TouchableOpacity
+            onPress={() => { setShowPaywall(true); SubscriptionService.getProducts(['com.royal.vocadoo.premium.months', 'com.royal.vocadoo.premium.annually']).then((list)=>{ setProducts(list); try { const m=list.find(p=>p.duration==='monthly')?.id; setSelectedSku(m||list[0]?.id||null);} catch { setSelectedSku(list[0]?.id||null);} }).catch(() => {}); }}
+            activeOpacity={0.9}
+            style={[styles.moreInfoCard, isLight ? styles.moreInfoCardLight : styles.moreInfoCardDark]}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.moreInfoTitle, isLight && styles.moreInfoTitleLight]}>Unlock everything</Text>
+              <Text style={[styles.moreInfoSubtitle, isLight && styles.moreInfoSubtitleLight]}>Access all stories, save unlimited, analytics, and more.</Text>
+            </View>
+            <View style={styles.moreInfoIconWrap}>
+              <Crown color={isLight ? '#0C1116' : '#0D3B4A'} size={28} />
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <LinearGradient
+            colors={isLight ? ['#C3A1A9', '#5BA9B3'] : ['#452A31', '#0D3B4A']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.premiumActiveCard]}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={styles.premiumActiveIcon}><Star color="#FFD166" size={24} /></View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.premiumActiveTitle}>Your Account is Premium</Text>
+                <Text style={styles.premiumActiveSubtitle}>All sets and features are available</Text>
+              </View>
+            </View>
+          </LinearGradient>
+        )}
+
+        {/* Practice reminders live in Settings */}
+
+        {/* Settings entry */}
+        <TouchableOpacity onPress={() => router.push('/settings')} activeOpacity={0.8} style={[styles.infoCard, isLight && styles.infoCardLight, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+          <Text style={[styles.settingsRowTitle, isLight && styles.userNameLight]}>Settings</Text>
+          <ChevronRight size={20} color={isLight ? '#111827' : '#E5E7EB'} />
+        </TouchableOpacity>
+
+        
+
+        {/* Removed duplicate subscription card in signed-in view; use banner + modal paywall */}
+
+        {/* Language Preferences moved to Settings */}
+
+        {/* Modal is rendered outside ScrollView to cover header and content */}
+
+        <View style={styles.streakCard}>
+          <View style={styles.streakHeaderRow}>
+            <View style={styles.streakFlameWrap}>
+              <LottieView source={require('../assets/lottie/flame.json')} autoPlay loop style={{ width: 48, height: 48 }} />
+              <View style={styles.streakCountBadge}><Text style={styles.streakCountText}>{safeStreak}</Text></View>
+            </View>
+            <Text style={[styles.streakTitle, isLight && styles.streakTitleLight]}>Your streak</Text>
+            <View style={{ width: 32 }} />
+          </View>
+          <View style={styles.streakWeekRow}>
+            {weekActivity.map(({ label, active }) => (
+              <View key={label} style={[styles.streakDay, isLight && styles.streakDayLight]}>
+                <Text style={[styles.streakDayLabel, isLight && styles.streakDayLabelLight]}>{label}</Text>
+                <View style={[styles.streakDot, active && styles.streakDotActive]} />
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Email/Joined moved to Settings */}
+
+        {/* Danger Zone moved to Settings */}
+        <TouchableOpacity onPress={() => router.push('/report')} activeOpacity={0.8} style={[styles.infoCard, isLight && styles.infoCardLight, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }]}>
+          <Text style={[styles.settingsRowTitle, isLight && styles.userNameLight]}>Report an Issue</Text>
+          <ChevronRight size={20} color={isLight ? '#111827' : '#E5E7EB'} />
+        </TouchableOpacity>
+      {/* Paywall Modal (signed-in view) */}
+      <Modal visible={showPaywall} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => {
+        setShowPaywall(false);
+        if ((params as any)?.paywall === '1') {
+          try { router.replace('/profile'); } catch {}
+        }
+      }}>
+        <SafeAreaView style={[styles.paywallContainer, isLight && styles.paywallContainerLight]}>
+          <View style={styles.paywallHeaderRow}>
+            <TouchableOpacity onPress={() => {
+              setShowPaywall(false);
+              if ((params as any)?.paywall === '1') {
+                try { router.replace('/profile'); } catch {}
+              }
+            }}>
+              <Text style={[styles.paywallCancel, isLight && styles.paywallCancelLight]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.paywallHeader}>
+            <View style={styles.paywallBadge}><Crown color="#0D3B4A" size={30} /></View>
+            <Text style={[styles.paywallTitle, isLight && styles.paywallTitleLight]}>Get Vocadoo Premium</Text>
+            <Text style={[styles.paywallHeadline, isLight && styles.paywallHeadlineLight]}>Unlock everything</Text>
+          </View>
+          <View style={styles.paywallBullets}>
+            <Text style={[styles.paywallBullet, isLight && styles.paywallBulletLight]}>✓ Learn faster with focused practice</Text>
+            <Text style={[styles.paywallBullet, isLight && styles.paywallBulletLight]}>✓ Save unlimited stories</Text>
+            <Text style={[styles.paywallBullet, isLight && styles.paywallBulletLight]}>✓ Detailed analytics & progress</Text>
+            <Text style={[styles.paywallBullet, isLight && styles.paywallBulletLight]}>✓ Cancel anytime from your Apple ID</Text>
+          </View>
+          <View style={styles.paywallPlansRow}>
+            {(() => {
+              const list = [...(products || [])].sort((a,b) => (a.duration === 'monthly' ? -1 : 1));
+              return list.map(p => (
+                <TouchableOpacity key={p.id} activeOpacity={0.9} onPress={() => setSelectedSku(p.id)} style={[styles.planCard, selectedSku === p.id && styles.planCardActive]}>
+                  <Text style={styles.planTitle}>{p.duration === 'yearly' ? 'Yearly' : 'Monthly'}</Text>
+                  <Text style={styles.planPrice}>{p.localizedPrice}/{p.duration === 'yearly' ? 'year' : 'month'}</Text>
+                  {!!p.hasFreeTrial && (<Text style={styles.planTrialText}>Includes free trial</Text>)}
+                </TouchableOpacity>
+              ));
+            })()}
+          </View>
+          <TouchableOpacity
+            disabled={isPurchasing}
+            onPress={handleContinuePurchase}
+            activeOpacity={0.9}
+            style={[styles.paywallCta, isPurchasing && { opacity: 0.7 }]}
+          >
+            {isPurchasing ? (
+              <ActivityIndicator color="#0D3B4A" />
+            ) : (
+              <Text style={styles.paywallCtaText}>{(() => {
+                const sel = (products || []).find(p => p.id === selectedSku);
+                return sel?.hasFreeTrial ? 'Start Free Trial' : 'Continue';
+              })()}</Text>
+            )}
+          </TouchableOpacity>
+          <View style={styles.paywallFooterRow}>
+            <TouchableOpacity onPress={async () => { const restored = await SubscriptionService.restore(); setSubStatus(restored); }}>
+              <Text style={[styles.paywallLink, isLight && styles.paywallLinkLight]}>Restore</Text>
+            </TouchableOpacity>
+            <Text style={[styles.paywallDot, isLight && styles.paywallLinkLight]}>•</Text>
+            {/* Manage removed as per request */}
+            <TouchableOpacity onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>
+              <Text style={[styles.paywallLink, isLight && styles.paywallLinkLight]}>Terms & Conditions</Text>
+            </TouchableOpacity>
+            <Text style={[styles.paywallDot, isLight && styles.paywallLinkLight]}>•</Text>
+            <TouchableOpacity onPress={() => Linking.openURL('https://docs.google.com/document/d/1dj2k7y2ogm8sRcD5RxuiP7zqJ_cPKEhFvLfNboaWkwA/edit?tab=t.0')}>
+              <Text style={[styles.paywallLink, isLight && styles.paywallLinkLight]}>Privacy Policy</Text>
+            </TouchableOpacity>
+          </View>
+
+          {showPurchaseSuccess && (
+            <View style={styles.successOverlay} pointerEvents="auto">
+              <View style={[styles.successCard, isLight && styles.successCardLight]}>
+                <CheckCircle2 size={24} color={isLight ? '#0D3B4A' : '#B6E0E2'} />
+                <Text style={[styles.successTitle, isLight && styles.successTitleLight]}>You’re all set</Text>
+                <Text style={[styles.successText, isLight && styles.successTextLight]}>Premium unlocked on this device.</Text>
+              </View>
+            </View>
+          )}
+        </SafeAreaView>
+      </Modal>
+
+      </ScrollView>
+
+      {showLangModal && (
+        <View style={styles.modalOverlay}>
+          <View style={[styles.langModalCard, isLight && styles.langModalCardLight]}>
+            <Text style={[styles.infoHeader, isLight && styles.infoHeaderLight]}>Choose Language</Text>
+            <View style={[styles.langSearchBox, isLight && styles.langSearchBoxLight]}>
+              <TextInput
+                value={langSearch}
+                onChangeText={setLangSearch}
+                placeholder="Search e.g., Spanish, es"
+                placeholderTextColor={isLight ? '#6B7280' : '#9CA3AF'}
+                style={[styles.langSearchInput, isLight ? { color: '#111827' } : { color: '#E5E7EB' }]}
+                autoCapitalize="none"
+                autoCorrect
+                spellCheck
+                autoComplete="off"
+                
+              />
+            </View>
+            <ScrollView style={{ maxHeight: 240 }}>
+              {filteredLangs.map(l => (
+                <TouchableOpacity key={l.code} style={[styles.langRow, isLight ? styles.langRowLight : styles.langRowDark]} onPress={async () => { await useAppStore.getState().setLanguagePreferences([l.code]); setShowLangModal(false); setUser(useAppStore.getState().user); }}>
+                  <Text style={isLight ? { color: '#111827' } : { color: '#E5E7EB' }}>{l.flag} {l.name} ({l.code.toUpperCase()})</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity onPress={() => setShowLangModal(false)} style={[styles.premiumBtn, { alignSelf: 'flex-end', marginTop: 10, backgroundColor: '#F8B070' }]}>
+              <Text style={styles.premiumBtnText}>Done</Text>
             </TouchableOpacity>
           </View>
         </View>
-
-        <View style={styles.statsContainer}>
-          <View style={[styles.statCard, isLight && styles.statCardLight]}>
-            <View style={[styles.statIcon, isLight && styles.statIconLight]}>
-              <Star size={24} color="#F2AB27" />
-            </View>
-            <Text style={[styles.statValue, isLight && styles.statValueLight]}>{safeXp}</Text>
-            <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>Total XP</Text>
-          </View>
-
-          <View style={[styles.statCard, isLight && styles.statCardLight]}>
-            <View style={[styles.statIcon, isLight && styles.statIconLight]}>
-              <Award size={24} color="#4F8EF7" />
-            </View>
-            <Text style={[styles.statValue, isLight && styles.statValueLight]}>{safeExercises}</Text>
-            <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>Exercises</Text>
-          </View>
-
-          <View style={[styles.statCard, isLight && styles.statCardLight]}>
-            <View style={[styles.statIcon, isLight && styles.statIconLight]}>
-              <Calendar size={24} color="#6CC24A" />
-            </View>
-            <Text style={[styles.statValue, isLight && styles.statValueLight]}>{safeStreak}</Text>
-            <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>Day Streak</Text>
+      )}
+      {/* Sign-up success overlay */}
+      {showSignUpSuccess && (
+        <View style={styles.modalOverlay}>
+          <View style={[styles.signupCard, isLight && styles.signupCardLight]}>
+            <LottieView source={require('../assets/lottie/Success.json')} autoPlay loop={false} style={{ width: 96, height: 96 }} />
+            <Text style={[styles.signupTitle, isLight && styles.signupTitleLight]}>Account created</Text>
+            <Text style={[styles.signupText, isLight && styles.signupTextLight]}>Sign in using your email and password to continue.</Text>
+            <TouchableOpacity
+              style={[styles.premiumBtn, { marginTop: 10, alignSelf: 'stretch', backgroundColor: '#e28743' }]}
+              onPress={() => { setShowSignUpSuccess(false); setShowEmailAuth(true); setIsSignUp(false); }}
+            >
+              <Text style={styles.premiumBtnText}>Sign in now</Text>
+            </TouchableOpacity>
           </View>
         </View>
-
-        <View style={[styles.infoCard, isLight && styles.infoCardLight]}>
-          <View style={styles.infoRow}>
-            <Mail size={18} color="#8a8a8a" />
-            <Text style={[styles.infoLabel, isLight && styles.infoLabelLight]}>Email</Text>
-            <Text style={[styles.infoValue, isLight && styles.infoValueLight]}>{user.email ?? 'Not provided'}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Calendar size={18} color="#8a8a8a" />
-            <Text style={[styles.infoLabel, isLight && styles.infoLabelLight]}>Joined</Text>
-            <Text style={[styles.infoValue, isLight && styles.infoValueLight]}>{formatDate(user.createdAt)}</Text>
-          </View>
-        </View>
-      </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#121315' },
-  containerLight: { flex: 1, backgroundColor: '#F2E3D0' },
+  containerLight: { flex: 1, backgroundColor: '#F8F8F8' },
   header: {
     paddingHorizontal: 20,
     paddingTop: 16,
@@ -552,7 +1134,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
-  profileCardLight: { backgroundColor: '#F9F1E7' },
+  profileCardLight: { backgroundColor: '#FFFFFF' },
   avatarContainer: {
     width: 110,
     height: 110,
@@ -566,11 +1148,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -4,
     right: -4,
-    backgroundColor: '#f59f46',
+    backgroundColor: '#F8B070',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 16,
-    shadowColor: '#f59f46',
+    shadowColor: '#F8B070',
     shadowOpacity: 0.4,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
@@ -578,6 +1160,7 @@ const styles = StyleSheet.create({
   levelText: { color: '#121315', fontWeight: '700', fontSize: 12 },
   userName: { color: '#fff', fontSize: 22, fontWeight: '700' },
   userNameLight: { color: '#111827' },
+  settingsRowTitle: { color: '#fff', fontSize: 16, fontWeight: '700' },
   userEmail: { color: '#9CA3AF', marginTop: 4 },
   xpContainer: { marginTop: 20, width: '100%' },
   xpLabel: { color: '#9CA3AF', fontSize: 12, marginBottom: 6 },
@@ -606,29 +1189,149 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statCardLight: { backgroundColor: '#F9F1E7' },
+  statCardLight: { backgroundColor: '#FFFFFF' },
   statIcon: {
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
   },
-  statIconLight: { backgroundColor: '#E9E6E0' },
+  statIconLight: { backgroundColor: 'transparent' },
   statContent: { flex: 1 },
   statValue: { color: '#fff', fontWeight: '700', fontSize: 18, textAlign: 'center', marginTop: 4 },
   statValueLight: { color: '#111827' },
   statLabel: { color: '#9CA3AF', fontSize: 11, marginTop: 4, textAlign: 'center' },
   statLabelLight: { color: '#6B7280' },
+
+  // Streak card styles
+  streakCard: {
+    marginTop: 12,
+    marginHorizontal: 16,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    padding: 16,
+  },
+  streakHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  streakFlameWrap: { flexDirection: 'row', alignItems: 'center' },
+  streakCountBadge: { marginLeft: 6, backgroundColor: '#111827', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  streakCountText: { color: '#F8B070', fontWeight: '800' },
+  streakTitle: { color: '#E5E7EB', fontWeight: '800', fontSize: 16 },
+  streakTitleLight: { color: '#111827' },
+  streakWeekRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
+  streakDay: { alignItems: 'center', justifyContent: 'center', width: 44 },
+  streakDayLight: {},
+  streakDayLabel: { color: '#9CA3AF', fontSize: 12, marginBottom: 6 },
+  streakDayLabelLight: { color: '#6B7280' },
+  streakDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#4B5563' },
+  streakDotActive: { backgroundColor: '#F8B070', shadowColor: '#F8B070', shadowOpacity: 0.6, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
+  streakFooterRow: { marginTop: 10, flexDirection: 'row', justifyContent: 'flex-start' },
+  streakTip: { borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6 },
+  streakTipOkay: { backgroundColor: 'rgba(248,176,112,0.16)', borderWidth: 1, borderColor: 'rgba(248,176,112,0.45)' },
+  streakTipWarn: { backgroundColor: 'rgba(255, 59, 48, 0.12)', borderWidth: 1, borderColor: 'rgba(255, 59, 48, 0.35)' },
+  streakTipText: { fontWeight: '800' },
+  streakTipTextOkay: { color: '#F8B070' },
+  streakTipTextWarn: { color: '#FF5A52' },
   infoCard: {
     backgroundColor: 'rgba(255,255,255,0.04)',
     borderRadius: 18,
     padding: 16,
-    marginBottom: 40,
+    marginBottom: 16,
   },
-  infoCardLight: { backgroundColor: '#F9F1E7' },
+  infoCardLight: { backgroundColor: '#FFFFFF' },
+  // Learn more callout
+  moreInfoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 18,
+    marginBottom: 12,
+    width: '100%',
+  },
+  moreInfoCardLight: { backgroundColor: '#B6E0E2' },
+  moreInfoCardDark: { backgroundColor: '#5B98A1' },
+  moreInfoTitle: { fontSize: 18, fontWeight: '800', color: '#EAF2F6' },
+  moreInfoTitleLight: { color: '#0C1116' },
+  moreInfoSubtitle: { marginTop: 4, color: '#EAF2F6' },
+  moreInfoSubtitleLight: { color: '#0C1116' },
+  moreInfoIconWrap: { marginLeft: 12, width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.5)', justifyContent: 'center', alignItems: 'center' },
+
+  premiumActiveCard: { borderRadius: 18, padding: 16, marginBottom: 12, width: '100%' },
+  premiumActiveIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  premiumActiveTitle: { color: '#EAF2F6', fontSize: 18, fontWeight: '800' },
+  premiumActiveSubtitle: { color: '#EAF2F6', marginTop: 4 },
+  manageChip: { paddingHorizontal: 12, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 999 },
+  manageChipText: { color: '#0D3B4A', fontWeight: '700' },
+
+  // Notification UI styles
+  pillBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  pillOff: { backgroundColor: 'rgba(255,255,255,0.05)' },
+  pillOn: { backgroundColor: 'rgba(248,176,112,0.35)', borderColor: '#F8B070' },
+  pillText: { fontWeight: '800', color: '#E5E7EB' },
+  pillTextOff: { color: '#E5E7EB' },
+  pillTextOn: { color: '#111827' },
+  cardSubtext: { color: '#9CA3AF', marginTop: 8 },
+  cardSubtextLight: { color: '#6B7280' },
+  freqChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  freqChipLight: { backgroundColor: '#EEF2F7', borderColor: '#E5E7EB' },
+  freqChipActive: { backgroundColor: '#F8B070', borderColor: '#F8B070' },
+  freqChipText: { color: '#E5E7EB', fontWeight: '700' },
+  freqChipTextLight: { color: '#374151', fontWeight: '700' },
+  freqChipTextActive: { color: '#111827' },
+  smallBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  smallBtnLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
+  smallBtnText: { color: '#E5E7EB', fontWeight: '700' },
+  smallBtnTextLight: { color: '#374151', fontWeight: '700' },
+  smallBtnAccent: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: '#F8B070' },
+  smallBtnTextAccent: { color: '#111827', fontWeight: '800' },
+
+  // Paywall
+  paywallContainer: { flex: 1, backgroundColor: '#0D1117', paddingHorizontal: 20 },
+  paywallContainerLight: { backgroundColor: '#F3F4F6' },
+  paywallHeaderRow: { paddingTop: 10, paddingBottom: 6 },
+  paywallCancel: { color: '#C7D2FE', fontWeight: '600' },
+  paywallCancelLight: { color: '#111827' },
+  paywallHeader: { alignItems: 'center', paddingVertical: 10 },
+  paywallBadge: { width: 58, height: 58, borderRadius: 16, backgroundColor: '#B6E0E2', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+  paywallTitle: { fontSize: 20, fontWeight: '800', color: '#E5E7EB' },
+  paywallTitleLight: { color: '#111827' },
+  paywallHeadline: { fontSize: 26, fontWeight: '800', color: '#E5E7EB', marginTop: 6 },
+  paywallHeadlineLight: { color: '#111827' },
+  paywallBullets: { marginTop: 16, gap: 8 },
+  paywallBullet: { color: '#D1D5DB', fontSize: 16 },
+  paywallBulletLight: { color: '#374151' },
+  paywallPlansRow: { flexDirection: 'row', gap: 12, marginTop: 18 },
+  planCard: { flex: 1, backgroundColor: '#E5E7EB', borderRadius: 16, padding: 14 },
+  planCardActive: { backgroundColor: '#B6E0E2' },
+  planTitle: { fontSize: 14, color: '#0D3B4A' },
+  planPrice: { fontSize: 18, fontWeight: '800', color: '#0D3B4A', marginTop: 2 },
+  planTrialText: { marginTop: 4, color: '#0D3B4A', fontWeight: '600' },
+  trialChip: { marginTop: 8, alignSelf: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  trialChipText: { color: '#92400E', fontWeight: '800' },
+  paywallCta: { marginTop: 18, backgroundColor: '#B6E0E2', borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
+  paywallCtaText: { color: '#0D3B4A', fontWeight: '800', fontSize: 18 },
+  paywallFooterRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 14 },
+  paywallLink: { color: '#9CA3AF' },
+  paywallLinkLight: { color: '#374151' },
+  paywallDot: { color: '#9CA3AF' },
+
+  // Success Overlay
+  successOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.25)' },
+  successCard: { backgroundColor: '#0D3B4A', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 18, alignItems: 'center', minWidth: 240, gap: 8 },
+  successCardLight: { backgroundColor: '#B6E0E2' },
+  // Sign-up success modal
+  signupCard: { width: '86%', maxWidth: 420, backgroundColor: '#1E1E1E', borderRadius: 16, padding: 16, alignItems: 'center' },
+  signupCardLight: { backgroundColor: '#FFFFFF', borderWidth: StyleSheet.hairlineWidth, borderColor: '#E5E7EB' },
+  signupTitle: { marginTop: 6, color: '#FFFFFF', fontWeight: '800', fontSize: 18 },
+  signupTitleLight: { color: '#111827' },
+  signupText: { marginTop: 6, color: '#9CA3AF', textAlign: 'center' },
+  signupTextLight: { color: '#4B5563' },
+  successTitle: { color: '#EAF2F6', fontWeight: '800', fontSize: 16 },
+  successTitleLight: { color: '#0D3B4A' },
+  successText: { color: '#EAF2F6' },
+  successTextLight: { color: '#0D3B4A' },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -655,8 +1358,8 @@ const styles = StyleSheet.create({
     borderColor: '#D7D3CB',
   },
   themeToggleActive: {
-    backgroundColor: 'rgba(242,147,92,0.18)',
-    borderColor: 'rgba(242,147,92,0.45)'
+    backgroundColor: 'rgba(248,176,112,0.18)',
+    borderColor: 'rgba(248,176,112,0.45)'
   },
   themeThumb: {
     width: 18,
@@ -665,10 +1368,56 @@ const styles = StyleSheet.create({
     backgroundColor: '#9CA3AF',
   },
   themeThumbOn: {
-    backgroundColor: '#F2935C',
+    backgroundColor: '#F8B070',
   },
   themeToggleText: { color: '#E5E7EB', fontWeight: '700', fontSize: 12 },
   themeToggleTextLight: { color: '#374151' },
+  infoHeader: { color: '#E5E7EB', fontWeight: '800', marginBottom: 6 },
+  infoHeaderLight: { color: '#111827' },
+  infoHint: { color: '#9CA3AF', marginBottom: 12, fontSize: 12 },
+  infoHintLight: { color: '#6B7280' },
+  subRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  premiumBtn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#2A2F33' },
+  premiumBtnText: { color: '#FFFFFF', fontWeight: '700' },
+  dangerBtn: {
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: '#EF9797',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+  },
+  dangerBtnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 12 },
+  premiumGradient: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    padding: 16,
+    marginBottom: 40,
+    // Ensure the gradient card spans the full width like other cards
+    width: '100%',
+  },
+  // Text styles specifically for content over the premium gradient
+  premiumHeader: { color: '#FFFFFF', fontWeight: '800', marginBottom: 6 },
+  premiumHint: { color: 'rgba(255,255,255,0.92)', marginBottom: 12, fontSize: 12 },
+  premiumLabel: { color: 'rgba(255,255,255,0.9)', marginLeft: 10, fontSize: 12, width: 60 },
+  premiumValue: { color: '#FFFFFF', flex: 1, textAlign: 'right' },
+  linksRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  linkText: { color: '#FFFFFF', textDecorationLine: 'underline', fontSize: 12 },
+  linkDivider: { color: 'rgba(255,255,255,0.7)' },
+  langChip: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10, backgroundColor: '#2A2F33' },
+  langChipLight: { backgroundColor: '#E9E6E0' },
+  langChipDark: { backgroundColor: '#2A2F33' },
+  langChipText: { color: '#FFFFFF', fontWeight: '700' },
+  modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center', zIndex: 100, elevation: 12 },
+  langModalCard: { width: '86%', backgroundColor: '#2C2C2C', borderRadius: 16, padding: 14, overflow: 'hidden' },
+  langModalCardLight: { backgroundColor: '#FFFFFF' },
+  langSearchInput: { flex: 1, height: 36, fontSize: 14 },
+  langSearchBox: { marginTop: 6, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#1F2629', borderWidth: 1, borderColor: '#2A3033' },
+  langSearchBoxLight: { backgroundColor: '#FFFFFF', borderColor: '#E5DED3' },
+  langRow: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, marginTop: 6 },
+  langRowLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5DED3' },
+  langRowDark: { backgroundColor: '#1F2629', borderWidth: 1, borderColor: '#2A3033' },
   signInContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -683,7 +1432,7 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
     borderRadius: 20,
   },
-  signInContentLight: { backgroundColor: '#F9F1E7' },
+  signInContentLight: { backgroundColor: '#FFFFFF' },
   signInTitle: { color: '#fff', fontSize: 20, fontWeight: '700', marginTop: 16 },
   signInTitleLight: { color: '#111827' },
   signInSubtitle: { color: '#9CA3AF', textAlign: 'center', marginTop: 8 },
@@ -744,6 +1493,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
   },
+  avatarSectionTitleLight: {
+    color: '#111827',
+  },
   avatarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -758,7 +1510,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.1)',
     overflow: 'hidden',
     position: 'relative',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
+  avatarOptionLight: { borderColor: '#D7D3CB', backgroundColor: '#ECECEC' },
   avatarOptionSelected: {
     borderColor: '#e28743',
     borderWidth: 3,
