@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { OPENAI_API_KEY, API_BASE_URL } from '../lib/appConfig';
 import { LANG_NAME_MAP } from '../lib/languages';
+import { aiProxyService } from './AiProxyService';
 
 // Name map imported from centralized catalog
 
@@ -51,24 +51,16 @@ Return ONLY a valid JSON object with these keys:
 Also include a legacy alias key examples equal to examples_target for backward compatibility.
 No markdown, no commentary. Word: "${word}"`;
 
-      const resp = await fetch(API_BASE_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: 'You are a translation assistant.' },
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0.2,
-          response_format: { type: 'json_object' },
-        }),
+      const resp = await aiProxyService.complete({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are a translation assistant.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.2,
+        maxTokens: 160,
       });
-      const json = await resp.json();
-      const content = json?.choices?.[0]?.message?.content || '';
+      const content = resp?.content || '';
       let data: any = null;
       try {
         data = typeof content === 'string' ? JSON.parse(content) : content;
@@ -128,24 +120,16 @@ Return ONLY a valid JSON object with these keys:
 Also include a legacy alias key examples equal to examples_target for backward compatibility.
 No markdown, no commentary. Word: "${word}"`;
 
-      const resp = await fetch(API_BASE_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: 'You are a translation assistant.' },
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0.2,
-          response_format: { type: 'json_object' },
-        }),
+      const resp = await aiProxyService.complete({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are a translation assistant.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.2,
+        maxTokens: 160,
       });
-      const json = await resp.json();
-      const content = json?.choices?.[0]?.message?.content || '';
+      const content = resp?.content || '';
       let data: any = null;
       try {
         data = typeof content === 'string' ? JSON.parse(content) : content;

@@ -1,8 +1,9 @@
 // aiService.ts
 // No platform-specific networking anymore; direct HTTPS to OpenAI
-import { OPENAI_API_KEY as CFG_OPENAI_API_KEY, API_BASE_URL as CFG_API_BASE_URL } from '../lib/appConfig';
+import { OPENAI_API_KEY as CFG_OPENAI_API_KEY, API_BASE_URL as CFG_API_BASE_URL, AI_PROXY_URL as CFG_AI_PROXY_URL } from '../lib/appConfig';
 import RNFS from 'react-native-fs';
 import { getCached, setCached } from '../lib/aiCache';
+import { aiProxyService } from './AiProxyService';
 
 const OPENAI_MODEL = 'gpt-4o-mini';
 
@@ -219,6 +220,19 @@ class AIService {
     max_tokens?: number;
     model?: string; // optional override per-call
   }) {
+    const proxyUrl = (CFG_AI_PROXY_URL && CFG_AI_PROXY_URL.trim()) || '';
+    if (proxyUrl) {
+      const proxyResponse = await aiProxyService.complete({
+        messages: payload.messages,
+        model: payload.model || OPENAI_MODEL,
+        temperature: payload.temperature,
+        maxTokens: payload.max_tokens,
+      });
+      const content = proxyResponse?.content?.trim();
+      if (!content) throw new Error('AI proxy returned an empty response.');
+      return content;
+    }
+
     const endpoint = getApiBaseUrl();
     this.ensureApiKey();
     const response = await fetch(endpoint, {

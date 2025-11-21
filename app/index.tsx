@@ -1,19 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Animated, LayoutAnimation, UIManager, Platform, Easing, InteractionManager, Linking } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Plus, ChevronRight, Camera, Type, Crown, Repeat2, LayoutGrid, List as ListIcon } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
-// Removed home card animations — keep navigation-only slide animations
+// Lightweight entrance animation only — navigation slides handled by RouteRenderer
 import OnboardingModal from './components/OnboardingModal';
 // No focus animation hook needed
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { Launch } from '../lib/launch';
 import LottieView from 'lottie-react-native';
 import LimitModal from '../lib/LimitModal';
 import { APP_STORE_ID, ANDROID_PACKAGE_NAME } from '../lib/appConfig';
-// no screen-focus animations on Home
+// Minimal screen-focus animation handled inline on Home
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 const MENU_STYLE_KEY = '@engniter.home.menuStyle'; // 'list' | 'grid'
@@ -24,6 +24,7 @@ let MENU_STYLE_CACHE: 'list' | 'grid' | null = null;
 export default function HomeScreen(props?: { preview?: boolean }) {
   const isPreview = !!(props as any)?.preview;
   const router = useRouter();
+  const pathname = usePathname();
   const [storedLevel, setStoredLevel] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const theme = useAppStore(s => s.theme);
@@ -321,13 +322,13 @@ export default function HomeScreen(props?: { preview?: boolean }) {
     }
   };
 
-  const handleQuizSession = () => {
+  const handleQuizSession = useCallback(() => {
     if (storedLevel) {
       router.push(`/quiz/learn?level=${storedLevel}`);
     } else {
       router.push('/quiz/level-select');
     }
-  };
+  }, [router, storedLevel]);
 
   const updateStoredLevel = async () => {
     const level = await AsyncStorage.getItem(SELECTED_LEVEL_KEY);
@@ -343,7 +344,7 @@ export default function HomeScreen(props?: { preview?: boolean }) {
   // Use theme background (light: #F8F8F8, dark: #1E1E1E)
   const background = colors.background;
 
-  const sections = [
+  const sections = useMemo(() => [
     {
       title: 'Learning Tools',
       items: [
@@ -408,7 +409,7 @@ export default function HomeScreen(props?: { preview?: boolean }) {
         },
       ],
     },
-  ];
+  ], [handleQuizSession, router]);
 
   // No PNG prefetch — icons are Lottie.
 
@@ -437,7 +438,6 @@ export default function HomeScreen(props?: { preview?: boolean }) {
     setIconDone(prev => (prev[key] ? prev : { ...prev, [key]: true }));
   };
 
-  // No bubble entrance animation on Home
   const [scrolled, setScrolled] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const isLight = theme === 'light';
@@ -544,7 +544,10 @@ export default function HomeScreen(props?: { preview?: boolean }) {
                     key={itemIndex}
                     style={[
                       menuStyle === 'grid' ? styles.gridItem : undefined,
-                      { transform: [{ scale: modeScale }] },
+                      {
+                        opacity: 1,
+                        transform: [{ translateY: 0 }, { scale: modeScale }],
+                      },
                     ]}
                   >
                     {menuStyle === 'grid' ? (

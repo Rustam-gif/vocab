@@ -6,7 +6,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js/dist/module/index.js';
 
 const supabaseUrl = 'https://auirkjgyattnvqaygmfo.supabase.co';
-const supabaseAnonKey = 'sb_publishable_rLA39DG5pwlN9VZcA5jerg_q-WTqd0m';
+const supabaseAnonKey =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1aXJramd5YXR0bnZxYXlnbWZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzNDk4MjksImV4cCI6MjA3NDkyNTgyOX0.qeNfIsSgc_b8cD6qRGqw5FAf5iq89JEpdgyF2pvD3Kg';
+export const SUPABASE_ANON_KEY = supabaseAnonKey;
 
 // Use a fetch with a hard timeout so auth calls never hang the UI if network is blocked
 const fetchWithTimeout: typeof fetch = (input: any, init?: any) => {

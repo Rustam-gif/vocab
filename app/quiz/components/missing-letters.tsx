@@ -201,7 +201,6 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
 
   const handleChange = useCallback((arrayIndex: number, text: string) => {
     const nextValue = text.slice(-1).toUpperCase();
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSlots(prev => {
       let targetFocus: number | null = null;
       const updated = prev.map((slot, idx) => {
