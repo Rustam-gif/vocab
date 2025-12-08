@@ -9,7 +9,10 @@ module.exports = mergeConfig(defaultConfig, {
     babelTransformerPath: require.resolve('react-native-svg-transformer'),
   },
   resolver: {
-    assetExts: defaultConfig.resolver.assetExts.filter(ext => ext !== 'svg'),
+    assetExts: [
+      ...defaultConfig.resolver.assetExts.filter(ext => ext !== 'svg'),
+      'riv',
+    ],
     sourceExts: [...defaultConfig.resolver.sourceExts, 'svg'],
     extraNodeModules: {
       'expo-router': path.resolve(__dirname, 'lib/router'),

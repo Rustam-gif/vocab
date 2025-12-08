@@ -22,6 +22,7 @@ import {
   KeyboardAvoidingView,
   BackHandler,
   InteractionManager,
+  DeviceEventEmitter,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -37,6 +38,8 @@ import UsageLimitsService from '../../services/UsageLimitsService';
 import LimitModal from '../../lib/LimitModal';
 import { saveStory as saveStoryToRemote } from '../../services/dbClient';
 import { supabase } from '../../lib/supabase';
+import TopStatusPanel from '../components/TopStatusPanel';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Story customization options
 interface StoryCustomization {
@@ -191,6 +194,7 @@ const InlineDotsOnce: React.FC<{ style?: any }> = ({ style }) => {
 
 export default function StoryExerciseScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ words?: string; from?: string }>();
   const [loading, setLoading] = useState(false);
   const [score, setScore] = useState(100);
@@ -261,6 +265,9 @@ export default function StoryExerciseScreen() {
   const hasStory = Boolean(story);
   const headerTitle = story?.title ?? 'Story Exercise';
   const headerSubtitle = story?.subtitle ?? null;
+  const ctaAnim = useRef(new Animated.Value(0)).current;
+  const shouldShowCTA = !isFullscreen && hasStory && !loading;
+  const footerTranslate = ctaAnim.interpolate({ inputRange: [0, 1], outputRange: [120, 0] });
   
   // SRS-aware picker UI state
   const [pickerQuery, setPickerQuery] = useState('');
@@ -270,6 +277,7 @@ export default function StoryExerciseScreen() {
   const [showSrsBanner, setShowSrsBanner] = useState(false);
   const srsBannerAnim = useRef(new Animated.Value(0)).current;
   const selectedSkuRef = useRef<string | null>(null);
+  const [panelHeight, setPanelHeight] = useState(Math.max(insets.top + 70, 90));
 
   // Ensure words are loaded, but defer heavy work so the sheet animation feels instant
   useEffect(() => {
@@ -280,6 +288,25 @@ export default function StoryExerciseScreen() {
     });
     return () => { try { (task as any)?.cancel?.(); } catch {}; };
   }, [loadWords]);
+
+  useEffect(() => {
+    Animated.timing(ctaAnim, {
+      toValue: shouldShowCTA ? 1 : 0,
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [ctaAnim, shouldShowCTA]);
+
+  useEffect(() => {
+    try { DeviceEventEmitter.emit('NAV_VISIBILITY', shouldShowCTA ? 'hide' : 'show'); } catch {}
+  }, [shouldShowCTA]);
+
+  useEffect(() => {
+    return () => {
+      try { DeviceEventEmitter.emit('NAV_VISIBILITY', 'show'); } catch {}
+    };
+  }, []);
 
   // Check premium status on mount and when returning to this screen
   const refreshStoryAccess = useCallback(async () => {
@@ -305,6 +332,13 @@ export default function StoryExerciseScreen() {
   useEffect(() => {
     refreshStoryAccess();
   }, [refreshStoryAccess]);
+
+  // Avoid initial pop-in when opening this tab with no story loaded
+  useEffect(() => {
+    if (!story) {
+      try { revealAnim.setValue(1); } catch {}
+    }
+  }, [story, revealAnim]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1103,46 +1137,35 @@ const buildStoryFromContent = (
     );
   }
 
+  const topOffset = !isFullscreen ? Math.max(0, panelHeight - 65) : 0;
+
   return (
     <SafeAreaView style={[styles.container, !isDarkMode && styles.containerLight]}>
-      {/* Header - Hidden in fullscreen */}
       {!isFullscreen && (
-        <View style={[styles.header, !isDarkMode && styles.headerLight]}>
-          {/* Back button removed; close is handled by the sheet overlay's X */}
-          <View style={styles.headerCenter}>
-            <Text style={[styles.headerTitle, !isDarkMode && styles.headerTitleLight]}>{headerTitle}</Text>
-            {headerSubtitle ? (
-              <Text style={[styles.headerSubtitle, !isDarkMode && styles.headerSubtitleLight]}>{headerSubtitle}</Text>
-            ) : null}
+        <TopStatusPanel
+          floating
+          includeTopInset
+          onHeight={setPanelHeight}
+          style={{ marginBottom: 8 }}
+        />
+      )}
+      <View style={{ flex: 1, paddingTop: topOffset }}>
+        {/* Mode Toggle - compact toggle only when user expands controls */}
+        {!isFullscreen && hasStory && showControls && false && (
+          <View style={styles.toggleContainer}>
+            <TouchableOpacity 
+              style={styles.toggleButton}
+              onPress={() => setIsNormalMode(!isNormalMode)}
+            >
+              <View style={[styles.toggleTrack, isNormalMode && styles.toggleTrackActive]}>
+                <View style={[styles.toggleThumb, isNormalMode && styles.toggleThumbActive]} />
+              </View>
+              <Text style={[styles.toggleLabel, !isDarkMode && styles.toggleLabelLight]}>
+                {isNormalMode ? 'Normal Reading' : 'Fill-in-the-blanks'}
+              </Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.closeButton} onPress={() => {
-            if (params.from === 'results') {
-              router.replace('/');
-            } else {
-              router.back();
-            }
-          }}>
-            <X size={24} color={isDarkMode ? "#FFFFFF" : "#111827"} />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Mode Toggle - compact toggle only when user expands controls */}
-      {!isFullscreen && hasStory && showControls && false && (
-        <View style={styles.toggleContainer}>
-          <TouchableOpacity 
-            style={styles.toggleButton}
-            onPress={() => setIsNormalMode(!isNormalMode)}
-          >
-            <View style={[styles.toggleTrack, isNormalMode && styles.toggleTrackActive]}>
-              <View style={[styles.toggleThumb, isNormalMode && styles.toggleThumbActive]} />
-            </View>
-            <Text style={[styles.toggleLabel, !isDarkMode && styles.toggleLabelLight]}>
-              {isNormalMode ? 'Normal Reading' : 'Fill-in-the-blanks'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+        )}
 
       {/* Tools Dock - grouped controls in one place */}
       {!isFullscreen && (
@@ -1271,7 +1294,7 @@ const buildStoryFromContent = (
               ) : (
                 <View style={styles.storyPlaceholder}>
                   <LottieView
-                    source={require('../../assets/lottie/se_animation.json')}
+                    source={require('../../assets/lottie/story_exercise.json')}
                     autoPlay
                     loop={false}
                     style={{ width: 220, height: 220, marginBottom: 8 }}
@@ -1301,33 +1324,45 @@ const buildStoryFromContent = (
               )}
             </Animated.View>
           </View>
-          <View style={styles.bottomSpacing} />
+          <View style={[styles.bottomSpacing, { height: 72 }]} />
           </>
         </ScrollView>
       </View>
 
-      {/* Footer Buttons - Hidden in fullscreen */}
+      {/* Footer Buttons - slide up when story is available */}
       {!isFullscreen && (
-        <View style={styles.footer}>
-          <TouchableOpacity onPress={() => generateStory()} disabled={loading} style={{ flex: 1 }} activeOpacity={0.9}>
-            <LinearGradient
-              colors={["#F8B070", "#F8B070"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.regenerateButton, loading && { opacity: 0.7 }]}
-            >
-              <Text style={styles.regenerateButtonText}>Generate</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+        <Animated.View
+          pointerEvents={shouldShowCTA ? 'auto' : 'none'}
+          style={[
+            styles.footerOverlay,
+            isDarkMode ? styles.footerOverlayDark : styles.footerOverlayLight,
+            {
+              transform: [{ translateY: footerTranslate }],
+              opacity: ctaAnim,
+            },
+          ]}
+        >
+          <View style={styles.footer}>
+            <TouchableOpacity onPress={() => generateStory()} disabled={loading} style={{ flex: 1 }} activeOpacity={0.9}>
+              <LinearGradient
+                colors={["#F8B070", "#F8B070"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.regenerateButton, loading && { opacity: 0.7 }]}
+              >
+                <Text style={styles.regenerateButtonText}>Generate</Text>
+              </LinearGradient>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.checkButton, (!hasStory || loading) && styles.checkButtonDisabled]}
-            onPress={checkAnswers}
-            disabled={!hasStory || loading}
-          >
-            <Text style={styles.checkButtonText}>Check Answers</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={[styles.checkButton, (!hasStory || loading) && styles.checkButtonDisabled]}
+              onPress={checkAnswers}
+              disabled={!hasStory || loading}
+            >
+              <Text style={styles.checkButtonText}>Check Answers</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
       )}
 
       {/* Save Toast */}
@@ -1844,6 +1879,9 @@ const buildStoryFromContent = (
           </View>
         </View>
       </Modal>
+
+      {/* Close padded content wrapper */}
+      </View>
 
       <LimitModal
         visible={limitOpen}
@@ -2509,10 +2547,38 @@ const styles = StyleSheet.create({
   emptyBlankInlineLight: {
     color: '#C06E38',
   },
+  footerOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 28,
+    zIndex: 80,
+  },
+  footerOverlayLight: {
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 12,
+  },
+  footerOverlayDark: {
+    backgroundColor: 'rgba(15,17,22,0.96)',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: -6 },
+    elevation: 12,
+  },
   footer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
     gap: 12,
     borderTopWidth: 0,
     borderTopColor: 'transparent',
@@ -2714,6 +2780,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 10,
+    marginBottom: 28,
   },
   storyPlaceholderButtonText: {
     fontSize: 14,

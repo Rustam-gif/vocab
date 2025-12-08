@@ -6,6 +6,7 @@ import { levels, Level } from './data/levels';
 import { useAppStore } from '../../lib/store';
 import { getTheme } from '../../lib/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 const HIGHEST_LEVEL_KEY = '@engniter.highestLevel';
@@ -17,6 +18,7 @@ export default function LevelSelectScreen() {
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     let mounted = true;
@@ -198,12 +200,21 @@ export default function LevelSelectScreen() {
           </>
         )}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
+        contentContainerStyle={[
+          styles.listContainer,
+          { paddingBottom: 200 + insets.bottom },
+        ]}
         showsVerticalScrollIndicator={false}
       />
 
       {/* Continue Button */}
-      <View style={[styles.footer, isLight && { backgroundColor: colors.background }]}>
+      <View
+        style={[
+          styles.footer,
+          isLight && { backgroundColor: colors.background },
+          { paddingBottom: insets.bottom + 50 },
+        ]}
+      >
         <TouchableOpacity
           style={[styles.continueButton, { backgroundColor: accent }, !canContinue && styles.continueButtonDisabled]}
           onPress={handleContinue}
@@ -355,7 +366,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#1E1E1E',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 12,
   },
   continueButton: {
     backgroundColor: '#F8B070',

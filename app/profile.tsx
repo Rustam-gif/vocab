@@ -20,7 +20,6 @@ import { useRouter, useLocalSearchParams, Link } from 'expo-router';
 import { useCallback, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-  ArrowLeft,
   User as UserIcon,
   Mail,
   Star,
@@ -41,6 +40,8 @@ import { analyticsService } from '../services/AnalyticsService';
 import { ProgressService } from '../services/ProgressService';
 import { useAppStore } from '../lib/store';
 import { LANGUAGES_WITH_FLAGS } from '../lib/languages';
+import TopStatusPanel from './components/TopStatusPanel';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Avatar images (static requires so Metro bundles them). Filenames without spaces to avoid any URL encoding quirks.
 const AVATAR_OPTIONS = [
@@ -94,6 +95,7 @@ export default function ProfileScreen() {
   const themeName = useAppStore(s => s.theme);
   const isLight = themeName === 'light';
   const toggleTheme = useAppStore(s => s.toggleTheme);
+  const insets = useSafeAreaInsets();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [showEmailAuth, setShowEmailAuth] = useState(false);
   const [email, setEmail] = useState('');
@@ -117,9 +119,12 @@ export default function ProfileScreen() {
   // Language picker state
   const [showLangModal, setShowLangModal] = useState(false);
   const [langSearch, setLangSearch] = useState('');
+  const [panelHeight, setPanelHeight] = useState(0);
   // Expanded catalog (>=150 languages)
   const langs = useMemo(() => LANGUAGES_WITH_FLAGS, []);
   const filteredLangs = useMemo(() => langs.filter(l => (l.name + l.code).toLowerCase().includes(langSearch.toLowerCase())), [langs, langSearch]);
+  const isPromo70 = (params as any)?.offer === '70';
+  const contentTop = Math.max(0, (panelHeight ? panelHeight - 10 : insets.top + 32));
 
   // Ensure local avatar images are warmed up to avoid any flicker/blank
   useEffect(() => {
@@ -139,21 +144,13 @@ export default function ProfileScreen() {
   }, [showEmailAuth, isSignUp]);
 
   useEffect(() => {
-    // Defer heavier calls to avoid a "stuck" feeling when navigating in
+    // Defer progress + lightweight subscription status so typing into
+    // the email/password fields feels instant on first open.
     const task = (InteractionManager as any).runAfterInteractions?.(() => {
       loadProgress();
-      SubscriptionService.initialize().then(() => {
-        SubscriptionService.getStatus().then(s => setSubStatus(s));
-        SubscriptionService.getProducts(['com.royal.vocadoo.premium.months', 'com.royal.vocadoo.premium.annually'])
-          .then((list) => {
-            setProducts(list);
-            try {
-              const monthly = list.find(p => p.duration === 'monthly')?.id;
-              setSelectedSku(monthly || list[0]?.id || null);
-            } catch { setSelectedSku(list[0]?.id || null); }
-          })
-          .catch(() => {});
-      });
+      SubscriptionService.getStatus()
+        .then(s => setSubStatus(s))
+        .catch(() => {});
     }) || { cancel: () => {} };
     return () => (task as any).cancel?.();
   }, [loadProgress]);
@@ -492,9 +489,7 @@ export default function ProfileScreen() {
     return (
       <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
         <View style={[styles.header, isLight && styles.headerLight]}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
-          </TouchableOpacity>
+          <View style={styles.placeholder} />
           <Text style={[styles.title, isLight && styles.titleLight]}>Profile</Text>
           <View style={styles.placeholder} />
         </View>
@@ -671,7 +666,13 @@ export default function ProfileScreen() {
             {/* Callout: Unlock vs Premium Active */}
             {!subStatus?.active ? (
               <TouchableOpacity
-                onPress={() => { setShowPaywall(true); SubscriptionService.getProducts(['com.royal.vocadoo.premium.months', 'com.royal.vocadoo.premium.annually']).then((list)=>{ setProducts(list); try { const m=list.find(p=>p.duration==='monthly')?.id; setSelectedSku(m||list[0]?.id||null);} catch { setSelectedSku(list[0]?.id||null);} }).catch(() => {}); }}
+                onPress={() => {
+                  setShowPaywall(true);
+                  SubscriptionService.initialize()
+                    .then(() => SubscriptionService.getProducts(['com.royal.vocadoo.premium.months', 'com.royal.vocadoo.premium.annually']))
+                    .then((list)=>{ setProducts(list); try { const m=list.find(p=>p.duration==='monthly')?.id; setSelectedSku(m||list[0]?.id||null);} catch { setSelectedSku(list[0]?.id||null);} })
+                    .catch(() => {});
+                }}
                 activeOpacity={0.9}
                 style={[styles.moreInfoCard, isLight ? styles.moreInfoCardLight : styles.moreInfoCardDark]}
               >
@@ -723,7 +724,14 @@ export default function ProfileScreen() {
             <View style={styles.paywallHeader}>
               <View style={styles.paywallBadge}><Crown color="#0D3B4A" size={30} /></View>
               <Text style={[styles.paywallTitle, isLight && styles.paywallTitleLight]}>Get Vocadoo Premium</Text>
-              <Text style={[styles.paywallHeadline, isLight && styles.paywallHeadlineLight]}>Unlock everything</Text>
+              {isPromo70 && (
+                <View style={[styles.paywallPromoTag, isLight && styles.paywallPromoTagLight]}>
+                  <Text style={[styles.paywallPromoText, isLight && styles.paywallPromoTextLight]}>Limited 70% off</Text>
+                </View>
+              )}
+              <Text style={[styles.paywallHeadline, isLight && styles.paywallHeadlineLight]}>
+                {isPromo70 ? 'Yearly plan now 70% off' : 'Unlock everything'}
+              </Text>
               {(() => {
                 const sel = (products || []).find(p => p.id === selectedSku) || (products || [])[0];
                 return sel?.hasFreeTrial ? (
@@ -853,42 +861,53 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
-      <View style={[styles.header, isLight && styles.headerLight]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
-        </TouchableOpacity>
-        <Text style={[styles.title, isLight && styles.titleLight]}>Profile</Text>
-        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-          <LogOut size={20} color="#a0a0a0" />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={[styles.profileCard, isLight && styles.profileCardLight]}>
-          <View style={styles.avatarContainer}>
-            <Image source={getAvatarSource()} style={styles.avatar} />
-            <View style={styles.levelBadge}>
-              <Text style={styles.levelText}>Lv.{getLevel(safeXp)}</Text>
-            </View>
-          </View>
-
-          <Text style={[styles.userName, isLight && styles.userNameLight]}>{user.name}</Text>
-
-          <View style={styles.xpContainer}>
-            <Text style={[styles.xpLabel, isLight && styles.xpLabelLight]}>XP Progress</Text>
-            <View style={[styles.xpBar, isLight && styles.xpBarLight]}>
-              <View style={[styles.xpProgress, { width: `${getXPProgress(safeXp)}%` }]} />
-            </View>
-            <Text style={[styles.xpText, isLight && styles.xpTextLight]}>
-              {safeXp} XP • Level {getLevel(safeXp)}
-            </Text>
-          </View>
+      <TopStatusPanel
+        floating
+        includeTopInset
+        onHeight={setPanelHeight}
+        style={{ marginBottom: 8 }}
+      />
+      <View style={{ flex: 1, paddingTop: contentTop }}>
+        <View style={[styles.header, isLight && styles.headerLight]}>
+          <View style={styles.placeholder} />
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+            <LogOut size={20} color="#a0a0a0" />
+          </TouchableOpacity>
         </View>
+
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={[styles.profileCard, isLight && styles.profileCardLight]}>
+            <View style={styles.avatarContainer}>
+              <Image source={getAvatarSource()} style={styles.avatar} />
+              <View style={styles.levelBadge}>
+                <Text style={styles.levelText}>Lv.{getLevel(safeXp)}</Text>
+              </View>
+            </View>
+
+            <Text style={[styles.userName, isLight && styles.userNameLight]}>{user.name}</Text>
+
+            <View style={styles.xpContainer}>
+              <Text style={[styles.xpLabel, isLight && styles.xpLabelLight]}>XP Progress</Text>
+              <View style={[styles.xpBar, isLight && styles.xpBarLight]}>
+                <View style={[styles.xpProgress, { width: `${getXPProgress(safeXp)}%` }]} />
+              </View>
+              <Text style={[styles.xpText, isLight && styles.xpTextLight]}>
+                {safeXp} XP • Level {getLevel(safeXp)}
+              </Text>
+            </View>
+          </View>
 
         {/* Subscription status/CTA for signed-in users */}
         {!subStatus?.active ? (
           <TouchableOpacity
-            onPress={() => { setShowPaywall(true); SubscriptionService.getProducts(['com.royal.vocadoo.premium.months', 'com.royal.vocadoo.premium.annually']).then((list)=>{ setProducts(list); try { const m=list.find(p=>p.duration==='monthly')?.id; setSelectedSku(m||list[0]?.id||null);} catch { setSelectedSku(list[0]?.id||null);} }).catch(() => {}); }}
+            onPress={() => {
+              setShowPaywall(true);
+              SubscriptionService.initialize()
+                .then(() => SubscriptionService.getProducts(['com.royal.vocadoo.premium.months', 'com.royal.vocadoo.premium.annually']))
+                .then((list)=>{ setProducts(list); try { const m=list.find(p=>p.duration==='monthly')?.id; setSelectedSku(m||list[0]?.id||null);} catch { setSelectedSku(list[0]?.id||null);} })
+                .catch(() => {});
+            }}
             activeOpacity={0.9}
             style={[styles.moreInfoCard, isLight ? styles.moreInfoCardLight : styles.moreInfoCardDark]}
           >
@@ -955,10 +974,15 @@ export default function ProfileScreen() {
         {/* Email/Joined moved to Settings */}
 
         {/* Danger Zone moved to Settings */}
-        <TouchableOpacity onPress={() => router.push('/report')} activeOpacity={0.8} style={[styles.infoCard, isLight && styles.infoCardLight, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }]}>
-          <Text style={[styles.settingsRowTitle, isLight && styles.userNameLight]}>Report an Issue</Text>
-          <ChevronRight size={20} color={isLight ? '#111827' : '#E5E7EB'} />
-        </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/report')} activeOpacity={0.8} style={[styles.infoCard, isLight && styles.infoCardLight, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }]}>
+            <Text style={[styles.settingsRowTitle, isLight && styles.userNameLight]}>Report an Issue</Text>
+            <ChevronRight size={20} color={isLight ? '#111827' : '#E5E7EB'} />
+          </TouchableOpacity>
+
+          <View style={{ height: 120 }} />
+        </ScrollView>
+      </View>
+
       {/* Paywall Modal (signed-in view) */}
       <Modal visible={showPaywall} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => {
         setShowPaywall(false);
@@ -980,7 +1004,14 @@ export default function ProfileScreen() {
           <View style={styles.paywallHeader}>
             <View style={styles.paywallBadge}><Crown color="#0D3B4A" size={30} /></View>
             <Text style={[styles.paywallTitle, isLight && styles.paywallTitleLight]}>Get Vocadoo Premium</Text>
-            <Text style={[styles.paywallHeadline, isLight && styles.paywallHeadlineLight]}>Unlock everything</Text>
+            {isPromo70 && (
+              <View style={[styles.paywallPromoTag, isLight && styles.paywallPromoTagLight]}>
+                <Text style={[styles.paywallPromoText, isLight && styles.paywallPromoTextLight]}>Limited 70% off</Text>
+              </View>
+            )}
+            <Text style={[styles.paywallHeadline, isLight && styles.paywallHeadlineLight]}>
+              {isPromo70 ? 'Yearly plan now 70% off' : 'Unlock everything'}
+            </Text>
           </View>
           <View style={styles.paywallBullets}>
             <Text style={[styles.paywallBullet, isLight && styles.paywallBulletLight]}>✓ Learn faster with focused practice</Text>
@@ -1041,9 +1072,6 @@ export default function ProfileScreen() {
           )}
         </SafeAreaView>
       </Modal>
-
-      </ScrollView>
-
       {showLangModal && (
         <View style={styles.modalOverlay}>
           <View style={[styles.langModalCard, isLight && styles.langModalCardLight]}>
@@ -1299,6 +1327,10 @@ const styles = StyleSheet.create({
   paywallTitleLight: { color: '#111827' },
   paywallHeadline: { fontSize: 26, fontWeight: '800', color: '#E5E7EB', marginTop: 6 },
   paywallHeadlineLight: { color: '#111827' },
+  paywallPromoTag: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.12)', marginTop: 10 },
+  paywallPromoTagLight: { backgroundColor: '#FFE7D6' },
+  paywallPromoText: { color: '#FDE68A', fontWeight: '800', fontSize: 14 },
+  paywallPromoTextLight: { color: '#9C2A00' },
   paywallBullets: { marginTop: 16, gap: 8 },
   paywallBullet: { color: '#D1D5DB', fontSize: 16 },
   paywallBulletLight: { color: '#374151' },

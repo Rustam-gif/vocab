@@ -164,13 +164,11 @@ export class PreloadService {
     (globalThis as any).__ICONS_WARMED__ = true;
     try {
       const sources: any[] = [
-        require('../assets/homepageicons/vault_icon.png'),
-        require('../assets/homepageicons/quizsession_icon.png'),
-        require('../assets/homepageicons/storyexercise_icon.png'),
-        require('../assets/homepageicons/IELTS_icon.png'),
-        require('../assets/homepageicons/journal_icon.png'),
-        require('../assets/homepageicons/analytics_icon.png'),
-        require('../assets/homepageicons/profile_icon.png'),
+        require('../assets/homepageicons/11.png'),
+        require('../assets/homepageicons/12.png'),
+        require('../assets/homepageicons/13.png'),
+        require('../assets/homepageicons/14.png'),
+        require('../assets/homepageicons/15.png'),
       ];
       sources.forEach((s) => { try { void s; } catch {} });
     } catch {}
@@ -260,12 +258,11 @@ export class PreloadService {
     try {
       const list: number[] = [
         // Home icons
-        require('../assets/homepageicons/vault_icon.png'),
-        require('../assets/homepageicons/quizsession_icon.png'),
-        require('../assets/homepageicons/storyexercise_icon.png'),
-        require('../assets/homepageicons/IELTS_icon.png'),
-        require('../assets/homepageicons/journal_icon.png'),
-        require('../assets/homepageicons/analytics_icon.png'),
+        require('../assets/homepageicons/11.png'),
+        require('../assets/homepageicons/12.png'),
+        require('../assets/homepageicons/13.png'),
+        require('../assets/homepageicons/14.png'),
+        require('../assets/homepageicons/15.png'),
         // Level icons
         require('../assets/levelicons/beginner.png'),
         require('../assets/levelicons/intermediate.png'),

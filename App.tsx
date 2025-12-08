@@ -14,23 +14,29 @@ export default function App() {
   const [showLaunch, setShowLaunch] = useState(true);
   const launchRef = useRef<LottieView>(null);
   const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const fastTimerRef = useRef<NodeJS.Timeout | null>(null);
   const finishedRef = useRef(false);
-  // Global TextInput defaults (iOS): enable predictive bar
+
+  // Fast safety: hide overlay shortly after mount even if the animation never fires
   useEffect(() => {
-    if (Platform.OS === 'ios') {
-      try {
-        (TextInput as any).defaultProps = {
-          ...(TextInput as any).defaultProps,
-          autoCorrect: true,
-          spellCheck: true,
-        };
-      } catch {}
-    }
+    fastTimerRef.current = setTimeout(() => {
+      if (finishedRef.current) return;
+      finishedRef.current = true;
+      setShowLaunch(false);
+      try { Launch.markDone(); } catch {}
+    }, 3000) as any;
+    return () => { if (fastTimerRef.current) clearTimeout(fastTimerRef.current); };
   }, []);
 
   // Fallback: hide overlay if animation never finishes (e.g., 8s)
   useEffect(() => {
-    fallbackTimerRef.current = setTimeout(() => setShowLaunch(false), 8000) as any;
+    fallbackTimerRef.current = setTimeout(() => {
+      setShowLaunch(false);
+      if (!finishedRef.current) {
+        finishedRef.current = true;
+        try { Launch.markDone(); } catch {}
+      }
+    }, 8000) as any;
     return () => { if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current); };
   }, []);
 
@@ -56,6 +62,12 @@ export default function App() {
               autoPlay
               loop={false}
               speed={0.7}
+              onError={() => {
+                if (finishedRef.current) return;
+                finishedRef.current = true;
+                setShowLaunch(false);
+                try { Launch.markDone(); } catch {}
+              }}
               onAnimationFinish={() => {
                 if (finishedRef.current) return;
                 finishedRef.current = true;

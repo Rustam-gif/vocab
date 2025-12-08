@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Image, Animated, Easing, InteractionManager } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
-import { ArrowLeft, X } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 import { levels } from './data/levels';
 import type { Level, Set as VocabSet } from './data/levels';
@@ -14,6 +13,8 @@ import { ProgressService } from '../../services/ProgressService';
 import { SetProgressService } from '../../services/SetProgressService';
 import { useAppStore } from '../../lib/store';
 import { getTheme } from '../../lib/theme';
+import TopStatusPanel from '../components/TopStatusPanel';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 // Unlock all sets for testing; set to false for progression-gated flow
@@ -25,6 +26,9 @@ export default function LearnScreen() {
   const theme = useAppStore(s => s.theme);
   const colors = getTheme(theme);
   const isLight = theme === 'light';
+  const insets = useSafeAreaInsets();
+  // Seed with a reasonable expected height to avoid initial layout jump
+  const [panelHeight, setPanelHeight] = useState<number>(Math.max(insets.top + 70, 90));
   const { level: levelId } = useLocalSearchParams<{ level: string }>();
   const [currentLevel, setCurrentLevel] = useState<Level | null>(null);
   const [progress, setProgress] = useState({ completed: 0, total: 0 });
@@ -350,97 +354,70 @@ export default function LearnScreen() {
 
   const accent = '#F8B070';
   const progressPercentage = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
+  const contentTop = Math.max(0, panelHeight - 78);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            try {
-              if (navigation?.canGoBack && navigation.canGoBack()) {
-                router.back();
-              } else {
-                router.replace('/');
-              }
-            } catch {
-              router.replace('/');
-            }
-          }}
-        >
-          <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
-        </TouchableOpacity>
-        <Text style={[styles.title, isLight && { color: '#111827' }]}>Learn</Text>
-        <TouchableOpacity
-          style={styles.settingsButton}
-          onPress={() => {
-            try {
-              router.replace('/');
-            } catch {
-              // Fallback to push if replace fails in some edge cases
-              router.push('/');
-            }
-          }}
-          accessibilityLabel="Close and go to Home"
-          accessibilityRole="button"
-        >
-          <X size={24} color={isLight ? '#6B7280' : '#fff'} />
-        </TouchableOpacity>
-      </View>
-
-      <View style={[styles.levelInfo, isLight && styles.levelInfoLight]}>
-        <View style={styles.levelHeader}>
-          <Image
-            source={
-              currentLevel.id === 'beginner'
-                ? require('../../assets/levelicons/beginner.png')
-                : currentLevel.id === 'ielts'
-                ? require('../../assets/levelicons/ielts-vocabulary.png')
-                : currentLevel.id === 'intermediate'
-                ? require('../../assets/levelicons/intermediate.png')
-                : currentLevel.id === 'upper-intermediate'
-                ? require('../../assets/levelicons/upper-intermediate.png')
-                : currentLevel.id === 'proficient'
-                ? require('../../assets/levelicons/proficient.png')
-                : require('../../assets/levelicons/advanced.png')
-            }
-            style={styles.levelImage}
-            resizeMode="contain"
-          />
-          <View style={styles.levelDetails}>
-            <Text style={[styles.levelName, isLight && { color: '#111827' }]}>{currentLevel.name}</Text>
-          <Text style={[styles.levelCefr, { color: accent }]}>CEFR {currentLevel.cefr}</Text>
-          </View>
-          <TouchableOpacity style={styles.changeButton} onPress={handleChangeLevel}>
-            <Text style={styles.changeButtonText}>Change</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.progressContainer}>
-        <View style={styles.progressHeader}>
-          <Text style={[styles.progressText, isLight && { color: '#4B5563' }]}>
-            {progress.completed}/{progress.total} sets completed
-          </Text>
-          <Text style={[styles.progressPercentage, { color: accent }]}>{Math.round(progressPercentage)}%</Text>
-        </View>
-        <View style={styles.progressBar}>
-          <View 
-            style={[
-              styles.progressFill, 
-              { width: `${progressPercentage}%`, backgroundColor: accent }
-            ]} 
-          />
-        </View>
-      </View>
-
-      <FlatList
-        data={currentLevel.sets}
-        renderItem={renderSetItem}
-        keyExtractor={(item, index) => `${activeLevelId || 'level'}-${String(item.id)}-${index}`}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
+      <TopStatusPanel
+        floating
+        includeTopInset
+        onHeight={setPanelHeight}
       />
+      <View style={{ flex: 1, paddingTop: contentTop }}>
+        <View style={[styles.levelInfo, isLight && styles.levelInfoLight]}>
+          <View style={styles.levelHeader}>
+            <Image
+              source={
+                currentLevel.id === 'beginner'
+                  ? require('../../assets/levelicons/beginner.png')
+                  : currentLevel.id === 'ielts'
+                  ? require('../../assets/levelicons/ielts-vocabulary.png')
+                  : currentLevel.id === 'intermediate'
+                  ? require('../../assets/levelicons/intermediate.png')
+                  : currentLevel.id === 'upper-intermediate'
+                  ? require('../../assets/levelicons/upper-intermediate.png')
+                  : currentLevel.id === 'proficient'
+                  ? require('../../assets/levelicons/proficient.png')
+                  : require('../../assets/levelicons/advanced.png')
+              }
+              style={styles.levelImage}
+              resizeMode="contain"
+            />
+            <View style={styles.levelDetails}>
+              <Text style={[styles.levelName, isLight && { color: '#111827' }]}>{currentLevel.name}</Text>
+            <Text style={[styles.levelCefr, { color: accent }]}>CEFR {currentLevel.cefr}</Text>
+            </View>
+            <TouchableOpacity style={styles.changeButton} onPress={handleChangeLevel}>
+              <Text style={styles.changeButtonText}>Change</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.progressContainer}>
+          <View style={styles.progressHeader}>
+            <Text style={[styles.progressText, isLight && { color: '#4B5563' }]}>
+              {progress.completed}/{progress.total} sets completed
+            </Text>
+            <Text style={[styles.progressPercentage, { color: accent }]}>{Math.round(progressPercentage)}%</Text>
+          </View>
+          <View style={styles.progressBar}>
+            <View 
+              style={[
+                styles.progressFill, 
+                { width: `${progressPercentage}%`, backgroundColor: accent }
+              ]} 
+            />
+          </View>
+        </View>
+
+        <FlatList
+          data={currentLevel.sets}
+          renderItem={renderSetItem}
+          keyExtractor={(item, index) => `${activeLevelId || 'level'}-${String(item.id)}-${index}`}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+        />
+      </View>
     </SafeAreaView>
   );
 }
@@ -453,23 +430,16 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-  },
-  backButton: {
-    padding: 8,
   },
   title: {
     fontSize: 20,
     fontWeight: '600',
     color: '#fff',
-    flex: 1,
     textAlign: 'center',
     fontFamily: 'Ubuntu-Medium',
-  },
-  settingsButton: {
-    padding: 8,
   },
   levelInfo: {
     backgroundColor: '#2C2C2C',

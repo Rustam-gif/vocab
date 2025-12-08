@@ -1,7 +1,6 @@
 // Application config for AI features.
-// For production, calls go directly to OpenAI over HTTPS (no localhost).
-// Note: Mobile apps cannot fully hide API keys; prefer a proxy for real apps.
-// Client no longer ships an OpenAI key; all LLM calls go through the Supabase proxy.
+// All LLM calls are routed through the Supabase proxy; no direct OpenAI key
+// is bundled in the client app.
 export const OPENAI_API_KEY: string = '';
 
 // Direct OpenAI chat completions endpoint
@@ -22,3 +21,12 @@ export const REMOTE_SYNC: boolean = false;
 export const APP_STORE_ID: string = '';
 // Android: package name as seen on the Play Store
 export const ANDROID_PACKAGE_NAME: string = 'com.rustikkarim.vocabworking';
+
+// --- Daily news feed (user-provided API) ---
+// Paste your news API key and base URL here. No bundled samples are used when a key is present.
+// You can also inject via env (EXPO_PUBLIC_NEWS_API_KEY / NEWS_API_KEY and EXPO_PUBLIC_NEWS_API_URL / NEWS_API_URL).
+export const NEWS_API_KEY: string =
+  (typeof process !== 'undefined' && ((process as any).env?.EXPO_PUBLIC_NEWS_API_KEY || (process as any).env?.NEWS_API_KEY)) || 'a1d0e0f8f5704d3e94e522e561e2afae';
+export const NEWS_API_URL: string =
+  (typeof process !== 'undefined' && ((process as any).env?.EXPO_PUBLIC_NEWS_API_URL || (process as any).env?.NEWS_API_URL)) ||
+  'https://auirkjgyattnvqaygmfo.supabase.co/functions/v1/news';

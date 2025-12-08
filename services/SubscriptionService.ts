@@ -44,6 +44,11 @@ class SubscriptionServiceClass {
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
+    // In development builds, skip StoreKit/Play init to avoid noisy retries and callback floods.
+    if (__DEV__) {
+      this.initialized = true;
+      return;
+    }
     try {
       await initConnection();
       // Warm entitlement state from any available purchases

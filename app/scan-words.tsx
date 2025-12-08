@@ -131,7 +131,14 @@ export default function ScanWordsScreen() {
     }
     try {
       const { launchCamera } = ImagePicker as any;
-      const res = await launchCamera({ mediaType: 'photo', cameraType: 'back', includeBase64: false });
+      const res = await launchCamera({
+        mediaType: 'photo',
+        cameraType: 'back',
+        includeBase64: false,
+        quality: 0.5,
+        maxWidth: 1280,
+        maxHeight: 1280,
+      });
       if (res?.assets && res.assets[0]?.uri) {
         setPicked({ uri: res.assets[0].uri });
         setWords([]);
@@ -149,6 +156,20 @@ export default function ScanWordsScreen() {
     try {
       setProcessing(true);
       const arr = await aiService.ocrImageWords(picked.uri);
+      try {
+        console.log('[SCAN] OCR result length:', Array.isArray(arr) ? arr.length : 'non-array');
+      } catch {}
+      if (!arr || !Array.isArray(arr) || arr.length === 0) {
+        // Clear any previous words so a failed scan doesn't leave old results visible.
+        setWords([]);
+        setSelected({});
+        setShowReview(false);
+        Alert.alert(
+          'No words recognized',
+          'We could not read any clear words from this photo. Try retaking the picture closer, with better lighting, and with text in a single column.',
+        );
+        return;
+      }
       const uniq: string[] = [];
       const selMap: Record<string, boolean> = {};
       const seen = new Set<string>();

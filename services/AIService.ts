@@ -260,17 +260,18 @@ class AIService {
 
   /**
    * Vision OCR using an inexpensive OpenAI model (gpt-4o-mini).
-   * Accepts a local image URI (e.g., file:///...) and returns an array of tokens/words.
+   * This mirrors the original direct-OpenAI implementation that
+   * worked well before the Supabase proxy was added: single pass,
+   * JSON-only, no forced guesses.
    */
   async ocrImageWords(localUri: string): Promise<string[]> {
     try {
-      this.ensureApiKey();
       let path = localUri;
       if (path.startsWith('file://')) path = path.replace('file://', '');
       const base64 = await RNFS.readFile(path, 'base64');
       const dataUri = `data:image/jpeg;base64,${base64}`;
 
-      const payload = {
+      const payload: any = {
         model: 'gpt-4o-mini',
         messages: [
           {
@@ -284,31 +285,31 @@ class AIService {
               { type: 'text', text: 'Return only JSON array of unique lowercase words.' },
               { type: 'image_url', image_url: { url: dataUri } as any },
             ] as any,
-          },
-        ],
+          } as any,
+        ] as any,
         temperature: 0,
         max_tokens: 200,
       } as any;
 
-      const endpoint = getApiBaseUrl();
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) {
-        const t = await response.text().catch(() => '');
-        throw new Error(`OCR request failed (${(response as any)?.status ?? 0}): ${t}`);
-      }
-      const data = await response.json();
-      const content: string | undefined = data?.choices?.[0]?.message?.content;
+      // Always go through the Supabase proxy (callOpenAI).
+      const content = await this.callOpenAI(payload);
+
+      try {
+        console.log('[OCR] raw content snippet:', String(content || '').slice(0, 200));
+      } catch {}
+
       if (!content) return [];
-      const parsed = parseJSONLoose(content);
-      const arr: string[] = Array.isArray(parsed) ? parsed.map((s) => String(s).toLowerCase()) : [];
-      return arr.slice(0, 200);
+      let words: string[] = [];
+      try {
+        const parsed = parseJSONLoose(content);
+        if (Array.isArray(parsed)) {
+          words = parsed.map((s) => String(s).toLowerCase());
+        }
+      } catch {
+        // If JSON parsing fails, treat as no words rather than guessing.
+        words = [];
+      }
+      return words.slice(0, 200);
     } catch (e) {
       console.warn('AI OCR failed:', e);
       throw e;

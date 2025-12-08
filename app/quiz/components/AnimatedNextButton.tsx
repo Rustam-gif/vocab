@@ -67,12 +67,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    marginTop: 4,
+    paddingVertical: 6,
+    marginTop: 0,
+    marginBottom: 20,
   },
   button: {
-    width: 160,
-    height: 70,
+    width: 150,
+    height: 64,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -82,8 +83,8 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   animation: {
-    width: 160,
-    height: 70,
+    width: 150,
+    height: 64,
     position: 'absolute',
   },
   buttonText: {

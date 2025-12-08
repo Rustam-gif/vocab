@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Animated, LayoutAnimation, UIManager, Platform, Easing, InteractionManager, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Animated, Platform, Linking, Modal } from 'react-native';
+import { InteractionManager } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, ChevronRight, Camera, Type, Crown, Repeat2, LayoutGrid, List as ListIcon } from 'lucide-react-native';
+import { Plus, Camera, Type, Flame, Clock } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
+import { getTodayMissionForUser } from '../services/dailyMission';
 // Lightweight entrance animation only — navigation slides handled by RouteRenderer
 import OnboardingModal from './components/OnboardingModal';
 // No focus animation hook needed
@@ -12,14 +14,22 @@ import { usePathname, useRouter } from 'expo-router';
 import { Launch } from '../lib/launch';
 import LottieView from 'lottie-react-native';
 import LimitModal from '../lib/LimitModal';
-import { APP_STORE_ID, ANDROID_PACKAGE_NAME } from '../lib/appConfig';
+import { APP_STORE_ID, ANDROID_PACKAGE_NAME, NEWS_API_KEY, NEWS_API_URL, AI_PROXY_URL, BACKEND_BASE_URL } from '../lib/appConfig';
+import TopStatusPanel from './components/TopStatusPanel';
+import { aiProxyService } from '../services/AiProxyService';
 // Minimal screen-focus animation handled inline on Home
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
-const MENU_STYLE_KEY = '@engniter.home.menuStyle'; // 'list' | 'grid'
-// Cache the last chosen menu style across Home unmounts to avoid a brief
-// default-to-saved flip during navigation (visible behind other screens)
-let MENU_STYLE_CACHE: 'list' | 'grid' | null = null;
+
+type NewsItem = {
+  title: string;
+  summary: string;
+  vocab: { word: string; definition: string }[];
+  image?: string;
+  tag?: string;
+  category: 'technology' | 'world' | 'business';
+  tone: 'positive' | 'negative';
+};
 
 export default function HomeScreen(props?: { preview?: boolean }) {
   const isPreview = !!(props as any)?.preview;
@@ -32,6 +42,17 @@ export default function HomeScreen(props?: { preview?: boolean }) {
   const userProgress = useAppStore(s => s.userProgress);
   const loadProgress = useAppStore(s => s.loadProgress);
   const insets = useSafeAreaInsets();
+  const [missionLoading, setMissionLoading] = useState(false);
+  const [missionSummary, setMissionSummary] = useState<null | {
+    status: string;
+    answered: number;
+    total: number;
+    correct: number;
+    review: number;
+    fresh: number;
+    story: number;
+    xpReward: number;
+  }>(null);
   // Home stays mounted even when another screen overlays it via our router.
   // Do not hide it here; RouteRenderer controls visibility to avoid flicker.
   const [showStreakCelebrate, setShowStreakCelebrate] = useState(false);
@@ -40,11 +61,6 @@ export default function HomeScreen(props?: { preview?: boolean }) {
   // FAB menu
   const [menuOpen, setMenuOpen] = useState(false);
   const menuAnim = useRef(new Animated.Value(0)).current;
-  const [menuStyle, setMenuStyle] = useState<'list' | 'grid'>(MENU_STYLE_CACHE ?? 'list');
-  const viewModeAnim = useRef(new Animated.Value(1)).current; // bubble pop when switching
-  // Replay Lottie icons when toggling between list and grid
-  const [iconsTogglePlay, setIconsTogglePlay] = useState(false);
-  const [iconsPlayToken, setIconsPlayToken] = useState(0);
   // Daily sign-up nudge
   const user = useAppStore(s => s.user);
   const [showSignupNudge, setShowSignupNudge] = useState(false);
@@ -131,61 +147,330 @@ export default function HomeScreen(props?: { preview?: boolean }) {
     return adj;
   };
 
-  // Per-tile scale for press bounce
-  const tileScales = useRef<Record<string, Animated.Value>>({}).current;
-  const getTileScale = (key: string) => {
-    if (!tileScales[key]) tileScales[key] = new Animated.Value(1);
-    return tileScales[key];
+  const streakCount = userProgress?.streak || 0;
+  const missionStatus = missionSummary?.status;
+  const missionAnswered = missionSummary?.answered ?? 0;
+  const missionTotal = missionSummary?.total ?? 5;
+  const missionCorrect = missionSummary?.correct ?? 0;
+  const missionXP = missionSummary?.xpReward ?? 60;
+  const missionComposition = missionSummary
+    ? `${missionSummary.review} review · ${missionSummary.fresh} new · ${missionSummary.story} story`
+    : null;
+  const fallbackNewsImage = 'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1600&q=80';
+  const languagePrefs = useAppStore(s => s.languagePreferences);
+  const primaryLang = (languagePrefs?.[0] || '').toLowerCase();
+  const [newsCategory, setNewsCategory] = useState<'technology' | 'world' | 'business'>('technology');
+  const [newsTone, setNewsTone] = useState<'positive' | 'negative'>('positive');
+  const [newsFontScale, setNewsFontScale] = useState<0 | 1 | 2>(1); // 0=small,1=medium,2=large
+  const [newsOverrideList, setNewsOverrideList] = useState<NewsItem[] | null>(null);
+  const [newsList, setNewsList] = useState<NewsItem[]>([]);
+  const [newsStatus, setNewsStatus] = useState<string>('Loading live news…');
+  // Use live news when configured; disable cache read/write in dev to avoid loops
+  const newsConfigured = Boolean(NEWS_API_URL || BACKEND_BASE_URL || NEWS_API_KEY);
+  const [newsMenuOpen, setNewsMenuOpen] = useState(false);
+  const [, setNewsLoading] = useState(false);
+  const [newsModalVisible, setNewsModalVisible] = useState(false);
+  const newsModalAnim = useRef(new Animated.Value(0)).current;
+  const [newsModalArticle, setNewsModalArticle] = useState<NewsItem | null>(null);
+  const newsFetchStarted = useRef(false);
+  const initRanRef = useRef(false);
+  const missionFetchKeyRef = useRef<string | null>(null);
+
+  const displayList = useMemo(() => {
+    const base = newsOverrideList || newsList;
+    const seenTitles = new Set<string>();
+    const fallbackImages = [
+      'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1487058792275-0ad4aaf24ca7?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?auto=format&fit=crop&w=1200&q=80',
+      'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1200&q=80',
+    ];
+    const unique: NewsItem[] = [];
+    let fallbackIdx = 0;
+
+    for (const item of base) {
+      const key = (item.title || '').trim().toLowerCase();
+      if (!key || seenTitles.has(key)) continue;
+      seenTitles.add(key);
+      let image = item.image || '';
+      if (!image) {
+        image = fallbackImages[fallbackIdx % fallbackImages.length];
+        fallbackIdx += 1;
+      }
+      unique.push({ ...item, image });
+      if (unique.length >= 12) break;
+    }
+    return unique;
+  }, [newsOverrideList, newsList]);
+
+  const displayNews = displayList && displayList.length ? displayList[0] : null;
+  const extraNews = displayNews ? displayList.slice(1, 9) : [];
+
+  const extendSummary = (raw: string, title: string) => {
+    const safe = (raw || '').trim() || title || 'A brief news update.';
+    const filler =
+      ' Analysts add that the situation is still developing, and officials promise more updates later. ' +
+      'Local voices note both challenges and opportunities as plans move forward. ' +
+      'Experts remind readers to follow verified sources and to look for context instead of headlines alone.';
+    let words = safe.split(/\s+/);
+    if (words.length < 150) {
+      const needed = 150 - words.length;
+      const fillerWords = filler.repeat(3).split(/\s+/).slice(0, needed + 40);
+      words = words.concat(fillerWords);
+    }
+    if (words.length > 230) words = words.slice(0, 230);
+    return words.join(' ');
   };
-  const pressIn = (key: string) => {
-    try { Animated.spring(getTileScale(key), { toValue: 0.96, useNativeDriver: true, friction: 7, tension: 280 }).start(); } catch {}
-  };
-  const pressBounce = (key: string) => {
-    const v = getTileScale(key);
+
+  const vocabFromTitle = (title: string) =>
+    (title || '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 5)
+      .map(w => ({ word: w.replace(/[^a-zA-Z]/g, ''), definition: 'Key word from headline' }));
+
+  const parseJsonArray = (raw: string): any[] | null => {
+    if (!raw) return null;
     try {
-      Animated.sequence([
-        Animated.spring(v, { toValue: 1.05, useNativeDriver: true, friction: 6, tension: 180 }),
-        Animated.spring(v, { toValue: 1, useNativeDriver: true, friction: 7, tension: 140 }),
-      ]).start();
-    } catch {
-      try { v.setValue(1); } catch {}
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {}
+    const start = raw.indexOf('[');
+    const end = raw.lastIndexOf(']');
+    if (start >= 0 && end > start) {
+      try {
+        const parsed = JSON.parse(raw.slice(start, end + 1));
+        return Array.isArray(parsed) ? parsed : null;
+      } catch {}
+    }
+    return null;
+  };
+
+  const buildAiVocab = async (article: NewsItem): Promise<{ word: string; definition: string }[] | null> => {
+    if (!AI_PROXY_URL) return null;
+    const target = primaryLang && primaryLang !== 'en' ? primaryLang : 'English';
+    try {
+      // Hard timeout to avoid locking the UI if the proxy is slow
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
+      const resp = await aiProxyService.complete({
+        model: 'gpt-4o-mini',
+        temperature: 0.4,
+        maxTokens: 200,
+        messages: [
+          { role: 'system', content: 'You are a concise news vocabulary helper who returns clean JSON arrays.' },
+          {
+            role: 'user',
+            content:
+              `Headline: ${article.title}\n` +
+              `Summary: ${article.summary.slice(0, 800)}\n` +
+              `Return a JSON array of 5 items, each with keys: word, definition, translation. ` +
+              `Words should come from the headline/summary, skip names unless widely known. ` +
+              `Definitions must be in simple English. If translation is provided, it must be in ${target}.` ,
+          },
+        ],
+      }, { signal: controller.signal });
+      clearTimeout(timer);
+      const content = resp?.content || '';
+      const arr = parseJsonArray(typeof content === 'string' ? content : JSON.stringify(content));
+      if (!arr) return null;
+      const normalized = arr
+        .map((item: any) => {
+          const word = String(item?.word || '').trim();
+          const definition = String(item?.definition || '').trim();
+          const translation = String(item?.translation || '').trim();
+          if (!word || !definition) return null;
+          const def = translation && target !== 'English'
+            ? `${definition} (${target}: ${translation})`
+            : definition;
+          return { word, definition: def };
+        })
+        .filter(Boolean) as { word: string; definition: string }[];
+      return normalized.slice(0, 5);
+    } catch (e) {
+      if (__DEV__) console.warn('AI vocab enrichment failed or timed out', e);
+      return null;
     }
   };
 
-  // Header button scales
-  const hdrScaleToggle = getTileScale('hdr:toggle');
-  const hdrScaleTranslate = getTileScale('hdr:translate');
-  const hdrScalePro = getTileScale('hdr:pro');
+  const enrichArticleWithAi = async (article: NewsItem): Promise<NewsItem> => {
+    const aiVocab = await buildAiVocab(article);
+    const vocab = (aiVocab && aiVocab.length) ? aiVocab : (article.vocab?.length ? article.vocab : vocabFromTitle(article.title));
+    return { ...article, vocab };
+  };
+
+  const refreshNewsFromApi = useCallback(async () => {
+    if (!newsConfigured) {
+      setNewsStatus('Live feed unavailable');
+      setNewsOverrideList(null);
+      setNewsList([]);
+      setNewsLoading(false);
+      if (__DEV__) console.warn('News feed not configured — skipping fetch');
+      return;
+    }
+
+    // Point to backend cache endpoint (preferred). If NEWS_API_URL is set, use that as an override.
+    const backendBase = (BACKEND_BASE_URL || '').replace(/\/$/, '');
+    const targetUrl =
+      NEWS_API_URL && NEWS_API_URL.trim().length > 0
+        ? NEWS_API_URL.trim()
+        : `${backendBase || 'http://localhost:4000'}/api/news`;
+
+    try {
+      setNewsLoading(true);
+      setNewsStatus('Loading live news…');
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(targetUrl, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) throw new Error('auth');
+        if (res.status === 429) throw new Error('rate-limit');
+        throw new Error(`status ${res.status}`);
+      }
+      const data = await res.json();
+      if (data && typeof data.status === 'string' && data.status !== 'ok' && data.status !== 'stale') {
+        throw new Error(`api-status ${data.status}`);
+      }
+      let normalized: NewsItem[] = [];
+
+      const articles = Array.isArray((data as any)?.articles) ? (data as any).articles : Array.isArray((data as any)) ? (data as any) : [];
+
+      if (articles.length) {
+        normalized = articles.slice(0, 10).map((a: any) => {
+          const title = a?.title || a?.description || 'Daily update';
+          const baseSummary = a?.content || a?.description || '';
+          return {
+            title,
+            summary: extendSummary(baseSummary, title),
+            vocab: vocabFromTitle(title),
+            category: newsCategory,
+            tone: newsTone,
+            image: a?.urlToImage || fallbackNewsImage,
+            tag: 'Live',
+          } as NewsItem;
+        });
+      } else if (data?.title && data?.summary) {
+        normalized = [{
+          title: data.title,
+          summary: extendSummary(data.summary, data.title),
+          vocab: Array.isArray(data.vocab) ? data.vocab : vocabFromTitle(data.title),
+          category: newsCategory,
+          tone: newsTone,
+          image: (data as any)?.image || fallbackNewsImage,
+          tag: 'Live',
+        }];
+      }
+
+      if (normalized.length > 0) {
+        const enriched = await Promise.all(normalized.map(enrichArticleWithAi));
+        setNewsOverrideList(enriched);
+        setNewsList(enriched);
+        setNewsStatus(data.status === 'stale' ? 'Live feed (cached)' : 'Live feed');
+      } else {
+        setNewsOverrideList(null);
+        setNewsList([]);
+        setNewsStatus('Live feed unavailable');
+      }
+    } catch (e) {
+      const msg = (e as Error)?.message || '';
+      if (msg.includes('rate-limit')) {
+        setNewsStatus('Live feed unavailable (rate limited)');
+      } else if (msg.includes('auth')) {
+        setNewsStatus('Live feed unavailable (server auth)');
+      } else {
+        setNewsStatus('Live feed unavailable');
+      }
+      setNewsOverrideList(null);
+      setNewsList([]);
+      if (__DEV__) console.warn('News fetch failed', e);
+    } finally {
+      setNewsLoading(false);
+    }
+  }, [NEWS_API_URL, newsCategory, newsTone, NEWS_API_KEY, fallbackNewsImage, enrichArticleWithAi]);
+
+  useEffect(() => {
+    if (newsFetchStarted.current) return;
+    newsFetchStarted.current = true;
+    const task = InteractionManager.runAfterInteractions(() => {
+      refreshNewsFromApi().catch(() => {});
+    });
+    return () => {
+      try { task?.cancel && task.cancel(); } catch {}
+    };
+  }, [refreshNewsFromApi]);
+
+  let missionSubtitle = 'A 5-question sprint to refresh your words.';
+  let missionCta = 'Start Mission';
+  if (missionLoading) {
+    missionSubtitle = 'Loading mission…';
+    missionCta = 'Loading…';
+  } else if (missionStatus === 'completed') {
+    missionSubtitle = `Completed: ${missionCorrect}/${missionTotal} correct · Streak: ${streakCount} day${streakCount === 1 ? '' : 's'}`;
+    missionCta = 'View Results';
+  } else if (missionStatus === 'in_progress') {
+    missionSubtitle = `Continue: ${missionAnswered}/${missionTotal} questions completed`;
+    missionCta = 'Continue Mission';
+  }
   
 
-  // Enable LayoutAnimation on Android
   useEffect(() => {
-    if (Platform.OS === 'android' && (UIManager as any).setLayoutAnimationEnabledExperimental) {
-      try { (UIManager as any).setLayoutAnimationEnabledExperimental(true); } catch {}
-    }
-  }, []);
-
-  useEffect(() => {
+    if (initRanRef.current) return;
+    initRanRef.current = true;
     (async () => {
       const level = await AsyncStorage.getItem(SELECTED_LEVEL_KEY);
       if (level) setStoredLevel(level);
       const done = await AsyncStorage.getItem('@engniter.onboarding_done_v1');
       setShowOnboarding(!done);
-      try {
-        const savedStyle = await AsyncStorage.getItem(MENU_STYLE_KEY);
-        if (savedStyle === 'grid' || savedStyle === 'list') {
-          if (MENU_STYLE_CACHE !== savedStyle) {
-            MENU_STYLE_CACHE = savedStyle as 'list' | 'grid';
-            setMenuStyle(MENU_STYLE_CACHE);
-          } else if (MENU_STYLE_CACHE && menuStyle !== MENU_STYLE_CACHE) {
-            // Align state with cache if different
-            setMenuStyle(MENU_STYLE_CACHE);
-          }
-        }
-      } catch {}
       try { await loadProgress(); } catch {}
     })();
   }, []);
+
+  // Load today’s mission summary for the home card without blocking the screen
+  useEffect(() => {
+    let alive = true;
+    const userId = user?.id || 'local-user';
+    if (pathname && pathname !== '/') return;
+    if (missionFetchKeyRef.current === userId) return;
+    missionFetchKeyRef.current = userId;
+    (async () => {
+      try {
+        setMissionLoading(true);
+        const res = await getTodayMissionForUser(userId);
+        if (!alive || !res) return;
+        const answered = res.questions.filter(q => q.answered).length;
+        const total = res.questions.length || 5;
+        const review = res.questions.filter(q => q.type === 'weak_word_mcq').length;
+        const fresh = res.questions.filter(q => q.type === 'new_word_mcq').length;
+        const story = res.questions.filter(q => q.type === 'story_mcq').length;
+        setMissionSummary({
+          status: res.mission.status,
+          answered,
+          total,
+          correct: res.mission.correctCount || 0,
+          review,
+          fresh,
+          story,
+          xpReward: res.mission.xpReward || 60,
+        });
+      } catch (e) {
+        console.warn('load mission summary failed', e);
+      } finally {
+        if (alive) setMissionLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [user?.id, pathname]);
 
   // Show a once‑per‑day sign‑up prompt 2 minutes after app launch (only if not signed in)
   useEffect(() => {
@@ -293,27 +578,6 @@ export default function HomeScreen(props?: { preview?: boolean }) {
     } catch {}
   };
 
-  const toggleMenuStyle = async () => {
-    const next = menuStyle === 'list' ? 'grid' : 'list';
-    // Smooth layout morph
-    try {
-      LayoutAnimation.configureNext({
-        duration: 260,
-        update: { type: LayoutAnimation.Types.easeInEaseOut },
-        create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-        delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-      });
-    } catch {}
-    try { viewModeAnim.setValue(0); } catch {}
-    Animated.timing(viewModeAnim, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-    MENU_STYLE_CACHE = next;
-    setMenuStyle(next);
-    // Trigger a short window where icons re-run their animations and force remount via token
-    setIconsTogglePlay(true);
-    setIconsPlayToken(t => t + 1);
-    setTimeout(() => setIconsTogglePlay(false), 1200);
-    try { await AsyncStorage.setItem(MENU_STYLE_KEY, next); } catch {}
-  };
   const closeMenu = () => {
     try {
       Animated.timing(menuAnim, { toValue: 0, duration: 140, useNativeDriver: true }).start(() => setMenuOpen(false));
@@ -343,6 +607,49 @@ export default function HomeScreen(props?: { preview?: boolean }) {
   const accent = '#187486';
   // Use theme background (light: #F8F8F8, dark: #1E1E1E)
   const background = colors.background;
+  const homeIcons = {
+    vault: require('../assets/homepageicons/11.png'),
+    quiz: require('../assets/homepageicons/12.png'),
+    story: require('../assets/homepageicons/13.png'),
+    ielts: require('../assets/homepageicons/14.png'),
+    account: require('../assets/homepageicons/15.png'),
+  } as const;
+
+  const navItems = useMemo(() => [
+    {
+      key: 'vault',
+      title: 'Vault',
+      icon: homeIcons.vault,
+      onPress: () => router.push('/vault'),
+    },
+    {
+      key: 'quiz',
+      title: 'Quiz',
+      icon: homeIcons.quiz,
+      onPress: handleQuizSession,
+    },
+    {
+      key: 'story',
+      title: 'Story',
+      icon: homeIcons.story,
+      onPress: () => router.push('/story/StoryExercise'),
+    },
+    {
+      key: 'ielts',
+      title: 'IELTS',
+      icon: homeIcons.ielts,
+      onPress: () => router.push('/ielts'),
+    },
+    {
+      key: 'account',
+      title: 'Account',
+      icon: homeIcons.account,
+      onPress: () => router.push('/profile'),
+    },
+  ], [handleQuizSession, router]);
+
+  const [activeNav, setActiveNav] = useState<string>('quiz');
+
 
   const sections = useMemo(() => [
     {
@@ -351,28 +658,28 @@ export default function HomeScreen(props?: { preview?: boolean }) {
         {
           title: 'Vault',
           subtitle: 'Manage your vocabulary',
-          icon: require('../assets/homepageicons/vault_icon.png'),
+          icon: homeIcons.vault,
           color: accent,
           onPress: () => router.push('/vault'),
         },
         {
           title: 'Quiz Session',
           subtitle: '5-word practice session',
-          icon: require('../assets/homepageicons/quizsession_icon.png'),
+          icon: homeIcons.quiz,
           color: accent,
           onPress: handleQuizSession,
         },
         {
           title: 'Story Exercise',
           subtitle: 'Fill-in-the-blanks with pill UI',
-          icon: require('../assets/homepageicons/storyexercise_icon.png'),
+          icon: homeIcons.story,
           color: accent,
           onPress: () => router.push('/story/StoryExercise'),
         },
         {
           title: 'IELTS',
           subtitle: 'Writing, Reading, Vocabulary',
-          icon: require('../assets/homepageicons/IELTS_icon.png'),
+          icon: homeIcons.ielts,
           color: accent,
           onPress: () => router.push('/ielts'),
         },
@@ -384,14 +691,14 @@ export default function HomeScreen(props?: { preview?: boolean }) {
         {
           title: 'Journal',
           subtitle: 'Track your learning journey',
-          icon: require('../assets/homepageicons/journal_icon.png'),
+          icon: homeIcons.account,
           color: accent,
           onPress: () => router.push('/journal'),
         },
         {
           title: 'Analytics',
           subtitle: 'View your progress',
-          icon: require('../assets/homepageicons/analytics_icon.png'),
+          icon: homeIcons.account,
           color: accent,
           onPress: () => router.push('/stats'),
         },
@@ -403,13 +710,13 @@ export default function HomeScreen(props?: { preview?: boolean }) {
         {
           title: 'Profile',
           subtitle: 'Manage your account',
-          lottie: require('../assets/homepageicons/profile_icon.json'),
+          icon: homeIcons.account,
           color: accent,
           onPress: () => router.push('/profile'),
         },
       ],
     },
-  ], [handleQuizSession, router]);
+  ], [accent, handleQuizSession, homeIcons.account, homeIcons.ielts, homeIcons.quiz, homeIcons.story, homeIcons.vault, router]);
 
   // No PNG prefetch — icons are Lottie.
 
@@ -441,84 +748,75 @@ export default function HomeScreen(props?: { preview?: boolean }) {
   const [scrolled, setScrolled] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
   const isLight = theme === 'light';
+  const categoryLabel = displayNews?.category === 'technology'
+    ? 'Tech'
+    : displayNews?.category === 'world'
+      ? 'World'
+      : displayNews?.category === 'business'
+        ? 'Business'
+        : 'Today';
+  const toneLabel = displayNews?.tone === 'negative' ? 'Serious' : displayNews?.tone === 'positive' ? 'Positive' : 'Neutral';
+  const heroTag = (displayNews?.tag || (newsStatus.toLowerCase().includes('live') ? 'Live' : 'Feature')).toUpperCase();
+  const heroImage = displayNews?.image || fallbackNewsImage;
+  const mainPreviewLines = newsFontScale === 2 ? 4 : newsFontScale === 0 ? 2 : 3;
+
+  const renderHighlightedText = (
+    text: string,
+    vocabList: { word: string }[],
+    props: any,
+    highlightStyle?: any
+  ) => {
+    const cleanWords = (vocabList || []).map(v => (v.word || '').trim()).filter(Boolean);
+    if (!cleanWords.length) return <Text {...props}>{text}</Text>;
+    const escaped = cleanWords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const regex = new RegExp(`\\b(${escaped.join('|')})\\b`, 'gi');
+    const parts = text.split(regex);
+    return (
+      <Text {...props}>
+        {parts.map((part, idx) => {
+          const match = cleanWords.some(w => w.toLowerCase() === part.toLowerCase());
+          if (match) {
+            return (
+              <Text key={idx} style={[{ fontWeight: '800', color: '#F8B070' }, highlightStyle]}>
+                {part}
+              </Text>
+            );
+          }
+          return <Text key={idx}>{part}</Text>;
+        })}
+      </Text>
+    );
+  };
+
+  const openNewsModal = (article: NewsItem) => {
+    setNewsModalArticle(article);
+    setNewsModalVisible(true);
+    newsModalAnim.setValue(0);
+    Animated.timing(newsModalAnim, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+  };
+
+  const closeNewsModal = () => {
+    Animated.timing(newsModalAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => setNewsModalVisible(false));
+  };
 
   return (
     <SafeAreaView edges={['left','right']} style={[styles.container, { backgroundColor: background }] }>
       {/* Fixed top bar; background becomes translucent only after scrolling */}
-      <View
-        onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}
-        style={[
-          styles.headerArea,
-          {
-            paddingTop: insets.top + 6,
-            paddingBottom: 6,
-            backgroundColor: scrolled
-              ? (isLight ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.2)')
-              : background,
-          },
-        ]}
-      >
-      <View style={[styles.headerRow] }>
-          <View style={[styles.streakPillInline, theme === 'light' && styles.streakPillLight]}>
-            {isPreview ? (
-              <Text style={[styles.streakText, theme === 'light' && styles.streakTextLight]}>🔥 {userProgress?.streak || 0}</Text>
-            ) : (
-              <>
-                <LottieView source={require('../assets/lottie/flame.json')} autoPlay loop style={{ width: 18, height: 18, marginRight: 6 }} />
-                <Text style={[styles.streakText, theme === 'light' && styles.streakTextLight]}>{userProgress?.streak || 0}</Text>
-              </>
-            )}
-          </View>
-        <View style={styles.headerRightRow}>
-          <Animated.View style={{ transform: [{ scale: hdrScaleToggle }] }}>
-            <TouchableOpacity
-              style={[styles.headerIconBtn, theme === 'light' && styles.headerIconBtnLight]}
-              onPress={toggleMenuStyle}
-              onPressIn={() => pressIn('hdr:toggle')}
-              onPressOut={() => pressBounce('hdr:toggle')}
-              activeOpacity={0.9}
-              accessibilityLabel={menuStyle === 'list' ? 'Switch to Tiles' : 'Switch to List'}
-            >
-              {menuStyle === 'list' ? (
-                <LayoutGrid size={16} color={'#0D3B4A'} />
-              ) : (
-                <ListIcon size={16} color={'#0D3B4A'} />
-              )}
-            </TouchableOpacity>
-          </Animated.View>
-          <Animated.View style={{ transform: [{ scale: hdrScaleTranslate }] }}>
-            <TouchableOpacity
-              style={[styles.translateBtnInline, theme === 'light' && styles.translateBtnLight]}
-              onPress={() => router.push('/translate')}
-              onPressIn={() => pressIn('hdr:translate')}
-              onPressOut={() => pressBounce('hdr:translate')}
-              activeOpacity={0.9}
-              accessibilityLabel="Translate"
-            >
-              <Repeat2 size={14} color={theme === 'light' ? '#0D3B4A' : '#0D3B4A'} />
-            </TouchableOpacity>
-          </Animated.View>
-          
-          <Animated.View style={{ transform: [{ scale: hdrScalePro }] }}>
-            <TouchableOpacity
-              style={[styles.subBtnInline, theme === 'light' && styles.subBtnLight]}
-              onPress={() => router.push('/profile?paywall=1')}
-              onPressIn={() => pressIn('hdr:pro')}
-              onPressOut={() => pressBounce('hdr:pro')}
-              activeOpacity={0.9}
-            >
-              <Crown size={16} color={theme === 'light' ? '#0D3B4A' : '#0D3B4A'} />
-              <Text style={styles.subBtnText}>Pro</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </View>
-      </View>
-      </View>
+      <TopStatusPanel
+        floating
+        includeTopInset
+        scrolled={scrolled}
+        onHeight={setHeaderHeight}
+        isPreview={isPreview}
+      />
 
       <ScrollView
         style={[styles.scrollView, { backgroundColor: background }]}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: headerHeight || (insets.top + 54) }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: Math.max(0, (headerHeight ? headerHeight + 6 : insets.top + 48)) },
+        ]}
         // Avoid background flicker during navigation/transitions
         removeClippedSubviews={false}
         onScroll={({ nativeEvent }) => {
@@ -530,102 +828,292 @@ export default function HomeScreen(props?: { preview?: boolean }) {
       >
         {/* Header is fixed above — list starts below */}
 
-        {/* Sections */}
-        {sections.map((section, sectionIndex) => (
-          <View key={sectionIndex} style={styles.section}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            <View style={menuStyle === 'grid' ? styles.gridWrap : undefined}>
-              {section.items.map((item, itemIndex) => {
-                const itemKey = `s${sectionIndex}-i${itemIndex}`;
-                const modeScale = viewModeAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] });
-                const tileScale = getTileScale(itemKey);
-                return (
-                  <Animated.View
-                    key={itemIndex}
-                    style={[
-                      menuStyle === 'grid' ? styles.gridItem : undefined,
-                      {
-                        opacity: 1,
-                        transform: [{ translateY: 0 }, { scale: modeScale }],
-                      },
-                    ]}
-                  >
-                    {menuStyle === 'grid' ? (
-                      <Animated.View style={{ transform: [{ scale: tileScale }] }}>
-                        <TouchableOpacity
-                          style={[
-                            styles.tile,
-                            theme === 'light' && styles.tileLight,
-                          ]}
-                          activeOpacity={0.9}
-                          onPressIn={() => pressIn(itemKey)}
-                          onPressOut={() => pressBounce(itemKey)}
-                          onPress={item.onPress}
-                        >
-                          <View style={styles.iconShadowWrap}>
-                            {(item as any).lottie ? (
-                              <LottieView
-                                key={`lottie-${itemKey}-${menuStyle}-${iconsTogglePlay ? iconsPlayToken : 'still'}`}
-                                source={themedLottie((item as any).lottie)}
-                                autoPlay={(playIcons && !iconDone[itemKey]) || iconsTogglePlay}
-                                loop={false}
-                                onAnimationFinish={() => onIconFinish(itemKey)}
-                                progress={!((playIcons && !iconDone[itemKey]) || iconsTogglePlay) ? 1 : undefined}
-                                style={[styles.tileIcon, { opacity: 0.82 }]}
-                              />
-                            ) : (
-                              <Image source={item.icon} style={styles.tileIcon} resizeMode="contain" fadeDuration={0} />
-                            )}
-                          </View>
-                          <Text style={[styles.tileTitle, theme === 'light' && styles.cardTitleLight]}>{item.title}</Text>
-                        </TouchableOpacity>
-                      </Animated.View>
-                    ) : (
-                      <Animated.View style={{ transform: [{ scale: tileScale }] }}>
-                        <TouchableOpacity
-                          style={[
-                            styles.card,
-                            theme === 'light' && styles.cardLight,
-                            { marginHorizontal: 12 },
-                          ]}
-                          onPressIn={() => pressIn(itemKey)}
-                          onPressOut={() => pressBounce(itemKey)}
-                          onPress={item.onPress}
-                          activeOpacity={0.85}
-                        >
-                        <View style={styles.cardContent}>
-                          <View style={styles.cardLeft}>
-                            <View style={styles.iconContainer}>
-                              {(item as any).lottie ? (
-                                <LottieView
-                                  key={`lottie-list-${itemKey}-${menuStyle}-${iconsTogglePlay ? iconsPlayToken : 'still'}`}
-                                  source={themedLottie((item as any).lottie)}
-                                  autoPlay={(playIcons && !iconDone[itemKey]) || iconsTogglePlay}
-                                  loop={false}
-                                  onAnimationFinish={() => onIconFinish(itemKey)}
-                                  progress={!((playIcons && !iconDone[itemKey]) || iconsTogglePlay) ? 1 : undefined}
-                                  style={[styles.homeIcon, { opacity: 0.82 }]}
-                                />
-                              ) : (
-                                <Image source={item.icon} style={styles.homeIcon} resizeMode="contain" fadeDuration={0} />
-                              )}
-                            </View>
-                            <View style={styles.cardText}>
-                              <Text style={[styles.cardTitle, theme === 'light' && styles.cardTitleLight]}>{item.title}</Text>
-                              <Text style={[styles.cardSubtitle, theme === 'light' && styles.cardSubtitleLight]}>{item.subtitle}</Text>
-                            </View>
-                          </View>
-                          <ChevronRight size={20} color="#187486" />
-                        </View>
-                        </TouchableOpacity>
-                      </Animated.View>
-                    )}
-                  </Animated.View>
-                );
-              })}
+        {/* Today’s Mission */}
+        <View style={[styles.missionCard, theme === 'light' && styles.missionCardLight]}>
+          <View style={styles.missionHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.missionTitle, theme === 'light' && styles.missionTitleLight]}>Today’s Mission</Text>
+              <Text style={[styles.missionSubtitle, theme === 'light' && styles.missionSubtitleLight]}>
+                {missionSubtitle}
+              </Text>
+              <View style={styles.missionPillsRow}>
+                <View style={styles.timePill}>
+                  <Clock size={14} color={'#0D3B4A'} />
+                  <Text style={styles.timePillText}>≈ 5–10 min</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.streakPill}>
+              <Flame size={14} color={'#F8B070'} />
+              <Text style={styles.streakPillText}>Streak: {streakCount} days</Text>
             </View>
           </View>
-        ))}
+        <View style={[styles.rewardStrip, theme === 'light' && styles.rewardStripLight, { marginTop: 12 }]}>
+          <Text style={[styles.rewardText, theme === 'light' && styles.rewardTextLight]}>
+            Reward: +{missionXP} XP · Streak: {streakCount} day{streakCount === 1 ? '' : 's'}
+          </Text>
+        </View>
+          {!!missionComposition && (
+            <Text style={[styles.missionHelper, theme === 'light' && styles.missionHelperLight, { marginTop: 6 }]}>
+              {missionComposition}
+            </Text>
+          )}
+          <View style={styles.missionActions}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={styles.missionPrimary}
+              onPress={() => {
+                router.push('/mission');
+              }}
+              disabled={missionLoading}
+            >
+              <Text style={styles.missionPrimaryText}>{missionCta}</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={[styles.missionHelper, theme === 'light' && styles.missionHelperLight]}>You can exit anytime.</Text>
+        </View>
+
+        {/* Daily News */}
+        <View style={[styles.newsCard, theme === 'light' && styles.newsCardLight]}>
+          <View style={styles.newsHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.newsLabel, theme === 'light' && styles.newsLabelLight]}>Daily News</Text>
+              <Text style={[styles.newsStatus, theme === 'light' && styles.newsStatusLight]}>{newsStatus}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setNewsMenuOpen(o => !o)}
+              activeOpacity={0.8}
+              style={[
+                styles.newsSettingsBtn,
+                theme === 'light' && styles.newsSettingsBtnLight,
+                newsMenuOpen && styles.newsSettingsBtnActive,
+              ]}
+            >
+              <Text style={[styles.newsSettingsIcon, theme === 'light' && styles.newsSettingsIconLight]}>⋯</Text>
+            </TouchableOpacity>
+          </View>
+
+          {newsMenuOpen && (
+            <View style={[styles.newsSettingsCard, theme === 'light' && styles.newsSettingsCardLight]}>
+              <Text style={[styles.newsSettingsLabel, theme === 'light' && styles.newsSettingsLabelLight]}>Category</Text>
+              <View style={styles.newsControlsRow}>
+                {(['technology', 'world', 'business'] as const).map(cat => (
+                  <TouchableOpacity
+                    key={cat}
+                    onPress={() => setNewsCategory(cat)}
+                    style={[
+                      styles.newsChip,
+                      newsCategory === cat && styles.newsChipActive,
+                      theme === 'light' && styles.newsChipLight,
+                      theme === 'light' && newsCategory === cat && styles.newsChipActiveLight,
+                    ]}
+                  >
+                    <Text style={[styles.newsChipText, newsCategory === cat && styles.newsChipTextActive]}>
+                      {cat === 'technology' ? 'Tech' : cat === 'world' ? 'World' : 'Business'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={[styles.newsSettingsLabel, theme === 'light' && styles.newsSettingsLabelLight]}>Tone</Text>
+              <View style={styles.newsControlsRow}>
+                {(['positive', 'negative'] as const).map(tone => (
+                  <TouchableOpacity
+                    key={tone}
+                    onPress={() => setNewsTone(tone)}
+                    style={[
+                      styles.newsChip,
+                      newsTone === tone && styles.newsChipActive,
+                      theme === 'light' && styles.newsChipLight,
+                      theme === 'light' && newsTone === tone && styles.newsChipActiveLight,
+                    ]}
+                  >
+                    <Text style={[styles.newsChipText, newsTone === tone && styles.newsChipTextActive]}>
+                      {tone === 'positive' ? 'Positive' : 'Negative'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={[styles.newsSettingsLabel, theme === 'light' && styles.newsSettingsLabelLight]}>Size</Text>
+              <View style={styles.newsControlsRow}>
+                {([0, 1, 2] as const).map(size => (
+                  <TouchableOpacity
+                    key={size}
+                    onPress={() => setNewsFontScale(size)}
+                    style={[
+                      styles.newsChip,
+                      newsFontScale === size && styles.newsChipActive,
+                      theme === 'light' && styles.newsChipLight,
+                      theme === 'light' && newsFontScale === size && styles.newsChipActiveLight,
+                    ]}
+                  >
+                    <Text style={[styles.newsChipText, newsFontScale === size && styles.newsChipTextActive]}>
+                      {size === 0 ? 'S' : size === 1 ? 'M' : 'L'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {displayNews && (
+            <>
+              <View style={[styles.newsHeroShell, theme === 'light' && styles.newsHeroShellLight]}>
+                <View style={[styles.newsHeroImageWrap, theme === 'light' && styles.newsHeroImageWrapLight]}>
+                  <Image source={{ uri: heroImage }} style={styles.newsHeroImage} />
+                  <View style={styles.newsHeroOverlay} />
+                  <View style={styles.newsHeroBadgeRow}>
+                    <Text style={[styles.newsHeroBadge, theme === 'light' && styles.newsHeroBadgeLight]}>{heroTag}</Text>
+                    <Text style={[styles.newsHeroBadgeMuted, theme === 'light' && styles.newsHeroBadgeMutedLight]}>{categoryLabel} · {toneLabel}</Text>
+                  </View>
+                  <View style={[styles.newsHeroStatusPill, theme === 'light' && styles.newsHeroStatusPillLight]}>
+                    <Text style={[styles.newsHeroStatusText, theme === 'light' && styles.newsHeroStatusTextLight]}>{newsStatus}</Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity activeOpacity={0.9} onPress={() => openNewsModal(displayNews)} style={styles.newsHeroContent}>
+                  <Text style={[
+                    styles.newsTitle,
+                    theme === 'light' && styles.newsTitleLight,
+                    newsFontScale === 2 && { fontSize: 20 },
+                    newsFontScale === 0 && { fontSize: 16 },
+                  ]}>
+                    {displayNews.title}
+                  </Text>
+                  {renderHighlightedText(
+                    displayNews.summary,
+                    displayNews.vocab,
+                    {
+                      style: [
+                        styles.newsSummary,
+                        theme === 'light' && styles.newsSummaryLight,
+                        newsFontScale === 2 && { fontSize: 15, lineHeight: 22 },
+                        newsFontScale === 0 && { fontSize: 13, lineHeight: 19 },
+                      ],
+                      numberOfLines: mainPreviewLines,
+                    },
+                  )}
+                  <Text style={[styles.newsToggleText, theme === 'light' && styles.newsToggleTextLight, styles.newsToggleInline]}>
+                    Tap to open
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={[styles.newsGlossary, theme === 'light' && styles.newsGlossaryLight]}>
+                <Text style={[styles.newsGlossaryTitle, theme === 'light' && styles.newsGlossaryTitleLight]}>Vocabulary</Text>
+                {(displayNews.vocab || []).map(item => (
+                  <Text
+                    key={item.word}
+                    style={[
+                      styles.newsGlossaryItem,
+                      theme === 'light' && styles.newsGlossaryItemLight,
+                      newsFontScale === 2 && { fontSize: 13 },
+                      newsFontScale === 0 && { fontSize: 11 },
+                    ]}
+                  >
+                    <Text style={{ fontWeight: '700' }}>{item.word}</Text> — {item.definition}
+                  </Text>
+                ))}
+              </View>
+
+              {!!extraNews.length && (
+                <View style={styles.newsCarouselSection}>
+                  <Text style={[styles.newsLabel, theme === 'light' && styles.newsLabelLight]}>Headline previews</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 12, paddingVertical: 4, paddingRight: 4 }}
+                    style={{ marginTop: 10 }}
+                  >
+                    {extraNews.map((n, idx) => (
+                      <TouchableOpacity
+                        key={`${n.title}-${idx}-preview`}
+                    activeOpacity={0.9}
+                    onPress={() => openNewsModal(n)}
+                  >
+                    <View style={[styles.newsPreviewCard, theme === 'light' && styles.newsPreviewCardLight]}>
+                      <Image source={{ uri: n.image || fallbackNewsImage }} style={styles.newsPreviewImage} />
+                      <View style={styles.newsPreviewOverlay} />
+                      <View style={styles.newsPreviewCopy}>
+                        <Text style={[styles.newsPreviewTag, theme === 'light' && styles.newsPreviewTagLight]}>{(n.tag || 'Story').toUpperCase()}</Text>
+                        <Text style={[styles.newsPreviewTitle, theme === 'light' && styles.newsPreviewTitleLight, { color: '#FFFFFF', textShadowColor: 'rgba(0,0,0,0.4)', textShadowRadius: 6 }]} numberOfLines={3}>{n.title}</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+                </View>
+              )}
+
+              {!!extraNews.length && (
+                <View style={styles.newsExtraList}>
+                  <Text style={[styles.newsLabel, theme === 'light' && styles.newsLabelLight]}>More news</Text>
+                  {extraNews.map((n, idx) => {
+                    return (
+                      <TouchableOpacity
+                        key={`${n.title}-${idx}`}
+                        activeOpacity={0.9}
+                        onPress={() => openNewsModal(n)}
+                        style={[styles.newsExtraRow, theme === 'light' && styles.newsExtraRowLight]}
+                      >
+                        <Image source={{ uri: n.image || fallbackNewsImage }} style={styles.newsExtraThumb} />
+                        <View style={{ flex: 1, gap: 4 }}>
+                          <Text style={[styles.newsExtraTitle, theme === 'light' && styles.newsExtraTitleLight]} numberOfLines={3}>{n.title}</Text>
+                          <Text style={[styles.newsToggleText, theme === 'light' && styles.newsToggleTextLight, styles.newsToggleInline]}>
+                            Open story
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </>
+          )}
+        </View>
+
+        <Modal visible={newsModalVisible} transparent animationType="none" onRequestClose={closeNewsModal}>
+          <View style={styles.newsModalOverlay}>
+            <TouchableOpacity style={styles.newsModalBackdrop} activeOpacity={1} onPress={closeNewsModal} />
+            <Animated.View
+              style={[
+                styles.newsModalSheet,
+                theme === 'light' && styles.newsModalSheetLight,
+                { opacity: newsModalAnim, transform: [{ translateY: newsModalAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] },
+              ]}
+            >
+              <View style={[styles.newsModalHandle, theme === 'light' && styles.newsModalHandleLight]} />
+              {newsModalArticle && (
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+                  <Image source={{ uri: newsModalArticle.image || fallbackNewsImage }} style={styles.newsModalImage} />
+                  <View style={styles.newsModalTagRow}>
+                    <Text style={styles.newsModalTag}>{(newsModalArticle.tag || 'Story').toUpperCase()}</Text>
+                    <Text style={styles.newsModalTagMuted}>{(newsModalArticle.category || categoryLabel)} · {(newsModalArticle.tone || toneLabel)}</Text>
+                  </View>
+                  <Text style={[styles.newsModalTitle, theme === 'light' && styles.newsModalTitleLight]}>{newsModalArticle.title}</Text>
+                  {renderHighlightedText(
+                    newsModalArticle.summary,
+                    newsModalArticle.vocab,
+                    { style: [styles.newsModalSummary, theme === 'light' && styles.newsModalSummaryLight] },
+                    { color: '#F97316' }
+                  )}
+                  <View style={[styles.newsGlossary, theme === 'light' && styles.newsGlossaryLight]}>
+                    <Text style={[styles.newsGlossaryTitle, theme === 'light' && styles.newsGlossaryTitleLight]}>Vocabulary</Text>
+                    {newsModalArticle.vocab.map(item => (
+                      <Text key={item.word} style={[styles.newsGlossaryItem, theme === 'light' && styles.newsGlossaryItemLight]}>
+                        <Text style={{ fontWeight: '700' }}>{item.word}</Text> — {item.definition}
+                      </Text>
+                    ))}
+                  </View>
+                </ScrollView>
+              )}
+              <TouchableOpacity onPress={closeNewsModal} activeOpacity={0.8} style={[styles.newsToggleBtn, { alignSelf: 'stretch', marginTop: 12, alignItems: 'center' }]}>
+                <Text style={[styles.newsToggleText, theme === 'light' && styles.newsToggleTextLight]}>Close</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        </Modal>
 
         {/* Bottom spacing for FAB (respect safe-area) */}
         <View style={{ height: 8 }} />
@@ -634,13 +1122,14 @@ export default function HomeScreen(props?: { preview?: boolean }) {
       {/* Floating Action Button */}
       {!isPreview && (
         <TouchableOpacity
-          style={[styles.fab, { bottom: Math.max(20, insets.bottom + 18) }]}
+          style={[styles.fab, { bottom: Math.max(48, insets.bottom + 52) }]}
           onPress={() => (menuOpen ? closeMenu() : openMenu())}
           activeOpacity={0.8}
         >
           <Plus size={24} color="#FFFFFF" />
         </TouchableOpacity>
       )}
+
 
       {menuOpen && !isPreview && (
         <>
@@ -923,6 +1412,329 @@ const styles = StyleSheet.create({
     fontFamily: 'Ubuntu-Regular',
   },
   cardSubtitleLight: { color: '#4B5563' },
+  missionCard: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: '#0D3B4A',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  missionCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5DED3',
+  },
+  missionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+    fontFamily: 'Ubuntu-Bold',
+  },
+  missionTitleLight: { color: '#0D3B4A' },
+  missionSubtitle: {
+    fontSize: 14,
+    color: '#E5E7EB',
+    lineHeight: 18,
+    fontFamily: 'Ubuntu-Regular',
+  },
+  missionSubtitleLight: { color: '#4B5563' },
+  missionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  missionPillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  timePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#FDE9D9',
+  },
+  timePillText: {
+    color: '#0D3B4A',
+    fontWeight: '700',
+    fontSize: 12,
+    fontFamily: 'Ubuntu-Bold',
+  },
+  streakPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(24,116,134,0.12)',
+    alignSelf: 'flex-start',
+  },
+  streakPillText: {
+    color: '#187486',
+    fontWeight: '700',
+    fontSize: 12,
+    fontFamily: 'Ubuntu-Bold',
+  },
+  missionSteps: {
+    marginTop: 12,
+    gap: 8,
+  },
+  missionStep: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  missionStepLight: {
+    backgroundColor: '#F9F1E7',
+  },
+  missionStepLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  missionStepIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  missionStepTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
+    fontFamily: 'Ubuntu-Bold',
+  },
+  missionStepTitleLight: { color: '#0D3B4A' },
+  missionStepDesc: {
+    fontSize: 13,
+    color: '#E5E7EB',
+    lineHeight: 17,
+    fontFamily: 'Ubuntu-Regular',
+  },
+  missionStepDescLight: { color: '#4B5563' },
+  missionProgressRow: {
+    marginTop: 10,
+    gap: 6,
+  },
+  missionProgressText: {
+    fontSize: 12,
+    color: '#E5E7EB',
+    fontFamily: 'Ubuntu-Medium',
+  },
+  missionProgressTextLight: { color: '#4B5563' },
+  missionProgressBar: {
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  missionProgressFill: {
+    height: '100%',
+    backgroundColor: '#F8B070',
+    borderRadius: 999,
+  },
+  rewardStrip: {
+    marginTop: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(24,116,134,0.16)',
+  },
+  rewardStripLight: {
+    backgroundColor: 'rgba(24,116,134,0.12)',
+  },
+  rewardText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#E5E7EB',
+    fontFamily: 'Ubuntu-Medium',
+  },
+  rewardTextLight: { color: '#0D3B4A' },
+  missionActions: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 10,
+  },
+  missionPrimary: {
+    backgroundColor: '#F8B070',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+  },
+  missionPrimaryText: {
+    color: '#0D3B4A',
+    fontWeight: '700',
+    fontSize: 14,
+    fontFamily: 'Ubuntu-Bold',
+  },
+  missionSecondary: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  missionSecondaryLight: {
+    borderColor: '#187486',
+  },
+  missionSecondaryText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
+    fontFamily: 'Ubuntu-Medium',
+  },
+  missionSecondaryTextLight: { color: '#187486' },
+  missionHelper: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#E5E7EB',
+    fontFamily: 'Ubuntu-Regular',
+  },
+  missionHelperLight: { color: '#4B5563' },
+  newsCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: '#0D3B4A',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    gap: 10,
+  },
+  newsCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E5DED3' },
+  newsHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  newsLabel: { fontSize: 12, fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.6, fontFamily: 'Ubuntu-Bold' },
+  newsLabelLight: { color: '#4B5563' },
+  newsTitle: { marginTop: 4, fontSize: 18, fontWeight: '800', color: '#E5E7EB', fontFamily: 'Ubuntu-Bold' },
+  newsTitleLight: { color: '#0D3B4A' },
+  newsSummary: { marginTop: 6, fontSize: 14, lineHeight: 21, color: '#D1D5DB', fontFamily: 'Ubuntu-Regular' },
+  newsSummaryLight: { color: '#374151' },
+  newsGlossary: { marginTop: 12, padding: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', gap: 6 },
+  newsGlossaryLight: { backgroundColor: '#F8FAFC', borderColor: '#E5E7EB' },
+  newsGlossaryTitle: { fontSize: 12, fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: 'Ubuntu-Bold' },
+  newsGlossaryTitleLight: { color: '#6B7280' },
+  newsGlossaryItem: { fontSize: 13, color: '#D1D5DB', lineHeight: 18, fontFamily: 'Ubuntu-Regular' },
+  newsGlossaryItemLight: { color: '#4B5563' },
+  newsControlsRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' },
+  newsChip: { paddingHorizontal: 8, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' },
+  newsChipLight: { borderColor: '#E5E7EB', backgroundColor: '#F3F4F6' },
+  newsChipActive: { borderColor: '#F8B070', backgroundColor: 'rgba(248,176,112,0.2)' },
+  newsChipActiveLight: { borderColor: '#F8B070', backgroundColor: 'rgba(248,176,112,0.15)' },
+  newsChipText: { fontSize: 11, fontWeight: '700', color: '#D1D5DB' },
+  newsChipTextActive: { color: '#0D3B4A' },
+  newsStatus: { marginTop: 6, fontSize: 11, color: '#9CA3AF', fontFamily: 'Ubuntu-Medium' },
+  newsStatusLight: { color: '#6B7280' },
+  newsSettingsBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  newsSettingsBtnLight: { borderColor: '#E5E7EB', backgroundColor: '#F9FAFB' },
+  newsSettingsBtnActive: { borderColor: '#F8B070', backgroundColor: 'rgba(248,176,112,0.15)' },
+  newsSettingsIcon: { fontSize: 16, fontWeight: '800', color: '#E5E7EB' },
+  newsSettingsIconLight: { color: '#0D3B4A' },
+  newsSettingsCard: { marginTop: 8, padding: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', gap: 6 },
+  newsSettingsCardLight: { backgroundColor: '#F8FAFC', borderColor: '#E5E7EB' },
+  newsSettingsLabel: { fontSize: 11, fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 4, fontFamily: 'Ubuntu-Bold' },
+  newsSettingsLabelLight: { color: '#6B7280' },
+  newsHeroShell: { marginTop: 8, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', backgroundColor: 'rgba(255,255,255,0.03)', overflow: 'hidden', padding: 10, gap: 10 },
+  newsHeroShellLight: { backgroundColor: '#F9FAFB', borderColor: '#E5E7EB' },
+  newsHeroImageWrap: { height: 180, borderRadius: 12, overflow: 'hidden', position: 'relative' },
+  newsHeroImageWrapLight: {},
+  newsHeroImage: { width: '100%', height: '100%' },
+  newsHeroOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.25)' },
+  newsHeroBadgeRow: { position: 'absolute', top: 10, left: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  newsHeroBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#F8B070', color: '#0D3B4A', fontWeight: '800', fontSize: 11 },
+  newsHeroBadgeLight: { backgroundColor: '#FDE9D9', color: '#0D3B4A' },
+  newsHeroBadgeMuted: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(15,26,36,0.55)', color: '#E5E7EB', fontWeight: '700', fontSize: 11 },
+  newsHeroBadgeMutedLight: { backgroundColor: 'rgba(255,255,255,0.9)', color: '#0D3B4A' },
+  newsHeroStatusPill: { position: 'absolute', bottom: 10, left: 10, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: 'rgba(13,59,74,0.85)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+  newsHeroStatusPillLight: { backgroundColor: 'rgba(255,255,255,0.92)', borderColor: '#E5E7EB' },
+  newsHeroStatusText: { color: '#E5E7EB', fontWeight: '700', fontSize: 12 },
+  newsHeroStatusTextLight: { color: '#0D3B4A' },
+  newsHeroContent: { paddingTop: 8, gap: 6 },
+  newsToggleBtn: { marginTop: 6, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.08)' },
+  newsToggleText: { color: '#F8B070', fontWeight: '700', fontSize: 12 },
+  newsToggleTextLight: { color: '#0D3B4A' },
+  newsToggleInline: { marginTop: 2 },
+  newsCarouselSection: { marginTop: 14, gap: 8 },
+  newsPreviewCard: { width: 220, height: 150, borderRadius: 14, overflow: 'hidden', backgroundColor: '#111827', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  newsPreviewCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
+  newsPreviewImage: { width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 },
+  newsPreviewOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.28)' },
+  newsPreviewCopy: { position: 'absolute', left: 10, right: 10, bottom: 10, gap: 4 },
+  newsPreviewTag: { color: '#F8B070', fontWeight: '800', fontSize: 11 },
+  newsPreviewTagLight: { color: '#9A3412' },
+  newsPreviewTitle: { color: '#FFFFFF', fontWeight: '800', fontSize: 14, fontFamily: 'Ubuntu-Bold' },
+  newsPreviewTitleLight: { color: '#0D3B4A' },
+  newsPreviewSummary: { color: '#E5E7EB', fontSize: 12, lineHeight: 16, fontFamily: 'Ubuntu-Regular' },
+  newsPreviewSummaryLight: { color: '#374151' },
+  newsExtraList: { marginTop: 14, gap: 10 },
+  newsExtraRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  newsExtraRowLight: { backgroundColor: '#F8FAFC', borderColor: '#E5E7EB' },
+  newsExtraThumb: { width: 64, height: 64, borderRadius: 12, backgroundColor: '#111827' },
+  newsExtraTitle: { fontSize: 14, fontWeight: '800', color: '#E5E7EB', fontFamily: 'Ubuntu-Bold' },
+  newsExtraTitleLight: { color: '#0D3B4A' },
+  newsExtraSummary: { fontSize: 13, lineHeight: 18, color: '#D1D5DB', fontFamily: 'Ubuntu-Regular' },
+  newsExtraSummaryLight: { color: '#4B5563' },
+  newsModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
+  newsModalBackdrop: { flex: 1 },
+  newsModalSheet: { backgroundColor: '#1E1E1E', borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 18, paddingBottom: 28 },
+  newsModalSheetLight: { backgroundColor: '#FFFFFF' },
+  newsModalHandle: { width: 42, height: 4, borderRadius: 999, alignSelf: 'center', backgroundColor: '#4B5563', marginBottom: 12 },
+  newsModalHandleLight: { backgroundColor: '#E5E7EB' },
+  newsModalImage: { width: '100%', height: 180, borderRadius: 12, marginBottom: 12 },
+  newsModalTagRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  newsModalTag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#F8B070', color: '#0D3B4A', fontWeight: '800', fontSize: 12 },
+  newsModalTagMuted: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.08)', color: '#E5E7EB', fontWeight: '700', fontSize: 12 },
+  newsModalTitle: { fontSize: 20, fontWeight: '800', color: '#E5E7EB', fontFamily: 'Ubuntu-Bold', marginTop: 4 },
+  newsModalTitleLight: { color: '#0D3B4A' },
+  newsModalSummary: { marginTop: 8, fontSize: 14, lineHeight: 22, color: '#D1D5DB', fontFamily: 'Ubuntu-Regular' },
+  newsModalSummaryLight: { color: '#374151' },
+  offerRow: {
+    marginTop: 8,
+    gap: 6,
+  },
+  offerCountdownPill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: 'rgba(124,231,160,0.14)',
+  },
+  offerCountdownText: {
+    color: '#0b1a2d',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  offerPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  offerOldPrice: {
+    textDecorationLine: 'line-through',
+    color: '#6B7280',
+    fontSize: 14,
+  },
+  offerNewPrice: {
+    color: '#0b1a2d',
+    fontSize: 16,
+    fontWeight: '800',
+  },
   cardLight: {
     backgroundColor: '#FFFFFF',
     borderColor: '#FFFFFF',
@@ -939,19 +1751,19 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 24,
+    bottom: 50,
     right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: '#88BBF5',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
   },
   headerRow: {
     flexDirection: 'row',
@@ -1005,6 +1817,22 @@ const styles = StyleSheet.create({
   },
   subBtnLight: { backgroundColor: '#B6E0E2', borderColor: '#7FB2B6' },
   subBtnText: { color: '#0D3B4A', fontWeight: '800', fontSize: 14 },
+  offerBtnInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minHeight: 24,
+    backgroundColor: '#7CE7A0',
+    borderWidth: 1,
+    borderColor: '#5FC789',
+    shadowColor: '#7CE7A0',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  offerBtnText: { color: '#0b1a2d', fontWeight: '800', fontSize: 11 },
   headerRightRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   // Header icon pill (for Tiles/List toggle)
   headerIconBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, minHeight: 30, backgroundColor: '#CCE2FC', borderWidth: 1, borderColor: '#B3D6FA', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
@@ -1065,5 +1893,12 @@ const styles = StyleSheet.create({
   celebrateHintLight: { color: '#6B7280' },
   celebrateBtn: { marginTop: 16, backgroundColor: '#F8B070', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12 },
   celebrateBtnText: { color: '#0D3B4A', fontWeight: '800' },
+  navBar: { paddingHorizontal: 12, gap: 10 },
+  navItem: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, backgroundColor: '#2A3033', borderWidth: 1, borderColor: '#364147', marginRight: 10, alignItems: 'center', width: 84 },
+  navItemLight: { backgroundColor: '#E9F4F1', borderColor: '#D7E7E2' },
+  navIconWrap: { width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  navIcon: { width: 28, height: 28 },
+  navLabel: { color: '#E5E7EB', fontWeight: '700', fontSize: 12, textAlign: 'center' },
+  navLabelLight: { color: '#0D3B4A' },
   
 });

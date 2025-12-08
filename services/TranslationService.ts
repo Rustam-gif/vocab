@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LANG_NAME_MAP } from '../lib/languages';
 import { aiProxyService } from './AiProxyService';
+import { aiService } from './AIService';
 
 // Name map imported from centralized catalog
 
@@ -34,9 +35,34 @@ class TranslationServiceClass {
     return `${lang.toLowerCase()}::${word.toLowerCase()}`;
   }
 
+  private async fallbackTranslateCore(word: string, lang: string, cacheKey: string): Promise<Translation | null> {
+    try {
+      const t = await aiService.translateWord(word, lang);
+      if (!t) return null;
+      const out: Translation = {
+        lang,
+        word,
+        translation: t,
+        synonyms: [],
+        example: '',
+        examples: [],
+        examplesEn: [],
+        examplesBilingual: undefined,
+      };
+      this.cache[cacheKey] = out;
+      try { await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(this.cache)); } catch {}
+      return out;
+    } catch {
+      return null;
+    }
+  }
+
   async translate(word: string, lang: string): Promise<Translation | null> {
+    const trimmed = (word || '').trim();
+    if (!trimmed) return null;
+
     await this.ensureLoaded();
-    const key = this.makeKey(word, lang);
+    const key = this.makeKey(trimmed, lang);
     const hit = this.cache[key];
     if (hit) return hit;
 
@@ -72,7 +98,29 @@ No markdown, no commentary. Word: "${word}"`;
           try { data = JSON.parse(content.slice(start, end + 1)); } catch {}
         }
       }
-      if (!data || !data.translation) return null;
+      if (!data || !data.translation) {
+        if (__DEV__) {
+          console.warn('TranslationService.translate: missing translation in proxy response, falling back to AIService.translateWord');
+        }
+        const fb = await this.fallbackTranslateCore(trimmed, lang, key);
+        if (fb) return fb;
+        // As a last resort, treat raw content as translation text
+        const txt = String(content || '').trim();
+        if (!txt) return null;
+        const out: Translation = {
+          lang,
+          word: trimmed,
+          translation: txt,
+          synonyms: [],
+          example: '',
+          examples: [],
+          examplesEn: [],
+          examplesBilingual: undefined,
+        };
+        this.cache[key] = out;
+        try { await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(this.cache)); } catch {}
+        return out;
+      }
       const exTarget: string[] = Array.isArray(data.examples_target)
         ? data.examples_target.filter(Boolean).slice(0, 3)
         : (Array.isArray(data.examples) ? data.examples.filter(Boolean).slice(0, 3) : []);
@@ -98,14 +146,21 @@ No markdown, no commentary. Word: "${word}"`;
       try { await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(this.cache)); } catch {}
       return out;
     } catch (e) {
-      return null;
+      if (__DEV__) {
+        console.warn('TranslationService.translate proxy failed, falling back to AIService.translateWord:', e);
+      }
+      // Network / proxy error: use shared AIService path (same Supabase proxy as story exercise)
+      return this.fallbackTranslateCore(trimmed, lang, key);
     }
   }
 
   // Translate FROM a non‑English language INTO English
   async translateToEnglish(word: string, sourceLang: string): Promise<Translation | null> {
+    const trimmed = (word || '').trim();
+    if (!trimmed) return null;
+
     await this.ensureLoaded();
-    const key = `to-en:${(sourceLang || '').toLowerCase()}::${word.toLowerCase()}`;
+    const key = `to-en:${(sourceLang || '').toLowerCase()}::${trimmed.toLowerCase()}`;
     const hit = this.cache[key];
     if (hit) return hit;
 
@@ -140,7 +195,28 @@ No markdown, no commentary. Word: "${word}"`;
           try { data = JSON.parse(content.slice(start, end + 1)); } catch {}
         }
       }
-      if (!data || !data.translation) return null;
+      if (!data || !data.translation) {
+        if (__DEV__) {
+          console.warn('TranslationService.translateToEnglish: missing translation in proxy response, falling back to AIService.translateWord');
+        }
+        const fb = await this.fallbackTranslateCore(trimmed, 'en', key);
+        if (fb) return fb;
+        const txt = String(content || '').trim();
+        if (!txt) return null;
+        const out: Translation = {
+          lang: 'en',
+          word: trimmed,
+          translation: txt,
+          synonyms: [],
+          example: '',
+          examples: [],
+          examplesEn: [],
+          examplesBilingual: undefined,
+        };
+        this.cache[key] = out;
+        try { await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(this.cache)); } catch {}
+        return out;
+      }
       const exTarget: string[] = Array.isArray(data.examples_target)
         ? data.examples_target.filter(Boolean).slice(0, 3)
         : (Array.isArray(data.examples) ? data.examples.filter(Boolean).slice(0, 3) : []);
@@ -166,7 +242,11 @@ No markdown, no commentary. Word: "${word}"`;
       try { await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(this.cache)); } catch {}
       return out;
     } catch (e) {
-      return null;
+      if (__DEV__) {
+        console.warn('TranslationService.translateToEnglish proxy failed, falling back to AIService.translateWord:', e);
+      }
+      // Network / proxy error: reuse AIService.translateWord (same Supabase proxy as story exercise)
+      return this.fallbackTranslateCore(trimmed, 'en', key);
     }
   }
 }

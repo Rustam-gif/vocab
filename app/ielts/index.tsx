@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
@@ -6,70 +6,76 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAppStore } from '../../lib/store';
 import { getTheme } from '../../lib/theme';
+import TopStatusPanel from '../components/TopStatusPanel';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function IELTSHome() {
   const router = useRouter();
   const theme = useAppStore(s => s.theme);
   const colors = getTheme(theme);
   const isLight = theme === 'light';
+  const insets = useSafeAreaInsets();
+  const [panelHeight, setPanelHeight] = useState(0);
+  const contentTop = Math.max(0, panelHeight ? panelHeight - 48 : insets.top + 2);
   return (
     <SafeAreaView style={[styles.page, { backgroundColor: colors.background }]}>
-      <View style={styles.headerRow}>
-        <Text style={[styles.title, isLight && { color: '#111827' }]}>IELTS Practice</Text>
-        <TouchableOpacity accessibilityLabel="Close" onPress={() => router.back()} style={styles.closeBtn}>
-          <Text style={[styles.closeTxt, isLight && { color: '#111827' }]}>✕</Text>
-        </TouchableOpacity>
-      </View>
-      <Text style={[styles.subtitle, isLight && { color: '#4B5563' }]}>Choose a module</Text>
-      <View style={styles.row}>
-        <TouchableOpacity style={[styles.card, isLight && styles.cardLight, isLight && styles.cardLightShadow]} activeOpacity={0.9} onPress={() => router.push('/ielts/writing')}>
-          <View style={styles.cardTile}>
-            <LottieView
-              source={require('../../assets/homepageicons/IELTS_icons/writing_icon.json')}
-              autoPlay
-              loop={false}
-              __stableKey="ielts-icon:writing"
-              style={{ width: 120, height: 120, opacity: 0.9 }}
-            />
-            <Text style={[styles.cardTitle, isLight && { color: '#111827' }]}>Writing</Text>
-            <Text style={[styles.cardHint, isLight && { color: '#6B7280' }]}>Task 1 & 2</Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.card, isLight && styles.cardLight, isLight && styles.cardLightShadow]} activeOpacity={0.9} onPress={() => router.push('/ielts/reading')}>
-          <View style={styles.cardTile}>
-            <LottieView
-              source={require('../../assets/homepageicons/IELTS_icons/reading_icon.json')}
-              autoPlay
-              loop={false}
-              __stableKey="ielts-icon:reading"
-              style={{ width: 120, height: 120, opacity: 0.9 }}
-            />
-            <Text style={[styles.cardTitle, isLight && { color: '#111827' }]}>Reading</Text>
-            <Text style={[styles.cardHint, isLight && { color: '#6B7280' }]}>Timed sets</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.row}>
-        <TouchableOpacity style={[styles.card, isLight && styles.cardLight, isLight && styles.cardLightShadow]} activeOpacity={0.9} onPress={() => router.push('/ielts/vocabulary')}>
-          <View style={styles.cardTile}>
-            <LottieView
-              source={require('../../assets/homepageicons/IELTS_icons/vocabulary_icon.json')}
-              autoPlay
-              loop={false}
-              __stableKey="ielts-icon:vocabulary"
-              style={{ width: 120, height: 120, opacity: 0.9 }}
-            />
-            <Text style={[styles.cardTitle, isLight && { color: '#111827' }]}>Vocabulary</Text>
-            <Text style={[styles.cardHint, isLight && { color: '#6B7280' }]}>In-context</Text>
-          </View>
-        </TouchableOpacity>
+      <TopStatusPanel
+        floating
+        includeTopInset
+        onHeight={setPanelHeight}
+      />
+      <View style={[styles.content, { paddingTop: contentTop }]}>
+        <View style={styles.row}>
+          <TouchableOpacity style={[styles.card, isLight && styles.cardLight, isLight && styles.cardLightShadow]} activeOpacity={0.9} onPress={() => router.push('/ielts/writing')}>
+            <View style={styles.cardTile}>
+              <LottieView
+                source={require('../../assets/homepageicons/IELTS_icons/writing_icon.json')}
+                autoPlay
+                loop={false}
+                __stableKey="ielts-icon:writing"
+                style={{ width: 120, height: 120, opacity: 0.9 }}
+              />
+              <Text style={[styles.cardTitle, isLight && { color: '#111827' }]}>Writing</Text>
+              <Text style={[styles.cardHint, isLight && { color: '#6B7280' }]}>Task 1 & 2</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.card, isLight && styles.cardLight, isLight && styles.cardLightShadow]} activeOpacity={0.9} onPress={() => router.push('/ielts/reading')}>
+            <View style={styles.cardTile}>
+              <LottieView
+                source={require('../../assets/homepageicons/IELTS_icons/reading_icon.json')}
+                autoPlay
+                loop={false}
+                __stableKey="ielts-icon:reading"
+                style={{ width: 120, height: 120, opacity: 0.9 }}
+              />
+              <Text style={[styles.cardTitle, isLight && { color: '#111827' }]}>Reading</Text>
+              <Text style={[styles.cardHint, isLight && { color: '#6B7280' }]}>Timed sets</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.row}>
+          <TouchableOpacity style={[styles.card, isLight && styles.cardLight, isLight && styles.cardLightShadow]} activeOpacity={0.9} onPress={() => router.push('/ielts/vocabulary')}>
+            <View style={styles.cardTile}>
+              <LottieView
+                source={require('../../assets/homepageicons/IELTS_icons/vocabulary_icon.json')}
+                autoPlay
+                loop={false}
+                __stableKey="ielts-icon:vocabulary"
+                style={{ width: 120, height: 120, opacity: 0.9 }}
+              />
+              <Text style={[styles.cardTitle, isLight && { color: '#111827' }]}>Vocabulary</Text>
+              <Text style={[styles.cardHint, isLight && { color: '#6B7280' }]}>In-context</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, padding: 16 },
+  page: { flex: 1 },
+  content: { flex: 1, paddingHorizontal: 16 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { fontSize: 24, fontWeight: '800', color: '#E5E7EB' },
   subtitle: { marginTop: 4, color: '#9CA3AF' },

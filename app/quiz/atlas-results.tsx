@@ -167,20 +167,39 @@ export default function AtlasResults() {
     }
   };
 
-  const handleCreateStory = () => {
-    // Find the set and extract words
-    if (!setId || !levelId) return;
-    
+  // Compute the words for this set; handles both static sets and dynamically generated quiz sets
+  const resolveWordsForSet = useCallback(() => {
+    if (!levelId || !setId) return [] as any[];
     const level = levels.find(l => l.id === levelId);
-    if (!level) return;
-    
+    if (!level) return [] as any[];
     const set = level.sets.find(s => String(s.id) === String(setId));
-    if (!set || !set.words || set.words.length === 0) return;
+    if (set?.words?.length) return set.words;
 
+    // Dynamically inserted recap quizzes (quiz-1, quiz-2, ...)
+    if (!/^quiz-\d+$/.test(String(setId))) return [] as any[];
+    const baseSets = level.sets.filter(s => {
+      const n = Number(s.id);
+      const dropFirstTen = level.id === 'upper-intermediate' ? (isNaN(n) || n > 10) : true;
+      return dropFirstTen && (s as any).type !== 'quiz';
+    });
+    const groupIndex = Math.max(1, parseInt(String(setId).split('-')[1], 10));
+    const start = (groupIndex - 1) * 4;
+    const group = baseSets.slice(start, start + 4);
+    const words: any[] = [];
+    group.forEach(g => {
+      words.push(...(g.words || []).slice(0, 5));
+    });
+    return words;
+  }, [levelId, setId]);
+
+  const handleCreateStory = () => {
     // Use ALL words from the set; trim, filter empties, and de-duplicate
+    const words = resolveWordsForSet();
+    if (!words.length) return;
+
     const wordsToUse = Array.from(
       new Set(
-        set.words
+        words
           .map(w => (typeof w.word === 'string' ? w.word.trim() : ''))
           .filter(Boolean)
       )

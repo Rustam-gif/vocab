@@ -9,6 +9,7 @@ import { LinearGradient } from '../../lib/LinearGradient';
 import { useAppStore } from '../../lib/store';
 
 const TOTAL = 30;
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 export default function PlacementTest() {
   const router = useRouter();
@@ -113,14 +114,6 @@ export default function PlacementTest() {
 
   return (
     <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
-      {/* Soft vertical gradient background */}
-      <LinearGradient
-        colors={isLight ? ['#FAFAFA', '#F8F8F8'] : ['#121415', '#151719']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={StyleSheet.absoluteFillObject as any}
-        pointerEvents="none"
-      />
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <Text style={[styles.headerTitle, isLight && styles.headerTitleLight]}>Placement Test</Text>
@@ -156,23 +149,28 @@ export default function PlacementTest() {
         ) : null}
         <View style={styles.options}>
           {allOptions.map((opt, i) => (
-            <TouchableOpacity
+            <AnimatedTouchable
               key={`${current.id}-${i}`}
               style={[
                 styles.option,
                 isLight && styles.optionLight,
-                selected === i && [styles.optionSelected, { borderColor: bandAccent }],
+                selected === i && [styles.optionSelected, { borderColor: bandAccent, shadowColor: bandAccent }],
                 isLight && selected === i && [styles.optionSelectedLight, { borderLeftWidth: 3, borderLeftColor: bandAccent }],
+                { transform: [{ scale: selected === i ? 1.02 : 1 }] },
               ]}
               onPress={() => setSelected(i)}
               disabled={locked}
               activeOpacity={0.8}
             >
               <View style={styles.optionInnerRow}>
-                <View style={[styles.radio, isLight && styles.radioLight, selected === i && [styles.radioActive, { borderColor: bandAccent, backgroundColor: bandAccent }]]} />
+                <View style={[
+                  styles.radio,
+                  isLight && styles.radioLight,
+                  selected === i && [styles.radioActive, { borderColor: bandAccent, backgroundColor: bandAccent }],
+                ]} />
                 <Text style={[styles.optionText, isLight && styles.optionTextLight]}>{opt}</Text>
               </View>
-            </TouchableOpacity>
+            </AnimatedTouchable>
           ))}
         </View>
         </View>
@@ -249,8 +247,8 @@ function toRGBA(hex: string, alpha: number) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121415' },
-  containerLight: { backgroundColor: '#F8F8F8' },
+  container: { flex: 1, backgroundColor: '#0b1424', paddingTop: 8 },
+  containerLight: { backgroundColor: '#0b1424' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   text: { color: '#fff' },
   header: { padding: 16 },
@@ -264,29 +262,29 @@ const styles = StyleSheet.create({
   counterTextLight: { color: '#374151' },
   headerText: { color: '#9CA3AF', fontWeight: '700' },
   streakWarn: { color: '#F8B070', fontWeight: '700', marginTop: 4 },
-  progressBar: { height: 8, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 6, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.12)' },
-  progressBarLight: { backgroundColor: '#E9E6E0', borderColor: '#D7D3CB' },
-  progressFill: { height: '100%', backgroundColor: '#187486', borderRadius: 6 },
-  questionCard: { backgroundColor: 'rgba(44,47,47,0.9)', marginHorizontal: 16, borderRadius: 18, padding: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: '#3d474b', shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 12 }, elevation: 8, marginTop: 8 },
-  questionCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E5DED3', shadowOpacity: 0.12 },
-  word: { color: '#fff', fontSize: 26, fontWeight: '900' },
-  wordLight: { color: '#111827' },
-  prompt: { color: '#9CA3AF', marginTop: 8, marginBottom: 12, fontSize: 14 },
-  promptLight: { color: '#374151' },
-  example: { color: '#9CA3AF', fontStyle: 'italic', marginBottom: 12 },
-  exampleLight: { color: '#6B7280' },
+  progressBar: { height: 8, backgroundColor: '#1f2b40', borderRadius: 6, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: '#24344f', marginBottom: 4 },
+  progressBarLight: { backgroundColor: '#1f2b40', borderColor: '#24344f' },
+  progressFill: { height: '100%', backgroundColor: '#7CE7A0', borderRadius: 6 },
+  questionCard: { backgroundColor: 'rgba(12,20,36,0.95)', marginHorizontal: 16, borderRadius: 20, padding: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: '#1f2b40', shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 14 }, elevation: 10, marginTop: 8 },
+  questionCardLight: { backgroundColor: 'rgba(12,20,36,0.95)', borderColor: '#1f2b40', shadowOpacity: 0.2 },
+  word: { color: '#E6EDF7', fontSize: 26, fontWeight: '900' },
+  wordLight: { color: '#E6EDF7' },
+  prompt: { color: '#AFC3E3', marginTop: 8, marginBottom: 12, fontSize: 15 },
+  promptLight: { color: '#AFC3E3' },
+  example: { color: '#C7D7F0', fontStyle: 'italic', marginBottom: 12 },
+  exampleLight: { color: '#C7D7F0' },
   options: { gap: 10 },
-  option: { backgroundColor: 'rgba(62,70,74,0.88)', borderWidth: StyleSheet.hairlineWidth, borderColor: '#4b555a', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14 },
-  optionLight: { backgroundColor: '#FAF8F3', borderColor: '#D7D3CB' },
-  optionSelectedLight: { backgroundColor: '#FFF3E9', borderColor: '#F0C9AC' },
-  optionSelected: { borderColor: '#F8B070' },
+  option: { backgroundColor: 'rgba(21,39,64,0.92)', borderWidth: StyleSheet.hairlineWidth, borderColor: '#24344f', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 6 } },
+  optionLight: { backgroundColor: 'rgba(21,39,64,0.92)', borderColor: '#24344f' },
+  optionSelectedLight: { backgroundColor: 'rgba(124,231,160,0.14)', borderColor: '#7CE7A0' },
+  optionSelected: { borderColor: '#7CE7A0', backgroundColor: 'rgba(124,231,160,0.08)' },
   optionInnerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' },
   radio: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#6B7280', marginTop: 3 },
   radioLight: { borderColor: '#9CA3AF' },
-  radioActive: { borderColor: '#F8B070', backgroundColor: '#F8B070' },
-  optionText: { color: '#E5E7EB', fontSize: 15, fontWeight: '600', flex: 1, flexShrink: 1, lineHeight: 20 },
-  optionTextLight: { color: '#111827' },
-  footer: { flexDirection: 'row', gap: 10, padding: 16 },
+  radioActive: { borderColor: '#7CE7A0', backgroundColor: '#7CE7A0' },
+  optionText: { color: '#E6EDF7', fontSize: 15, fontWeight: '700', flex: 1, flexShrink: 1, lineHeight: 20 },
+  optionTextLight: { color: '#E6EDF7' },
+  footer: { flexDirection: 'row', gap: 10, padding: 16, marginTop: 4 },
   btn: { flex: 1, borderRadius: 12, paddingVertical: 0, alignItems: 'center', overflow: 'hidden' },
   nextGradient: { width: '100%', borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, minHeight: 44 },
   btnText: { color: '#fff', fontWeight: '800' },

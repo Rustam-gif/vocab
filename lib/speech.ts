@@ -84,6 +84,10 @@ export async function speak(text: string, options: SpeakOptions = {}) {
         } catch {}
       }
 
+      // Fallback to react-native-tts if OpenAI/native audio is unavailable
+      const usedNativeTts = await tryNativeTTS(text, options);
+      if (usedNativeTts) return;
+
       // No native audio libs available; signal error explicitly
       options.onError?.(new Error('No native audio backend. Install react-native-sound + react-native-fs.'));
       return;
@@ -178,6 +182,54 @@ export async function getAvailableVoicesAsync(): Promise<Array<{ identifier: str
 export default { speak, stop, getAvailableVoicesAsync };
 
 // ---- helpers ----
+async function tryNativeTTS(text: string, options: SpeakOptions): Promise<boolean> {
+  try {
+    // Dynamically require to avoid crashes if not installed on web
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const TTS = require('react-native-tts');
+    try { await TTS.stop(); } catch {}
+    if (options.language) {
+      try { await TTS.setDefaultLanguage(options.language); } catch {}
+    }
+    if (typeof options.rate === 'number') {
+      const clamped = Math.max(0.3, Math.min(2.0, options.rate));
+      try { await TTS.setDefaultRate(clamped); } catch {}
+    }
+    if (typeof options.pitch === 'number') {
+      const clamped = Math.max(0.5, Math.min(2.0, options.pitch));
+      try { await TTS.setDefaultPitch(clamped); } catch {}
+    }
+
+    await new Promise<void>((resolve) => {
+      const cleanup = (subs: Array<{ remove?: () => void }>) => {
+        subs.forEach(sub => {
+          try { sub?.remove?.(); } catch {}
+        });
+      };
+      const finishSub = TTS.addEventListener('tts-finish', () => {
+        options.onDone?.();
+        cleanup([finishSub, cancelSub, errorSub]);
+        resolve();
+      });
+      const cancelSub = TTS.addEventListener('tts-cancel', () => {
+        options.onStopped?.();
+        cleanup([finishSub, cancelSub, errorSub]);
+        resolve();
+      });
+      const errorSub = TTS.addEventListener('tts-error', (err: any) => {
+        options.onError?.(err);
+        cleanup([finishSub, cancelSub, errorSub]);
+        resolve();
+      });
+      TTS.speak(text);
+    });
+    return true;
+  } catch (err) {
+    options.onError?.(err);
+    return false;
+  }
+}
+
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   // Manual base64 encoder (no dependency on btoa/Buffer)
   const bytes = new Uint8Array(buffer);
