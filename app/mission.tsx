@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Mountain, Check, Circle as CircleIcon } from 'lucide-react-native';
+import { ArrowLeft } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
@@ -45,12 +45,14 @@ export default function MissionScreen() {
   const correctIndex = currentQuestion?.correctIndex ?? -1;
   const correctText = correctIndex >= 0 ? currentQuestion?.options?.[correctIndex] : undefined;
   const missionComplete = bundle?.mission?.status === 'completed';
-  const reviewCount = questions.filter(q => q.type === 'weak_word_mcq').length;
-  const newCount = questions.filter(q => q.type === 'new_word_mcq').length;
-  const storyCount = questions.filter(q => q.type === 'story_mcq').length;
+  const reviewCount = bundle?.mission?.weakWordsCount ?? 0;
+  const newCount = bundle?.mission?.newWordsCount ?? 0;
+  const storyCount = questions.filter(q => q.type === 'story_mcq' || q.type === 'story_context_mcq').length;
   const missionReward = bundle?.mission?.xpReward ?? 60;
   const missionStreak = userProgress?.streak ?? 0;
   const compositionReady = questions.length > 0;
+  const isFillBlank = currentQuestion?.type === 'context_fill_blank';
+  const isStoryQuestion = currentQuestion?.type === 'story_context_mcq' || currentQuestion?.type === 'story_mcq';
 
   useEffect(() => {
     Animated.timing(progressAnim, {
@@ -160,52 +162,51 @@ export default function MissionScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Text style={[styles.topTitle, isLight && styles.topTitleLight]}>Today’s Mission</Text>
-          {status !== 'intro' && (
-            <Text style={[styles.topProgress, isLight && styles.topProgressLight]}>
-              Question {status === 'done' ? questions.length : index + 1} of {questions.length}
-            </Text>
-          )}
         </View>
         <View style={{ width: 36 }} />
       </View>
 
-      {status !== 'intro' && (
-        <View style={styles.progressBar}>
-          <Animated.View
-            style={[
-              styles.progressFill,
-              {
-                width: progressAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0%', '100%'],
-                }),
-              },
-            ]}
-          />
-        </View>
-      )}
-
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.body, status === 'active' && styles.bodyActive]}
+        showsVerticalScrollIndicator={false}
+      >
         {status === 'intro' && (
           <View style={[styles.card, isLight && styles.cardLight]}>
-            <Text style={[styles.title, isLight && styles.titleLight]}>Today’s Mission</Text>
-            <Text style={[styles.subtitle, isLight && styles.subtitleLight]}>
-              {questions.length ? `${questions.length} questions · about 10 minutes` : '5 questions · about 10 minutes'}
-            </Text>
-            <View style={styles.bullets}>
-              <Text style={[styles.bulletText, isLight && styles.bulletTextLight]}>
-                • {compositionReady ? `${reviewCount} review word${reviewCount === 1 ? '' : 's'}` : 'Review words loading…'}
-              </Text>
-              <Text style={[styles.bulletText, isLight && styles.bulletTextLight]}>
-                • {compositionReady ? `${newCount} new word${newCount === 1 ? '' : 's'}` : 'New words loading…'}
-              </Text>
-              <Text style={[styles.bulletText, isLight && styles.bulletTextLight]}>
-                • {compositionReady ? `${storyCount} mini stor${storyCount === 1 ? 'y' : 'ies'}` : 'Story loading…'}
-              </Text>
+            <View style={styles.introHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.title, isLight && styles.titleLight]}>Today’s Mission</Text>
+                <Text style={[styles.subtitle, isLight && styles.subtitleLight]}>
+                  {questions.length ? `${questions.length} questions · 5–10 min` : '5 questions · 5–10 min'}
+                </Text>
+              </View>
+              <View style={[styles.streakPill, isLight && styles.streakPillLight]}>
+                <Text style={[styles.streakPillText, isLight && { color: '#16A34A' }]}>
+                  Streak {missionStreak} day{missionStreak === 1 ? '' : 's'}
+                </Text>
+              </View>
             </View>
+
+            <View style={styles.chipRow}>
+              <View style={[styles.metaChip, isLight && styles.metaChipLight]}>
+                <Text style={[styles.metaChipText, isLight && styles.metaChipTextLight]}>
+                  {compositionReady ? `${reviewCount} review` : 'Review loading…'}
+                </Text>
+              </View>
+              <View style={[styles.metaChip, isLight && styles.metaChipLight]}>
+                <Text style={[styles.metaChipText, isLight && styles.metaChipTextLight]}>
+                  {compositionReady ? `${newCount} new` : 'New loading…'}
+                </Text>
+              </View>
+              <View style={[styles.metaChip, isLight && styles.metaChipLight]}>
+                <Text style={[styles.metaChipText, isLight && styles.metaChipTextLight]}>
+                  {compositionReady ? `${storyCount} story` : 'Story loading…'}
+                </Text>
+              </View>
+            </View>
+
             <View style={[styles.rewardStrip, isLight && styles.rewardStripLight]}>
               <Text style={[styles.rewardText, isLight && styles.rewardTextLight]}>
-                +{missionReward} XP · Streak: {missionStreak} day{missionStreak === 1 ? '' : 's'}
+                +{missionReward} XP reward
               </Text>
             </View>
             <TouchableOpacity
@@ -218,12 +219,12 @@ export default function MissionScreen() {
                 {missionComplete ? 'Mission complete' : loading ? 'Preparing…' : status === 'active' ? 'Continue Mission' : 'Begin Mission'}
               </Text>
             </TouchableOpacity>
-            <Text style={[styles.helper, isLight && styles.helperLight]}>You can exit anytime.</Text>
+            <Text style={[styles.helper, isLight && styles.helperLight]}>You can pause anytime.</Text>
           </View>
         )}
 
         {status === 'active' && (
-          <View style={[styles.card, isLight && styles.cardLight]}>
+          <View style={[styles.card, styles.activeCard, isLight && styles.cardLight]}>
             {showConfetti && (
               <View style={styles.confettiOverlay} pointerEvents="none">
                 <LottieView
@@ -253,40 +254,51 @@ export default function MissionScreen() {
                   opacity: cardAnim,
                 }}
               >
-                <View style={styles.pathRow}>
-                  <Mountain size={18} color={'#7CE7A0'} />
-                  <View style={styles.pathNodes}>
-                    {questions.map((_, i) => {
-                      const isDone = i < index;
-                      const isCurrent = i === index;
-                      return (
-                        <View key={i} style={styles.nodeWrap}>
-                          <View
-                            style={[
-                              styles.nodeDot,
-                              isLight && styles.nodeDotLight,
-                              isDone && styles.nodeDone,
-                              isCurrent && styles.nodeCurrent,
-                            ]}
-                          >
-                            {isDone ? <Check size={12} color={'#0b1a2d'} /> : <CircleIcon size={12} color={'transparent'} />}
-                          </View>
-                          {i < questions.length - 1 && (
-                            <View style={[styles.nodeLine, (isDone || isCurrent) && styles.nodeLineDone]} />
-                          )}
-                        </View>
-                      );
-                    })}
+                {isStoryQuestion && (
+                  <View style={styles.storyIllustration}>
+                    <View style={styles.storyIllustrationInner} />
                   </View>
-                </View>
+                )}
                 <View style={styles.cardHeader}>
                   <Text style={[styles.questionWord, isLight && styles.questionWordLight]}>
                     {promptTitle}
                   </Text>
-                  {!!promptBody && (
+                  {!!promptBody && !isFillBlank && (
                     <Text style={[styles.questionPrompt, isLight && styles.questionPromptLight]}>
                       {promptBody}
                     </Text>
+                  )}
+                  {!!promptBody && isFillBlank && (
+                    <>
+                      {(() => {
+                        const lines = currentQuestion?.prompt?.split('\n') ?? [];
+                        const bodyLines = lines.slice(1);
+                        const sentence = bodyLines[0] || '';
+                        const helper = bodyLines.slice(1).join('\n').trim();
+                        const parts = sentence.split('_____');
+                        return (
+                          <>
+                            <Text style={[styles.fillSentence]}>
+                              {parts.map((part, idx) => (
+                                <Text key={`seg-${idx}`} style={styles.fillSentenceText}>
+                                  {part}
+                                  {idx < parts.length - 1 && (
+                                    <Text key={`blank-${idx}`} style={styles.blankPill}>
+                                      _____
+                                    </Text>
+                                  )}
+                                </Text>
+                              ))}
+                            </Text>
+                            {!!helper && (
+                              <Text style={[styles.fillHelperText]}>
+                                {helper}
+                              </Text>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </>
                   )}
                 </View>
                 <View style={styles.options}>
@@ -413,7 +425,7 @@ export default function MissionScreen() {
         )}
 
         {status === 'done' && (
-          <View style={[styles.card, isLight && styles.cardLight]}>
+          <View style={[styles.card, styles.completeCard, isLight && styles.cardLight]}>
             <Text style={[styles.title, isLight && styles.titleLight]}>Mission complete!</Text>
             <Text style={[styles.subtitle, isLight && styles.subtitleLight]}>
               +{missionReward} XP · Streak: {missionStreak} day{missionStreak === 1 ? '' : 's'}
@@ -461,51 +473,51 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#E6EDF7',
   },
-  topTitleLight: { color: '#E6EDF7' },
-  topProgress: {
-    fontSize: 12,
-    color: '#AFC3E3',
-  },
-  topProgressLight: { color: '#AFC3E3' },
-  progressBar: {
-    marginHorizontal: 16,
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: '#1f2b40',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#7CE7A0',
-    borderRadius: 999,
-  },
+  topTitleLight: { color: '#111827' },
   body: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    flexGrow: 1,
+  },
+  bodyActive: {
+    justifyContent: 'center',
   },
   card: {
-    backgroundColor: '#0f1f3a',
-    borderRadius: 18,
-    padding: 18,
+    backgroundColor: '#0b172a',
+    borderRadius: 24,
+    paddingVertical: 18,
+    paddingHorizontal: 18,
     shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
   },
   cardLight: {
-    backgroundColor: '#0f1f3a',
+    backgroundColor: '#FFFFFF',
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  activeCard: {
+    marginTop: 8,
   },
   title: {
     fontSize: 22,
     fontWeight: '800',
     color: '#E6EDF7',
   },
-  titleLight: { color: '#E6EDF7' },
+  titleLight: { color: '#111827' },
   subtitle: {
-    marginTop: 8,
+    marginTop: 4,
     fontSize: 14,
     color: '#AFC3E3',
   },
-  subtitleLight: { color: '#AFC3E3' },
+  subtitleLight: { color: '#4B5563' },
+  introHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   bullets: {
     marginTop: 10,
     gap: 4,
@@ -514,16 +526,53 @@ const styles = StyleSheet.create({
     color: '#C7D7F0',
     fontSize: 13,
   },
-  bulletTextLight: { color: '#C7D7F0' },
-  rewardStrip: {
+  bulletTextLight: { color: '#4B5563' },
+  streakPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(124,231,160,0.16)',
+  },
+  streakPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#7CE7A0',
+  },
+  streakPillLight: {
+    backgroundColor: 'rgba(34,197,94,0.12)',
+  },
+  chipRow: {
+    flexDirection: 'row',
     marginTop: 12,
+    gap: 8,
+  },
+  metaChip: {
+    flexShrink: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: '#12243c',
+  },
+  metaChipText: {
+    fontSize: 12,
+    color: '#C7D7F0',
+    fontWeight: '500',
+  },
+  metaChipLight: {
+    backgroundColor: '#F3F4F6',
+  },
+  metaChipTextLight: {
+    color: '#4B5563',
+  },
+  rewardStrip: {
+    marginTop: 14,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
     backgroundColor: 'rgba(124,231,160,0.12)',
   },
   rewardStripLight: {
-    backgroundColor: 'rgba(124,231,160,0.12)',
+    backgroundColor: 'rgba(34,197,94,0.10)',
   },
   rewardText: {
     fontSize: 13,
@@ -538,10 +587,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   primaryBtn: {
-    marginTop: 14,
+    marginTop: 16,
     backgroundColor: '#7CE7A0',
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: 18,
     alignItems: 'center',
   },
   primaryBtnText: {
@@ -550,44 +599,70 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   helper: {
-    marginTop: 8,
+    marginTop: 10,
     fontSize: 12,
     color: '#AFC3E3',
   },
-  helperLight: { color: '#AFC3E3' },
+  helperLight: { color: '#6B7280' },
   cardHeader: {
-    marginBottom: 12,
-    gap: 6,
+    marginTop: 4,
+    marginBottom: 16,
+    gap: 8,
+    alignItems: 'center',
   },
   questionWord: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '800',
     color: '#E6EDF7',
   },
-  questionWordLight: { color: '#E6EDF7' },
+  questionWordLight: { color: '#111827' },
   questionPrompt: {
     fontSize: 15,
     color: '#C7D7F0',
+    textAlign: 'center',
   },
-  questionPromptLight: { color: '#C7D7F0' },
+  questionPromptLight: { color: '#4B5563' },
+  fillSentence: {
+    marginTop: 4,
+  },
+  fillSentenceText: {
+    fontSize: 15,
+    color: '#C7D7F0',
+    textAlign: 'center',
+  },
+  blankPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    marginHorizontal: 2,
+    borderRadius: 999,
+    backgroundColor: 'rgba(79,215,217,0.16)',
+    color: '#4FD7D9',
+  },
+  fillHelperText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#AFC3E3',
+    textAlign: 'center',
+  },
   options: {
     gap: 10,
+    marginBottom: 8,
   },
   optionBtn: {
     paddingVertical: 12,
     paddingHorizontal: 12,
-    borderRadius: 14,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: '#1f2b40',
-    backgroundColor: '#152740',
+    backgroundColor: '#12243c',
   },
   optionBtnLight: {
-    borderColor: '#1f2b40',
-    backgroundColor: '#152740',
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F3F4F6',
   },
   optionBtnSelected: {
-    borderColor: '#7CE7A0',
-    backgroundColor: 'rgba(124,231,160,0.15)',
+    borderColor: '#4FD7D9',
+    backgroundColor: 'rgba(79,215,217,0.18)',
   },
   optionBtnCorrect: {
     borderColor: '#1B8F5A',
@@ -601,7 +676,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#E6EDF7',
   },
-  optionTextLight: { color: '#E6EDF7' },
+  optionTextLight: { color: '#111827' },
   optionTextStrong: { fontWeight: '700' },
   feedback: {
     marginTop: 8,
@@ -659,8 +734,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   nodeDotLight: {
-    backgroundColor: '#152740',
-    borderColor: '#24344f',
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
   },
   nodeLine: {
     flex: 1,
@@ -678,5 +753,25 @@ const styles = StyleSheet.create({
   },
   nodeCurrent: {
     borderColor: '#7CE7A0',
+  },
+  storyIllustration: {
+    height: 80,
+    borderRadius: 18,
+    backgroundColor: '#12243c',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  storyIllustrationInner: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
+    backgroundColor: 'rgba(79,215,217,0.12)',
+  },
+  completeCard: {
+    shadowColor: '#7CE7A0',
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
   },
 });

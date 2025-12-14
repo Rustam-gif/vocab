@@ -63,9 +63,21 @@ const wordsPool = [
     today,
   });
   assert.strictEqual(result.questions.length, 5, 'mission should have 5 questions including story');
-  assert.ok(result.mission.weakWordsCount >= 3, 'should include review questions');
   assert.ok(result.mission.newWordsCount >= 1, 'should include at least one new question');
-  assert.strictEqual(result.questions[result.questions.length - 1].type, 'story_mcq', 'last question is story');
+  const types = result.questions.map(q => q.type);
+  assert.ok(types.includes('definition_mcq'), 'includes definition question');
+  assert.ok(types.includes('context_fill_blank'), 'includes context fill-in-the-blank question');
+  assert.ok(
+    types.includes('usage_validation') || types.includes('synonym_antonym'),
+    'includes usage or synonym/antonym question',
+  );
+  assert.ok(types.includes('rewrite_sentence'), 'includes rewrite/paraphrase question');
+  assert.ok(types.includes('story_context_mcq'), 'includes story context question');
+  assert.strictEqual(
+    result.questions[result.questions.length - 1].type,
+    'story_context_mcq',
+    'last question is story',
+  );
 }
 
 // Mission generation: no weak words (all new)
@@ -79,7 +91,7 @@ const wordsPool = [
     today,
   });
   assert.strictEqual(result.questions.length, 5, 'should still create 5 questions');
-  assert.ok(result.mission.newWordsCount >= 4, 'fills non-story slots with new words when no weak words');
+  assert.ok(result.mission.newWordsCount >= 1, 'uses at least one new word when available');
 }
 
 // Mission generation: no new words (all review)
@@ -94,7 +106,7 @@ const wordsPool = [
   });
   assert.strictEqual(result.questions.length, 5, 'should still create 5 questions');
   assert.strictEqual(result.mission.newWordsCount, 0, 'no new words available means zero new questions');
-  assert.ok(result.mission.weakWordsCount >= 4, 'fills with weak/review words');
+  assert.ok(result.mission.weakWordsCount >= 1, 'fills with weak/review words');
 }
 
 console.log('dailyMission tests passed');

@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { levels } from '../app/quiz/data/levels';
 import { Mission, MissionWithQuestions, UserStats, UserWordState, Word } from '../core/dailyMissionTypes';
-import { isWeakWord, makeFreshUserWordState, sortWeakStates, toDateKey, updateUserWordStateAfterAnswer } from '../core/learningEngine';
+import { addDays, isWeakWord, makeFreshUserWordState, sortWeakStates, toDateKey, updateUserWordStateAfterAnswer } from '../core/learningEngine';
 import { planDailyMission } from '../core/missionPlanner';
 import { ProgressService } from './ProgressService';
+import { vaultService } from './VaultService';
+import type { Word as VaultWord } from '../types';
 export type { Mission, MissionWithQuestions, MissionQuestion, UserWordState } from '../core/dailyMissionTypes';
 
 const STORAGE_KEYS = {
@@ -22,24 +23,26 @@ const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !=
 
 const nanoid = () => Math.random().toString(36).slice(2, 10);
 
-// Load static word list from quiz levels (id = `${levelId}:${setId}:${word}`)
-const allWords: Word[] = (() => {
-  const bucket: Word[] = [];
-  for (const lvl of levels) {
-    for (const set of lvl.sets || []) {
-      for (const w of set.words || []) {
-        bucket.push({
-          id: `${lvl.id}:${set.id}:${w.word}`,
-          text: w.word,
-          definition: w.definition,
-          exampleSentence: w.example,
-          difficulty: 1,
-        });
-      }
-    }
+let wordsCache: Word[] | null = null;
+
+async function getAllMissionWords(): Promise<Word[]> {
+  if (wordsCache && wordsCache.length) return wordsCache;
+  try {
+    await vaultService.initialize();
+  } catch {
+    // ignore; fall through with whatever data we have
   }
-  return bucket;
-})();
+  const vaultWords: VaultWord[] = vaultService.getAllWords();
+  const mapped: Word[] = (vaultWords || []).map((vw) => ({
+    id: vw.id,
+    text: vw.word,
+    definition: vw.definition,
+    exampleSentence: vw.example,
+    difficulty: 1,
+  }));
+  wordsCache = mapped;
+  return mapped;
+}
 
 async function clearPersistentCaches() {
   await Promise.all([
@@ -143,17 +146,21 @@ function getExistingMission(userId: string, dateKey: string): MissionWithQuestio
 
 function shouldRegenerate(bundle: MissionWithQuestions): boolean {
   if (!bundle?.questions || bundle.questions.length < 5) return true;
-  const hasStory = bundle.questions.some(q => q.type === 'story_mcq');
-  return !hasStory;
+  const hasNewStory = bundle.questions.some(q => q.type === 'story_context_mcq');
+  return !hasNewStory;
 }
 
 function logMissionSummary(bundle: MissionWithQuestions, tag: 'existing' | 'new') {
   if (!isDev || !bundle) return;
   const counts = bundle.questions.reduce(
     (acc, q) => {
-      if (q.type === 'weak_word_mcq') acc.review += 1;
-      if (q.type === 'new_word_mcq') acc.newWords += 1;
-      if (q.type === 'story_mcq') acc.story += 1;
+      if (q.type === 'story_mcq' || q.type === 'story_context_mcq') {
+        acc.story += 1;
+      } else if (q.type === 'new_word_mcq') {
+        acc.newWords += 1;
+      } else {
+        acc.review += 1;
+      }
       return acc;
     },
     { review: 0, newWords: 0, story: 0 }
@@ -183,16 +190,24 @@ function getUserWeakWords(userId: string, date: Date): UserWordState[] {
   if (!map) return [];
   const out: UserWordState[] = [];
   map.forEach((s) => {
-    if (isWeakWord(s, date)) {
-      out.push({ ...s });
+    if (!isWeakWord(s, date)) return;
+    const lastSeen = s.lastSeenAt ? new Date(s.lastSeenAt) : null;
+    if (lastSeen) {
+      const twoDaysAgo = addDays(date, -2);
+      const recentlyReviewed = lastSeen >= new Date(toDateKey(twoDaysAgo));
+      const strongHistory = s.totalCorrect >= s.totalIncorrect + 2;
+      if (recentlyReviewed && strongHistory) {
+        return;
+      }
     }
+    out.push({ ...s });
   });
   return sortWeakStates(out);
 }
 
-function getNewWordCandidates(userId: string): Word[] {
+function getNewWordCandidates(userId: string, wordsPool: Word[]): Word[] {
   const map = uwsCache.get(userId);
-  return allWords.filter((w) => {
+  return wordsPool.filter((w) => {
     if (!map) return true;
     const existing = map.get(w.id);
     return !existing || existing.status === 'new';
@@ -242,8 +257,34 @@ async function updateUserStatsAfterMission(userId: string, mission: Mission) {
   }
 }
 
+function getMissionWordIdsForDate(userId: string, dateKey: string): Set<string> {
+  const out = new Set<string>();
+  missionCache.forEach(({ mission, questions }) => {
+    if (mission.userId === userId && mission.date === dateKey) {
+      questions.forEach(q => {
+        if (q.primaryWordId) out.add(q.primaryWordId);
+      });
+    }
+  });
+  return out;
+}
+
+export async function getMissionWordsByIds(ids: string[]): Promise<Word[]> {
+  if (!ids || !ids.length) return [];
+  const all = await getAllMissionWords();
+  const wanted = new Set(ids);
+  const result: Word[] = [];
+  all.forEach((w) => {
+    if (wanted.has(w.id)) {
+      result.push(w);
+    }
+  });
+  return result;
+}
+
 export async function getTodayMissionForUser(userId: string, today: Date = new Date()): Promise<MissionWithQuestions> {
   await ensureCachesLoaded();
+  const allWords = await getAllMissionWords();
   const dateKey = toDateKey(today);
   const existing = getExistingMission(userId, dateKey);
   if (existing && !shouldRegenerate(existing)) {
@@ -253,10 +294,24 @@ export async function getTodayMissionForUser(userId: string, today: Date = new D
 
   const missionId = nanoid();
   const weakStates = getUserWeakWords(userId, today);
-  const weakWords = weakStates
+
+  const yesterdayKey = toDateKey(addDays(today, -1));
+  const yesterdayWordIds = getMissionWordIdsForDate(userId, yesterdayKey);
+
+  const filteredWeakStates = weakStates.filter(s => !yesterdayWordIds.has(s.wordId));
+  const effectiveWeakStates = filteredWeakStates.length >= 3 || filteredWeakStates.length === weakStates.length
+    ? filteredWeakStates
+    : weakStates;
+
+  const weakWords = effectiveWeakStates
     .map((s) => allWords.find((w) => w.id === s.wordId))
     .filter(Boolean) as Word[];
-  const newWordCandidates = getNewWordCandidates(userId);
+  const allNewCandidates = getNewWordCandidates(userId, allWords);
+  const filteredNewCandidates = allNewCandidates.filter(w => !yesterdayWordIds.has(w.id));
+  const newWordCandidates =
+    filteredNewCandidates.length >= 2 || filteredNewCandidates.length === allNewCandidates.length
+      ? filteredNewCandidates
+      : allNewCandidates;
 
   const plan = planDailyMission({
     userId,

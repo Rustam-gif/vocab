@@ -347,6 +347,7 @@ export function RouteRenderer() {
   const basePath = top.pathname || '/';
   const isActive = (key: string) => {
     if (key === 'home') return basePath === '/';
+    if (key === 'vault') return basePath.startsWith('/vault');
     if (key === 'quiz') return basePath.startsWith('/quiz');
     if (key === 'story') return basePath.startsWith('/story');
     if (key === 'ielts') return basePath.startsWith('/ielts');
@@ -357,7 +358,7 @@ export function RouteRenderer() {
     { key: 'home', label: 'Home', icon: require('../assets/homepageicons/11.png'), go: () => ctx.setStack([{ pathname: '/' }]) },
     { key: 'story', label: 'Story', icon: require('../assets/homepageicons/13.png'), go: () => ctx.setStack([{ pathname: '/story/StoryExercise' }]) },
     { key: 'quiz', label: 'Learn', icon: require('../assets/homepageicons/12.png'), go: () => ctx.setStack([{ pathname: '/quiz/learn' }]) },
-    { key: 'ielts', label: 'IELTS', icon: require('../assets/homepageicons/14.png'), go: () => ctx.setStack([{ pathname: '/ielts' }]) },
+    { key: 'vault', label: 'Vault', icon: require('../assets/homepageicons/book.png'), go: () => ctx.setStack([{ pathname: '/vault' }]) },
     { key: 'account', label: 'Profile', icon: require('../assets/homepageicons/15.png'), go: () => ctx.setStack([{ pathname: '/profile' }]) },
   ] as const;
   // Bottom-sheet style overlay for Translate

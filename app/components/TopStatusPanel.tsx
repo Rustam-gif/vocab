@@ -101,10 +101,10 @@ export default function TopStatusPanel({
       (async () => {
         try {
           const stored = await AsyncStorage.getItem(OFFER_KEY);
-          let expiry = stored ? Number(stored) : 0;
           const now = Date.now();
-          if (!expiry || expiry < now) {
-            expiry = now + 3600 * 1000; // 1 hour from now
+          let expiry = stored ? Number(stored) : 0;
+          if (!expiry || Number.isNaN(expiry)) {
+            expiry = now + 3600 * 1000; // first-time device offer: 1 hour from first launch
             await AsyncStorage.setItem(OFFER_KEY, String(expiry));
           }
           notifyOffer({ expiry, countdown: formatCountdown(expiry) });

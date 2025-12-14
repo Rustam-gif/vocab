@@ -15,7 +15,7 @@ import {
 import LottieView from 'lottie-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Plus, Search, BookOpen, Trash2 } from 'lucide-react-native';
+import { Plus, Search, BookOpen, Trash2 } from 'lucide-react-native';
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
 import { Word } from '../types';
@@ -224,12 +224,7 @@ export default function VaultScreen() {
   return (
     <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
       <View style={[styles.header, isLight && styles.headerLight]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
-        </TouchableOpacity>
+        <View style={{ width: 32 }} />
         <Text style={[styles.title, isLight && styles.titleLight]}>Vocabulary Vault</Text>
         <TouchableOpacity
           style={styles.addButtonIcon}
@@ -299,8 +294,15 @@ export default function VaultScreen() {
               const count = words.filter(w => w.folderId === f.id).length;
               // Check if this is a default folder (don't allow deletion)
               const isDefaultFolder = (
-                ['folder-sets-default', 'folder-phrasal-default', 'folder-daily-default', 'folder-translated-default'].includes(f.id)
+                [
+                  'folder-sets-default',
+                  'folder-phrasal-default',
+                  'folder-daily-default',
+                  'folder-translated-default',
+                  'folder-news-default',
+                ].includes(f.id)
                 || /translated\s+words/i.test(f.title)
+                || /news\s+vocab/i.test(f.title)
               );
               
               return (
@@ -537,9 +539,6 @@ const styles = StyleSheet.create({
   meaningDefLight: { color: '#111827' },
   meaningExample: { color: '#9CA3AF', marginTop: 4, fontStyle: 'italic' },
   meaningExampleLight: { color: '#6B7280' },
-  backButton: {
-    padding: 8,
-  },
   title: {
     fontSize: 22,
     fontWeight: 'bold',

@@ -36,7 +36,7 @@ class AiProxyService {
     return url;
   }
 
-  async complete(request: ProxyRequest): Promise<ProxyResponse> {
+  async complete(request: ProxyRequest, init?: { signal?: AbortSignal }): Promise<ProxyResponse> {
     const body = {
       prompt: request.prompt,
       context: request.context,
@@ -54,6 +54,7 @@ class AiProxyService {
         Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       },
       body: JSON.stringify(body),
+      signal: init?.signal,
     });
 
     if (!res.ok) {

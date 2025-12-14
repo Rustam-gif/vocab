@@ -1,6 +1,15 @@
 export type WordStatus = 'new' | 'learning' | 'review' | 'mastered';
 
-export type QuestionType = 'weak_word_mcq' | 'new_word_mcq' | 'story_mcq';
+export type QuestionType =
+  | 'weak_word_mcq'
+  | 'new_word_mcq'
+  | 'story_mcq'
+  | 'definition_mcq'
+  | 'context_fill_blank'
+  | 'usage_validation'
+  | 'synonym_antonym'
+  | 'rewrite_sentence'
+  | 'story_context_mcq';
 
 export type MissionStatus = 'not_started' | 'in_progress' | 'completed' | 'expired';
 

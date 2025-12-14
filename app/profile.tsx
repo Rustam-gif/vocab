@@ -30,6 +30,7 @@ import {
   Crown,
   CheckCircle2,
   ChevronRight,
+  Settings as SettingsIcon,
 } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 import { supabase, localSignOutHard } from '../lib/supabase';
@@ -491,7 +492,13 @@ export default function ProfileScreen() {
         <View style={[styles.header, isLight && styles.headerLight]}>
           <View style={styles.placeholder} />
           <Text style={[styles.title, isLight && styles.titleLight]}>Profile</Text>
-          <View style={styles.placeholder} />
+          <TouchableOpacity
+            style={styles.settingsIconButton}
+            onPress={() => router.push('/settings')}
+            activeOpacity={0.8}
+          >
+            <SettingsIcon size={20} color={isLight ? '#4B5563' : '#a0a0a0'} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.signInContainer}>
@@ -799,14 +806,6 @@ export default function ProfileScreen() {
           </SafeAreaView>
         </Modal>
             {/* Quick access rows visible even when logged out */}
-            <TouchableOpacity onPress={() => router.push('/settings')} activeOpacity={0.8} style={[styles.infoCard, isLight && styles.infoCardLight, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }]}>
-              <Text style={[styles.settingsRowTitle, isLight && styles.userNameLight]}>Settings</Text>
-              <ChevronRight size={20} color={isLight ? '#111827' : '#E5E7EB'} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push('/report')} activeOpacity={0.8} style={[styles.infoCard, isLight && styles.infoCardLight, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }]}>
-              <Text style={[styles.settingsRowTitle, isLight && styles.userNameLight]}>Report an Issue</Text>
-              <ChevronRight size={20} color={isLight ? '#111827' : '#E5E7EB'} />
-            </TouchableOpacity>
 
             {/* Streak card (read-only preview) */}
             <View style={[styles.streakCard, { marginTop: 16 }]}>
@@ -827,6 +826,24 @@ export default function ProfileScreen() {
                 ))}
               </View>
             </View>
+
+            <TouchableOpacity
+              onPress={() => router.push('/report')}
+              activeOpacity={0.8}
+              style={[
+                styles.infoCard,
+                isLight && styles.infoCardLight,
+                {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginTop: 16,
+                },
+              ]}
+            >
+              <Text style={[styles.settingsRowTitle, isLight && styles.userNameLight]}>Report an Issue</Text>
+              <ChevronRight size={20} color={isLight ? '#111827' : '#E5E7EB'} />
+            </TouchableOpacity>
           </ScrollView>
         </View>
       </SafeAreaView>
@@ -871,9 +888,14 @@ export default function ProfileScreen() {
         <View style={[styles.header, isLight && styles.headerLight]}>
           <View style={styles.placeholder} />
           <View style={{ flex: 1 }} />
-          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-            <LogOut size={20} color="#a0a0a0" />
-          </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.settingsIconButton} onPress={() => router.push('/settings')}>
+                <SettingsIcon size={20} color={isLight ? '#4B5563' : '#a0a0a0'} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+                <LogOut size={20} color="#a0a0a0" />
+              </TouchableOpacity>
+            </View>
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -1138,6 +1160,19 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontSize: 20, fontWeight: '700' },
   titleLight: { color: '#111827' },
   backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  settingsIconButton: {
     width: 44,
     height: 44,
     borderRadius: 12,

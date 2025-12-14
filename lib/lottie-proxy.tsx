@@ -1,29 +1,11 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
-import { UIManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-function hasNativeLottie(): boolean {
-  try {
-    const cfg = (UIManager as any).getViewManagerConfig?.('LottieAnimationView');
-    if (cfg) return true;
-    return !!(UIManager as any)['LottieAnimationView'];
-  } catch {
-    return false;
-  }
-}
-
-let Impl: any;
-try {
-  if (hasNativeLottie()) {
-    Impl = require('lottie-react-native/lib/module').default;
-    try { console.log('[lottie] native component available'); } catch {}
-  } else {
-    Impl = require('./lottie').default; // graceful no-op fallback
-    try { console.log('[lottie] native component unavailable, using stub'); } catch {}
-  }
-} catch {
-  Impl = require('./lottie').default;
-}
+// To avoid native bridge crashes related to dispatchViewManagerCommand / reset
+// on environments where the Lottie native module is not wired correctly, we
+// deliberately route all usages through a safe stub implementation. This keeps
+// the UI stable at the cost of skipping complex Lottie animations.
+let Impl: any = require('./lottie').default;
 
 // Global gate map. By default we keep a 1-hour throttling behavior,
 // but allow certain keys (home/folder/IELTS icons) to be once-per-day.

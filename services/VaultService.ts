@@ -65,11 +65,13 @@ class VaultService {
   static readonly DEFAULT_FOLDER_PHRASAL_ID = 'folder-phrasal-default';
   static readonly DEFAULT_FOLDER_DAILY_ID = 'folder-daily-default';
   static readonly DEFAULT_FOLDER_TRANSLATED_ID = 'folder-translated-default';
+   static readonly DEFAULT_FOLDER_NEWS_ID = 'folder-news-default';
   static readonly DEFAULT_FOLDER_SETS_TITLE = 'Saved from Sets';
   static readonly DEFAULT_FOLDER_USER_TITLE = 'My Saved Words';
   static readonly DEFAULT_FOLDER_PHRASAL_TITLE = 'Common Phrasal Verbs';
   static readonly DEFAULT_FOLDER_DAILY_TITLE = 'Daily Essentials';
   static readonly DEFAULT_FOLDER_TRANSLATED_TITLE = 'Translated Words';
+  static readonly DEFAULT_FOLDER_NEWS_TITLE = 'News Vocabulary';
 
   async initialize() {
     try {
@@ -98,6 +100,7 @@ class VaultService {
           { id: VaultService.DEFAULT_FOLDER_PHRASAL_ID, title: VaultService.DEFAULT_FOLDER_PHRASAL_TITLE, createdAt: new Date().toISOString() },
           { id: VaultService.DEFAULT_FOLDER_DAILY_ID, title: VaultService.DEFAULT_FOLDER_DAILY_TITLE, createdAt: new Date().toISOString() },
           { id: VaultService.DEFAULT_FOLDER_TRANSLATED_ID, title: VaultService.DEFAULT_FOLDER_TRANSLATED_TITLE, createdAt: new Date().toISOString() },
+          { id: VaultService.DEFAULT_FOLDER_NEWS_ID, title: VaultService.DEFAULT_FOLDER_NEWS_TITLE, createdAt: new Date().toISOString() },
         ];
         await this.saveWords();
       }
@@ -123,6 +126,7 @@ class VaultService {
     const hasPhrasal = this.folders.some(f => f.id === VaultService.DEFAULT_FOLDER_PHRASAL_ID || f.title === VaultService.DEFAULT_FOLDER_PHRASAL_TITLE);
     const hasDaily = this.folders.some(f => f.id === VaultService.DEFAULT_FOLDER_DAILY_ID || f.title === VaultService.DEFAULT_FOLDER_DAILY_TITLE);
     const hasTranslated = this.folders.some(f => f.id === VaultService.DEFAULT_FOLDER_TRANSLATED_ID || f.title === VaultService.DEFAULT_FOLDER_TRANSLATED_TITLE);
+    const hasNews = this.folders.some(f => f.id === VaultService.DEFAULT_FOLDER_NEWS_ID || f.title === VaultService.DEFAULT_FOLDER_NEWS_TITLE);
     
     if (!hasSets) {
       this.folders.push({ id: VaultService.DEFAULT_FOLDER_SETS_ID, title: VaultService.DEFAULT_FOLDER_SETS_TITLE, createdAt: new Date().toISOString() });
@@ -158,6 +162,10 @@ class VaultService {
     }
     if (!hasTranslated) {
       this.folders.push({ id: VaultService.DEFAULT_FOLDER_TRANSLATED_ID, title: VaultService.DEFAULT_FOLDER_TRANSLATED_TITLE, createdAt: new Date().toISOString() });
+      changed = true;
+    }
+    if (!hasNews) {
+      this.folders.push({ id: VaultService.DEFAULT_FOLDER_NEWS_ID, title: VaultService.DEFAULT_FOLDER_NEWS_TITLE, createdAt: new Date().toISOString() });
       changed = true;
     }
     return changed;
@@ -219,6 +227,7 @@ class VaultService {
       VaultService.DEFAULT_FOLDER_PHRASAL_ID,
       VaultService.DEFAULT_FOLDER_DAILY_ID,
       VaultService.DEFAULT_FOLDER_TRANSLATED_ID,
+      VaultService.DEFAULT_FOLDER_NEWS_ID,
     ]);
     if (blockById.has(folderId)) return false;
 
@@ -232,6 +241,7 @@ class VaultService {
       VaultService.DEFAULT_FOLDER_PHRASAL_TITLE,
       VaultService.DEFAULT_FOLDER_DAILY_TITLE,
       VaultService.DEFAULT_FOLDER_TRANSLATED_TITLE,
+      VaultService.DEFAULT_FOLDER_NEWS_TITLE,
     ]);
     if (blockByTitle.has(f.title)) return false;
 
