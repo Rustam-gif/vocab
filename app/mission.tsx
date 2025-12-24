@@ -31,7 +31,7 @@ export default function MissionScreen() {
   const xpPerQuestion = 10;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const comboAnim = useRef(new Animated.Value(0)).current;
-  const [showConfetti, setShowConfetti] = useState(false);
+  const [answerAnim, setAnswerAnim] = useState<null | 'success' | 'notbad'>(null);
   const cardAnim = useRef(new Animated.Value(1)).current;
 
   const isLight = theme === 'light';
@@ -133,12 +133,12 @@ export default function MissionScreen() {
     }
     setStatus('active');
     setIndex(0);
-    setSelectedIdx(null);
-    setAnsweredCorrect(null);
-    setCorrectCount(0);
-    setCombo(0);
-    setShowConfetti(false);
-  };
+	    setSelectedIdx(null);
+	    setAnsweredCorrect(null);
+	    setCorrectCount(0);
+	    setCombo(0);
+	    setAnswerAnim(null);
+	  };
 
   const goNext = () => {
     const isLast = index === questions.length - 1;
@@ -225,13 +225,17 @@ export default function MissionScreen() {
 
         {status === 'active' && (
           <View style={[styles.card, styles.activeCard, isLight && styles.cardLight]}>
-            {showConfetti && (
-              <View style={styles.confettiOverlay} pointerEvents="none">
+            {answerAnim && (
+              <View style={styles.answerAnimOverlay} pointerEvents="none">
                 <LottieView
-                  source={require('../assets/lottie/Success.json')}
+                  source={
+                    answerAnim === 'success'
+                      ? require('../assets/lottie/storywords/success.json')
+                      : require('../assets/lottie/storywords/notbad.json')
+                  }
                   autoPlay
                   loop={false}
-                  style={{ width: 140, height: 140 }}
+                  style={{ width: 220, height: 90 }}
                 />
               </View>
             )}
@@ -351,10 +355,12 @@ export default function MissionScreen() {
                           if (correct) {
                             setCorrectCount(c => c + 1);
                             setCombo(c => c + 1);
-                            setShowConfetti(true);
-                            setTimeout(() => setShowConfetti(false), 900);
+                            setAnswerAnim('success');
+                            setTimeout(() => setAnswerAnim(null), 900);
                           } else {
                             setCombo(0);
+                            setAnswerAnim('notbad');
+                            setTimeout(() => setAnswerAnim(null), 900);
                           }
                         }}
                       >
@@ -706,6 +712,14 @@ const styles = StyleSheet.create({
     top: -20,
     right: -10,
     opacity: 0.9,
+  },
+  answerAnimOverlay: {
+    position: 'absolute',
+    top: -18,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    opacity: 0.95,
   },
   pathRow: {
     flexDirection: 'row',

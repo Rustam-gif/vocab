@@ -11,7 +11,7 @@ import SubscriptionService from '../../services/SubscriptionService';
 
 type Props = {
   visible: boolean;
-  onClose: () => void;
+  onClose: (next?: 'placement' | 'profile') => void;
   theme: 'light' | 'dark';
 };
 
@@ -67,6 +67,12 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
       body: 'Even 5 minutes a day works. Choose a time and we’ll build around it.',
       image: undefined as any,
       type: 'time' as const,
+    },
+    {
+      title: 'Create your account',
+      body: 'Sign up to unlock Story and Learn, sync your progress, and keep your words safe. It is completely free :)',
+      lottie: require('../../assets/lottie/Onboarding/SaveWords.json'),
+      type: 'signup' as const,
     },
     {
       title: 'Unlock 70% Off',
@@ -265,9 +271,24 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
         <View style={styles.header}>
           <View style={{ width: 44 }} />
           <Text style={[styles.headerTitle, isLight && styles.headerTitleLight]}>Getting Started</Text>
-          <TouchableOpacity onPress={onClose} style={styles.skipBtn}>
-            <Text style={[styles.skipText, isLight && styles.skipTextLight]}>Skip</Text>
-          </TouchableOpacity>
+          {pages[index]?.type === 'lang' ? (
+            <View style={{ width: 44 }} />
+          ) : (
+            <TouchableOpacity
+              onPress={() => {
+                // Find the language page index and skip to it if before, otherwise close
+                const langPageIndex = pages.findIndex(p => (p as any).type === 'lang');
+                if (langPageIndex >= 0 && index < langPageIndex) {
+                  pageTo(langPageIndex);
+                } else {
+                  onClose();
+                }
+              }}
+              style={styles.skipBtn}
+            >
+              <Text style={[styles.skipText, isLight && styles.skipTextLight]}>Skip</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <Animated.ScrollView
@@ -452,14 +473,33 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
                         >
                           <Text style={styles.subSecondaryText}>Not now</Text>
                         </TouchableOpacity>
-                      </View>
-                    </Animated.View>
-                  );
-                }
-                // Default: render hero with Lottie or image
-                return (
-                  <Animated.View style={[styles.heroCard, isLight ? styles.heroCardLight : styles.heroCardDark, { transform: [{ scale }, { translateY }], opacity }]}>
-                    {p.lottie ? (() => {
+	                      </View>
+	                    </Animated.View>
+	                  );
+	                }
+	                if ((p as any).type === 'signup') {
+	                  const hasPlayed = !!playedRef.current[i];
+	                  const shouldAuto = index === i && !hasPlayed;
+	                  return (
+	                    <Animated.View style={[styles.heroCard, isLight ? styles.heroCardLight : styles.heroCardDark, { transform: [{ scale }, { translateY }], opacity }]}>
+	                      {p.lottie ? (
+	                        <LottieView
+	                          ref={ref => { if (ref) lottieRefs.current[i] = ref; }}
+	                          source={p.lottie}
+	                          autoPlay={shouldAuto}
+	                          loop={false}
+	                          progress={shouldAuto ? undefined : hasPlayed ? 1 : 0}
+	                          onAnimationFinish={() => handleLoopFinish(i, 3)}
+	                          style={{ width: Math.min(300, width * 0.75), height: Math.min(300, width * 0.75) }}
+	                        />
+	                      ) : null}
+	                    </Animated.View>
+	                  );
+	                }
+	                // Default: render hero with Lottie or image
+	                return (
+	                  <Animated.View style={[styles.heroCard, isLight ? styles.heroCardLight : styles.heroCardDark, { transform: [{ scale }, { translateY }], opacity }]}>
+	                    {p.lottie ? (() => {
                       const hasPlayed = !!playedRef.current[i];
                       const shouldAuto = index === i && !hasPlayed;
                       return (
@@ -482,11 +522,28 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
                   </Animated.View>
                 );
               })()}
+
               {(p as any).type !== 'subscribe' && (
                 <>
                   <Text style={[styles.title, isLight && styles.titleLight]}>{p.title}</Text>
                   <Text style={[styles.body, isLight && styles.bodyLight]}>{p.body}</Text>
                 </>
+              )}
+              {(p as any).type === 'signup' && (
+                <View style={{ marginTop: 12 }}>
+                  <TouchableOpacity
+                    style={styles.signupCta}
+                    activeOpacity={0.9}
+                    onPress={() => {
+                      try { onClose('profile'); } catch { onClose(); }
+                    }}
+                  >
+                    <Text style={styles.signupCtaText}>Sign up</Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.signupHint, isLight && styles.signupHintLight]}>
+                    Takes about 1 minute. It is completely free :)
+                  </Text>
+                </View>
               )}
               {(p as any).type === 'theme' && (
                 <View style={styles.themeRow}>
@@ -572,17 +629,20 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
                 />
               ))}
             </View>
-            <View style={[styles.btnRow, { justifyContent: 'center' }]}>
-              {index < pages.length - 1 ? (
-                <TouchableOpacity style={styles.primaryBtn} onPress={() => pageTo(index + 1)}>
-                  <Text style={styles.primaryText}>Next</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity style={styles.primaryBtn} onPress={onClose}>
-                  <Text style={styles.primaryText}>Get Started</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            {/* Hide Next on language page until a language is selected */}
+            {(pages[index]?.type !== 'lang' || (selectedLangs && selectedLangs.length > 0)) && (
+              <View style={[styles.btnRow, { justifyContent: 'center' }]}>
+                {index < pages.length - 1 ? (
+                  <TouchableOpacity style={styles.primaryBtn} onPress={() => pageTo(index + 1)}>
+                    <Text style={styles.primaryText}>Next</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity style={styles.primaryBtn} onPress={onClose}>
+                    <Text style={styles.primaryText}>Get Started</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
         )}
       </SafeAreaView>
@@ -800,6 +860,29 @@ const styles = StyleSheet.create({
   subscribeSecondaryText: {
     fontSize: 14,
     fontWeight: '600',
+    color: '#6B7280',
+  },
+  signupCta: {
+    marginTop: 14,
+    backgroundColor: '#F8B070',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+  },
+  signupCtaText: {
+    fontWeight: '800',
+    color: '#111827',
+  },
+  signupHint: {
+    marginTop: 8,
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '600',
+  },
+  signupHintLight: {
     color: '#6B7280',
   },
 });

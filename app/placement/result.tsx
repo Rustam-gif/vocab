@@ -12,7 +12,7 @@ const HIGHEST_LEVEL_KEY = '@engniter.highestLevel';
 
 export default function PlacementResult() {
   const router = useRouter();
-  const { levelId, ability, early, q } = useLocalSearchParams<{ levelId?: string; ability?: string; early?: string; q?: string }>();
+  const { levelId, ability, confidence, band, early, q } = useLocalSearchParams<{ levelId?: string; ability?: string; confidence?: string; band?: string; early?: string; q?: string }>();
   const recommended = levelId || 'intermediate';
   const themeName = useAppStore(s => s.theme);
   const isLight = themeName === 'light';
@@ -60,12 +60,24 @@ export default function PlacementResult() {
         <Text style={[styles.level, isLight && styles.levelLight]}>{labelFor(recommended)}</Text>
         <Text style={[styles.caption, isLight && styles.captionLight]}>You can change it anytime in Learn.</Text>
         {early === '1' ? (
-          <Text style={[styles.caption, isLight && styles.captionLight, { color: '#F8B070' }]}>We stopped early after 3 incorrect answers in a row (at question {q || '–'}). Try a quick review, then continue in Learn.</Text>
+          <Text style={[styles.caption, isLight && styles.captionLight, { color: '#F8B070' }]}>Test ended early at question {q || '–'}. Your level has been determined with high confidence.</Text>
+        ) : null}
+        {band ? (
+          <View style={styles.row}>
+            <Text style={[styles.kvKey, isLight && styles.kvKeyLight]}>CEFR Band</Text>
+            <Text style={[styles.kvVal, isLight && styles.kvValLight, { color: bandColor(band) }]}>{band}</Text>
+          </View>
         ) : null}
         <View style={styles.row}>
-          <Text style={[styles.kvKey, isLight && styles.kvKeyLight]}>Estimated ability</Text>
+          <Text style={[styles.kvKey, isLight && styles.kvKeyLight]}>Ability Score</Text>
           <Text style={[styles.kvVal, isLight && styles.kvValLight]}>{Number(ability ?? '0').toFixed(1)}</Text>
         </View>
+        {confidence ? (
+          <View style={styles.row}>
+            <Text style={[styles.kvKey, isLight && styles.kvKeyLight]}>Confidence</Text>
+            <Text style={[styles.kvVal, isLight && styles.kvValLight]}>{Math.round(Number(confidence) * 100)}%</Text>
+          </View>
+        ) : null}
         <TouchableOpacity style={styles.cta} onPress={() => router.replace(`/quiz/learn?level=${recommended}`)}>
           <Text style={styles.ctaText}>Continue to Learn</Text>
         </TouchableOpacity>
@@ -83,10 +95,29 @@ function labelFor(id: string) {
       return 'Beginner (A1–A2)';
     case 'intermediate':
       return 'Intermediate (B1)';
+    case 'upper-intermediate':
+      return 'Upper Intermediate (B2)';
     case 'advanced':
       return 'Advanced (B2–C1)';
     default:
       return id;
+  }
+}
+
+function bandColor(band: string): string {
+  switch (band) {
+    case 'A1':
+      return '#64B5F6';
+    case 'A2':
+      return '#81C784';
+    case 'B1':
+      return '#FFCA28';
+    case 'B2':
+      return '#F8B070';
+    case 'C1':
+      return '#E57373';
+    default:
+      return '#E5E7EB';
   }
 }
 

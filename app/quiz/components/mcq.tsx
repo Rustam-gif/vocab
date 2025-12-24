@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Animated, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Animated,
   Easing,
-  Dimensions 
+  Dimensions,
+  ScrollView
 } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
@@ -2971,66 +2972,72 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
         </View>
       </View>
 
-      <Animated.View 
+      <Animated.View
         style={{
           flex: 1,
           opacity: fadeAnim,
           transform: [{ translateX: slideAnim }],
-          paddingHorizontal: 20,
-          paddingTop: 24,
         }}
       >
-        <View style={styles.wordHeader}>
-          <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{currentQuestion.word}</Text>
-          <Text style={[styles.ipaText, isLight && { color: '#6B7280' }]}>{currentQuestion.ipa}</Text>
-          <Text style={[styles.exampleInline, isLight && { color: '#6B7280' }]}>
-            {renderSentenceWithHighlight(currentQuestion.example, currentQuestion.word)}
-          </Text>
-       </View>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          <View style={styles.wordHeader}>
+            <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{currentQuestion.word}</Text>
+            <Text style={[styles.ipaText, isLight && { color: '#6B7280' }]}>{currentQuestion.ipa}</Text>
+            <Text style={[styles.exampleInline, isLight && { color: '#6B7280' }]}>
+              {renderSentenceWithHighlight(currentQuestion.example, currentQuestion.word)}
+            </Text>
+          </View>
 
-        <View style={styles.optionsContainer}>
-          {currentQuestion.options.map((option, index) => {
-            const isSelected = selectedAnswer === index;
-            const isCorrectOption = index === currentQuestion.correctAnswer;
-            // If an animated value hasn't been prepared yet, render visible (1) to avoid invisible options
-            const v = optionAnims.current[index] || new Animated.Value(1);
-            const scale = v.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.86, 1.06, 1] });
-            const opacity = v.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
-            const translateY = v.interpolate({ inputRange: [0, 1], outputRange: [10, 0] });
+          <View style={styles.optionsContainer}>
+            {currentQuestion.options.map((option, index) => {
+              const isSelected = selectedAnswer === index;
+              const isCorrectOption = index === currentQuestion.correctAnswer;
+              // If an animated value hasn't been prepared yet, render visible (1) to avoid invisible options
+              const v = optionAnims.current[index] || new Animated.Value(1);
+              const scale = v.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.86, 1.06, 1] });
+              const opacity = v.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+              const translateY = v.interpolate({ inputRange: [0, 1], outputRange: [10, 0] });
 
-            return (
-              <Animated.View
-                key={index}
-                style={{ width: '100%', marginBottom: 12, transform: [{ translateY }, { scale }], opacity }}
-              >
-                <TouchableOpacity
-                style={[
-                  styles.optionButton,
-                  // Keep light card color even after feedback so unselected options don't darken
-                  isLight && styles.optionLight,
-                  (!showFeedback && isSelected) && (isLight ? styles.selectedOptionLight : styles.selectedOption),
-                  (showFeedback && index === currentQuestion.correctAnswer) && (isLight ? styles.correctOptionLight : styles.correctOption),
-                  (showFeedback && isSelected && !isCorrectOption) && (isLight ? styles.wrongOptionLight : styles.wrongOption),
-                ]}
-                onPress={() => handleAnswerSelect(index)}
-                disabled={isAnswered}
-              >
-                  <Text style={[styles.optionText, isLight && { color: '#111827' }]}>
-                  {option}
-                </Text>
-              </TouchableOpacity>
-              </Animated.View>
-            );
-          })}
-        </View>
+              return (
+                <Animated.View
+                  key={index}
+                  style={{ width: '100%', marginBottom: 12, transform: [{ translateY }, { scale }], opacity }}
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.optionButton,
+                      // Keep light card color even after feedback so unselected options don't darken
+                      isLight && styles.optionLight,
+                      (!showFeedback && isSelected) && (isLight ? styles.selectedOptionLight : styles.selectedOption),
+                      (showFeedback && index === currentQuestion.correctAnswer) && (isLight ? styles.correctOptionLight : styles.correctOption),
+                      (showFeedback && isSelected && !isCorrectOption) && (isLight ? styles.wrongOptionLight : styles.wrongOption),
+                    ]}
+                    onPress={() => handleAnswerSelect(index)}
+                    disabled={isAnswered}
+                  >
+                    <Text style={[styles.optionText, isLight && { color: '#111827' }]}>
+                      {option}
+                    </Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              );
+            })}
+          </View>
+        </ScrollView>
 
         {isAnswered && (
-          <AnimatedNextButton
-            onPress={handleNextPress}
-            disabled={isProcessingNext}
-          />
+          <View style={styles.nextButtonContainer}>
+            <AnimatedNextButton
+              onPress={handleNextPress}
+              disabled={isProcessingNext}
+            />
+          </View>
         )}
-
       </Animated.View>
     </View>
   );
@@ -3126,6 +3133,13 @@ const styles = StyleSheet.create({
   },
   optionsContainer: {
     marginBottom: 20,
+  },
+  nextButtonContainer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    alignItems: 'center',
   },
   optionButton: {
     backgroundColor: '#3A3A3A',

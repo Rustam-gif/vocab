@@ -10,6 +10,7 @@ import {
   AccessibilityInfo,
   StyleProp,
   ViewStyle,
+  ScrollView,
 } from 'react-native';
 import { useAppStore } from '../../../lib/store';
 import { getTheme } from '../../../lib/theme';
@@ -1080,83 +1081,90 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
 
   return (
     <View style={[styles.container, isLight && { backgroundColor: colors.background }]}>
-      <View style={styles.body}>
-        <View style={styles.topRow}>
-        <View style={styles.progressContainer}>
-          <Text style={[styles.progressText, isLight && { color: '#6B7280' }]}>
-            Word {currentIndex + 1} of {wordsData.length}
-          </Text>
-          <View style={styles.scoreWrapper}>
-            <Animated.Text
-              style={[
-                styles.deductionText,
-                {
-                  opacity: deductionOpacity,
-                  transform: [{ translateY: deductionTranslateY }],
-                },
-              ]}
-            >
-              -5
-            </Animated.Text>
-            <Text style={styles.scoreText}>{displayScore}</Text>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        <View style={styles.body}>
+          <View style={styles.topRow}>
+            <View style={styles.progressContainer}>
+              <Text style={[styles.progressText, isLight && { color: '#6B7280' }]}>
+                Word {currentIndex + 1} of {wordsData.length}
+              </Text>
+              <View style={styles.scoreWrapper}>
+                <Animated.Text
+                  style={[
+                    styles.deductionText,
+                    {
+                      opacity: deductionOpacity,
+                      transform: [{ translateY: deductionTranslateY }],
+                    },
+                  ]}
+                >
+                  -5
+                </Animated.Text>
+                <Text style={styles.scoreText}>{displayScore}</Text>
+              </View>
+            </View>
+            <View style={[styles.progressBar, isLight && { backgroundColor: '#E5E7EB' }]}>
+              <Animated.View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+            </View>
+          </View>
+
+          <View style={styles.wordHeader}>
+            <Text style={[styles.wordHighlight, isLight && { color: '#111827' }]}>{currentWord.word}</Text>
+            <Text style={[styles.promptText, isLight && { color: '#4B5563' }]}>
+              Select {requiredCount} {pluralised}
+            </Text>
+            <Text style={[styles.ipaText, isLight && { color: '#6B7280' }]}>{currentWord.ipa}</Text>
+          </View>
+
+          <View style={styles.grid}>
+            {options[currentIndex].map((choice, idx) => {
+              const isSelected = selected.includes(choice);
+              const isCorrect = currentWord.correct.includes(choice);
+              const buttonStyles: Array<ViewStyle> = [styles.optionButton];
+              // Keep light card color regardless of reveal state
+              if (isLight) buttonStyles.push(styles.optionLight);
+
+              if (revealed) {
+                if (isSelected && isCorrect) {
+                  buttonStyles.push(isLight ? styles.optionCorrectLight : styles.optionCorrect);
+                } else if (isSelected && !isCorrect) {
+                  buttonStyles.push(isLight ? styles.optionIncorrectLight : styles.optionIncorrect);
+                } else if (!isSelected && isCorrect) {
+                  buttonStyles.push(isLight ? styles.optionCorrectOutlineLight : styles.optionCorrectOutline);
+                }
+              } else if (isSelected) {
+                buttonStyles.push(styles.optionSelected);
+              }
+
+              return (
+                <Animated.View
+                  key={choice}
+                  style={{
+                    width: '47%',
+                    marginBottom: 12,
+                    transform: [
+                      { translateY: (optionAnims.current[idx] || new Animated.Value(1)).interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+                      { scale: (optionAnims.current[idx] || new Animated.Value(1)).interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.86, 1.06, 1] }) },
+                    ],
+                    opacity: (optionAnims.current[idx] || new Animated.Value(1)).interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
+                  }}
+                >
+                  <TouchableWithoutFeedback onPress={() => toggleSelection(choice)}>
+                    <View style={buttonStyles}>
+                      <Text style={[styles.optionText, isLight && { color: '#111827' }]}>{choice}</Text>
+                    </View>
+                  </TouchableWithoutFeedback>
+                </Animated.View>
+              );
+            })}
           </View>
         </View>
-        <View style={[styles.progressBar, isLight && { backgroundColor: '#E5E7EB' }]}>
-          <Animated.View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-        </View>
-      </View>
-
-        <View style={styles.wordHeader}>
-          <Text style={[styles.wordHighlight, isLight && { color: '#111827' }]}>{currentWord.word}</Text>
-          <Text style={[styles.promptText, isLight && { color: '#4B5563' }]}>
-            Select {requiredCount} {pluralised}
-          </Text>
-          <Text style={[styles.ipaText, isLight && { color: '#6B7280' }]}>{currentWord.ipa}</Text>
-        </View>
-
-        <View style={styles.grid}>
-          {options[currentIndex].map((choice, idx) => {
-            const isSelected = selected.includes(choice);
-            const isCorrect = currentWord.correct.includes(choice);
-            const buttonStyles: Array<ViewStyle> = [styles.optionButton];
-            // Keep light card color regardless of reveal state
-            if (isLight) buttonStyles.push(styles.optionLight);
-
-            if (revealed) {
-              if (isSelected && isCorrect) {
-                buttonStyles.push(isLight ? styles.optionCorrectLight : styles.optionCorrect);
-              } else if (isSelected && !isCorrect) {
-                buttonStyles.push(isLight ? styles.optionIncorrectLight : styles.optionIncorrect);
-              } else if (!isSelected && isCorrect) {
-                buttonStyles.push(isLight ? styles.optionCorrectOutlineLight : styles.optionCorrectOutline);
-              }
-            } else if (isSelected) {
-              buttonStyles.push(styles.optionSelected);
-            }
-
-            return (
-              <Animated.View
-                key={choice}
-                style={{
-                  width: '47%',
-                  marginBottom: 12,
-                  transform: [
-                    { translateY: (optionAnims.current[idx] || new Animated.Value(1)).interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
-                    { scale: (optionAnims.current[idx] || new Animated.Value(1)).interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.86, 1.06, 1] }) },
-                  ],
-                  opacity: (optionAnims.current[idx] || new Animated.Value(1)).interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
-                }}
-              >
-                <TouchableWithoutFeedback onPress={() => toggleSelection(choice)}>
-                <View style={buttonStyles}>
-                  <Text style={[styles.optionText, isLight && { color: '#111827' }]}>{choice}</Text>
-                </View>
-              </TouchableWithoutFeedback>
-              </Animated.View>
-            );
-          })}
-        </View>
-      </View>
+      </ScrollView>
 
       <View style={styles.footerButtons}>
         <AnimatedNextButton

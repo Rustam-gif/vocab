@@ -205,6 +205,8 @@ export default function StoryExerciseScreen() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const themeName = useAppStore(s => s.theme);
   const currentUser = useAppStore(s => s.user);
+  const isSignedIn = !!(currentUser && (currentUser as any)?.id);
+  const [showSignupModal, setShowSignupModal] = useState(false);
 
   const getActiveUserId = useCallback(async () => {
     if (currentUser?.id) return currentUser.id;
@@ -277,7 +279,8 @@ export default function StoryExerciseScreen() {
   const [showSrsBanner, setShowSrsBanner] = useState(false);
   const srsBannerAnim = useRef(new Animated.Value(0)).current;
   const selectedSkuRef = useRef<string | null>(null);
-  const [panelHeight, setPanelHeight] = useState(Math.max(insets.top + 70, 90));
+  // Use a stable initial height to prevent layout jump when measured
+  const [panelHeight, setPanelHeight] = useState(insets.top + 48);
 
   // Ensure words are loaded, but defer heavy work so the sheet animation feels instant
   useEffect(() => {
@@ -299,8 +302,8 @@ export default function StoryExerciseScreen() {
   }, [ctaAnim, shouldShowCTA]);
 
   useEffect(() => {
-    try { DeviceEventEmitter.emit('NAV_VISIBILITY', shouldShowCTA ? 'hide' : 'show'); } catch {}
-  }, [shouldShowCTA]);
+    try { DeviceEventEmitter.emit('NAV_VISIBILITY', 'show'); } catch {}
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -1137,7 +1140,8 @@ const buildStoryFromContent = (
     );
   }
 
-  const topOffset = !isFullscreen ? Math.max(0, panelHeight - 65) : 0;
+  // Use fixed offset based on insets to prevent layout jump
+  const topOffset = !isFullscreen ? Math.max(0, insets.top - 20) : 0;
 
   return (
     <SafeAreaView style={[styles.container, !isDarkMode && styles.containerLight]}>
@@ -1145,7 +1149,6 @@ const buildStoryFromContent = (
         <TopStatusPanel
           floating
           includeTopInset
-          onHeight={setPanelHeight}
           style={{ marginBottom: 8 }}
         />
       )}
@@ -1306,6 +1309,10 @@ const buildStoryFromContent = (
                   <TouchableOpacity
                     style={styles.storyPlaceholderButton}
                     onPress={() => {
+                      if (!isSignedIn) {
+                        setShowSignupModal(true);
+                        return;
+                      }
                       if (!vaultWords.length) {
                         Alert.alert('Vault Empty', 'Add words to your vault to build a custom story.');
                         return;
@@ -1324,7 +1331,7 @@ const buildStoryFromContent = (
               )}
             </Animated.View>
           </View>
-          <View style={[styles.bottomSpacing, { height: 72 }]} />
+          <View style={[styles.bottomSpacing, { height: 56 }]} />
           </>
         </ScrollView>
       </View>
@@ -1537,6 +1544,20 @@ const buildStoryFromContent = (
         hasTrial={(() => { const list = products || []; const selId = selectedSkuRef.current; const sel = list.find(p => p.id === selId) || list[0]; return !!sel?.hasFreeTrial; })()}
         products={products || []}
         onSelectSku={(sku: string) => { selectedSkuRef.current = sku; }}
+      />
+
+      {/* Sign up required modal */}
+      <LimitModal
+        visible={showSignupModal}
+        title="Sign up required"
+        message="Create an account to use Story and keep your progress synced."
+        onClose={() => setShowSignupModal(false)}
+        onSubscribe={() => {
+          setShowSignupModal(false);
+          router.push('/profile');
+        }}
+        primaryText="Sign up"
+        secondaryText="Not now"
       />
 
       <Modal
@@ -2554,7 +2575,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 28,
+    paddingBottom: 18,
     zIndex: 80,
   },
   footerOverlayLight: {

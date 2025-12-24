@@ -6,7 +6,7 @@ export const OPENAI_API_KEY: string = '';
 // Direct OpenAI chat completions endpoint
 export const API_BASE_URL: string = 'https://api.openai.com/v1/chat/completions';
 // Optional proxy (Supabase Edge / Vercel serverless). Leave blank to call OpenAI directly.
-export const AI_PROXY_URL: string = 'https://auirkjgyattnvqaygmfo.functions.supabase.co/functions/v1/ai-proxy';
+export const AI_PROXY_URL: string = 'https://auirkjgyattnvqaygmfo.supabase.co/functions/v1/ai-proxy';
 // Backend base URL for app-specific endpoints (e.g., account deletion).
 // For local development, this should point to your Node server (server/index.mjs).
 // On device, replace with your deployed API URL.
@@ -30,3 +30,12 @@ export const NEWS_API_KEY: string =
 export const NEWS_API_URL: string =
   (typeof process !== 'undefined' && ((process as any).env?.EXPO_PUBLIC_NEWS_API_URL || (process as any).env?.NEWS_API_URL)) ||
   'https://auirkjgyattnvqaygmfo.supabase.co/functions/v1/news';
+
+export const STORY_IMAGE_URL: string =
+  (typeof process !== 'undefined' && ((process as any).env?.EXPO_PUBLIC_STORY_IMAGE_URL || (process as any).env?.STORY_IMAGE_URL)) ||
+  'https://auirkjgyattnvqaygmfo.supabase.co/functions/v1/story-image-recraft';
+
+// --- AI-generated productivity articles ---
+export const PRODUCTIVITY_ARTICLES_URL: string =
+  (typeof process !== 'undefined' && ((process as any).env?.EXPO_PUBLIC_PRODUCTIVITY_ARTICLES_URL || (process as any).env?.PRODUCTIVITY_ARTICLES_URL)) ||
+  'https://auirkjgyattnvqaygmfo.supabase.co/functions/v1/productivity-articles';

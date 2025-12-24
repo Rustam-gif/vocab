@@ -443,11 +443,11 @@ const readArticleCache = async (cacheKey: string) => {
 
 const readRecentArticles = async (limit = 12) => {
   if (!supabase) return [];
-  const minGenerated = new Date(Date.now() - CACHE_TTL_MS).toISOString();
+  const nowIso = new Date().toISOString();
   const { data, error } = await supabase
     .from(NEWS_ARTICLE_TABLE)
     .select("cache_key,title,source_url,category,image,summary,vocab,generated_at,expires_at")
-    .gt("generated_at", minGenerated)
+    .gt("expires_at", nowIso) // Only return non-expired articles
     .order("generated_at", { ascending: false })
     .limit(limit);
   if (error || !Array.isArray(data)) return [];
@@ -474,7 +474,7 @@ const writeArticleCache = async (row: {
 };
 
 serve(async (req) => {
-  console.log("NEWS FUNCTION VERSION", "debug-ai-proxy-v2", {
+  console.log("NEWS FUNCTION VERSION", "fix-cache-expiry-v3", {
     aiEnabled: AI_ENABLED,
     aiProxyEndpoint: AI_PROXY_ENDPOINT,
     hasKey: Boolean(AI_PROXY_KEY || AI_PROXY_FALLBACK_KEY),
@@ -530,7 +530,11 @@ serve(async (req) => {
       }
     }
 
-    const finalUrl = `${API_URL}${API_URL.includes("?") ? "&" : "?"}apikey=${API_KEY}`;
+    // Request lifestyle/productivity content from NewsData.io
+    // Categories: lifestyle, health, education, science, technology
+    const categoryParam = "category=lifestyle,health,education,science,technology";
+    const separator = API_URL.includes("?") ? "&" : "?";
+    const finalUrl = `${API_URL}${separator}apikey=${API_KEY}&${categoryParam}`;
     const upstream = await fetch(finalUrl, { headers: { Accept: "application/json" } });
 
     if (!upstream.ok) {

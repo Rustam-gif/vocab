@@ -80,10 +80,10 @@ serve(async (req) => {
           Authorization: `Bearer ${OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini-tts',
+          model: 'tts-1',
           voice,
           input,
-          format,
+          response_format: format,
           speed,
         }),
       });

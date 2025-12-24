@@ -133,24 +133,64 @@ export default function TopStatusPanel({
     }
   };
 
-  const bg = scrolled
-    ? (isLight ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.2)')
-    : colors.background;
-
   return (
     <View
       onLayout={e => onHeight?.(e.nativeEvent.layout.height)}
       style={[
-        styles.container,
-        {
-          paddingTop: (includeTopInset ? insets.top : 10),
-          backgroundColor: bg,
-        },
+        styles.outerContainer,
         floating && styles.floating,
         style,
       ]}
     >
-      <View style={styles.row}>
+      <View
+        style={[
+          styles.solidBackground,
+          { backgroundColor: scrolled
+            ? (isLight ? 'rgba(255,255,255,0.85)' : 'rgba(18,19,21,0.9)')
+            : colors.background
+          },
+        ]}
+      />
+
+      {/* Blur fade layers - creates gradual blur-to-clear transition */}
+      {scrolled && (
+        <>
+          <View style={[
+            styles.blurFadeLayer,
+            { bottom: 0, opacity: 0.6, backgroundColor: isLight ? 'rgba(255,255,255,0.5)' : 'rgba(18,19,21,0.5)' }
+          ]} />
+          <View style={[
+            styles.blurFadeLayer,
+            { bottom: -4, opacity: 0.4, backgroundColor: isLight ? 'rgba(255,255,255,0.3)' : 'rgba(18,19,21,0.3)' }
+          ]} />
+          <View style={[
+            styles.blurFadeLayer,
+            { bottom: -8, opacity: 0.2, backgroundColor: isLight ? 'rgba(255,255,255,0.15)' : 'rgba(18,19,21,0.15)' }
+          ]} />
+          <View style={[
+            styles.blurFadeLayer,
+            { bottom: -12, opacity: 0.1, backgroundColor: isLight ? 'rgba(255,255,255,0.05)' : 'rgba(18,19,21,0.05)' }
+          ]} />
+        </>
+      )}
+
+      {/* Soft shadow layers - stacked for gradient fade effect */}
+      {scrolled && (
+        <>
+          <View style={[styles.shadowLayer1, isLight && styles.shadowLayerLight1]} />
+          <View style={[styles.shadowLayer2, isLight && styles.shadowLayerLight2]} />
+          <View style={[styles.shadowLayer3, isLight && styles.shadowLayerLight3]} />
+        </>
+      )}
+
+      {/* Content */}
+      <View
+        style={[
+          styles.container,
+          { paddingTop: (includeTopInset ? insets.top : 10) },
+        ]}
+      >
+        <View style={styles.row}>
         <View style={[styles.streakPill, isLight && styles.streakPillLight]}>
           {isPreview ? (
             <Text style={[styles.streakText, isLight && styles.streakTextLight]}>🔥 {streak}</Text>
@@ -209,16 +249,82 @@ export default function TopStatusPanel({
             )}
           </Animated.View>
         </View>
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  outerContainer: {
+    width: '100%',
+    alignSelf: 'stretch',
+  },
+  solidBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  blurFadeLayer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 6,
+  },
+  shadowLayer1: {
+    position: 'absolute',
+    bottom: -2,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  shadowLayerLight1: {
+    shadowOpacity: 0.04,
+  },
+  shadowLayer2: {
+    position: 'absolute',
+    bottom: -6,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  shadowLayerLight2: {
+    shadowOpacity: 0.03,
+  },
+  shadowLayer3: {
+    position: 'absolute',
+    bottom: -12,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.02,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  shadowLayerLight3: {
+    shadowOpacity: 0.015,
+  },
   container: {
     width: '100%',
     paddingHorizontal: 16,
-    paddingBottom: 4,
+    paddingBottom: 8,
     alignSelf: 'stretch',
   },
   floating: {

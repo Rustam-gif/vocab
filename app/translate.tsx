@@ -25,8 +25,29 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
   const addWord = useAppStore(s => s.addWord);
   const getFolders = useAppStore(s => s.getFolders);
   const createFolder = useAppStore(s => s.createFolder);
+  const storedLangPref = useAppStore(s => s.languagePreferences);
   const [word, setWord] = useState('');
-  const [lang, setLang] = useState(useAppStore.getState().languagePreferences?.[0] || 'ru');
+  const [lang, setLang] = useState(storedLangPref?.[0] || 'ru');
+
+  // Load language from AsyncStorage directly on mount (backup for delayed store init)
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem('@engniter.langs');
+        const langs = raw ? JSON.parse(raw) : [];
+        if (langs[0] && langs[0] !== lang) {
+          setLang(langs[0]);
+        }
+      } catch {}
+    })();
+  }, []);
+
+  // Sync language when store preferences load/change
+  useEffect(() => {
+    if (storedLangPref?.[0] && storedLangPref[0] !== lang) {
+      setLang(storedLangPref[0]);
+    }
+  }, [storedLangPref]);
   const [reverse, setReverse] = useState(false); // false: EN -> lang, true: lang -> EN
   const [showLangModal, setShowLangModal] = useState(false);
   const [langSearch, setLangSearch] = useState('');
@@ -35,6 +56,7 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
     translation: string;
+    synonyms?: string[];
     example?: string;
     examples?: string[]; // target-language examples
     examplesEn?: string[]; // English examples
@@ -75,12 +97,6 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
     }
   }, [showLangModal]);
 
-  useEffect(() => {
-    if (isPreview) return;
-    (async () => {
-      try { const saved = await AsyncStorage.getItem('@engniter.translate.lang'); if (saved) setLang(saved); } catch {}
-    })();
-  }, []);
 
   const doTranslate = async () => {
     if (isPreview) return;
@@ -99,7 +115,7 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
     try {
       const t = reverse ? await TranslationService.translateToEnglish(w, lang) : await TranslationService.translate(w, lang);
       if (!t) { setResult(null); return; }
-      setResult({ translation: t.translation, example: t.example, examples: t.examples, examplesEn: (t as any).examplesEn });
+      setResult({ translation: t.translation, synonyms: t.synonyms, example: t.example, examples: t.examples, examplesEn: (t as any).examplesEn });
       setLastQuery(w);
       setShowAllExamples(false);
       // Auto-save to a dedicated "Translated Words" folder
@@ -207,6 +223,19 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
         {!isPreview && result && (
           <View style={[styles.resultCard, isLight && styles.resultCardLight]}>
             <Text style={[styles.bigWord, isLight && { color: '#111827' }]}>{result.translation}</Text>
+            {/* Synonyms */}
+            {Array.isArray(result.synonyms) && result.synonyms.length > 0 && (
+              <View style={styles.synonymsContainer}>
+                <Text style={[styles.synonymsLabel, isLight && { color: '#6B7280' }]}>Synonyms</Text>
+                <View style={styles.synonymsWrap}>
+                  {result.synonyms.slice(0, 6).map((syn, idx) => (
+                    <View key={idx} style={[styles.synonymChip, isLight && styles.synonymChipLight]}>
+                      <Text style={[styles.synonymText, isLight && { color: '#374151' }]}>{syn}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
             {/* Examples list (up to 3). Fallback to single example if provided. */}
             {/* Bilingual examples */}
             {(Array.isArray(result.examples) && result.examples.length > 0) || (Array.isArray(result.examplesEn) && result.examplesEn.length > 0) ? (
@@ -394,7 +423,7 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
                   onPress={async () => {
                     setLang(l.code);
                     setShowLangModal(false);
-                    try { await AsyncStorage.setItem('@engniter.translate.lang', l.code); } catch {}
+                    try { await useAppStore.getState().setLanguagePreferences([l.code]); } catch {}
                   }}
                 >
                   <Text style={isLight ? { color: '#111827' } : { color: '#E5E7EB' }}>{l.flag} {l.name} ({l.code.toUpperCase()})</Text>
@@ -438,6 +467,12 @@ const styles = StyleSheet.create({
   resultCard: { marginTop: 12, backgroundColor: '#2A2A2A', borderRadius: 14, padding: 14 },
   resultCardLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB' },
   bigWord: { fontSize: 28, fontWeight: '900', color: '#E5E7EB', textAlign: 'center' },
+  synonymsContainer: { marginTop: 12, alignItems: 'center' },
+  synonymsLabel: { color: '#9CA3AF', fontSize: 12, fontWeight: '700', marginBottom: 6 },
+  synonymsWrap: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6 },
+  synonymChip: { backgroundColor: 'rgba(182,224,226,0.15)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(182,224,226,0.3)' },
+  synonymChipLight: { backgroundColor: '#F3F4F6', borderColor: '#E5E7EB' },
+  synonymText: { color: '#B6E0E2', fontSize: 13, fontWeight: '600' },
   exampleBullet: { color: '#9CA3AF', fontSize: 14 },
   example: { color: '#9CA3AF', flex: 1 },
   examplePair: { marginTop: 8 },

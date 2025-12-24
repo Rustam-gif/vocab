@@ -73,10 +73,10 @@ export class TTSService {
     }
 
     const body = {
-      model: 'gpt-4o-mini-tts',
+      model: 'tts-1',
       voice,
       input: text,
-      format,
+      response_format: format,
       speed,
     } as const;
 

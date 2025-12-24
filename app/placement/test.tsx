@@ -1,8 +1,8 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Animated, Easing, DeviceEventEmitter } from 'react-native';
 import { useRouter } from 'expo-router';
 import { X } from 'lucide-react-native';
-import { buildBank, pickNextItem, startSession, updateAbility, recommendedLevelFromAbility, PlacementItem, Band } from '../../services/PlacementService';
+import { buildBank, pickNextItem, startSession, updateAbility, recommendedLevelFromAbility, canStopEarly, getAssessmentSummary, PlacementItem, Band } from '../../services/PlacementService';
 import { analyticsService } from '../../services/AnalyticsService';
 import AnimatedNextButton from '../quiz/components/AnimatedNextButton';
 import { LinearGradient } from '../../lib/LinearGradient';
@@ -15,6 +15,13 @@ export default function PlacementTest() {
   const router = useRouter();
   const themeName = useAppStore(s => s.theme);
   const isLight = themeName === 'light';
+
+  // Hide nav bar on mount, show on unmount
+  useEffect(() => {
+    DeviceEventEmitter.emit('NAV_VISIBILITY', 'hide');
+    return () => DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
+  }, []);
+
   const bank = useMemo(() => buildBank(), []);
   const sessionRef = useRef(startSession());
   const targetBandForIndex = (idx: number): Band => {
@@ -29,7 +36,7 @@ export default function PlacementTest() {
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [locked, setLocked] = useState(false);
-  const [wrongStreak, setWrongStreak] = useState(0);
+  const questionStartTime = useRef<number>(Date.now());
   const progressAnim = useRef(new Animated.Value(0)).current;
   // Card pop animation
   const cardScale = useRef(new Animated.Value(0.94)).current;
@@ -64,42 +71,60 @@ export default function PlacementTest() {
   const handleAnswer = async (choiceIndex: number | null) => {
     if (locked) return;
     setLocked(true);
+
+    const responseTime = Date.now() - questionStartTime.current;
     const choice = choiceIndex == null ? null : allOptions[choiceIndex];
     const correct = choiceIndex != null && choiceIndex === current.correctIndex;
+
     // Log analytics
     try {
       analyticsService.recordResult({
         wordId: current.word,
         exerciseType: 'placement',
         correct,
-        timeSpent: 0,
+        timeSpent: responseTime,
         timestamp: new Date(),
         score: correct ? 1 : 0,
       });
     } catch {}
 
-    // Update session ability
-    updateAbility(sessionRef.current, current, !!correct);
+    // Update session ability with response time for better estimation
+    updateAbility(sessionRef.current, current, !!correct, responseTime);
     sessionRef.current.asked.push(current.id);
-    sessionRef.current.answers.push({ itemId: current.id, correct: !!correct, chosen: choice || undefined, timestamp: new Date() });
+    sessionRef.current.answers.push({ itemId: current.id, correct: !!correct, chosen: choice || undefined, timestamp: new Date(), responseTime });
 
-    // Track wrong streak for early stop
-    const nextStreak = correct ? 0 : wrongStreak + 1;
-    setWrongStreak(nextStreak);
-    if (nextStreak >= 3) {
-      const ability = sessionRef.current.ability;
-      const levelId = recommendedLevelFromAbility(ability);
-      router.replace({ pathname: '/placement/result', params: { levelId, ability: String(ability), early: '1', q: String(index + 1) } });
+    // Check for early stop using improved algorithm
+    if (canStopEarly(sessionRef.current)) {
+      const summary = getAssessmentSummary(sessionRef.current);
+      router.replace({
+        pathname: '/placement/result',
+        params: {
+          levelId: summary.level,
+          ability: String(summary.ability),
+          confidence: String(summary.confidence),
+          band: summary.band,
+          early: '1',
+          q: String(index + 1)
+        }
+      });
       return;
     }
 
     const nextIndex = index + 1;
     if (nextIndex >= TOTAL) {
-      const ability = sessionRef.current.ability;
-      const levelId = recommendedLevelFromAbility(ability);
-      router.replace({ pathname: '/placement/result', params: { levelId, ability: String(ability) } });
+      const summary = getAssessmentSummary(sessionRef.current);
+      router.replace({
+        pathname: '/placement/result',
+        params: {
+          levelId: summary.level,
+          ability: String(summary.ability),
+          confidence: String(summary.confidence),
+          band: summary.band
+        }
+      });
       return;
     }
+
     // Force target band per group of 5
     const desiredBand = targetBandForIndex(nextIndex);
     const next = pickNextItem(bank, sessionRef.current, desiredBand);
@@ -107,6 +132,7 @@ export default function PlacementTest() {
     setSelected(null);
     setLocked(false);
     setCurrent(next);
+    questionStartTime.current = Date.now(); // Reset timer for next question
   };
 
   const band = targetBandForIndex(index);
@@ -247,43 +273,43 @@ function toRGBA(hex: string, alpha: number) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0b1424', paddingTop: 8 },
-  containerLight: { backgroundColor: '#0b1424' },
+  container: { flex: 1, backgroundColor: '#121315', paddingTop: 8 },
+  containerLight: { backgroundColor: '#F8F8F8' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   text: { color: '#fff' },
   header: { padding: 16 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  headerTitle: { color: '#E5E7EB', fontSize: 16, fontWeight: '800' },
-  headerTitleLight: { color: '#111827' },
+  headerTitle: { color: '#9CA3AF', fontSize: 16, fontWeight: '800' },
+  headerTitleLight: { color: '#6B7280' },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  counterPill: { backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.15)' },
-  counterPillLight: { backgroundColor: '#E9E6E0', borderColor: '#D7D3CB' },
-  counterText: { color: '#E5E7EB', fontSize: 12, fontWeight: '700' },
+  counterPill: { backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  counterPillLight: { backgroundColor: '#FFFFFF', borderColor: '#E5DED3' },
+  counterText: { color: '#E5E7EB', fontSize: 13, fontWeight: '700' },
   counterTextLight: { color: '#374151' },
   headerText: { color: '#9CA3AF', fontWeight: '700' },
   streakWarn: { color: '#F8B070', fontWeight: '700', marginTop: 4 },
-  progressBar: { height: 8, backgroundColor: '#1f2b40', borderRadius: 6, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: '#24344f', marginBottom: 4 },
-  progressBarLight: { backgroundColor: '#1f2b40', borderColor: '#24344f' },
+  progressBar: { height: 6, backgroundColor: '#262D30', borderRadius: 6, overflow: 'hidden', borderWidth: 0, marginBottom: 4 },
+  progressBarLight: { backgroundColor: '#E5DED3' },
   progressFill: { height: '100%', backgroundColor: '#7CE7A0', borderRadius: 6 },
-  questionCard: { backgroundColor: 'rgba(12,20,36,0.95)', marginHorizontal: 16, borderRadius: 20, padding: 18, borderWidth: StyleSheet.hairlineWidth, borderColor: '#1f2b40', shadowColor: '#000', shadowOpacity: 0.45, shadowRadius: 18, shadowOffset: { width: 0, height: 14 }, elevation: 10, marginTop: 8 },
-  questionCardLight: { backgroundColor: 'rgba(12,20,36,0.95)', borderColor: '#1f2b40', shadowOpacity: 0.2 },
-  word: { color: '#E6EDF7', fontSize: 26, fontWeight: '900' },
-  wordLight: { color: '#E6EDF7' },
-  prompt: { color: '#AFC3E3', marginTop: 8, marginBottom: 12, fontSize: 15 },
-  promptLight: { color: '#AFC3E3' },
-  example: { color: '#C7D7F0', fontStyle: 'italic', marginBottom: 12 },
-  exampleLight: { color: '#C7D7F0' },
+  questionCard: { backgroundColor: '#1E2124', marginHorizontal: 16, borderRadius: 22, padding: 20, borderWidth: 1, borderColor: '#2A3033', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8, marginTop: 8 },
+  questionCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E5DED3', shadowOpacity: 0.1 },
+  word: { color: '#E5E7EB', fontSize: 26, fontWeight: '900' },
+  wordLight: { color: '#111827' },
+  prompt: { color: '#9CA3AF', marginTop: 8, marginBottom: 12, fontSize: 15 },
+  promptLight: { color: '#6B7280' },
+  example: { color: '#9CA3AF', fontStyle: 'italic', marginBottom: 12 },
+  exampleLight: { color: '#6B7280' },
   options: { gap: 10 },
-  option: { backgroundColor: 'rgba(21,39,64,0.92)', borderWidth: StyleSheet.hairlineWidth, borderColor: '#24344f', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 6 } },
-  optionLight: { backgroundColor: 'rgba(21,39,64,0.92)', borderColor: '#24344f' },
-  optionSelectedLight: { backgroundColor: 'rgba(124,231,160,0.14)', borderColor: '#7CE7A0' },
-  optionSelected: { borderColor: '#7CE7A0', backgroundColor: 'rgba(124,231,160,0.08)' },
+  option: { backgroundColor: '#262D30', borderWidth: 1, borderColor: '#353D42', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14 },
+  optionLight: { backgroundColor: '#FBF8F4', borderColor: '#E5DED3' },
+  optionSelectedLight: { backgroundColor: 'rgba(248,176,112,0.15)', borderColor: '#F8B070' },
+  optionSelected: { borderColor: '#7CE7A0', backgroundColor: 'rgba(124,231,160,0.12)' },
   optionInnerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' },
-  radio: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#6B7280', marginTop: 3 },
+  radio: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: '#4B5563', marginTop: 2 },
   radioLight: { borderColor: '#9CA3AF' },
   radioActive: { borderColor: '#7CE7A0', backgroundColor: '#7CE7A0' },
-  optionText: { color: '#E6EDF7', fontSize: 15, fontWeight: '700', flex: 1, flexShrink: 1, lineHeight: 20 },
-  optionTextLight: { color: '#E6EDF7' },
+  optionText: { color: '#E5E7EB', fontSize: 15, fontWeight: '600', flex: 1, flexShrink: 1, lineHeight: 20 },
+  optionTextLight: { color: '#374151' },
   footer: { flexDirection: 'row', gap: 10, padding: 16, marginTop: 4 },
   btn: { flex: 1, borderRadius: 12, paddingVertical: 0, alignItems: 'center', overflow: 'hidden' },
   nextGradient: { width: '100%', borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, minHeight: 44 },

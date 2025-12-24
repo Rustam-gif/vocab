@@ -1,22 +1,28 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Text, TextInput, View, StyleSheet } from 'react-native';
+import { Text, TextInput, View, StyleSheet, InteractionManager } from 'react-native';
 // Fonts are bundled locally from assets/fonts and linked via react-native.config.js
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
 import LottieView from 'lottie-react-native';
 import { Launch } from '../lib/launch';
 import { usePathname } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ThemeName } from '../lib/theme';
 
 export default function RootLayout() {
   // No runtime font loading needed; fonts are available by name (e.g., 'Ubuntu-Regular').
   const themeName = useAppStore(s => s.theme);
+  const languagePreferences = useAppStore(s => s.languagePreferences);
   const initializeApp = useAppStore(s => s.initialize);
+  const setTheme = useAppStore(s => s.setTheme);
+  const setLanguagePreferences = useAppStore(s => s.setLanguagePreferences);
   const [showLaunch, setShowLaunch] = useState(true);
   const launchRef = useRef<LottieView>(null);
   const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const finishedRef = useRef(false);
+  const [prefsHydrated, setPrefsHydrated] = useState(false);
   // Global short loading overlay on route changes
   const [routeLoading, setRouteLoading] = useState(false);
   const path = usePathname();
@@ -37,15 +43,106 @@ export default function RootLayout() {
   }, []);
 
   // Initialize services (vault, analytics, progress) once on app start
+  // Use InteractionManager to defer heavy work until after animations complete
   useEffect(() => {
-    initializeApp().catch(() => {});
-  }, [initializeApp]);
+    let cancelled = false;
+    let interactionHandle: any;
+    const hydratePrefsThenInit = async () => {
+      try {
+        const [storedTheme, storedLangs] = await AsyncStorage.multiGet(['@engniter.theme', '@engniter.langs']);
+        const themeVal = storedTheme?.[1];
+        const langsVal = storedLangs?.[1];
+        if (!cancelled) {
+          if (themeVal && (themeVal === 'light' || themeVal === 'dark') && themeVal !== themeName) {
+            await setTheme(themeVal as ThemeName);
+          }
+          if (langsVal) {
+            try {
+              const parsed = JSON.parse(langsVal);
+              if (Array.isArray(parsed) && JSON.stringify(parsed) !== JSON.stringify(languagePreferences)) {
+                await setLanguagePreferences(parsed.filter((l: any) => typeof l === 'string'));
+              }
+            } catch {}
+          }
+        }
+      } catch (err) {
+        console.warn('[RootLayout] hydrate prefs failed', err);
+      } finally {
+        if (!cancelled) setPrefsHydrated(true);
+      }
+
+      interactionHandle = InteractionManager.runAfterInteractions(() => {
+        initializeApp().catch(() => {});
+      });
+    };
+
+    hydratePrefsThenInit();
+    return () => {
+      cancelled = true;
+      if (interactionHandle) interactionHandle.cancel();
+    };
+  }, [initializeApp, languagePreferences, setLanguagePreferences, setTheme, themeName]);
+
+  const initialSyncRef = useRef(false);
+  useEffect(() => {
+    if (initialSyncRef.current) return;
+    initialSyncRef.current = true;
+    let cancelled = false;
+    const syncSettings = async () => {
+      try {
+        const storedTheme = await AsyncStorage.getItem('@engniter.theme');
+        if (!cancelled && storedTheme && (storedTheme === 'light' || storedTheme === 'dark') && storedTheme !== themeName) {
+          await setTheme(storedTheme as ThemeName);
+        }
+      } catch (error) {
+        console.warn('[RootLayout] Failed to sync theme from storage', error);
+      }
+      try {
+        const rawLangs = await AsyncStorage.getItem('@engniter.langs');
+        if (cancelled || !rawLangs) return;
+        const parsed = JSON.parse(rawLangs);
+        if (!Array.isArray(parsed)) return;
+        const currentLangs = useAppStore.getState().languagePreferences || [];
+        const normalized = parsed.filter((l: any) => typeof l === 'string');
+        const isEqual =
+          normalized.length === currentLangs.length &&
+          normalized.every((v, idx) => v === currentLangs[idx]);
+        if (!isEqual) {
+          await setLanguagePreferences(normalized);
+        }
+      } catch (error) {
+        console.warn('[RootLayout] Failed to sync language preferences', error);
+      }
+    };
+    syncSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, [setTheme, setLanguagePreferences, themeName]);
 
   // Fallback: hide overlay if animation never finishes (e.g., 8s)
   useEffect(() => {
     fallbackTimerRef.current = setTimeout(() => setShowLaunch(false), 8000) as any;
     return () => { if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current); };
   }, []);
+
+  // Always persist latest prefs in case a caller forgot to write them.
+  useEffect(() => {
+    AsyncStorage.setItem('@engniter.theme', themeName).catch((err) => {
+      console.warn('[RootLayout] failed to persist theme', err);
+    });
+  }, [themeName]);
+
+  useEffect(() => {
+    try {
+      const payload = Array.isArray(languagePreferences) ? languagePreferences : [];
+      AsyncStorage.setItem('@engniter.langs', JSON.stringify(payload)).catch((err) => {
+        console.warn('[RootLayout] failed to persist langs', err);
+      });
+    } catch (err) {
+      console.warn('[RootLayout] failed to serialize langs', err);
+    }
+  }, [languagePreferences]);
 
   // Show a brief loading overlay on some route changes (skip when navigating to or from Home)
   useEffect(() => {
@@ -62,7 +159,7 @@ export default function RootLayout() {
     return () => clearTimeout(t);
   }, [path]);
 
-  return (
+  return prefsHydrated ? (
     <>
       {/* Theme-aware status bar */}
       <StatusBar style={themeName === 'light' ? 'dark' : 'light'} />
@@ -148,6 +245,9 @@ export default function RootLayout() {
         </View>
       )}
     </>
+  ) : (
+    // Render nothing until prefs hydrate to avoid flashing the wrong theme
+    <View style={{ flex: 1, backgroundColor: getTheme(themeName).background }} />
   );
 }
 

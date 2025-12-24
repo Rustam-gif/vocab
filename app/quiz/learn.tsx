@@ -15,6 +15,7 @@ import { useAppStore } from '../../lib/store';
 import { getTheme } from '../../lib/theme';
 import TopStatusPanel from '../components/TopStatusPanel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import LimitModal from '../../lib/LimitModal';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 // Unlock all sets for testing; set to false for progression-gated flow
@@ -24,11 +25,14 @@ export default function LearnScreen() {
   const router = useRouter();
   const navigation = useNavigation<any>();
   const theme = useAppStore(s => s.theme);
+  const user = useAppStore(s => s.user);
+  const isSignedIn = !!(user && (user as any)?.id);
   const colors = getTheme(theme);
   const isLight = theme === 'light';
   const insets = useSafeAreaInsets();
-  // Seed with a reasonable expected height to avoid initial layout jump
-  const [panelHeight, setPanelHeight] = useState<number>(Math.max(insets.top + 70, 90));
+  const [showSignupModal, setShowSignupModal] = useState(false);
+  // Use a stable initial height to prevent layout jump when measured
+  const [panelHeight, setPanelHeight] = useState<number>(insets.top + 48);
   const { level: levelId } = useLocalSearchParams<{ level: string }>();
   const [currentLevel, setCurrentLevel] = useState<Level | null>(null);
   const [progress, setProgress] = useState({ completed: 0, total: 0 });
@@ -211,6 +215,12 @@ export default function LearnScreen() {
       return;
     }
 
+    // Check if user is signed in before starting
+    if (!isSignedIn) {
+      setShowSignupModal(true);
+      return;
+    }
+
     console.log('LearnScreen - handleSetPress:', { setId: set.id, levelId: activeLevelId, setType: set.type });
 
     // Both quiz and regular sets use atlas-practice-integrated
@@ -336,10 +346,17 @@ export default function LearnScreen() {
     );
   };
 
+  // Use fixed offset based on insets to prevent layout jump
+  const contentTop = Math.max(0, insets.top - 30);
+
   if (!currentLevel) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.loadingContainer}>
+        <TopStatusPanel
+          floating
+          includeTopInset
+        />
+        <View style={[styles.loadingContainer, { paddingTop: contentTop }]}>
           <LottieView
             source={require('../../assets/lottie/loading.json')}
             autoPlay
@@ -354,14 +371,12 @@ export default function LearnScreen() {
 
   const accent = '#F8B070';
   const progressPercentage = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
-  const contentTop = Math.max(0, panelHeight - 78);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <TopStatusPanel
         floating
         includeTopInset
-        onHeight={setPanelHeight}
       />
       <View style={{ flex: 1, paddingTop: contentTop }}>
         <View style={[styles.levelInfo, isLight && styles.levelInfoLight]}>
@@ -418,6 +433,19 @@ export default function LearnScreen() {
           showsVerticalScrollIndicator={false}
         />
       </View>
+
+      <LimitModal
+        visible={showSignupModal}
+        title="Sign up required"
+        message="Create an account to use Learn and keep your progress synced."
+        onClose={() => setShowSignupModal(false)}
+        onSubscribe={() => {
+          setShowSignupModal(false);
+          router.push('/profile');
+        }}
+        primaryText="Sign up"
+        secondaryText="Not now"
+      />
     </SafeAreaView>
   );
 }

@@ -56,16 +56,24 @@ export async function speak(text: string, options: SpeakOptions = {}) {
         if (RNFS?.CachesDirectoryPath && Sound) {
           // Avoid calling setCategory (RN 0.81 strict arg checks on NSNumber cause redbox
           // in react-native-sound when nullability isn't annotated). iOS plays fine without it.
+          console.log('[speech] Starting TTS synthesis for:', text);
           const { data } = await ttsService.synthesizeToArrayBuffer(text, { voice, rate, format: 'mp3' });
+          console.log('[speech] TTS synthesis complete, data size:', data.byteLength);
           const base64 = arrayBufferToBase64(data);
           const filePath = `${RNFS.CachesDirectoryPath}/tts_${Date.now()}.mp3`;
           await RNFS.writeFile(filePath, base64, 'base64');
+          console.log('[speech] Audio file written to:', filePath);
           await new Promise<void>((resolve, reject) => {
             const s = new Sound(filePath, '', (error: any) => {
-              if (error) { reject(error); return; }
+              if (error) {
+                console.error('[speech] Sound load error:', error);
+                reject(error);
+                return;
+              }
               currentRNSound = s;
-              try { console.log('[speech] backend: react-native-sound'); } catch {}
+              console.log('[speech] backend: react-native-sound, playing...');
               s.play((success: boolean) => {
+                console.log('[speech] Playback finished, success:', success);
                 if (success) options.onDone?.();
                 s.release();
                 if (currentRNSound === s) currentRNSound = null;
@@ -78,18 +86,21 @@ export async function speak(text: string, options: SpeakOptions = {}) {
           return; // handled by RN Sound
         }
       } catch (e) {
-        try {
-          console.warn('[speech] react-native-sound or react-native-fs unavailable:',
-            (e as any)?.message || e);
-        } catch {}
+        console.warn('[speech] OpenAI TTS failed, trying native fallback:', (e as any)?.message || e);
+        // Don't call onError yet - try fallbacks first
       }
 
-      // Fallback to react-native-tts if OpenAI/native audio is unavailable
+      // Fallback to expo-speech (iOS native) if OpenAI TTS fails
+      const usedExpoSpeech = await tryExpoSpeech(text, options);
+      if (usedExpoSpeech) return;
+
+      // Fallback to react-native-tts if expo-speech is unavailable
       const usedNativeTts = await tryNativeTTS(text, options);
       if (usedNativeTts) return;
 
       // No native audio libs available; signal error explicitly
-      options.onError?.(new Error('No native audio backend. Install react-native-sound + react-native-fs.'));
+      console.error('[speech] All TTS backends failed');
+      options.onError?.(new Error('No TTS backend available.'));
       return;
     }
   } catch (e) {
@@ -182,50 +193,87 @@ export async function getAvailableVoicesAsync(): Promise<Array<{ identifier: str
 export default { speak, stop, getAvailableVoicesAsync };
 
 // ---- helpers ----
+async function tryExpoSpeech(text: string, options: SpeakOptions): Promise<boolean> {
+  try {
+    const Speech = require('expo-speech');
+    if (!Speech || typeof Speech.speak !== 'function') {
+      return false;
+    }
+    console.log('[speech] backend: expo-speech');
+    await Speech.speak(text, {
+      language: options.language || 'en-US',
+      rate: options.rate || 1.0,
+      pitch: options.pitch || 1.0,
+      onDone: options.onDone,
+      onStopped: options.onStopped,
+      onError: options.onError,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function tryNativeTTS(text: string, options: SpeakOptions): Promise<boolean> {
   try {
     // Dynamically require to avoid crashes if not installed on web
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const TTS = require('react-native-tts');
+    const TTS = require('react-native-tts').default || require('react-native-tts');
+
+    // Check if TTS module is available
+    if (!TTS || typeof TTS.speak !== 'function') {
+      console.log('[speech] react-native-tts not available');
+      return false;
+    }
+
     try { await TTS.stop(); } catch {}
     if (options.language) {
       try { await TTS.setDefaultLanguage(options.language); } catch {}
     }
-    if (typeof options.rate === 'number') {
-      const clamped = Math.max(0.3, Math.min(2.0, options.rate));
-      try { await TTS.setDefaultRate(clamped); } catch {}
-    }
+    // react-native-tts uses 0.0-1.0 scale on iOS where 0.5 is normal
+    // OpenAI uses 0.25-4.0 where 1.0 is normal
+    // Convert: if input rate is ~1.0 (normal), use 0.5 for iOS
+    const iosRate = typeof options.rate === 'number' ? options.rate * 0.5 : 0.5;
+    const clampedRate = Math.max(0.3, Math.min(0.75, iosRate));
+    try { await TTS.setDefaultRate(clampedRate); } catch {}
+
     if (typeof options.pitch === 'number') {
       const clamped = Math.max(0.5, Math.min(2.0, options.pitch));
       try { await TTS.setDefaultPitch(clamped); } catch {}
     }
 
-    await new Promise<void>((resolve) => {
-      const cleanup = (subs: Array<{ remove?: () => void }>) => {
-        subs.forEach(sub => {
-          try { sub?.remove?.(); } catch {}
+    // Use event listeners for completion tracking
+    // Supported events: tts-start, tts-finish, tts-pause, tts-resume, tts-progress, tts-cancel
+    if (typeof TTS.addEventListener === 'function') {
+      console.log('[speech] backend: react-native-tts');
+      await new Promise<void>((resolve) => {
+        const cleanup = (subs: Array<{ remove?: () => void }>) => {
+          subs.forEach(sub => {
+            try { sub?.remove?.(); } catch {}
+          });
+        };
+        const finishSub = TTS.addEventListener('tts-finish', () => {
+          options.onDone?.();
+          cleanup([finishSub, cancelSub]);
+          resolve();
         });
-      };
-      const finishSub = TTS.addEventListener('tts-finish', () => {
-        options.onDone?.();
-        cleanup([finishSub, cancelSub, errorSub]);
-        resolve();
+        const cancelSub = TTS.addEventListener('tts-cancel', () => {
+          options.onStopped?.();
+          cleanup([finishSub, cancelSub]);
+          resolve();
+        });
+        TTS.speak(text);
       });
-      const cancelSub = TTS.addEventListener('tts-cancel', () => {
-        options.onStopped?.();
-        cleanup([finishSub, cancelSub, errorSub]);
-        resolve();
-      });
-      const errorSub = TTS.addEventListener('tts-error', (err: any) => {
-        options.onError?.(err);
-        cleanup([finishSub, cancelSub, errorSub]);
-        resolve();
-      });
-      TTS.speak(text);
-    });
+      return true;
+    }
+
+    // Simple mode without event listeners
+    console.log('[speech] backend: react-native-tts (simple mode)');
+    await TTS.speak(text);
+    options.onDone?.();
     return true;
   } catch (err) {
-    options.onError?.(err);
+    console.error('[speech] react-native-tts error:', err);
     return false;
   }
 }

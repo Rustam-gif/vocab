@@ -41,7 +41,6 @@ import { analyticsService } from '../services/AnalyticsService';
 import { ProgressService } from '../services/ProgressService';
 import { useAppStore } from '../lib/store';
 import { LANGUAGES_WITH_FLAGS } from '../lib/languages';
-import TopStatusPanel from './components/TopStatusPanel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Avatar images (static requires so Metro bundles them). Filenames without spaces to avoid any URL encoding quirks.
@@ -110,6 +109,7 @@ export default function ProfileScreen() {
   const [selectedSku, setSelectedSku] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const paywallParamConsumed = useRef(false);
+  const redirectConsumed = useRef(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [showSignUpSuccess, setShowSignUpSuccess] = useState(false);
   const [showPurchaseSuccess, setShowPurchaseSuccess] = useState(false);
@@ -120,12 +120,11 @@ export default function ProfileScreen() {
   // Language picker state
   const [showLangModal, setShowLangModal] = useState(false);
   const [langSearch, setLangSearch] = useState('');
-  const [panelHeight, setPanelHeight] = useState(0);
   // Expanded catalog (>=150 languages)
   const langs = useMemo(() => LANGUAGES_WITH_FLAGS, []);
   const filteredLangs = useMemo(() => langs.filter(l => (l.name + l.code).toLowerCase().includes(langSearch.toLowerCase())), [langs, langSearch]);
   const isPromo70 = (params as any)?.offer === '70';
-  const contentTop = Math.max(0, (panelHeight ? panelHeight - 10 : insets.top + 32));
+  const redirectTo = typeof (params as any)?.redirect === 'string' ? String((params as any).redirect) : null;
 
   // Ensure local avatar images are warmed up to avoid any flicker/blank
   useEffect(() => {
@@ -174,6 +173,15 @@ export default function ProfileScreen() {
       setShowPaywall(true);
     }
   }, [params]);
+
+  // If Profile was opened as a gate (e.g., Learn/Story requires sign up), go back automatically after sign-in.
+  useEffect(() => {
+    if (redirectConsumed.current) return;
+    if (!redirectTo) return;
+    if (!(user && (user as any)?.id)) return;
+    redirectConsumed.current = true;
+    try { router.replace(redirectTo); } catch {}
+  }, [redirectTo, user && (user as any)?.id, router]);
 
   // No persisted flag — allow stat animations to run each time this screen mounts
 
@@ -878,13 +886,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
-      <TopStatusPanel
-        floating
-        includeTopInset
-        onHeight={setPanelHeight}
-        style={{ marginBottom: 8 }}
-      />
-      <View style={{ flex: 1, paddingTop: contentTop }}>
+      <View style={{ flex: 1 }}>
         <View style={[styles.header, isLight && styles.headerLight]}>
           <View style={styles.placeholder} />
           <View style={{ flex: 1 }} />

@@ -285,7 +285,10 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
                             pitch: 1.0,
                             onDone: () => setSpeakingWord(prev => (prev === w.word ? null : prev)),
                             onStopped: () => setSpeakingWord(prev => (prev === w.word ? null : prev)),
-                            onError: () => setSpeakingWord(prev => (prev === w.word ? null : prev)),
+                            onError: (err) => {
+                              console.error('[TTS Error]', err);
+                              setSpeakingWord(prev => (prev === w.word ? null : prev));
+                            },
                           });
                         } catch {}
                       }}
@@ -416,12 +419,33 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
             <ScrollView style={{ maxHeight: 320 }}>
               {modalWord && trMap[modalWord] ? (
                 <View>
-                  <Text style={[styles.translationText, isLight && { color: '#1F2937' }]}>• {trMap[modalWord].translation}</Text>
+                  <Text style={[styles.trLabel, isLight && { color: '#6B7280' }]}>Translation</Text>
+                  <Text style={[styles.translationText, isLight && { color: '#1F2937' }]}>{trMap[modalWord].translation}</Text>
+
                   {trMap[modalWord].synonyms?.length ? (
-                    <Text style={[styles.translationText, isLight && { color: '#1F2937' }]}>• Synonyms: {trMap[modalWord].synonyms.join(', ')}</Text>
+                    <>
+                      <Text style={[styles.trLabel, isLight && { color: '#6B7280' }, { marginTop: 12 }]}>Synonyms</Text>
+                      <View style={styles.synonymsRow}>
+                        {trMap[modalWord].synonyms.map((syn: string, i: number) => (
+                          <View key={i} style={[styles.synChip, isLight && styles.synChipLight]}>
+                            <Text style={[styles.synChipText, isLight && { color: '#374151' }]}>{syn}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </>
                   ) : null}
-                  {trMap[modalWord].example ? (
-                    <Text style={[styles.translationExample, isLight && { color: '#374151' }]}>“{trMap[modalWord].example}”</Text>
+
+                  {(trMap[modalWord].examples?.length || trMap[modalWord].example) ? (
+                    <>
+                      <Text style={[styles.trLabel, isLight && { color: '#6B7280' }, { marginTop: 12 }]}>Examples</Text>
+                      {trMap[modalWord].examples?.length ? (
+                        trMap[modalWord].examples.map((ex: string, i: number) => (
+                          <Text key={i} style={[styles.translationExample, isLight && { color: '#374151' }]}>• {ex}</Text>
+                        ))
+                      ) : trMap[modalWord].example ? (
+                        <Text style={[styles.translationExample, isLight && { color: '#374151' }]}>• {trMap[modalWord].example}</Text>
+                      ) : null}
+                    </>
                   ) : null}
                 </View>
               ) : (
@@ -622,15 +646,46 @@ const styles = StyleSheet.create({
   },
   translationText: {
     color: '#E5E7EB',
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 4,
-    fontFamily: 'Ubuntu-Regular',
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 24,
+    marginTop: 2,
+    fontFamily: 'Ubuntu-Bold',
   },
   translationExample: {
     color: '#9CA3AF',
-    fontStyle: 'italic',
+    fontSize: 14,
+    lineHeight: 20,
     marginTop: 6,
+    fontFamily: 'Ubuntu-Regular',
+  },
+  trLabel: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+    fontFamily: 'Ubuntu-Medium',
+  },
+  synonymsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  synChip: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  synChipLight: {
+    backgroundColor: '#F3F4F6',
+  },
+  synChipText: {
+    color: '#E5E7EB',
+    fontSize: 13,
     fontFamily: 'Ubuntu-Regular',
   },
   trBtn: {

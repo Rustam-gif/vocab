@@ -88,11 +88,14 @@ class VaultService {
         // Ensure default folders exist for existing users
         const changed = this.ensureDefaultFolders();
         if (changed) {
-          await this.saveWords();
+          // Non-blocking save to not freeze UI
+          this.saveWords().catch(() => {});
         }
       } else {
-        // Initialize with demo words + starter vocabulary
-        this.words = [...DEMO_WORDS, ...this.getPhrasalVerbsWords(), ...this.getDailyEssentialsWords()];
+        // First install: build vocabulary in batches to prevent UI freeze
+        // Start with demo words immediately for fast perceived load
+        this.words = [...DEMO_WORDS];
+
         // Default folders for exercises
         this.folders = [
           { id: VaultService.DEFAULT_FOLDER_SETS_ID, title: VaultService.DEFAULT_FOLDER_SETS_TITLE, createdAt: new Date().toISOString() },
@@ -102,7 +105,24 @@ class VaultService {
           { id: VaultService.DEFAULT_FOLDER_TRANSLATED_ID, title: VaultService.DEFAULT_FOLDER_TRANSLATED_TITLE, createdAt: new Date().toISOString() },
           { id: VaultService.DEFAULT_FOLDER_NEWS_ID, title: VaultService.DEFAULT_FOLDER_NEWS_TITLE, createdAt: new Date().toISOString() },
         ];
-        await this.saveWords();
+
+        // Add phrasal verbs and daily words in a deferred manner to prevent freeze
+        // Use setImmediate to yield to the main thread between batches
+        await new Promise<void>(resolve => {
+          setImmediate(() => {
+            const phrasalWords = this.getPhrasalVerbsWords();
+            this.words = [...this.words, ...phrasalWords];
+
+            setImmediate(() => {
+              const dailyWords = this.getDailyEssentialsWords();
+              this.words = [...this.words, ...dailyWords];
+
+              // Non-blocking save - don't await to prevent freeze
+              this.saveWords().catch(() => {});
+              resolve();
+            });
+          });
+        });
       }
     } catch (error) {
       console.error('Failed to initialize vault:', error);

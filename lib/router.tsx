@@ -3,6 +3,32 @@ import { useAppStore } from './store';
 import { getTheme } from './theme';
 import PreloadService from '../services/PreloadService';
 import { DeviceEventEmitter } from 'react-native';
+import LimitModal from './LimitModal';
+import { supabase } from './supabase';
+
+// Helper to map Supabase user to app user format
+const mapSupabaseUser = (user: any, progress?: any) => {
+  if (!user) return null;
+  const displayName = user?.user_metadata?.full_name ?? user?.email ?? 'Vocabulary Learner';
+  let avatar = 'avatar_1';
+  const avatarId = user?.user_metadata?.avatar_id;
+  if (avatarId && avatarId >= 1 && avatarId <= 6) {
+    avatar = `avatar_${avatarId}`;
+  } else if (user?.user_metadata?.avatar_url) {
+    avatar = user.user_metadata.avatar_url;
+  }
+  return {
+    id: user.id,
+    name: displayName,
+    email: user.email ?? undefined,
+    avatar,
+    avatarId,
+    xp: progress?.xp ?? user?.user_metadata?.progress?.xp ?? 0,
+    streak: progress?.streak ?? user?.user_metadata?.progress?.streak ?? 0,
+    exercisesCompleted: progress?.exercisesCompleted ?? user?.user_metadata?.progress?.exercisesCompleted ?? 0,
+    createdAt: user.created_at ? new Date(user.created_at) : new Date(),
+  };
+};
 
 type Route = { pathname: string; params?: Record<string, any> };
 
@@ -15,6 +41,10 @@ type Router = {
 const RouterCtx = React.createContext<{
   stack: Route[];
   setStack: React.Dispatch<React.SetStateAction<Route[]>>;
+  tabStacks: Record<string, Route[]>;
+  setTabStacks: React.Dispatch<React.SetStateAction<Record<string, Route[]>>>;
+  currentTab: string;
+  setCurrentTab: React.Dispatch<React.SetStateAction<string>>;
 } | null>(null);
 
 function normalize(input: string | Route): Route {
@@ -30,17 +60,49 @@ function normalize(input: string | Route): Route {
   return { pathname, params };
 }
 
+// Helper to determine which tab a route belongs to
+function getTabForRoute(pathname: string): string {
+  if (pathname.startsWith('/quiz')) return 'quiz';
+  if (pathname.startsWith('/story')) return 'story';
+  if (pathname.startsWith('/vault')) return 'vault';
+  if (pathname.startsWith('/profile') || pathname.startsWith('/stats') || pathname.startsWith('/journal') || pathname.startsWith('/settings')) return 'account';
+  return 'home';
+}
+
 export function RouterProvider({ children }: { children: React.ReactNode }) {
   const [stack, setStack] = React.useState<Route[]>([{ pathname: '/' }]);
+  const [tabStacks, setTabStacks] = React.useState<Record<string, Route[]>>({
+    home: [{ pathname: '/' }],
+    story: [{ pathname: '/story/StoryExercise' }],
+    quiz: [{ pathname: '/quiz/learn' }],
+    vault: [{ pathname: '/vault' }],
+    account: [{ pathname: '/profile' }],
+  });
+  const [currentTab, setCurrentTab] = React.useState<string>('home');
+
+  // Keep tab stack in sync when navigating within a tab
+  React.useEffect(() => {
+    const top = stack[stack.length - 1];
+    if (!top) return;
+    const tab = getTabForRoute(top.pathname);
+    // Update currentTab if navigating to a different tab via push/replace
+    if (tab !== currentTab) {
+      setCurrentTab(tab);
+    }
+    // Always update the current tab's stack
+    setTabStacks(prev => ({ ...prev, [tab]: [...stack] }));
+  }, [stack]);
+
   // Expose current params to hooks used inside screens
   const top = stack[stack.length - 1];
   (globalThis as any).__ROUTE_PARAMS = top?.params || {};
-  // Initialize app services (vault, analytics, progress, preferences) on first mount
-  const initializeApp = useAppStore(s => s.initialize);
-  useEffect(() => {
-    initializeApp().catch(() => {});
-  }, [initializeApp]);
-  return <RouterCtx.Provider value={{ stack, setStack }}>{children}</RouterCtx.Provider>;
+  // Note: App initialization is handled in _layout.tsx with InteractionManager
+  // to prevent UI freeze on first install. Do not add initializeApp() here.
+  return (
+    <RouterCtx.Provider value={{ stack, setStack, tabStacks, setTabStacks, currentTab, setCurrentTab }}>
+      {children}
+    </RouterCtx.Provider>
+  );
 }
 
 export function useRouter(): Router {
@@ -106,6 +168,95 @@ export function Stack({ children }: { children?: React.ReactNode }) {
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 Stack.Screen = (_props: any) => null;
 
+function buildRedirectPath(pathname: string, params?: Record<string, any> | null): string {
+  if (!params) return pathname;
+  const entries = Object.entries(params).filter(([, v]) => v != null && String(v).length > 0);
+  if (!entries.length) return pathname;
+  const qs = entries
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+    .join('&');
+  return qs ? `${pathname}?${qs}` : pathname;
+}
+
+function makeSignupRequiredScreen(feature: 'story' | 'learn'): React.ComponentType<any> {
+  return function SignupRequiredScreen() {
+    const themeName = useAppStore(s => s.theme);
+    const colors = getTheme(themeName);
+    const router = useRouter();
+    const pathname = usePathname();
+    const params = useLocalSearchParams();
+    const redirect = buildRedirectPath(pathname, params);
+
+    const { View, Text, TouchableOpacity } = require('react-native');
+    const isLight = themeName === 'light';
+    const titleColor = isLight ? '#0D3B4A' : '#E5E7EB';
+    const bodyColor = isLight ? '#4B5563' : '#9CA3AF';
+
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, paddingHorizontal: 24, justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 22, fontWeight: '900', color: titleColor, textAlign: 'center' }}>
+          Sign up required
+        </Text>
+        <Text style={{ marginTop: 10, fontSize: 14, lineHeight: 20, color: bodyColor, textAlign: 'center' }}>
+          {feature === 'learn'
+            ? 'Create an account to use Learn and keep your progress synced.'
+            : 'Create an account to use Story and keep your progress synced.'}
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 18 }}>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => router.replace({ pathname: '/profile', params: { redirect } })}
+            style={{ paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, backgroundColor: '#F8B070' }}
+          >
+            <Text style={{ fontWeight: '800', color: '#111827' }}>Sign up</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => router.back()}
+            style={{
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              borderRadius: 12,
+              backgroundColor: isLight ? '#FFFFFF' : '#1F2629',
+              borderWidth: 1,
+              borderColor: isLight ? '#E5DED3' : '#364147',
+            }}
+          >
+            <Text style={{ fontWeight: '800', color: titleColor }}>Back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+}
+
+const SignupRequiredLearnScreen = makeSignupRequiredScreen('learn');
+const SignupRequiredStoryScreen = makeSignupRequiredScreen('story');
+
+function makeAuthGateScreen(
+  feature: 'story' | 'learn',
+  getInner: () => React.ComponentType<any>
+): React.ComponentType<any> {
+  const Required = feature === 'learn' ? SignupRequiredLearnScreen : SignupRequiredStoryScreen;
+  return function AuthGateScreen() {
+    const user = useAppStore(s => s.user);
+    const authed = !!(user && (user as any)?.id);
+    if (!authed) return <Required />;
+    const Inner = getInner();
+    return <Inner />;
+  };
+}
+
+const StoryExerciseGateScreen = makeAuthGateScreen('story', () => require('../app/story/StoryExercise').default);
+const StoryExerciseLegacyGateScreen = makeAuthGateScreen('story', () => require('../app/story-exercise').default);
+
+const QuizLevelSelectGateScreen = makeAuthGateScreen('learn', () => require('../app/quiz/level-select').default);
+const QuizLearnGateScreen = makeAuthGateScreen('learn', () => require('../app/quiz/learn').default);
+const QuizAtlasResultsGateScreen = makeAuthGateScreen('learn', () => require('../app/quiz/atlas-results').default);
+const QuizWordIntroGateScreen = makeAuthGateScreen('learn', () => require('../app/quiz/word-intro').default);
+const QuizQuizScreenGateScreen = makeAuthGateScreen('learn', () => require('../app/quiz/quiz-screen').default);
+const QuizAtlasPracticeIntegratedGateScreen = makeAuthGateScreen('learn', () => require('../app/quiz/atlas-practice-integrated').default);
+
 // Minimal route renderer mapping paths to screens
 function ScreenFor(pathname: string): React.ComponentType<any> {
   switch (pathname) {
@@ -151,32 +302,32 @@ function ScreenFor(pathname: string): React.ComponentType<any> {
       return require('../app/placement/index').default;
     case '/placement/test':
       return require('../app/placement/test').default;
-    case '/placement/result':
-      return require('../app/placement/result').default;
-    case '/story/StoryExercise':
-      return require('../app/story/StoryExercise').default;
-    case '/quiz/level-select':
-      return require('../app/quiz/level-select').default;
-    case '/quiz/learn':
-      return require('../app/quiz/learn').default;
-    case '/quiz/atlas-results':
-      return require('../app/quiz/atlas-results').default;
-    case '/quiz/word-intro':
-      return require('../app/quiz/word-intro').default;
-    case '/quiz/quiz-screen':
-      return require('../app/quiz/quiz-screen').default;
-    case '/quiz/atlas-practice-integrated':
-      return require('../app/quiz/atlas-practice-integrated').default;
-    default:
+	    case '/placement/result':
+	      return require('../app/placement/result').default;
+	    case '/story/StoryExercise':
+	      return require('../app/story/StoryExercise').default;
+	    case '/quiz/level-select':
+	      return require('../app/quiz/level-select').default;
+	    case '/quiz/learn':
+	      return require('../app/quiz/learn').default;
+	    case '/quiz/atlas-results':
+	      return QuizAtlasResultsGateScreen;
+	    case '/quiz/word-intro':
+	      return QuizWordIntroGateScreen;
+	    case '/quiz/quiz-screen':
+	      return QuizQuizScreenGateScreen;
+	    case '/quiz/atlas-practice-integrated':
+	      return QuizAtlasPracticeIntegratedGateScreen;
+	    default:
       if (pathname.startsWith('/journal/')) {
         return require('../app/journal/[id]').default;
       }
       if (pathname.startsWith('/vault/word/')) {
         return require('../app/vault-word').default;
       }
-      if (pathname === '/story-exercise') {
-        return require('../app/story-exercise').default;
-      }
+	      if (pathname === '/story-exercise') {
+	        return require('../app/story-exercise').default;
+	      }
       // Fallback to home
       return require('../app/index').default;
   }
@@ -191,9 +342,16 @@ export function RouteRenderer() {
   const prevKey = prevRoute ? prevRoute.pathname + JSON.stringify(prevRoute.params || {}) : null;
   // Theme for flip backdrop
   const themeName = useAppStore(s => s.theme);
+  const user = useAppStore(s => s.user);
   const colors = getTheme(themeName);
+  const isSignedIn = !!(user && (user as any)?.id);
   // Access react-native primitives before using in hooks
   const { View, Animated, Easing, Dimensions, PanResponder, TouchableOpacity, Text, Image } = require('react-native');
+  const [signupGate, setSignupGate] = React.useState<{
+    visible: boolean;
+    feature: 'story' | 'learn' | null;
+    redirect: string | null;
+  }>({ visible: false, feature: null, redirect: null });
   const [navHidden, setNavHidden] = React.useState(false);
   const navAnim = React.useRef(new Animated.Value(0)).current;
   React.useEffect(() => {
@@ -203,6 +361,56 @@ export function RouteRenderer() {
     });
     return () => sub.remove();
   }, []);
+
+  // Global auth state listener - syncs user across the entire app
+  const authInitializedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (authInitializedRef.current) return;
+    authInitializedRef.current = true;
+
+    const setUser = useAppStore.getState().setUser;
+    let subscription: { unsubscribe: () => void } | null = null;
+
+    // Defer auth setup until after initial render to prevent freeze
+    const { InteractionManager } = require('react-native');
+    const handle = InteractionManager.runAfterInteractions(() => {
+      // Check for existing session on app start with timeout
+      const checkSession = async () => {
+        try {
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Session check timeout')), 3000)
+          );
+          const sessionPromise = supabase.auth.getSession();
+          const { data } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+          if (data?.session?.user) {
+            const progress = useAppStore.getState().userProgress;
+            setUser(mapSupabaseUser(data.session.user, progress));
+          }
+        } catch (e) {
+          console.log('Auth session check skipped:', e);
+        }
+      };
+
+      checkSession();
+
+      // Listen for auth state changes globally
+      const result = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user) {
+          const progress = useAppStore.getState().userProgress;
+          setUser(mapSupabaseUser(session.user, progress));
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+        }
+      });
+      subscription = result.data.subscription;
+    });
+
+    return () => {
+      handle.cancel();
+      subscription?.unsubscribe();
+    };
+  }, []);
+
   React.useEffect(() => {
     try {
       Animated.timing(navAnim, {
@@ -354,12 +562,43 @@ export function RouteRenderer() {
     if (key === 'account') return basePath.startsWith('/profile') || basePath.startsWith('/stats') || basePath.startsWith('/journal');
     return false;
   };
+  const openSignupGate = React.useCallback((feature: 'story' | 'learn', redirect: string) => {
+    setSignupGate({ visible: true, feature, redirect });
+  }, []);
+
+  // Use refs to get latest values in callback without stale closures
+  const tabStacksRef = React.useRef(ctx.tabStacks);
+  const currentTabRef = React.useRef(ctx.currentTab);
+  const stackRef = React.useRef(ctx.stack);
+  React.useEffect(() => { tabStacksRef.current = ctx.tabStacks; }, [ctx.tabStacks]);
+  React.useEffect(() => { currentTabRef.current = ctx.currentTab; }, [ctx.currentTab]);
+  React.useEffect(() => { stackRef.current = ctx.stack; }, [ctx.stack]);
+
+  // Tab switching function that preserves state
+  const switchToTab = React.useCallback((tabKey: string, defaultRoute: Route) => {
+    // Save current stack to current tab before switching
+    const currentTabKey = currentTabRef.current;
+    const currentStack = stackRef.current;
+    ctx.setTabStacks(prev => ({ ...prev, [currentTabKey]: [...currentStack] }));
+
+    // Switch to new tab
+    ctx.setCurrentTab(tabKey);
+
+    // Restore the saved stack for the new tab, or use default
+    const savedStack = tabStacksRef.current[tabKey];
+    if (savedStack && savedStack.length > 0) {
+      ctx.setStack([...savedStack]);
+    } else {
+      ctx.setStack([defaultRoute]);
+    }
+  }, [ctx.setTabStacks, ctx.setCurrentTab, ctx.setStack]);
+
   const navItems = [
-    { key: 'home', label: 'Home', icon: require('../assets/homepageicons/11.png'), go: () => ctx.setStack([{ pathname: '/' }]) },
-    { key: 'story', label: 'Story', icon: require('../assets/homepageicons/13.png'), go: () => ctx.setStack([{ pathname: '/story/StoryExercise' }]) },
-    { key: 'quiz', label: 'Learn', icon: require('../assets/homepageicons/12.png'), go: () => ctx.setStack([{ pathname: '/quiz/learn' }]) },
-    { key: 'vault', label: 'Vault', icon: require('../assets/homepageicons/book.png'), go: () => ctx.setStack([{ pathname: '/vault' }]) },
-    { key: 'account', label: 'Profile', icon: require('../assets/homepageicons/15.png'), go: () => ctx.setStack([{ pathname: '/profile' }]) },
+    { key: 'home', label: 'Home', icon: require('../assets/homepageicons/11.png'), go: () => switchToTab('home', { pathname: '/' }) },
+    { key: 'story', label: 'Story', icon: require('../assets/homepageicons/13.png'), go: () => switchToTab('story', { pathname: '/story/StoryExercise' }) },
+    { key: 'quiz', label: 'Learn', icon: require('../assets/homepageicons/12.png'), go: () => switchToTab('quiz', { pathname: '/quiz/learn' }) },
+    { key: 'vault', label: 'Vault', icon: require('../assets/homepageicons/book.png'), go: () => switchToTab('vault', { pathname: '/vault' }) },
+    { key: 'account', label: 'Profile', icon: require('../assets/homepageicons/15.png'), go: () => switchToTab('account', { pathname: '/profile' }) },
   ] as const;
   // Bottom-sheet style overlay for Translate
   const sheetAnim = React.useRef(new Animated.Value(0)).current; // 0 closed, 1 open
@@ -694,7 +933,25 @@ export function RouteRenderer() {
           ))}
           </View>
         </View>
-      </Animated.View>
+	      </Animated.View>
+
+      <LimitModal
+        visible={signupGate.visible}
+        title="Sign up required"
+        message={
+          signupGate.feature === 'story'
+            ? 'Create an account to use Story and keep your progress synced.'
+            : 'Create an account to use Learn and keep your progress synced.'
+        }
+        onClose={() => setSignupGate({ visible: false, feature: null, redirect: null })}
+        onSubscribe={() => {
+          const redirect = signupGate.redirect;
+          setSignupGate({ visible: false, feature: null, redirect: null });
+          ctx.setStack([{ pathname: '/profile', params: redirect ? { redirect } : undefined }]);
+        }}
+        primaryText="Sign up"
+        secondaryText="Not now"
+      />
 
       {/* StoryExercise now also uses the same bottom-sheet overlay via sheetRoute */}
     </View>

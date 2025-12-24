@@ -8,6 +8,7 @@ import {
   AccessibilityInfo,
   ViewStyle,
   TextStyle,
+  ScrollView,
 } from 'react-native';
 import { useAppStore } from '../../../lib/store';
 import { getTheme } from '../../../lib/theme';
@@ -1620,81 +1621,88 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
 
   return (
     <View style={[styles.container, isLight && { backgroundColor: colors.background }]}>
-      <View style={styles.progressContainer}>
-        <Text style={[styles.progressText, isLight && { color: '#6B7280' }]}>Word {index + 1} of {itemsData.length}</Text>
-        <View style={styles.scoreWrapper}>
-          <Animated.Text
-            style={[
-              styles.deductionText,
-              {
-                opacity: deductionOpacity,
-                transform: [{ translateY: deductionTranslateY }],
-              },
-            ]}
-          >
-            -5
-          </Animated.Text>
-          <Text style={styles.scoreText}>{displayScore}</Text>
-        </View>
-      </View>
-      <View style={[styles.progressBar, isLight && { backgroundColor: '#E5E7EB' }]}>
-        <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-      </View>
-
-      <Text style={[styles.headerText, isLight && { color: '#111827' }]}>Natural Usage</Text>
-      <Text style={[styles.subHeaderText, isLight && { color: '#6B7280' }]}>
-        {item.mode === 'word' ? 'Select the word that correctly completes the sentence.' : 'Pick the sentence that uses the word correctly.'}
-      </Text>
-
-      {item.mode === 'word' ? (
-        <View style={styles.promptHeader}>
-          <Text style={[styles.promptText, isLight && { color: '#111827' }]}>{item.prompt}</Text>
-        </View>
-      ) : (
-      <View style={styles.wordHeader}>
-        <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{item.word}</Text>
-        <Text style={[styles.ipaText, isLight && { color: '#6B7280' }]}>{item.ipa}</Text>
-      </View>
-      )}
-
-      <View style={styles.optionsWrapper}>
-        {options.map((option, idx) => {
-          const isSelected = selected === idx;
-          const isCorrect = option.isCorrect;
-
-          const cardStyle: ViewStyle[] = [styles.optionCard];
-          const textStyle: TextStyle[] = [styles.optionText, isLight && { color: '#111827' }];
-          if (isLight) cardStyle.push(styles.optionLight);
-
-          if (!revealed && isSelected) {
-            cardStyle.push(styles.cardSelected);
-          }
-
-          if (revealed) {
-            if (isCorrect) {
-              // Always highlight the correct option with green background
-              cardStyle.push(isLight ? styles.cardCorrectLight : styles.cardCorrect);
-            } else if (isSelected) {
-              // Selected but incorrect → red background
-              cardStyle.push(isLight ? styles.cardIncorrectLight : styles.cardIncorrect);
-            }
-          }
-
-          return (
-            <TouchableOpacity
-              key={option.key}
-              style={cardStyle}
-              activeOpacity={0.85}
-              onPress={() => handleSelect(idx)}
-              disabled={revealed}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isSelected }}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        <View style={styles.progressContainer}>
+          <Text style={[styles.progressText, isLight && { color: '#6B7280' }]}>Word {index + 1} of {itemsData.length}</Text>
+          <View style={styles.scoreWrapper}>
+            <Animated.Text
+              style={[
+                styles.deductionText,
+                {
+                  opacity: deductionOpacity,
+                  transform: [{ translateY: deductionTranslateY }],
+                },
+              ]}
             >
-              <Text style={textStyle}>{option.text}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+              -5
+            </Animated.Text>
+            <Text style={styles.scoreText}>{displayScore}</Text>
+          </View>
+        </View>
+        <View style={[styles.progressBar, isLight && { backgroundColor: '#E5E7EB' }]}>
+          <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+        </View>
+
+        <Text style={[styles.headerText, isLight && { color: '#111827' }]}>Natural Usage</Text>
+        <Text style={[styles.subHeaderText, isLight && { color: '#6B7280' }]}>
+          {item.mode === 'word' ? 'Select the word that correctly completes the sentence.' : 'Pick the sentence that uses the word correctly.'}
+        </Text>
+
+        {item.mode === 'word' ? (
+          <View style={styles.promptHeader}>
+            <Text style={[styles.promptText, isLight && { color: '#111827' }]}>{item.prompt}</Text>
+          </View>
+        ) : (
+          <View style={styles.wordHeader}>
+            <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{item.word}</Text>
+            <Text style={[styles.ipaText, isLight && { color: '#6B7280' }]}>{item.ipa}</Text>
+          </View>
+        )}
+
+        <View style={styles.optionsWrapper}>
+          {options.map((option, idx) => {
+            const isSelected = selected === idx;
+            const isCorrect = option.isCorrect;
+
+            const cardStyle: ViewStyle[] = [styles.optionCard];
+            const textStyle: TextStyle[] = [styles.optionText, isLight && { color: '#111827' }];
+            if (isLight) cardStyle.push(styles.optionLight);
+
+            if (!revealed && isSelected) {
+              cardStyle.push(styles.cardSelected);
+            }
+
+            if (revealed) {
+              if (isCorrect) {
+                // Always highlight the correct option with green background
+                cardStyle.push(isLight ? styles.cardCorrectLight : styles.cardCorrect);
+              } else if (isSelected) {
+                // Selected but incorrect → red background
+                cardStyle.push(isLight ? styles.cardIncorrectLight : styles.cardIncorrect);
+              }
+            }
+
+            return (
+              <TouchableOpacity
+                key={option.key}
+                style={cardStyle}
+                activeOpacity={0.85}
+                onPress={() => handleSelect(idx)}
+                disabled={revealed}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+              >
+                <Text style={textStyle}>{option.text}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
 
       <View style={styles.footer}>
         <AnimatedNextButton

@@ -303,8 +303,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Preferences
   languagePreferences: [],
   setLanguagePreferences: async (langs: string[]) => {
-    try { await AsyncStorage.setItem('@engniter.langs', JSON.stringify(langs)); } catch {}
+    console.log('[Store] Saving language preferences:', langs);
     set({ languagePreferences: langs });
+    try {
+      await AsyncStorage.setItem('@engniter.langs', JSON.stringify(langs));
+      console.log('[Store] Language preferences saved successfully');
+    } catch (e) {
+      console.error('[Store] Failed to save language preferences:', e);
+    }
   },
   updateProgress: async (xp, exercisesCompleted) => {
     try {
@@ -321,59 +327,120 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   
-  // Theme: initialize from system to avoid dark flash before async init
+  // Theme: initialize from system to avoid a flash; default to dark
   theme: ((): ThemeName => {
     const sys = Appearance.getColorScheme();
     return (sys === 'light' || sys === 'dark') ? (sys as ThemeName) : 'dark';
   })(),
   setTheme: async (t: ThemeName) => {
+    console.log('[Store] Setting theme:', t);
+    set({ theme: t });
     try {
       await AsyncStorage.setItem('@engniter.theme', t);
-    } catch {}
-    set({ theme: t });
+      console.log('[Store] Theme saved successfully');
+    } catch (e) {
+      console.error('[Store] Failed to save theme:', e);
+    }
   },
   toggleTheme: async () => {
     const next = get().theme === 'dark' ? 'light' : 'dark';
+    console.log('[Store] Toggling theme to:', next);
+    set({ theme: next });
     try {
       await AsyncStorage.setItem('@engniter.theme', next);
-    } catch {}
-    set({ theme: next });
+      console.log('[Store] Theme saved successfully');
+    } catch (e) {
+      console.error('[Store] Failed to save theme:', e);
+    }
   },
   
   // Initialize app
   initialize: async () => {
-    try {
-      await Promise.all([
-        vaultService.initialize(),
-        analyticsService.initialize(),
-        ProgressService.initialize(),
-      ]);
-      
-      const words = vaultService.getAllWords();
-      const analytics = analyticsService.getAnalyticsData();
-      const userProgress = await ProgressService.getProgress();
-      // Theme preference: honor persisted value or system preference; default to dark
-      let themePref: ThemeName | null = null;
-      try {
-        const stored = await AsyncStorage.getItem('@engniter.theme');
-        if (stored === 'light' || stored === 'dark') themePref = stored as ThemeName;
-      } catch {}
-      if (!themePref) {
-        const sys = Appearance.getColorScheme();
-        themePref = (sys === 'light' || sys === 'dark') ? (sys as ThemeName) : 'dark';
-        try { await AsyncStorage.setItem('@engniter.theme', themePref); } catch {}
+    console.log('[Store] Initializing app...');
+
+    const normalizeTheme = (raw: any): ThemeName | null => {
+      if (raw === 'light' || raw === 'dark') return raw;
+      if (typeof raw === 'string') {
+        const lower = raw.toLowerCase();
+        if (lower === 'light' || lower === 'dark') return lower as ThemeName;
       }
+      return null;
+    };
 
-      // Load language preferences
-      let langs: string[] = [];
-      try {
-        const s = await AsyncStorage.getItem('@engniter.langs');
-        langs = s ? JSON.parse(s) : [];
-      } catch {}
+    const normalizeLangs = (raw: any): string[] => {
+      if (Array.isArray(raw)) return raw.filter(l => typeof l === 'string');
+      if (typeof raw === 'string' && raw.trim()) return [raw.trim()];
+      return [];
+    };
 
-      set({ words, analytics, userProgress, theme: themePref, languagePreferences: langs });
-    } catch (error) {
-      console.error('Failed to initialize app:', error);
+    // Hydrate persisted preferences before any other state to avoid flashes.
+    // If storage is missing/empty, keep whatever is already in memory instead of resetting.
+    let themePref: ThemeName | null = null;
+    let langs: string[] | null = null;
+    try {
+      const storedTheme = await AsyncStorage.getItem('@engniter.theme');
+      const parsedTheme = normalizeTheme(storedTheme);
+      if (parsedTheme) themePref = parsedTheme;
+    } catch (err) {
+      console.warn('[Store] failed to read saved theme', err);
     }
+
+    try {
+      const s = await AsyncStorage.getItem('@engniter.langs');
+      const parsed = s ? JSON.parse(s) : [];
+      const normalized = normalizeLangs(parsed);
+      if (normalized.length) langs = normalized;
+    } catch (err) {
+      console.warn('[Store] failed to read saved langs', err);
+    }
+
+    // Apply prefs immediately, but only overwrite when we actually have a value from storage.
+    set(state => {
+      // Fallbacks if nothing persisted: keep current theme or system default
+      const sys = Appearance.getColorScheme();
+      const fallbackTheme: ThemeName = state.theme || ((sys === 'light' || sys === 'dark') ? (sys as ThemeName) : 'dark');
+      return {
+        ...state,
+        theme: themePref ?? fallbackTheme,
+        languagePreferences: langs ?? state.languagePreferences,
+      };
+    });
+
+    // Initialize services independently so one failure does not prevent prefs hydration.
+    let words: Word[] = [];
+    let analytics: any = null;
+    let userProgress: any = null;
+
+    try {
+      await vaultService.initialize();
+      words = vaultService.getAllWords();
+    } catch (err) {
+      console.error('[Store] vault init failed', err);
+    }
+
+    try {
+      await analyticsService.initialize();
+      analytics = analyticsService.getAnalyticsData();
+    } catch (err) {
+      console.error('[Store] analytics init failed', err);
+    }
+
+    try {
+      await ProgressService.initialize();
+      userProgress = await ProgressService.getProgress();
+    } catch (err) {
+      console.error('[Store] progress init failed', err);
+      // Fall back to previous state if available
+      userProgress = get().userProgress || userProgress;
+    }
+
+    console.log('[Store] Setting state - theme:', themePref, 'langs:', langs);
+    set({
+      words,
+      analytics,
+      userProgress,
+      theme: themePref ?? get().theme,
+      languagePreferences: langs ?? get().languagePreferences,
+    });
   },
 }));
