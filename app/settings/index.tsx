@@ -186,20 +186,7 @@ export default function SettingsScreen() {
           <View style={styles.rowBetween}>
             <Text style={[styles.label, isLight && styles.labelLight]}>Theme</Text>
             <TouchableOpacity
-              onPress={async () => {
-                const newTheme = themeName === 'dark' ? 'light' : 'dark';
-                // Save directly to AsyncStorage
-                try {
-                  await AsyncStorage.setItem('@engniter.theme', newTheme);
-                  // Verify it was saved
-                  const verify = await AsyncStorage.getItem('@engniter.theme');
-                  Alert.alert('Theme Saved', `Saved: ${newTheme}\nVerified: ${verify}`);
-                } catch (e: any) {
-                  Alert.alert('Save Error', e?.message || 'Unknown error');
-                }
-                // Update store
-                toggleTheme();
-              }}
+              onPress={() => toggleTheme()}
               style={[styles.toggle, isLight && styles.toggleLight, themeName === 'light' && styles.toggleActive]}
             >
               <Text style={[styles.toggleText, isLight && styles.toggleTextLight]}>{themeName === 'light' ? 'Light' : 'Dark'}</Text>

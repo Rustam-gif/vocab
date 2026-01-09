@@ -43,8 +43,8 @@ export default function VaultFolderScreen() {
   return (
     <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
       <View style={[styles.header, isLight && styles.headerLight]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
+        <TouchableOpacity style={styles.backButton} onPress={() => router.replace('/vault')}>
+          <ArrowLeft size={24} color={isLight ? '#0F766E' : '#4ED9CB'} />
         </TouchableOpacity>
         <Text style={[styles.title, isLight && styles.titleLight]} numberOfLines={1} ellipsizeMode="tail">{title || 'Folder'}</Text>
         <View style={styles.practiceActions}>
@@ -100,11 +100,11 @@ export default function VaultFolderScreen() {
                       }}
                       style={[styles.speakBtn, speakingFor === word.id && styles.speakBtnActive, isLight && styles.speakBtnLight]}
                     >
-                      <Volume2 size={18} color={speakingFor === word.id ? '#F8B070' : (isLight ? '#111827' : '#F8B070')} />
+                      <Volume2 size={18} color={speakingFor === word.id ? '#4ED9CB' : (isLight ? '#0F766E' : '#E5E7EB')} />
                     </TouchableOpacity>
                     {(() => {
                       const sprintCorrect = (word as any)?.exerciseStats?.sprint?.correct || 0;
-                      const starColor = sprintCorrect > 0 ? '#437F76' : '#E06262';
+                      const starColor = sprintCorrect > 0 ? '#4ED9CB' : '#F25E86';
                       return (
                         <View style={styles.scoreContainer}>
                           <Star size={16} color={starColor} fill={starColor} />
@@ -119,7 +119,7 @@ export default function VaultFolderScreen() {
                 <View style={styles.wordFooter}>
                   <Text style={[styles.practiceMeta, isLight && { color: '#6B7280' }]}>Practiced {word.practiceCount} times</Text>
                   <View style={styles.dateInfo}>
-                    <Calendar size={14} color={isLight ? '#6B7280' : '#a0a0a0'} />
+                    <Calendar size={14} color={isLight ? '#0F766E' : '#4ED9CB'} />
                     <Text style={[styles.dateText, isLight && { color: '#6B7280' }]}>{formatDate(word.savedAt)}</Text>
                   </View>
                 </View>
@@ -136,7 +136,7 @@ export default function VaultFolderScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
   },
   headerLight: { },
   header: {
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     flex: 1,
     marginRight: 12,
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   titleLight: { color: '#111827' },
   practiceActions: {
@@ -170,24 +170,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 8,
     paddingHorizontal: 18,
-    backgroundColor: '#E28743',
+    backgroundColor: '#F25E86',
     borderRadius: 999,
     minWidth: 110,
   },
-  practiceButtonLight: { backgroundColor: '#F8B070' },
-  practiceButtonTextLight: { color: '#111827' },
+  practiceButtonLight: { backgroundColor: '#F25E86' },
+  practiceButtonTextLight: { color: '#FFFFFF' },
   practiceButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 13,
     letterSpacing: 0.2,
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   practiceMeta: {
-    color: '#a0a0a0',
+    color: '#9CA3AF',
     fontSize: 12,
     fontWeight: '600',
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   content: {
     flex: 1,
@@ -202,24 +202,40 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 8,
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   emptySubtitle: {
-    color: '#a0a0a0',
+    color: '#9CA3AF',
     fontSize: 14,
     textAlign: 'center',
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   wordsList: {
     paddingBottom: 20,
   },
   wordCard: {
-    backgroundColor: '#2c2f2f',
+    backgroundColor: '#1F1F1F',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  wordCardLight: { backgroundColor: '#FFFFFF' },
+  wordCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.3)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
   wordHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -232,7 +248,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     flex: 1,
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   speakBtn: {
     width: 32,
@@ -240,17 +256,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(78,217,203,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(78,217,203,0.25)',
   },
   speakBtnLight: {
-    backgroundColor: '#E5E7EB',
-    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(78,217,203,0.3)',
   },
   speakBtnActive: {
-    backgroundColor: 'rgba(248,176,112,0.12)',
-    borderColor: 'rgba(248,176,112,0.35)',
+    backgroundColor: 'rgba(78,217,203,0.2)',
+    borderColor: 'rgba(78,217,203,0.45)',
   },
   scoreContainer: {
     flexDirection: 'row',
@@ -260,21 +276,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 4,
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   definitionText: {
     fontSize: 16,
-    color: '#e0e0e0',
+    color: '#E5E7EB',
     marginBottom: 8,
     lineHeight: 22,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   exampleText: {
     fontSize: 14,
-    color: '#a0a0a0',
+    color: '#9CA3AF',
     fontStyle: 'italic',
     marginBottom: 12,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   wordFooter: {
     flexDirection: 'row',
@@ -282,9 +298,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   practiceText: {
-    color: '#a0a0a0',
+    color: '#9CA3AF',
     fontSize: 12,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   dateInfo: {
     flexDirection: 'row',
@@ -292,8 +308,8 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 12,
-    color: '#a0a0a0',
+    color: '#9CA3AF',
     marginLeft: 4,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
 });

@@ -8,8 +8,11 @@ import {
   Animated,
   Modal,
   ScrollView,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
-import { ArrowLeft, ArrowRight, Volume2, Bookmark, Check, Sparkles, Globe } from 'lucide-react-native';
+import { Volume2, Bookmark, Check, Globe } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 import Speech from '../../../lib/speech';
 import { useRouter } from 'expo-router';
@@ -34,11 +37,18 @@ interface Word {
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const CARD_WIDTH = Math.round(SCREEN_WIDTH * 0.86);
-// Smaller, responsive height so cards never get cropped by header/nav
-const CARD_HEIGHT = Math.min(520, Math.round(SCREEN_HEIGHT * 0.50));
-const CARD_SPACING = 16;
-const SIDE_PADDING = Math.round((SCREEN_WIDTH - CARD_WIDTH) / 2);
+const MAIN_NODE_SIZE = 140;
+const ROCKET_START_FRAME = 20;
+const ROCKET_END_FRAME = 136;
+const ROCKET_TOTAL_FRAMES = 144;
+const ROCKET_FPS = 24;
+const ROCKET_STATIC_PROGRESS = ROCKET_START_FRAME / ROCKET_TOTAL_FRAMES;
+const ROCKET_LAUNCH_TIMEOUT_MS = Math.round(((ROCKET_END_FRAME - ROCKET_START_FRAME) / ROCKET_FPS) * 1000);
+
+// Enable LayoutAnimation for Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export default function WordIntroComponent({ setId, levelId, onComplete }: WordIntroProps) {
   const router = useRouter();
@@ -50,26 +60,57 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
   const [words, setWords] = useState<Word[]>([]);
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
   const [savingWords, setSavingWords] = useState<Set<string>>(new Set());
-  const TOTAL_CARDS = words.length + 1; // words + 1 CTA card
   const languagePrefs = useAppStore(s => s.languagePreferences);
   const targetLang = languagePrefs?.[0] || '';
-  const [translation, setTranslation] = useState<any | null>(null);
-  const [loadingTr, setLoadingTr] = useState(false);
   const [trMap, setTrMap] = useState<Record<string, any>>({});
   const [showTrModal, setShowTrModal] = useState(false);
   const [modalWord, setModalWord] = useState<string | null>(null);
+  const [loadingTr, setLoadingTr] = useState(false);
   const trAnim = useRef(new Animated.Value(0)).current;
+  const rocketRef = useRef<LottieView>(null);
+  const rocketLaunchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const rocketLaunchActiveRef = useRef(false);
+  const [rocketLaunching, setRocketLaunching] = useState(false);
 
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollerRef = useRef<any>(null);
   const [speakingWord, setSpeakingWord] = useState<string | null>(null);
   const voiceIdRef = useRef<string | undefined>(undefined);
 
+  // Breathing animation for main node
+  const breatheAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const breathe = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breatheAnim, {
+          toValue: 1.05,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(breatheAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    breathe.start();
+    return () => breathe.stop();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (rocketLaunchTimeoutRef.current) {
+        clearTimeout(rocketLaunchTimeoutRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     loadWords();
   }, [setId, levelId]);
 
-  // Pick an American English voice if available; otherwise rely on language.
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -102,63 +143,25 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
     setWords(wordData);
   };
 
+  const CARD_WIDTH = SCREEN_WIDTH;
+
   const onMomentumEnd = (e: any) => {
     const offsetX = e.nativeEvent.contentOffset.x;
-    const newIndex = Math.round(offsetX / (CARD_WIDTH + CARD_SPACING));
-    if (newIndex !== currentIndex) setCurrentIndex(newIndex);
-  };
-
-  const goToNext = () => {
-    if (currentIndex < TOTAL_CARDS - 1) {
-      const x = (currentIndex + 1) * (CARD_WIDTH + CARD_SPACING);
-      scrollerRef.current?.scrollTo({ x, animated: true });
-      setCurrentIndex(prev => prev + 1);
+    const newIndex = Math.round(offsetX / CARD_WIDTH);
+    if (newIndex !== currentIndex) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setCurrentIndex(newIndex);
     }
   };
-
-  const goToPrevious = () => {
-    if (currentIndex > 0) {
-      const x = (currentIndex - 1) * (CARD_WIDTH + CARD_SPACING);
-      scrollerRef.current?.scrollTo({ x, animated: true });
-      setCurrentIndex(prev => prev - 1);
-    }
-  };
-
-  // Translation fetch
-  useEffect(() => {
-    const w = words[Math.min(currentIndex, Math.max(0, words.length - 1))]?.word;
-    if (!w || !targetLang) { setTranslation(null); return; }
-    // If we already have a cached translation for this word, use it immediately
-    if (trMap[w]) {
-      setTranslation(trMap[w]);
-      return;
-    }
-    let alive = true;
-    setLoadingTr(true);
-    TranslationService.translate(w, targetLang)
-      .then(res => {
-        if (!alive) return;
-        if (res) {
-          setTrMap(prev => ({ ...prev, [w]: res }));
-          setTranslation(res);
-        } else {
-          setTranslation(null);
-        }
-      })
-      .finally(() => { if (alive) setLoadingTr(false); });
-    return () => { alive = false; };
-  }, [currentIndex, words, targetLang]);
 
   const handleSaveWord = async (wordText: string) => {
     if (savingWords.has(wordText) || savedWords.has(wordText)) return;
 
     setSavingWords(prev => new Set(prev).add(wordText));
-    
+
     try {
-      // Find the full word data
       const wordData = words.find(w => w.word === wordText);
       if (wordData) {
-        // Save to store
         await addWord({
           word: wordData.word,
           definition: wordData.definition,
@@ -168,11 +171,8 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
           tags: [],
           folderId: 'folder-sets-default',
         });
-        
+
         setSavedWords(prev => new Set(prev).add(wordText));
-        
-        // Don't navigate - let user continue their lesson
-        // The word is now saved and will show as saved (checkmark instead of bookmark)
       }
     } catch (error) {
       console.error('Failed to save word:', error);
@@ -186,274 +186,293 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
   };
 
   const handleStartPractice = () => {
-    console.log('Start Practice button pressed');
     try {
       if (typeof onComplete === 'function') {
-        console.log('Calling onComplete callback');
         onComplete();
-      } else {
-        console.warn('onComplete is not a function:', typeof onComplete);
       }
     } catch (e) {
       console.warn('Start Practice callback failed:', e);
     }
   };
 
-  const isCtaIndex = currentIndex >= words.length;
+  const finishRocketLaunch = () => {
+    if (!rocketLaunchActiveRef.current) return;
+    rocketLaunchActiveRef.current = false;
+    if (rocketLaunchTimeoutRef.current) {
+      clearTimeout(rocketLaunchTimeoutRef.current);
+      rocketLaunchTimeoutRef.current = null;
+    }
+    handleStartPractice();
+  };
+
+  const handleRocketNext = () => {
+    if (rocketLaunchActiveRef.current) return;
+    rocketLaunchActiveRef.current = true;
+    setRocketLaunching(true);
+    try {
+      rocketRef.current?.reset?.();
+      rocketRef.current?.play?.(ROCKET_START_FRAME, ROCKET_END_FRAME);
+    } catch {}
+    if (rocketLaunchTimeoutRef.current) {
+      clearTimeout(rocketLaunchTimeoutRef.current);
+    }
+    rocketLaunchTimeoutRef.current = setTimeout(() => {
+      finishRocketLaunch();
+    }, ROCKET_LAUNCH_TIMEOUT_MS);
+  };
+
   const currentWord = words[Math.min(currentIndex, words.length - 1)];
-  const progressIndex = Math.min(currentIndex, words.length - 1);
+  const isLastCard = currentIndex >= words.length - 1;
+
+  const renderMainWordNode = (word: Word) => {
+    const isSaved = savedWords.has(word.word);
+
+    return (
+      <View style={styles.mainNodeContainer}>
+        {/* Main node with speaker button overlay */}
+        <View style={styles.mainNodeWrapper}>
+          {/* Glossy teal node */}
+          <Animated.View style={[styles.mainNode, { transform: [{ scale: breatheAnim }] }]}>
+            {/* Glossy overlay */}
+            <View style={styles.mainNodeGlossy} />
+            {/* 3D edge */}
+            <View style={styles.mainNodeEdge} />
+
+            {/* Word content */}
+            <View style={styles.mainNodeContent}>
+              <Text style={styles.mainWordText} numberOfLines={1} adjustsFontSizeToFit>
+                {word.word}
+              </Text>
+              <Text style={styles.mainPhoneticText}>{word.phonetic}</Text>
+            </View>
+          </Animated.View>
+
+          {/* Speaker button - positioned on top-right of node */}
+          <TouchableOpacity
+            style={[styles.speakerButton, isLight && styles.speakerButtonLight]}
+            onPress={() => {
+              try {
+                if (speakingWord === word.word) {
+                  Speech?.stop?.();
+                  setSpeakingWord(null);
+                  return;
+                }
+                Speech?.stop?.();
+                setSpeakingWord(word.word);
+                Speech?.speak?.(word.word, {
+                  language: 'en-US',
+                  voice: voiceIdRef.current,
+                  rate: 0.98,
+                  pitch: 1.0,
+                  onDone: () => setSpeakingWord(prev => (prev === word.word ? null : prev)),
+                  onStopped: () => setSpeakingWord(prev => (prev === word.word ? null : prev)),
+                  onError: () => setSpeakingWord(prev => (prev === word.word ? null : prev)),
+                });
+              } catch {}
+            }}
+          >
+            <Volume2 size={16} color="#4ED9CB" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Word details card */}
+        <View style={[styles.detailsCard, isLight && styles.detailsCardLight]}>
+          <View style={styles.detailsGlossy} />
+
+          {/* Save button in top-right corner */}
+          <TouchableOpacity
+            style={[styles.saveButtonCorner, isSaved && styles.savedButton]}
+            onPress={() => handleSaveWord(word.word)}
+            disabled={savingWords.has(word.word) || isSaved}
+          >
+            {isSaved ? (
+              <Check size={18} color="#fff" />
+            ) : (
+              <Bookmark size={18} color="#fff" />
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.detailSection}>
+            <Text style={styles.detailLabel}>Definition</Text>
+            <Text style={[styles.detailText, isLight && styles.detailTextLight]}>{word.definition}</Text>
+          </View>
+
+          <View style={styles.detailSectionNopad}>
+            <Text style={styles.detailLabel}>Example</Text>
+            <Text style={[styles.exampleText, isLight && styles.exampleTextLight]}>
+              {word.example.split(word.word).map((part, i) => (
+                <Text key={i}>
+                  {i === 0 ? part : (
+                    <>
+                      <Text style={styles.highlightWord}>{word.word}</Text>
+                      {part}
+                    </>
+                  )}
+                </Text>
+              ))}
+            </Text>
+          </View>
+
+          {word.synonyms?.length > 0 && (
+            <View style={styles.detailSectionNopad}>
+              <Text style={styles.detailLabel}>Synonyms</Text>
+              <View style={styles.synonymsRow}>
+                {word.synonyms.map((syn, i) => (
+                  <View key={i} style={styles.synonymChip}>
+                    <Text style={styles.synonymText}>{syn}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Translation button */}
+          {!!targetLang && (
+            <TouchableOpacity
+              style={styles.translateBtn}
+              onPress={async () => {
+                if (!trMap[word.word]) {
+                  setLoadingTr(true);
+                  const res = await TranslationService.translate(word.word, targetLang);
+                  if (res) setTrMap(prev => ({ ...prev, [word.word]: res }));
+                  setLoadingTr(false);
+                }
+                setModalWord(word.word);
+                setShowTrModal(true);
+                trAnim.setValue(0);
+                Animated.timing(trAnim, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+              }}
+            >
+              <Globe size={16} color="#F25E86" />
+              <Text style={styles.translateBtnText}>
+                {loadingTr && !trMap[word.word] ? 'Translating…' : 'Show Translation'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
 
   if (words.length === 0) {
     return (
-      <View style={[styles.loadingContainer, isLight && { backgroundColor: colors.background }]}>
+      <View style={styles.loadingContainer}>
         <LottieView
           source={require('../../../assets/lottie/loading.json')}
           autoPlay
           loop
           style={{ width: 140, height: 140 }}
         />
-        <Text style={[styles.loadingText, isLight && { color: '#6B7280' }]}>Loading words...</Text>
+        <Text style={styles.loadingText}>Loading words...</Text>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, isLight && { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={[styles.title, isLight && { color: '#111827' }]}>{isCtaIndex ? 'All set' : 'Word Introduction'}</Text>
-        {/* Removed numeric progress per request */}
-      </View>
-
-      {/* Progress Dots */}
-      <View style={styles.progressDots}>
-        {words.map((_, index) => (
+    <View style={styles.container}>
+      {/* Progress dots */}
+      <View style={styles.progressRow}>
+        {words.map((_, idx) => (
           <View
-            key={index}
+            key={idx}
             style={[
-              styles.dot,
-              index === progressIndex && styles.activeDot,
-              index < currentIndex && styles.completedDot,
+              styles.progressDot,
+              idx === currentIndex && styles.progressDotActive,
             ]}
           />
         ))}
       </View>
 
-      {/* Word Cards (Horizontal Carousel) */}
-      <View style={styles.cardContainer}>
-        <Animated.ScrollView
-          ref={scrollerRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          decelerationRate="fast"
-          snapToInterval={CARD_WIDTH + CARD_SPACING}
-          snapToAlignment="start"
-          contentContainerStyle={{ paddingHorizontal: SIDE_PADDING }}
-          onMomentumScrollEnd={onMomentumEnd}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-            { useNativeDriver: true }
-          )}
-          scrollEventThrottle={16}
-        >
-          {words.map((w, idx) => (
-            <View key={w.word + idx} style={[styles.wordCard, isLight && styles.wordCardLight, { width: CARD_WIDTH, marginRight: CARD_SPACING }]}>
-              <View style={styles.cardContent}>
-                <ScrollView
-                  contentContainerStyle={styles.cardBodyContent}
-                  showsVerticalScrollIndicator={false}
-                >
-                {/* Word Header */}
-                <View style={styles.wordHeader}>
-                  <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{w.word}</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <TouchableOpacity
-                      style={[styles.circleBtn, isLight && { backgroundColor: '#E5E7EB' }, speakingWord === w.word && { backgroundColor: '#ecd2bf' }]}
-                      onPress={() => {
-                        try {
-                          if (speakingWord === w.word) {
-                            Speech?.stop?.();
-                            setSpeakingWord(null);
-                            return;
-                          }
-                          Speech?.stop?.();
-                          setSpeakingWord(w.word);
-                          Speech?.speak?.(w.word, {
-                            language: 'en-US',
-                            voice: voiceIdRef.current,
-                            rate: 0.98,
-                            pitch: 1.0,
-                            onDone: () => setSpeakingWord(prev => (prev === w.word ? null : prev)),
-                            onStopped: () => setSpeakingWord(prev => (prev === w.word ? null : prev)),
-                            onError: (err) => {
-                              console.error('[TTS Error]', err);
-                              setSpeakingWord(prev => (prev === w.word ? null : prev));
-                            },
-                          });
-                        } catch {}
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Play American English pronunciation for ${w.word}`}
-                    >
-                      <Volume2 size={20} color={'#F8B070'} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Phonetic */}
-                <Text style={[styles.phoneticText, isLight && { color: '#6B7280' }]}>{w.phonetic}</Text>
-
-                {/* Definition */}
-                <View style={styles.definitionSection}>
-                  <Text style={styles.sectionTitle}>Definition</Text>
-                  <Text style={[styles.definitionText, isLight && { color: '#1F2937' }]}>{w.definition}</Text>
-                </View>
-
-                {/* Example */}
-                <View style={styles.exampleSection}>
-                  <Text style={styles.sectionTitle}>Example</Text>
-                  <Text style={[styles.exampleText, isLight && { color: '#4B5563' }]}>
-                    {w.example ? w.example.split(w.word).map((part, i) => (
-                      <Text key={i}>
-                        {i === 0 ? part : (
-                          <>
-                            <Text style={styles.highlightedWord}>{w.word}</Text>
-                            {part}
-                          </>
-                        )}
-                      </Text>
-                    )) : 'No example available'}
-                  </Text>
-                </View>
-
-                {/* Synonyms */}
-                {w.synonyms?.length ? (
-                  <View style={styles.synonymsSection}>
-                    <Text style={styles.sectionTitle}>Synonyms</Text>
-                    <View style={styles.synonymsContainer}>
-                      {w.synonyms.map((syn, i) => (
-                        <View key={syn + i} style={[styles.synonymTag, isLight && { backgroundColor: '#E5E7EB' }]}>
-                          <Text style={[styles.synonymText, isLight && { color: '#111827' }]}>{syn}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                ) : null}
-
-                {/* Translation pop-up button */}
-                {!!targetLang && (
-                  <TouchableOpacity
-                    style={styles.trBtn}
-                    onPress={async () => {
-                      if (!trMap[w.word]) {
-                        setLoadingTr(true);
-                        const res = await TranslationService.translate(w.word, targetLang);
-                        if (res) setTrMap(prev => ({ ...prev, [w.word]: res }));
-                        setLoadingTr(false);
-                      }
-                      setModalWord(w.word);
-                      setShowTrModal(true);
-                      trAnim.setValue(0);
-                      Animated.timing(trAnim, { toValue: 1, duration: 220, useNativeDriver: true }).start();
-                    }}
-                  >
-                    <Globe size={16} color={'#F8B070'} />
-                    <Text style={styles.trBtnText}>{loadingTr && !trMap[w.word] ? 'Translating…' : 'Show Translation'}</Text>
-                  </TouchableOpacity>
-                )}
-
-                <View style={styles.bottomGutter} />
-                </ScrollView>
-
-                {/* Save to Vault (fixed inside card, slightly above bottom) */}
-                <View style={styles.saveButtonContainer} pointerEvents="box-none">
-                  <TouchableOpacity
-                    style={[styles.saveButton, savedWords.has(w.word) && styles.savedButton]}
-                    onPress={() => handleSaveWord(w.word)}
-                    disabled={savingWords.has(w.word) || savedWords.has(w.word)}
-                  >
-                    {savingWords.has(w.word) ? (
-                      <Text style={styles.saveButtonText}>Saving...</Text>
-                    ) : savedWords.has(w.word) ? (
-                      <>
-                        <Check size={20} color="#fff" />
-                        <Text style={styles.saveButtonText}>Saved!</Text>
-                      </>
-                    ) : (
-                      <>
-                        <Bookmark size={20} color="#fff" />
-                        <Text style={styles.saveButtonText}>Save to Vault</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          ))}
-
-          {/* CTA Final Card */}
-          <View key="cta-card" style={[styles.wordCard, styles.ctaCard, isLight && styles.wordCardLight, { width: CARD_WIDTH, marginRight: CARD_SPACING }]}>
-            <View style={[styles.ctaIconWrap, isLight && { backgroundColor: '#E5E7EB' }]}>
-              <Sparkles size={28} color="#F8B070" />
-            </View>
-            <Text style={[styles.ctaTitle, isLight && { color: '#111827' }]}>You're ready!</Text>
-            <Text style={[styles.ctaText, isLight && { color: '#6B7280' }]}>You've seen all {words.length} words. When you’re ready, start practicing.</Text>
-            <AnimatedNextButton
-              onPress={handleStartPractice}
-            />
+      {/* Horizontal word cards */}
+      <Animated.ScrollView
+        ref={scrollerRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={onMomentumEnd}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
+        contentContainerStyle={styles.scrollContent}
+        style={styles.horizontalScroll}
+      >
+        {words.map((word, idx) => (
+          <View key={word.word + idx} style={[styles.cardWrapper, { width: CARD_WIDTH }]}>
+            {renderMainWordNode(word)}
           </View>
-        </Animated.ScrollView>
-      </View>
+        ))}
 
-      {/* Navigation Controls removed per request */}
+        {/* Final CTA card */}
+        <View style={[styles.cardWrapper, styles.ctaWrapper, { width: CARD_WIDTH }]}>
+          <View style={styles.ctaCard}>
+            <View style={styles.ctaIconWrap}>
+              <LottieView
+                ref={rocketRef}
+                source={require('../../../assets/lottie/learn/Rocket_loader.json')}
+                autoPlay={false}
+                loop={false}
+                progress={rocketLaunching ? undefined : ROCKET_STATIC_PROGRESS}
+                resizeMode="contain"
+                style={styles.ctaRocket}
+                onAnimationFinish={(isCancelled: boolean) => {
+                  if (!isCancelled) finishRocketLaunch();
+                }}
+              />
+            </View>
+            <Text style={styles.ctaTitle}>You're ready!</Text>
+            <Text style={styles.ctaText}>
+              You've seen all {words.length} words. Start practicing now.
+            </Text>
+            <AnimatedNextButton onPress={handleRocketNext} disabled={rocketLaunching} />
+          </View>
+        </View>
+      </Animated.ScrollView>
 
-      {/* Fixed Save dock removed — button is inside each card */}
+      {/* Bottom action - Next button only */}
+      {currentIndex < words.length && (
+        <View style={styles.bottomActions}>
+          <AnimatedNextButton
+            onPress={() => {
+              const x = (currentIndex + 1) * CARD_WIDTH;
+              scrollerRef.current?.scrollTo({ x, animated: true });
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setCurrentIndex(prev => prev + 1);
+            }}
+          />
+        </View>
+      )}
 
       {/* Translation modal */}
       <Modal visible={showTrModal} transparent animationType="none" onRequestClose={() => setShowTrModal(false)}>
-        <View style={styles.trModalOverlay}>
-          {/* Tap outside to dismiss */}
-          <TouchableOpacity style={styles.trModalBackdrop} activeOpacity={1} onPress={() => setShowTrModal(false)} />
-          <Animated.View style={[styles.trSheet, isLight && styles.trSheetLight, { opacity: trAnim, transform: [{ translateY: trAnim.interpolate({ inputRange: [0,1], outputRange: [40, 0] }) }] }]}>
-            <Text style={[styles.sectionTitle, isLight && { color: '#111827' }]}>Translation {targetLang ? flagFor(targetLang) : ''}</Text>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowTrModal(false)} />
+          <Animated.View style={[styles.modalSheet, { opacity: trAnim, transform: [{ translateY: trAnim.interpolate({ inputRange: [0,1], outputRange: [40, 0] }) }] }]}>
+            <Text style={styles.modalTitle}>Translation</Text>
             <ScrollView style={{ maxHeight: 320 }}>
               {modalWord && trMap[modalWord] ? (
                 <View>
-                  <Text style={[styles.trLabel, isLight && { color: '#6B7280' }]}>Translation</Text>
-                  <Text style={[styles.translationText, isLight && { color: '#1F2937' }]}>{trMap[modalWord].translation}</Text>
-
-                  {trMap[modalWord].synonyms?.length ? (
+                  <Text style={styles.translationText}>{trMap[modalWord].translation}</Text>
+                  {trMap[modalWord].synonyms?.length > 0 && (
                     <>
-                      <Text style={[styles.trLabel, isLight && { color: '#6B7280' }, { marginTop: 12 }]}>Synonyms</Text>
+                      <Text style={styles.modalLabel}>Synonyms</Text>
                       <View style={styles.synonymsRow}>
                         {trMap[modalWord].synonyms.map((syn: string, i: number) => (
-                          <View key={i} style={[styles.synChip, isLight && styles.synChipLight]}>
-                            <Text style={[styles.synChipText, isLight && { color: '#374151' }]}>{syn}</Text>
+                          <View key={i} style={styles.modalChip}>
+                            <Text style={styles.modalChipText}>{syn}</Text>
                           </View>
                         ))}
                       </View>
                     </>
-                  ) : null}
-
-                  {(trMap[modalWord].examples?.length || trMap[modalWord].example) ? (
-                    <>
-                      <Text style={[styles.trLabel, isLight && { color: '#6B7280' }, { marginTop: 12 }]}>Examples</Text>
-                      {trMap[modalWord].examples?.length ? (
-                        trMap[modalWord].examples.map((ex: string, i: number) => (
-                          <Text key={i} style={[styles.translationExample, isLight && { color: '#374151' }]}>• {ex}</Text>
-                        ))
-                      ) : trMap[modalWord].example ? (
-                        <Text style={[styles.translationExample, isLight && { color: '#374151' }]}>• {trMap[modalWord].example}</Text>
-                      ) : null}
-                    </>
-                  ) : null}
+                  )}
                 </View>
               ) : (
-                <Text style={[styles.translationText, isLight && { color: '#6B7280' }]}>No translation</Text>
+                <Text style={styles.translationText}>No translation available</Text>
               )}
             </ScrollView>
-            <TouchableOpacity onPress={() => { Animated.timing(trAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => setShowTrModal(false)); }} style={[styles.saveButton, { marginTop: 12 }]}> 
-              <Text style={styles.saveButtonText}>Close</Text>
+            <TouchableOpacity onPress={() => setShowTrModal(false)} style={styles.modalCloseBtn}>
+              <Text style={styles.modalCloseBtnText}>Close</Text>
             </TouchableOpacity>
           </Animated.View>
         </View>
@@ -465,388 +484,385 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: 'transparent',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1E1E1E',
+    backgroundColor: 'transparent',
   },
   loadingText: {
     fontSize: 14,
     color: '#9CA3AF',
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 4,
-    fontFamily: 'Ubuntu-Bold',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#9CA3AF',
-  },
-  progressDots: {
+  progressRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 16,
+    gap: 8,
   },
-  dot: {
+  progressDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#333',
-    marginHorizontal: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
-  activeDot: {
-    backgroundColor: '#F8B070',
+  progressDotActive: {
+    backgroundColor: '#4ED9CB',
     width: 24,
   },
-  completedDot: {
-    backgroundColor: '#4CAF50',
-  },
-  cardContainer: {
+
+  // Scroll content
+  horizontalScroll: {
     flex: 1,
-    justifyContent: 'flex-start',
-    paddingTop: 4,
-    paddingBottom: 32,
   },
-  wordCard: {
-    minHeight: CARD_HEIGHT,
-    backgroundColor: '#2a2a2a',
+  scrollContent: {
+    // Horizontal scroll container
+  },
+  cardWrapper: {
+    paddingHorizontal: 20,
+  },
+
+  // Main word node
+  mainNodeContainer: {
+    alignItems: 'center',
+    paddingTop: 8,
+  },
+  mainNodeWrapper: {
+    position: 'relative',
+  },
+  mainNode: {
+    width: MAIN_NODE_SIZE,
+    height: MAIN_NODE_SIZE,
+    borderRadius: MAIN_NODE_SIZE / 2,
+    backgroundColor: '#4ED9CB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.4)',
+    shadowColor: '#3BB8AC',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 15,
+    overflow: 'hidden',
+  },
+  mainNodeGlossy: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderTopLeftRadius: MAIN_NODE_SIZE / 2,
+    borderTopRightRadius: MAIN_NODE_SIZE / 2,
+  },
+  mainNodeEdge: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 12,
+    backgroundColor: '#38A89D',
+    borderBottomLeftRadius: MAIN_NODE_SIZE / 2,
+    borderBottomRightRadius: MAIN_NODE_SIZE / 2,
+  },
+  mainNodeContent: {
+    alignItems: 'center',
+    zIndex: 1,
+    paddingHorizontal: 12,
+  },
+  mainWordText: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    fontFamily: 'Feather-Bold',
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  mainPhoneticText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
+    fontFamily: 'Feather-Bold',
+    marginTop: 4,
+  },
+  speakerButton: {
+    position: 'absolute',
+    right: -8,
+    top: -8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#2A2A2A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.5)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+    zIndex: 10,
+  },
+  speakerButtonLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(78,217,203,0.8)',
+  },
+
+  // Details card
+  detailsCard: {
+    backgroundColor: '#1F1F1F',
     borderRadius: 20,
     padding: 20,
-    marginVertical: 12,
+    marginTop: 24,
+    minHeight: 340,
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 8,
-    alignSelf: 'center',
-    position: 'relative',
+    elevation: 6,
   },
-  wordCardLight: { backgroundColor: '#FFFFFF', borderWidth: StyleSheet.hairlineWidth, borderColor: '#FFFFFF' },
-  cardContent: {
-    flexGrow: 1,
-    // Keep a small bottom padding; reclaim space for content
-    paddingBottom: 16
+  detailsCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(78,217,203,0.3)',
   },
-  cardBodyScroll: {},
-  cardBodyContent: { paddingBottom: 12 },
-  saveButtonFull: { alignSelf: 'stretch', marginTop: 10 },
-  bottomGutter: {
-    height: 0
+  detailsGlossy: {
+    display: 'none', // Removed glossy effect for cleaner look
   },
-  ctaCard: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: '#3a3a3a',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 10,
+  detailSection: {
+    marginBottom: 16,
+    paddingRight: 50,
   },
-  ctaIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#333',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
+  detailSectionNopad: {
+    marginBottom: 16,
   },
-  wordHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  wordText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#fff',
-    flex: 1,
-    fontFamily: 'Ubuntu-Bold',
-  },
-  audioButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#333',
-  },
-  circleBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#333',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  phoneticText: {
-    fontSize: 16,
-    color: '#9CA3AF',
-    fontStyle: 'italic',
-    marginBottom: 24,
-    fontFamily: 'Ubuntu-Regular',
-  },
-  definitionSection: {
-    marginBottom: 24,
-  },
-  exampleSection: {
-    marginBottom: 24,
-  },
-  synonymsSection: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 14,
+  detailLabel: {
+    fontSize: 12,
     fontWeight: '600',
-    color: '#F8B070',
-    marginBottom: 8,
-    fontFamily: 'Ubuntu-Medium',
+    color: '#F25E86',
+    marginBottom: 6,
+    fontFamily: 'Feather-Bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  definitionText: {
-    fontSize: 16,
-    color: '#fff',
-    lineHeight: 23,
-    fontFamily: 'Ubuntu-Regular',
+  detailText: {
+    fontSize: 15,
+    color: '#E5E7EB',
+    lineHeight: 22,
+    fontFamily: 'Feather-Bold',
+  },
+  detailTextLight: {
+    color: '#1F2937',
   },
   exampleText: {
     fontSize: 14,
-    color: '#fff',
-    lineHeight: 22,
+    color: '#9CA3AF',
+    lineHeight: 21,
     fontStyle: 'italic',
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
-  highlightedWord: {
-    fontWeight: 'bold',
-    color: '#F8B070',
-    fontFamily: 'Ubuntu-Bold',
+  exampleTextLight: {
+    color: '#6B7280',
   },
-  cardBodyScrollWrap: { flexGrow: 1 },
-  cardBodyScroll: { maxHeight: CARD_HEIGHT - 120 },
-  cardBodyContent: { paddingBottom: 8 },
-  translationSection: {
-    marginBottom: 20,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 12,
-    padding: 12,
-  },
-  translationText: {
-    color: '#E5E7EB',
-    fontSize: 18,
+  highlightWord: {
+    color: '#F25E86',
     fontWeight: '700',
-    lineHeight: 24,
-    marginTop: 2,
-    fontFamily: 'Ubuntu-Bold',
-  },
-  translationExample: {
-    color: '#9CA3AF',
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 6,
-    fontFamily: 'Ubuntu-Regular',
-  },
-  trLabel: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-    fontFamily: 'Ubuntu-Medium',
+    fontStyle: 'normal',
+    fontFamily: 'Feather-Bold',
   },
   synonymsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 4,
   },
-  synChip: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  synChipLight: {
-    backgroundColor: '#F3F4F6',
-  },
-  synChipText: {
-    color: '#E5E7EB',
-    fontSize: 13,
-    fontFamily: 'Ubuntu-Regular',
-  },
-  trBtn: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  synonymChip: {
+    backgroundColor: 'rgba(78,217,203,0.1)',
+    paddingHorizontal: 14,
     paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(248,176,112,0.14)',
-    borderWidth: 1,
-    borderColor: 'rgba(248,176,112,0.45)',
-    borderRadius: 999,
-    marginBottom: 24,
-  },
-  trBtnText: { color: '#111827', fontWeight: '700', fontFamily: 'Ubuntu-Bold' },
-  synonymsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  synonymTag: {
-    backgroundColor: '#333',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(78,217,203,0.25)',
   },
   synonymText: {
     fontSize: 13,
-    color: '#fff',
-    fontFamily: 'Ubuntu-Regular',
+    color: '#ffc09f',
+    fontFamily: 'Feather-Bold',
   },
-  saveButton: {
+  translateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8B070',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 24,
+    alignSelf: 'flex-start',
     gap: 8,
-    // Make the button a bit narrower than full width
-    alignSelf: 'center',
-    minWidth: 180,
-    maxWidth: 280,
-    width: '60%',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(248,176,112,0.12)',
+    borderRadius: 20,
+    marginBottom: 16,
   },
-  saveButtonContainer: {
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  // saveDock removed
-  savedButton: {
-    backgroundColor: '#427F75',
-  },
-  saveButtonText: {
-    fontSize: 14,
+  translateBtnText: {
+    color: '#F25E86',
+    fontSize: 13,
     fontWeight: '600',
-    color: '#fff',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
-  trModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
-  trModalBackdrop: { flex: 1 },
-  trSheet: { width: '100%', backgroundColor: '#2A2A2A', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, paddingBottom: 24 },
-  trSheetLight: { backgroundColor: '#FFFFFF' },
-  // saveBar removed – button lives inside card
-  navigationContainer: {
-    flexDirection: 'row',
+  saveButtonCorner: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-  },
-  navButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#333',
     justifyContent: 'center',
+    backgroundColor: '#F25E86',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 10,
+  },
+  savedButton: {
+    backgroundColor: '#437F76',
+  },
+
+  // Bottom actions
+  bottomActions: {
     alignItems: 'center',
-  },
-  disabledButton: {
-    backgroundColor: '#222',
-  },
-  disabledButtonLight: {
-    backgroundColor: '#E5E7EB',
-    opacity: 0.6,
-  },
-  navSpacer: {
-    flex: 1,
-  },
-  startPracticeContainer: {
+    justifyContent: 'center',
     paddingHorizontal: 20,
     paddingBottom: 20,
+    marginTop: 0,
   },
-  startPracticeButton: {
-    backgroundColor: '#F8B070',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+
+  // CTA card
+  ctaWrapper: {
+    justifyContent: 'center',
+    flex: 1,
+  },
+  ctaCard: {
+    backgroundColor: '#1F1F1F',
+    borderRadius: 20,
+    padding: 32,
     alignItems: 'center',
-    alignSelf: 'center',
-    minWidth: 180,
-    zIndex: 10,
-    elevation: 2,
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  startPracticeButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+  ctaIconWrap: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: '#4ED9CB',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#3BB8AC',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  ctaRocket: {
+    width: 196,
+    height: 196,
   },
   ctaTitle: {
     fontSize: 22,
-    fontWeight: 'bold',
-    color: '#fff',
-    textAlign: 'center',
+    fontWeight: '700',
+    color: '#FFFFFF',
     marginBottom: 8,
+    fontFamily: 'Feather-Bold',
   },
   ctaText: {
     fontSize: 14,
     color: '#9CA3AF',
     textAlign: 'center',
+    marginBottom: 20,
+    fontFamily: 'Feather-Bold',
+  },
+
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    flex: 1,
+  },
+  modalSheet: {
+    backgroundColor: '#2A2A2A',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 30,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
     marginBottom: 16,
+    fontFamily: 'Feather-Bold',
+  },
+  modalLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    marginTop: 16,
+    marginBottom: 8,
+    fontFamily: 'Feather-Bold',
+  },
+  translationText: {
+    fontSize: 18,
+    color: '#E5E7EB',
+    fontFamily: 'Feather-Bold',
+  },
+  modalChip: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  modalChipText: {
+    fontSize: 13,
+    color: '#E5E7EB',
+    fontFamily: 'Feather-Bold',
+  },
+  modalCloseBtn: {
+    backgroundColor: '#F25E86',
+    paddingVertical: 14,
+    borderRadius: 24,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  modalCloseBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    fontFamily: 'Feather-Bold',
   },
 });
 
 function flagFor(lang: string): string {
   const m: Record<string, string> = {
-    zh: '🇨🇳',
-    es: '🇪🇸',
-    hi: '🇮🇳',
-    ar: '🇸🇦',
-    bn: '🇧🇩',
-    pt: '🇧🇷',
-    ru: '🇷🇺',
-    ja: '🇯🇵',
-    pa: '🇮🇳',
-    de: '🇩🇪',
-    jv: '🇮🇩',
-    ko: '🇰🇷',
-    fr: '🇫🇷',
-    te: '🇮🇳',
-    mr: '🇮🇳',
-    ta: '🇮🇳',
-    ur: '🇵🇰',
-    tr: '🇹🇷',
-    vi: '🇻🇳',
-    it: '🇮🇹',
-    fa: '🇮🇷',
-    pl: '🇵🇱',
-    uk: '🇺🇦',
-    nl: '🇳🇱',
-    th: '🇹🇭',
-    id: '🇮🇩',
-    he: '🇮🇱',
-    el: '🇬🇷',
-    sv: '🇸🇪',
-    ro: '🇷🇴',
-    // Keep older codes for compatibility
-    uz: '🇺🇿',
-    az: '🇦🇿',
-    kk: '🇰🇿',
+    zh: '🇨🇳', es: '🇪🇸', hi: '🇮🇳', ar: '🇸🇦', bn: '🇧🇩', pt: '🇧🇷',
+    ru: '🇷🇺', ja: '🇯🇵', de: '🇩🇪', ko: '🇰🇷', fr: '🇫🇷', tr: '🇹🇷',
+    vi: '🇻🇳', it: '🇮🇹', pl: '🇵🇱', uk: '🇺🇦', nl: '🇳🇱', th: '🇹🇭',
+    id: '🇮🇩', he: '🇮🇱', el: '🇬🇷', sv: '🇸🇪', uz: '🇺🇿', az: '🇦🇿',
   };
   return m[lang] || '🌐';
 }

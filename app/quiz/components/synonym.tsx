@@ -17,6 +17,8 @@ import { getTheme } from '../../../lib/theme';
 import { Vibration } from 'react-native';
 import { analyticsService } from '../../../services/AnalyticsService';
 import AnimatedNextButton from './AnimatedNextButton';
+import { Volume2 } from 'lucide-react-native';
+import { speak } from '../../../lib/speech';
 import { levels } from '../data/levels';
 
 interface SynonymProps {
@@ -724,13 +726,13 @@ const SYN_OVERRIDES: Record<string, Record<string, Record<string, { correct: str
   },
 };
 
-// Strong (dark theme) colors
-const CORRECT_COLOR = '#437F76';
-const INCORRECT_COLOR = '#924646';
-// Soft light-theme variants (~50% less saturated/tinted)
-const CORRECT_COLOR_LIGHT = '#A1BFBA';
-const INCORRECT_COLOR_LIGHT = '#C9A3A3';
-const ACCENT_COLOR = '#F8B070';
+// Teal for correct, pink for incorrect
+const CORRECT_COLOR = '#4ED9CB';
+const INCORRECT_COLOR = '#F25E86';
+// Light-theme variants
+const CORRECT_COLOR_LIGHT = '#4ED9CB';
+const INCORRECT_COLOR_LIGHT = '#F25E86';
+const ACCENT_COLOR = '#F25E86';
 
 export default function SynonymComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange, wordsOverride }: SynonymProps) {
   const themeName = useAppStore(s => s.theme);
@@ -1113,6 +1115,14 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
             </View>
           </View>
 
+          <TouchableOpacity
+            style={[styles.speakButtonCorner, isLight && styles.speakButtonCornerLight]}
+            onPress={() => speak(currentWord.word)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Volume2 size={20} color={isLight ? '#0D3B4A' : '#B6E0E2'} />
+          </TouchableOpacity>
+
           <View style={styles.wordHeader}>
             <Text style={[styles.wordHighlight, isLight && { color: '#111827' }]}>{currentWord.word}</Text>
             <Text style={[styles.promptText, isLight && { color: '#4B5563' }]}>
@@ -1200,7 +1210,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     fontWeight: '500',
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   scoreWrapper: {
     alignItems: 'center',
@@ -1213,7 +1223,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#F87171',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   progressBar: {
     height: 6,
@@ -1231,12 +1241,24 @@ const styles = StyleSheet.create({
     color: ACCENT_COLOR,
     fontSize: 15,
     fontWeight: '600',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   wordHeader: {
     alignItems: 'center',
     marginBottom: 32,
     marginTop: 24,
+  },
+  speakButtonCorner: {
+    position: 'absolute',
+    top: 4,
+    right: 12,
+    padding: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(182, 224, 226, 0.15)',
+    zIndex: 10,
+  },
+  speakButtonCornerLight: {
+    backgroundColor: 'rgba(13, 59, 74, 0.1)',
   },
   promptText: {
     color: 'rgba(207, 212, 216, 0.7)',
@@ -1244,14 +1266,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     marginBottom: 12,
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   wordHighlight: {
     color: '#fff',
     fontWeight: '700',
     fontSize: 28,
     marginBottom: 12,
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   wordTitle: {
     marginTop: 12,
@@ -1259,7 +1281,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
     textAlign: 'center',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   ipaText: {
     marginTop: 6,
@@ -1267,7 +1289,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     fontStyle: 'italic',
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   grid: {
     flexDirection: 'row',
@@ -1278,57 +1300,62 @@ const styles = StyleSheet.create({
   },
   optionButton: {
     width: '100%',
-    backgroundColor: '#3A3A3A',
-    borderRadius: 10,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 16,
     paddingVertical: 24,
     paddingHorizontal: 10,
     marginBottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
     minHeight: 88,
   },
   optionLight: {
-    // Match MCQ light card color for consistency
     backgroundColor: '#FFFFFF',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.3)',
   },
   optionSelected: {
-    borderColor: ACCENT_COLOR,
-    // Make selection clearly visible over the light card background
-    borderWidth: 3,
+    borderColor: '#F25E86',
+    backgroundColor: 'rgba(242,94,134,0.15)',
+    borderWidth: 2,
   },
   optionCorrect: {
-    backgroundColor: CORRECT_COLOR,
-    borderColor: 'transparent',
+    backgroundColor: 'rgba(78,217,203,0.2)',
+    borderColor: '#4ED9CB',
+    borderWidth: 2,
   },
   optionIncorrect: {
-    backgroundColor: INCORRECT_COLOR,
-    borderColor: 'transparent',
+    backgroundColor: 'rgba(242,94,134,0.2)',
+    borderColor: '#F25E86',
+    borderWidth: 2,
   },
   optionCorrectLight: {
-    backgroundColor: CORRECT_COLOR_LIGHT,
-    borderColor: 'transparent',
+    backgroundColor: 'rgba(78,217,203,0.25)',
+    borderColor: '#4ED9CB',
+    borderWidth: 2,
   },
   optionIncorrectLight: {
-    backgroundColor: INCORRECT_COLOR_LIGHT,
-    borderColor: 'transparent',
+    backgroundColor: 'rgba(242,94,134,0.25)',
+    borderColor: '#F25E86',
+    borderWidth: 2,
   },
   optionCorrectOutline: {
-    borderColor: CORRECT_COLOR,
-    backgroundColor: 'rgba(67, 127, 118, 0.1)',
+    borderColor: '#4ED9CB',
+    backgroundColor: 'rgba(78,217,203,0.15)',
+    borderWidth: 2,
   },
   optionCorrectOutlineLight: {
-    borderColor: CORRECT_COLOR_LIGHT,
-    backgroundColor: 'rgba(161, 191, 186, 0.25)',
+    borderColor: '#4ED9CB',
+    backgroundColor: 'rgba(78,217,203,0.2)',
+    borderWidth: 2,
   },
   optionText: {
     color: '#fff',
     fontSize: 15,
     textAlign: 'center',
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   footerButtons: {
     alignItems: 'center',
@@ -1346,7 +1373,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '600',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   buttonDisabled: {
     opacity: 0.5,

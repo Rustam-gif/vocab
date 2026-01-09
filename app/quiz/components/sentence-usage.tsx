@@ -16,10 +16,12 @@ import { Vibration } from 'react-native';
 import { analyticsService } from '../../../services/AnalyticsService';
 import { levels } from '../data/levels';
 import AnimatedNextButton from './AnimatedNextButton';
+import { Volume2 } from 'lucide-react-native';
+import { speak } from '../../../lib/speech';
 
-const ACCENT_COLOR = '#F8B070';
-const CORRECT_COLOR = '#437F76';
-const INCORRECT_COLOR = '#924646';
+const ACCENT_COLOR = '#F25E86';
+const CORRECT_COLOR = '#4ED9CB';
+const INCORRECT_COLOR = '#F25E86';
 
 interface SentenceUsageProps {
   setId: string;
@@ -1659,6 +1661,13 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
           </View>
         ) : (
           <View style={styles.wordHeader}>
+            <TouchableOpacity
+              style={[styles.speakButtonCorner, isLight && styles.speakButtonCornerLight]}
+              onPress={() => speak(item.word)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Volume2 size={20} color={isLight ? '#0D3B4A' : '#B6E0E2'} />
+            </TouchableOpacity>
             <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{item.word}</Text>
             <Text style={[styles.ipaText, isLight && { color: '#6B7280' }]}>{item.ipa}</Text>
           </View>
@@ -1732,7 +1741,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     fontWeight: '500',
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   scoreWrapper: {
     alignItems: 'center',
@@ -1745,13 +1754,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#F87171',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   scoreText: {
     fontSize: 16,
     fontWeight: '600',
     color: ACCENT_COLOR,
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   progressBar: {
     height: 6,
@@ -1770,70 +1779,88 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   subHeaderText: {
     color: '#9CA3AF',
     fontSize: 14,
     marginTop: 4,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   wordHeader: {
     alignItems: 'center',
     marginTop: 24,
     marginBottom: 24,
   },
+  speakButtonCorner: {
+    position: 'absolute',
+    top: 4,
+    right: 12,
+    padding: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(182, 224, 226, 0.15)',
+    zIndex: 10,
+  },
+  speakButtonCornerLight: {
+    backgroundColor: 'rgba(13, 59, 74, 0.1)',
+  },
   wordText: {
     fontSize: 32,
     fontWeight: '700',
     color: '#fff',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   ipaText: {
     fontSize: 16,
     color: '#9CA3AF',
     fontStyle: 'italic',
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   optionsWrapper: {
     gap: 12,
     flexGrow: 1,
   },
   optionCard: {
-    backgroundColor: '#3A3A3A',
+    backgroundColor: '#2A2A2A',
     borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 16,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
   },
   optionLight: {
     backgroundColor: '#FFFFFF',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.3)',
   },
   cardSelected: {
-    // Make selection clearer on dark cards
-    borderWidth: 3,
-    borderColor: ACCENT_COLOR,
+    borderWidth: 2,
+    borderColor: '#F25E86',
+    backgroundColor: 'rgba(242,94,134,0.15)',
   },
   optionText: {
     color: '#fff',
     fontSize: 16,
     lineHeight: 22,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   cardCorrect: {
-    backgroundColor: CORRECT_COLOR,
+    backgroundColor: 'rgba(78,217,203,0.2)',
+    borderColor: '#4ED9CB',
+    borderWidth: 2,
   },
   cardIncorrect: {
-    backgroundColor: INCORRECT_COLOR,
+    backgroundColor: 'rgba(242,94,134,0.2)',
+    borderColor: '#F25E86',
+    borderWidth: 2,
   },
   cardCorrectLight: {
-    backgroundColor: '#A1BFBA',
+    backgroundColor: 'rgba(78,217,203,0.15)',
+    borderColor: '#4ED9CB',
   },
   cardIncorrectLight: {
-    backgroundColor: '#C9A3A3',
+    backgroundColor: 'rgba(242,94,134,0.15)',
+    borderColor: '#F25E86',
   },
   correctText: {
     color: CORRECT_COLOR,
@@ -1850,7 +1877,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
     lineHeight: 26,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   footer: {
     marginTop: 32,
@@ -1868,7 +1895,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   disabledButton: {
     opacity: 0.5,

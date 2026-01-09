@@ -21,6 +21,7 @@ import { useAppStore } from '../../lib/store';
 import { getTheme } from '../../lib/theme';
 import { analyticsService } from '../../services/AnalyticsService';
 import { SetProgressService } from '../../services/SetProgressService';
+import { engagementTrackingService } from '../../services/EngagementTrackingService';
 
 const ACCENT = '#F8B070';
 const TAB_WIDTH = 88;
@@ -140,6 +141,16 @@ export default function AtlasPracticeIntegrated() {
         SetProgressService.markCompleted(String(levelId), String(setId), points);
       }
     } catch {}
+
+    // Track set completion
+    engagementTrackingService.trackEvent('set_completed', '/quiz/atlas-practice-integrated', {
+      setId,
+      levelId,
+      score: Math.max(0, totalScore),
+      correctAnswers: finalCorrect,
+      totalQuestions: finalQuestions,
+    });
+
     router.replace({
       pathname: '/quiz/atlas-results',
       params: {
@@ -176,9 +187,18 @@ export default function AtlasPracticeIntegrated() {
         await SetProgressService.initialize();
         if (levelId && setId) {
           const saved = SetProgressService.get(String(levelId), String(setId));
-          if (saved?.status === 'in_progress' && typeof saved.lastPhase === 'number') {
+          const isResume = saved?.status === 'in_progress' && typeof saved.lastPhase === 'number';
+
+          if (isResume) {
             // Resume where left off
             setCurrentPhase(Math.min(saved.lastPhase, phases.length - 1));
+          } else {
+            // Track new set started (not a resume)
+            engagementTrackingService.trackEvent('set_started', '/quiz/atlas-practice-integrated', {
+              setId,
+              levelId,
+              setTitle: set?.title,
+            });
           }
           // Mark as in progress at entry
           await SetProgressService.markInProgress(String(levelId), String(setId), currentPhase);

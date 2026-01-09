@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Image } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, Image, DeviceEventEmitter } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Check, CheckCircle } from 'lucide-react-native';
 import { levels, Level } from './data/levels';
@@ -50,6 +50,11 @@ export default function LevelSelectScreen() {
   const handleContinue = () => {
     if (!selectedLevel) return;
     AsyncStorage.setItem(SELECTED_LEVEL_KEY, selectedLevel).then(() => {
+      // Show nav bar after level selection
+      DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
+      // Emit event so home refreshes storedLevel
+      DeviceEventEmitter.emit('LEVEL_SELECTED', selectedLevel);
+      // Navigate to learn exercises with selected level
       router.replace(`/quiz/learn?level=${selectedLevel}`);
     });
   };

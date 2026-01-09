@@ -142,46 +142,16 @@ export default function TopStatusPanel({
         style,
       ]}
     >
-      <View
-        style={[
-          styles.solidBackground,
-          { backgroundColor: scrolled
-            ? (isLight ? 'rgba(255,255,255,0.85)' : 'rgba(18,19,21,0.9)')
-            : colors.background
-          },
-        ]}
-      />
-
-      {/* Blur fade layers - creates gradual blur-to-clear transition */}
       {scrolled && (
-        <>
-          <View style={[
-            styles.blurFadeLayer,
-            { bottom: 0, opacity: 0.6, backgroundColor: isLight ? 'rgba(255,255,255,0.5)' : 'rgba(18,19,21,0.5)' }
-          ]} />
-          <View style={[
-            styles.blurFadeLayer,
-            { bottom: -4, opacity: 0.4, backgroundColor: isLight ? 'rgba(255,255,255,0.3)' : 'rgba(18,19,21,0.3)' }
-          ]} />
-          <View style={[
-            styles.blurFadeLayer,
-            { bottom: -8, opacity: 0.2, backgroundColor: isLight ? 'rgba(255,255,255,0.15)' : 'rgba(18,19,21,0.15)' }
-          ]} />
-          <View style={[
-            styles.blurFadeLayer,
-            { bottom: -12, opacity: 0.1, backgroundColor: isLight ? 'rgba(255,255,255,0.05)' : 'rgba(18,19,21,0.05)' }
-          ]} />
-        </>
+        <View
+          style={[
+            styles.solidBackground,
+            { backgroundColor: isLight ? '#FFFFFF' : '#121315' },
+          ]}
+        />
       )}
 
-      {/* Soft shadow layers - stacked for gradient fade effect */}
-      {scrolled && (
-        <>
-          <View style={[styles.shadowLayer1, isLight && styles.shadowLayerLight1]} />
-          <View style={[styles.shadowLayer2, isLight && styles.shadowLayerLight2]} />
-          <View style={[styles.shadowLayer3, isLight && styles.shadowLayerLight3]} />
-        </>
-      )}
+
 
       {/* Content */}
       <View
@@ -267,60 +237,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  blurFadeLayer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 6,
-  },
-  shadowLayer1: {
-    position: 'absolute',
-    bottom: -2,
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: 'transparent',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  shadowLayerLight1: {
-    shadowOpacity: 0.04,
-  },
-  shadowLayer2: {
-    position: 'absolute',
-    bottom: -6,
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: 'transparent',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  shadowLayerLight2: {
-    shadowOpacity: 0.03,
-  },
-  shadowLayer3: {
-    position: 'absolute',
-    bottom: -12,
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: 'transparent',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.02,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  shadowLayerLight3: {
-    shadowOpacity: 0.015,
-  },
   container: {
     width: '100%',
     paddingHorizontal: 16,
@@ -350,20 +266,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(26,32,36,0.9)',
     borderWidth: 1,
     borderColor: 'rgba(248,176,112,0.35)',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
   },
   streakPillLight: { backgroundColor: '#FFF7ED', borderColor: '#FBD38D' },
   streakText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
   streakTextLight: { color: '#0D3B4A' },
   rightRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  translateBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, minHeight: 30, backgroundColor: '#F09898', borderWidth: 1, borderColor: '#E08181', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  translateBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, minHeight: 30, backgroundColor: '#F09898', borderWidth: 1, borderColor: '#E08181' },
   translateBtnLight: { backgroundColor: '#F09898', borderColor: '#E08181' },
-  subBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, minHeight: 30, backgroundColor: '#B6E0E2', borderWidth: 1, borderColor: '#93CBD0', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  subBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, minHeight: 30, backgroundColor: '#B6E0E2', borderWidth: 1, borderColor: '#93CBD0' },
   subBtnLight: { backgroundColor: '#B6E0E2', borderColor: '#7FB2B6' },
   subBtnText: { color: '#0D3B4A', fontWeight: '800', fontSize: 14 },
-  offerBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, minHeight: 24, backgroundColor: '#7CE7A0', borderWidth: 1, borderColor: '#5FC789', shadowColor: '#7CE7A0', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
+  offerBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, minHeight: 24, backgroundColor: '#0BBF9E', borderWidth: 1, borderColor: '#099E82' },
   offerBtnText: { color: '#0b1a2d', fontWeight: '800', fontSize: 11 },
 });

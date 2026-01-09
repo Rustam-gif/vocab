@@ -226,11 +226,27 @@ export async function bumpDailyXp(userId: UserID, xp: number, timeSpentSeconds: 
 }
 
 /* -------- AI stories -------- */
-export function saveStory(story_text: string, metadata: Record<string, any> = {}) {
-  return supabase.rpc('create_ai_story', {
-    p_story_text: story_text,
-    p_metadata: metadata,
+export async function saveStory(story_text: string, metadata: Record<string, any> = {}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    return { data: null, error: { code: 'NO_USER', message: 'Not authenticated' } };
+  }
+
+  if (__DEV__) {
+    console.log('[saveStory] Attempting insert for user:', session.user.id);
+  }
+
+  const result = await supabase.from('ai_stories').insert({
+    user_id: session.user.id,
+    story_text,
+    metadata,
   });
+
+  if (__DEV__) {
+    console.log('[saveStory] Insert result:', result.error ? result.error : 'success');
+  }
+
+  return result;
 }
 
 export function listStories(userId: UserID, limit = 20) {

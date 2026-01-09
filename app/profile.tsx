@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
-  Text,
+  Text as RNText,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
@@ -61,6 +61,10 @@ const getLocalAvatarById = (id: number) => {
 
 // Use a bundled local avatar as default to avoid network fetches
 const DEFAULT_AVATAR = 'avatar_1';
+
+const Text = (props: React.ComponentProps<typeof RNText>) => (
+  <RNText {...props} style={[{ fontFamily: 'Feather-Bold' }, props.style]} />
+);
 
 const mapSupabaseUser = (user: any, progress?: any) => {
   const displayName = user?.user_metadata?.full_name ?? user?.email ?? 'Vocabulary Learner';
@@ -501,17 +505,17 @@ export default function ProfileScreen() {
           <View style={styles.placeholder} />
           <Text style={[styles.title, isLight && styles.titleLight]}>Profile</Text>
           <TouchableOpacity
-            style={styles.settingsIconButton}
+            style={[styles.settingsIconButton, isLight && styles.settingsIconButtonLight]}
             onPress={() => router.push('/settings')}
             activeOpacity={0.8}
           >
-            <SettingsIcon size={20} color={isLight ? '#4B5563' : '#a0a0a0'} />
+            <SettingsIcon size={20} color={isLight ? '#0F766E' : '#4ED9CB'} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.signInContainer}>
           <ScrollView contentContainerStyle={[styles.signInContent, isLight && styles.signInContentLight]}>
-            <UserIcon size={64} color={isLight ? '#6B7280' : '#a0a0a0'} />
+            <UserIcon size={64} color={isLight ? '#0F766E' : '#4ED9CB'} />
             <Text style={[styles.signInTitle, isLight && styles.signInTitleLight]}>Welcome to Vocadoo</Text>
             <Text style={[styles.signInSubtitle, isLight && styles.signInSubtitleLight]}>
               {showEmailAuth ? (isSignUp ? 'Create an account' : 'Sign in to your account') : 'Sign in to sync your progress across devices'}
@@ -561,7 +565,7 @@ export default function ProfileScreen() {
                     </View>
 
                     <View style={[styles.inputContainer, isLight && styles.inputContainerLight]}>
-                      <UserIcon size={20} color="#a0a0a0" style={styles.inputIcon} />
+                      <UserIcon size={20} color="#4ED9CB" style={styles.inputIcon} />
                       <TextInput
                         style={[styles.input, isLight && styles.inputLight]}
                         placeholder="Full Name"
@@ -578,7 +582,7 @@ export default function ProfileScreen() {
                 )}
 
                 <View style={[styles.inputContainer, isLight && styles.inputContainerLight]}>
-                  <Mail size={20} color="#a0a0a0" style={styles.inputIcon} />
+                  <Mail size={20} color="#4ED9CB" style={styles.inputIcon} />
                   <TextInput
                     style={[styles.input, isLight && styles.inputLight]}
                     placeholder="Email"
@@ -696,12 +700,12 @@ export default function ProfileScreen() {
                   <Text style={[styles.moreInfoSubtitle, isLight && styles.moreInfoSubtitleLight]}>Access all stories, save unlimited, analytics, and more.</Text>
                 </View>
                 <View style={styles.moreInfoIconWrap}>
-                  <Crown color={isLight ? '#0C1116' : '#0D3B4A'} size={28} />
+                  <Crown color="#F25E86" size={28} />
                 </View>
               </TouchableOpacity>
             ) : (
               <LinearGradient
-                colors={isLight ? ['#C3A1A9', '#5BA9B3'] : ['#452A31', '#0D3B4A']}
+                colors={isLight ? ['#F7C6D8', '#9FE6DE'] : ['#3A222C', '#0D3B4A']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={[styles.premiumActiveCard]}
@@ -805,7 +809,7 @@ export default function ProfileScreen() {
             {showPurchaseSuccess && (
               <View style={styles.successOverlay} pointerEvents="auto">
                 <View style={[styles.successCard, isLight && styles.successCardLight]}>
-                  <CheckCircle2 size={24} color={isLight ? '#0D3B4A' : '#B6E0E2'} />
+                  <CheckCircle2 size={24} color={isLight ? '#0D3B4A' : '#4ED9CB'} />
                   <Text style={[styles.successTitle, isLight && styles.successTitleLight]}>You’re all set</Text>
                   <Text style={[styles.successText, isLight && styles.successTextLight]}>Premium unlocked on this device.</Text>
                 </View>
@@ -816,7 +820,7 @@ export default function ProfileScreen() {
             {/* Quick access rows visible even when logged out */}
 
             {/* Streak card (read-only preview) */}
-            <View style={[styles.streakCard, { marginTop: 16 }]}>
+            <View style={[styles.streakCard, isLight && styles.streakCardLight, { marginTop: 16 }]}>
               <View style={styles.streakHeaderRow}>
                 <View style={styles.streakFlameWrap}>
                   <LottieView source={require('../assets/lottie/flame.json')} autoPlay loop style={{ width: 48, height: 48 }} />
@@ -850,7 +854,7 @@ export default function ProfileScreen() {
               ]}
             >
               <Text style={[styles.settingsRowTitle, isLight && styles.userNameLight]}>Report an Issue</Text>
-              <ChevronRight size={20} color={isLight ? '#111827' : '#E5E7EB'} />
+              <ChevronRight size={20} color={isLight ? '#0F766E' : '#4ED9CB'} />
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -891,11 +895,11 @@ export default function ProfileScreen() {
           <View style={styles.placeholder} />
           <View style={{ flex: 1 }} />
             <View style={styles.headerActions}>
-              <TouchableOpacity style={styles.settingsIconButton} onPress={() => router.push('/settings')}>
-                <SettingsIcon size={20} color={isLight ? '#4B5563' : '#a0a0a0'} />
+              <TouchableOpacity style={[styles.settingsIconButton, isLight && styles.settingsIconButtonLight]} onPress={() => router.push('/settings')}>
+                <SettingsIcon size={20} color={isLight ? '#0F766E' : '#4ED9CB'} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-                <LogOut size={20} color="#a0a0a0" />
+              <TouchableOpacity style={[styles.signOutButton, isLight && styles.signOutButtonLight]} onPress={handleSignOut}>
+                <LogOut size={20} color="#F25E86" />
               </TouchableOpacity>
             </View>
         </View>
@@ -940,12 +944,12 @@ export default function ProfileScreen() {
               <Text style={[styles.moreInfoSubtitle, isLight && styles.moreInfoSubtitleLight]}>Access all stories, save unlimited, analytics, and more.</Text>
             </View>
             <View style={styles.moreInfoIconWrap}>
-              <Crown color={isLight ? '#0C1116' : '#0D3B4A'} size={28} />
+              <Crown color="#F25E86" size={28} />
             </View>
           </TouchableOpacity>
         ) : (
           <LinearGradient
-            colors={isLight ? ['#C3A1A9', '#5BA9B3'] : ['#452A31', '#0D3B4A']}
+            colors={isLight ? ['#F7C6D8', '#9FE6DE'] : ['#3A222C', '#0D3B4A']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={[styles.premiumActiveCard]}
@@ -962,12 +966,6 @@ export default function ProfileScreen() {
 
         {/* Practice reminders live in Settings */}
 
-        {/* Settings entry */}
-        <TouchableOpacity onPress={() => router.push('/settings')} activeOpacity={0.8} style={[styles.infoCard, isLight && styles.infoCardLight, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
-          <Text style={[styles.settingsRowTitle, isLight && styles.userNameLight]}>Settings</Text>
-          <ChevronRight size={20} color={isLight ? '#111827' : '#E5E7EB'} />
-        </TouchableOpacity>
-
         
 
         {/* Removed duplicate subscription card in signed-in view; use banner + modal paywall */}
@@ -976,7 +974,7 @@ export default function ProfileScreen() {
 
         {/* Modal is rendered outside ScrollView to cover header and content */}
 
-        <View style={styles.streakCard}>
+        <View style={[styles.streakCard, isLight && styles.streakCardLight]}>
           <View style={styles.streakHeaderRow}>
             <View style={styles.streakFlameWrap}>
               <LottieView source={require('../assets/lottie/flame.json')} autoPlay loop style={{ width: 48, height: 48 }} />
@@ -998,9 +996,9 @@ export default function ProfileScreen() {
         {/* Email/Joined moved to Settings */}
 
         {/* Danger Zone moved to Settings */}
-          <TouchableOpacity onPress={() => router.push('/report')} activeOpacity={0.8} style={[styles.infoCard, isLight && styles.infoCardLight, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }]}>
-            <Text style={[styles.settingsRowTitle, isLight && styles.userNameLight]}>Report an Issue</Text>
-            <ChevronRight size={20} color={isLight ? '#111827' : '#E5E7EB'} />
+          <TouchableOpacity onPress={() => router.push('/report')} activeOpacity={0.8} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 20, gap: 4 }}>
+            <Text style={{ fontSize: 13, color: isLight ? '#6B7280' : '#9CA3AF' }}>Report an Issue</Text>
+            <ChevronRight size={14} color={isLight ? '#6B7280' : '#9CA3AF'} />
           </TouchableOpacity>
 
           <View style={{ height: 120 }} />
@@ -1088,7 +1086,7 @@ export default function ProfileScreen() {
           {showPurchaseSuccess && (
             <View style={styles.successOverlay} pointerEvents="auto">
               <View style={[styles.successCard, isLight && styles.successCardLight]}>
-                <CheckCircle2 size={24} color={isLight ? '#0D3B4A' : '#B6E0E2'} />
+                <CheckCircle2 size={24} color={isLight ? '#0D3B4A' : '#4ED9CB'} />
                 <Text style={[styles.successTitle, isLight && styles.successTitleLight]}>You’re all set</Text>
                 <Text style={[styles.successText, isLight && styles.successTextLight]}>Premium unlocked on this device.</Text>
               </View>
@@ -1121,7 +1119,7 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-            <TouchableOpacity onPress={() => setShowLangModal(false)} style={[styles.premiumBtn, { alignSelf: 'flex-end', marginTop: 10, backgroundColor: '#F8B070' }]}>
+            <TouchableOpacity onPress={() => setShowLangModal(false)} style={[styles.premiumBtn, { alignSelf: 'flex-end', marginTop: 10, backgroundColor: '#F25E86' }]}>
               <Text style={styles.premiumBtnText}>Done</Text>
             </TouchableOpacity>
           </View>
@@ -1135,7 +1133,7 @@ export default function ProfileScreen() {
             <Text style={[styles.signupTitle, isLight && styles.signupTitleLight]}>Account created</Text>
             <Text style={[styles.signupText, isLight && styles.signupTextLight]}>Sign in using your email and password to continue.</Text>
             <TouchableOpacity
-              style={[styles.premiumBtn, { marginTop: 10, alignSelf: 'stretch', backgroundColor: '#e28743' }]}
+              style={[styles.premiumBtn, { marginTop: 10, alignSelf: 'stretch', backgroundColor: '#F25E86' }]}
               onPress={() => { setShowSignUpSuccess(false); setShowEmailAuth(true); setIsSignUp(false); }}
             >
               <Text style={styles.premiumBtnText}>Sign in now</Text>
@@ -1148,7 +1146,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121315' },
+  container: { flex: 1, backgroundColor: '#1E1E1E' },
   containerLight: { flex: 1, backgroundColor: '#F8F8F8' },
   header: {
     paddingHorizontal: 20,
@@ -1165,7 +1163,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#1F1F1F',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1178,28 +1178,56 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#1F1F1F',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  settingsIconButtonLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(78,217,203,0.3)',
   },
   signOutButton: {
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#1F1F1F',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  signOutButtonLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(78,217,203,0.3)',
   },
   placeholder: { width: 44, height: 44 },
   content: { flex: 1, paddingHorizontal: 20 },
   profileCard: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: '#1F1F1F',
     borderRadius: 20,
     padding: 20,
     alignItems: 'center',
     marginBottom: 24,
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  profileCardLight: { backgroundColor: '#FFFFFF' },
+  profileCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.3)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
   avatarContainer: {
     width: 110,
     height: 110,
@@ -1213,16 +1241,16 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -4,
     right: -4,
-    backgroundColor: '#F8B070',
+    backgroundColor: '#F25E86',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 16,
-    shadowColor: '#F8B070',
+    shadowColor: '#F25E86',
     shadowOpacity: 0.4,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
   },
-  levelText: { color: '#121315', fontWeight: '700', fontSize: 12 },
+  levelText: { color: '#FFFFFF', fontWeight: '700', fontSize: 12 },
   userName: { color: '#fff', fontSize: 22, fontWeight: '700' },
   userNameLight: { color: '#111827' },
   settingsRowTitle: { color: '#fff', fontSize: 16, fontWeight: '700' },
@@ -1232,12 +1260,12 @@ const styles = StyleSheet.create({
   xpLabelLight: { color: '#6B7280' },
   xpBar: {
     height: 10,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#2A2A2A',
     borderRadius: 6,
     overflow: 'hidden',
   },
-  xpBarLight: { backgroundColor: '#E9E6E0' },
-  xpProgress: { height: '100%', backgroundColor: '#4F8EF7' },
+  xpBarLight: { backgroundColor: '#E5E7EB' },
+  xpProgress: { height: '100%', backgroundColor: '#F25E86' },
   xpText: { color: '#9CA3AF', marginTop: 6, fontSize: 12 },
   xpTextLight: { color: '#374151' },
   statsContainer: {
@@ -1247,14 +1275,30 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: '#1F1F1F',
     borderRadius: 18,
     padding: 16,
     marginHorizontal: 6,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  statCardLight: { backgroundColor: '#FFFFFF' },
+  statCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.3)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
   statIcon: {
     width: 48,
     height: 48,
@@ -1276,13 +1320,30 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginHorizontal: 16,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: '#1F1F1F',
     padding: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  streakCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.3)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   streakHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   streakFlameWrap: { flexDirection: 'row', alignItems: 'center' },
   streakCountBadge: { marginLeft: 6, backgroundColor: '#111827', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
-  streakCountText: { color: '#F8B070', fontWeight: '800' },
+  streakCountText: { color: '#F25E86', fontWeight: '800' },
   streakTitle: { color: '#E5E7EB', fontWeight: '800', fontSize: 16 },
   streakTitleLight: { color: '#111827' },
   streakWeekRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 },
@@ -1291,21 +1352,37 @@ const styles = StyleSheet.create({
   streakDayLabel: { color: '#9CA3AF', fontSize: 12, marginBottom: 6 },
   streakDayLabelLight: { color: '#6B7280' },
   streakDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#4B5563' },
-  streakDotActive: { backgroundColor: '#F8B070', shadowColor: '#F8B070', shadowOpacity: 0.6, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
+  streakDotActive: { backgroundColor: '#F25E86', shadowColor: '#F25E86', shadowOpacity: 0.6, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
   streakFooterRow: { marginTop: 10, flexDirection: 'row', justifyContent: 'flex-start' },
   streakTip: { borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6 },
-  streakTipOkay: { backgroundColor: 'rgba(248,176,112,0.16)', borderWidth: 1, borderColor: 'rgba(248,176,112,0.45)' },
+  streakTipOkay: { backgroundColor: 'rgba(242,94,134,0.16)', borderWidth: 1, borderColor: 'rgba(242,94,134,0.45)' },
   streakTipWarn: { backgroundColor: 'rgba(255, 59, 48, 0.12)', borderWidth: 1, borderColor: 'rgba(255, 59, 48, 0.35)' },
   streakTipText: { fontWeight: '800' },
-  streakTipTextOkay: { color: '#F8B070' },
+  streakTipTextOkay: { color: '#F25E86' },
   streakTipTextWarn: { color: '#FF5A52' },
   infoCard: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: '#1F1F1F',
     borderRadius: 18,
     padding: 16,
     marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  infoCardLight: { backgroundColor: '#FFFFFF' },
+  infoCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.3)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
   // Learn more callout
   moreInfoCard: {
     flexDirection: 'row',
@@ -1314,72 +1391,98 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     marginBottom: 12,
     width: '100%',
+    backgroundColor: '#1A2021',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.22)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  moreInfoCardLight: { backgroundColor: '#B6E0E2' },
-  moreInfoCardDark: { backgroundColor: '#5B98A1' },
-  moreInfoTitle: { fontSize: 18, fontWeight: '800', color: '#EAF2F6' },
-  moreInfoTitleLight: { color: '#0C1116' },
-  moreInfoSubtitle: { marginTop: 4, color: '#EAF2F6' },
-  moreInfoSubtitleLight: { color: '#0C1116' },
-  moreInfoIconWrap: { marginLeft: 12, width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.5)', justifyContent: 'center', alignItems: 'center' },
+  moreInfoCardLight: {
+    backgroundColor: '#F4FFFD',
+    borderColor: 'rgba(78,217,203,0.4)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  moreInfoCardDark: { backgroundColor: '#1A2021' },
+  moreInfoTitle: { fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
+  moreInfoTitleLight: { color: '#0F172A' },
+  moreInfoSubtitle: { marginTop: 4, color: '#9CA3AF' },
+  moreInfoSubtitleLight: { color: '#475569' },
+  moreInfoIconWrap: {
+    marginLeft: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#2A2A2A',
+    borderWidth: 1,
+    borderColor: 'rgba(78,217,203,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
   premiumActiveCard: { borderRadius: 18, padding: 16, marginBottom: 12, width: '100%' },
-  premiumActiveIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  premiumActiveIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(78,217,203,0.25)', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   premiumActiveTitle: { color: '#EAF2F6', fontSize: 18, fontWeight: '800' },
   premiumActiveSubtitle: { color: '#EAF2F6', marginTop: 4 },
   manageChip: { paddingHorizontal: 12, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 999 },
   manageChipText: { color: '#0D3B4A', fontWeight: '700' },
 
   // Notification UI styles
-  pillBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
-  pillOff: { backgroundColor: 'rgba(255,255,255,0.05)' },
-  pillOn: { backgroundColor: 'rgba(248,176,112,0.35)', borderColor: '#F8B070' },
+  pillBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(78,217,203,0.2)' },
+  pillOff: { backgroundColor: '#1F1F1F' },
+  pillOn: { backgroundColor: 'rgba(242,94,134,0.35)', borderColor: '#F25E86' },
   pillText: { fontWeight: '800', color: '#E5E7EB' },
   pillTextOff: { color: '#E5E7EB' },
-  pillTextOn: { color: '#111827' },
+  pillTextOn: { color: '#FFFFFF' },
   cardSubtext: { color: '#9CA3AF', marginTop: 8 },
   cardSubtextLight: { color: '#6B7280' },
-  freqChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  freqChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, backgroundColor: '#1F1F1F', borderWidth: 1, borderColor: 'rgba(78,217,203,0.2)' },
   freqChipLight: { backgroundColor: '#EEF2F7', borderColor: '#E5E7EB' },
-  freqChipActive: { backgroundColor: '#F8B070', borderColor: '#F8B070' },
+  freqChipActive: { backgroundColor: '#F25E86', borderColor: '#F25E86' },
   freqChipText: { color: '#E5E7EB', fontWeight: '700' },
   freqChipTextLight: { color: '#374151', fontWeight: '700' },
-  freqChipTextActive: { color: '#111827' },
-  smallBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  freqChipTextActive: { color: '#FFFFFF' },
+  smallBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: '#1F1F1F', borderWidth: 1, borderColor: 'rgba(78,217,203,0.2)' },
   smallBtnLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
   smallBtnText: { color: '#E5E7EB', fontWeight: '700' },
   smallBtnTextLight: { color: '#374151', fontWeight: '700' },
-  smallBtnAccent: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: '#F8B070' },
-  smallBtnTextAccent: { color: '#111827', fontWeight: '800' },
+  smallBtnAccent: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: '#F25E86' },
+  smallBtnTextAccent: { color: '#FFFFFF', fontWeight: '800' },
 
   // Paywall
   paywallContainer: { flex: 1, backgroundColor: '#0D1117', paddingHorizontal: 20 },
   paywallContainerLight: { backgroundColor: '#F3F4F6' },
   paywallHeaderRow: { paddingTop: 10, paddingBottom: 6 },
-  paywallCancel: { color: '#C7D2FE', fontWeight: '600' },
-  paywallCancelLight: { color: '#111827' },
+  paywallCancel: { color: '#4ED9CB', fontWeight: '600' },
+  paywallCancelLight: { color: '#0F766E' },
   paywallHeader: { alignItems: 'center', paddingVertical: 10 },
-  paywallBadge: { width: 58, height: 58, borderRadius: 16, backgroundColor: '#B6E0E2', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+  paywallBadge: { width: 58, height: 58, borderRadius: 16, backgroundColor: '#4ED9CB', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
   paywallTitle: { fontSize: 20, fontWeight: '800', color: '#E5E7EB' },
   paywallTitleLight: { color: '#111827' },
   paywallHeadline: { fontSize: 26, fontWeight: '800', color: '#E5E7EB', marginTop: 6 },
   paywallHeadlineLight: { color: '#111827' },
-  paywallPromoTag: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.12)', marginTop: 10 },
-  paywallPromoTagLight: { backgroundColor: '#FFE7D6' },
-  paywallPromoText: { color: '#FDE68A', fontWeight: '800', fontSize: 14 },
-  paywallPromoTextLight: { color: '#9C2A00' },
+  paywallPromoTag: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999, backgroundColor: 'rgba(78,217,203,0.16)', marginTop: 10 },
+  paywallPromoTagLight: { backgroundColor: '#FDE2EA' },
+  paywallPromoText: { color: '#F25E86', fontWeight: '800', fontSize: 14 },
+  paywallPromoTextLight: { color: '#F25E86' },
   paywallBullets: { marginTop: 16, gap: 8 },
   paywallBullet: { color: '#D1D5DB', fontSize: 16 },
   paywallBulletLight: { color: '#374151' },
   paywallPlansRow: { flexDirection: 'row', gap: 12, marginTop: 18 },
   planCard: { flex: 1, backgroundColor: '#E5E7EB', borderRadius: 16, padding: 14 },
-  planCardActive: { backgroundColor: '#B6E0E2' },
+  planCardActive: { backgroundColor: '#4ED9CB' },
   planTitle: { fontSize: 14, color: '#0D3B4A' },
   planPrice: { fontSize: 18, fontWeight: '800', color: '#0D3B4A', marginTop: 2 },
   planTrialText: { marginTop: 4, color: '#0D3B4A', fontWeight: '600' },
   trialChip: { marginTop: 8, alignSelf: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   trialChipText: { color: '#92400E', fontWeight: '800' },
-  paywallCta: { marginTop: 18, backgroundColor: '#B6E0E2', borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
+  paywallCta: { marginTop: 18, backgroundColor: '#4ED9CB', borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
   paywallCtaText: { color: '#0D3B4A', fontWeight: '800', fontSize: 18 },
   paywallFooterRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 14 },
   paywallLink: { color: '#9CA3AF' },
@@ -1389,10 +1492,24 @@ const styles = StyleSheet.create({
   // Success Overlay
   successOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.25)' },
   successCard: { backgroundColor: '#0D3B4A', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 18, alignItems: 'center', minWidth: 240, gap: 8 },
-  successCardLight: { backgroundColor: '#B6E0E2' },
+  successCardLight: { backgroundColor: '#4ED9CB' },
   // Sign-up success modal
-  signupCard: { width: '86%', maxWidth: 420, backgroundColor: '#1E1E1E', borderRadius: 16, padding: 16, alignItems: 'center' },
-  signupCardLight: { backgroundColor: '#FFFFFF', borderWidth: StyleSheet.hairlineWidth, borderColor: '#E5E7EB' },
+  signupCard: {
+    width: '86%',
+    maxWidth: 420,
+    backgroundColor: '#1F1F1F',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  signupCardLight: { backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: 'rgba(78,217,203,0.3)' },
   signupTitle: { marginTop: 6, color: '#FFFFFF', fontWeight: '800', fontSize: 18 },
   signupTitleLight: { color: '#111827' },
   signupText: { marginTop: 6, color: '#9CA3AF', textAlign: 'center' },
@@ -1415,20 +1532,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#1F1F1F',
     borderRadius: 16,
     paddingVertical: 6,
     paddingHorizontal: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.12)'
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)'
   },
   themeToggleLight: {
-    backgroundColor: '#E9E6E0',
-    borderColor: '#D7D3CB',
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(78,217,203,0.3)',
   },
   themeToggleActive: {
-    backgroundColor: 'rgba(248,176,112,0.18)',
-    borderColor: 'rgba(248,176,112,0.45)'
+    backgroundColor: 'rgba(78,217,203,0.18)',
+    borderColor: 'rgba(78,217,203,0.45)'
   },
   themeThumb: {
     width: 18,
@@ -1437,7 +1554,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#9CA3AF',
   },
   themeThumbOn: {
-    backgroundColor: '#F8B070',
+    backgroundColor: '#4ED9CB',
   },
   themeToggleText: { color: '#E5E7EB', fontWeight: '700', fontSize: 12 },
   themeToggleTextLight: { color: '#374151' },
@@ -1446,7 +1563,14 @@ const styles = StyleSheet.create({
   infoHint: { color: '#9CA3AF', marginBottom: 12, fontSize: 12 },
   infoHintLight: { color: '#6B7280' },
   subRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  premiumBtn: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#2A2F33' },
+  premiumBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#1F1F1F',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+  },
   premiumBtnText: { color: '#FFFFFF', fontWeight: '700' },
   dangerBtn: {
     marginTop: 8,
@@ -1474,19 +1598,48 @@ const styles = StyleSheet.create({
   linksRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
   linkText: { color: '#FFFFFF', textDecorationLine: 'underline', fontSize: 12 },
   linkDivider: { color: 'rgba(255,255,255,0.7)' },
-  langChip: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10, backgroundColor: '#2A2F33' },
-  langChipLight: { backgroundColor: '#E9E6E0' },
-  langChipDark: { backgroundColor: '#2A2F33' },
+  langChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#1F1F1F',
+    borderWidth: 1,
+    borderColor: 'rgba(78,217,203,0.15)',
+  },
+  langChipLight: { backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: 'rgba(78,217,203,0.3)' },
+  langChipDark: { backgroundColor: '#1F1F1F' },
   langChipText: { color: '#FFFFFF', fontWeight: '700' },
   modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center', zIndex: 100, elevation: 12 },
-  langModalCard: { width: '86%', backgroundColor: '#2C2C2C', borderRadius: 16, padding: 14, overflow: 'hidden' },
-  langModalCardLight: { backgroundColor: '#FFFFFF' },
-  langSearchInput: { flex: 1, height: 36, fontSize: 14 },
-  langSearchBox: { marginTop: 6, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#1F2629', borderWidth: 1, borderColor: '#2A3033' },
-  langSearchBoxLight: { backgroundColor: '#FFFFFF', borderColor: '#E5DED3' },
+  langModalCard: {
+    width: '86%',
+    backgroundColor: '#1F1F1F',
+    borderRadius: 16,
+    padding: 14,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  langModalCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.3)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  langSearchInput: { flex: 1, height: 36, fontSize: 14, fontFamily: 'Feather-Bold' },
+  langSearchBox: { marginTop: 6, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: '#1F1F1F', borderWidth: 1.5, borderColor: 'rgba(78,217,203,0.15)' },
+  langSearchBoxLight: { backgroundColor: '#FFFFFF', borderColor: 'rgba(78,217,203,0.3)' },
   langRow: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, marginTop: 6 },
-  langRowLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5DED3' },
-  langRowDark: { backgroundColor: '#1F2629', borderWidth: 1, borderColor: '#2A3033' },
+  langRowLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(78,217,203,0.3)' },
+  langRowDark: { backgroundColor: '#1F1F1F', borderWidth: 1.5, borderColor: 'rgba(78,217,203,0.15)' },
   signInContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1496,19 +1649,35 @@ const styles = StyleSheet.create({
   signInContent: {
     width: '100%',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#1F1F1F',
     paddingHorizontal: 28,
     paddingVertical: 40,
     borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  signInContentLight: { backgroundColor: '#FFFFFF' },
+  signInContentLight: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.3)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
   signInTitle: { color: '#fff', fontSize: 20, fontWeight: '700', marginTop: 16 },
   signInTitleLight: { color: '#111827' },
   signInSubtitle: { color: '#9CA3AF', textAlign: 'center', marginTop: 8 },
   signInSubtitleLight: { color: '#4B5563' },
   signInButtons: { width: '100%', marginTop: 20 },
   signInButton: {
-    backgroundColor: '#e28743',
+    backgroundColor: '#F25E86',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
@@ -1517,7 +1686,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
-  googleButton: { backgroundColor: '#4F8EF7' },
+  googleButton: { backgroundColor: '#F25E86' },
   appleButton: { backgroundColor: '#1C1C1E' },
   signInButtonText: { color: '#fff', fontWeight: '600' },
   guestText: { color: '#6B7280', textAlign: 'center', marginTop: 16, fontSize: 12 },
@@ -1525,22 +1694,25 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#2A2A2A',
     borderRadius: 12,
     marginBottom: 16,
     paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(78,217,203,0.15)',
   },
-  inputContainerLight: { backgroundColor: '#E9E6E0' },
+  inputContainerLight: { backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: 'rgba(78,217,203,0.3)' },
   inputIcon: { marginRight: 8 },
   input: {
     flex: 1,
     color: '#fff',
     paddingVertical: 14,
     fontSize: 16,
+    fontFamily: 'Feather-Bold',
   },
   inputLight: { color: '#111827' },
   switchAuthText: {
-    color: '#e28743',
+    color: '#F25E86',
     textAlign: 'center',
     marginTop: 16,
     fontSize: 14,
@@ -1576,14 +1748,14 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 40,
     borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(78,217,203,0.15)',
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: '#2A2A2A',
   },
-  avatarOptionLight: { borderColor: '#D7D3CB', backgroundColor: '#ECECEC' },
+  avatarOptionLight: { borderColor: 'rgba(78,217,203,0.3)', backgroundColor: '#FFFFFF' },
   avatarOptionSelected: {
-    borderColor: '#e28743',
+    borderColor: '#F25E86',
     borderWidth: 3,
   },
   avatarOptionImage: {
@@ -1595,7 +1767,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 2,
     right: 2,
-    backgroundColor: '#e28743',
+    backgroundColor: '#F25E86',
     borderRadius: 12,
     width: 24,
     height: 24,

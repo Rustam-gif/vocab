@@ -42,7 +42,7 @@ export default function SetCard({ set, onPress }: SetCardProps) {
   const getIconSource = () => {
     const t = cleanTitle(set.title || '').toLowerCase();
     if (set.type === 'quiz') return require('../../../assets/wordset_icons/quiz.png');
-    
+
     // IELTS topics
     if (t.includes('academic')) return require('../../../assets/wordset_icons/IELTS_words/academic-life.png');
     if (t.includes('environment') || t.includes('climate')) return require('../../../assets/wordset_icons/IELTS_words/environment-climate.png');
@@ -64,7 +64,11 @@ export default function SetCard({ set, onPress }: SetCardProps) {
     if (t.includes('sports') || t.includes('fitness')) return require('../../../assets/wordset_icons/IELTS_words/sports-fitness.png');
     if (t.includes('finance') || t.includes('banking')) return require('../../../assets/wordset_icons/IELTS_words/finance-banking.png');
     if (t.includes('employment') || t.includes('career')) return require('../../../assets/wordset_icons/IELTS_words/employment-career.png');
-    
+    if (t.includes('analysis') || t.includes('evidence')) return require('../../../assets/wordset_icons/IELTS_words/science-research.png');
+    if (t.includes('governance') || t.includes('law')) return require('../../../assets/wordset_icons/IELTS_words/government-politics.png');
+    if (t.includes('writing')) return require('../../../assets/wordset_icons/IELTS_words/academic-life.png');
+    if (t.includes('strategy') || t.includes('change')) return require('../../../assets/wordset_icons/OFFICE_communications/business-strategy.png');
+
     // Office Communication topics
     if (t.includes('meeting') || t.includes('discussion')) return require('../../../assets/wordset_icons/OFFICE_communications/meetings-discussions.png');
     if (t.includes('email') || t.includes('correspondence')) return require('../../../assets/wordset_icons/OFFICE_communications/email-correspondence.png');
@@ -86,7 +90,7 @@ export default function SetCard({ set, onPress }: SetCardProps) {
     if (t.includes('quality') || t.includes('standard')) return require('../../../assets/wordset_icons/OFFICE_communications/quality-standards.png');
     if (t.includes('remote') && t.includes('work')) return require('../../../assets/wordset_icons/OFFICE_communications/remote-work.png');
     if (t.includes('leadership') || t.includes('management')) return require('../../../assets/wordset_icons/OFFICE_communications/leadership-management.png');
-    
+
     // Beginner topics
     if (t.includes('daily') || t.includes('habit') || t.includes('routine')) return require('../../../assets/wordset_icons/daily-routines-habits.png');
     if (t.includes('basic') || t.includes('family') || t.includes('need')) return require('../../../assets/wordset_icons/basic-needs.png');
@@ -101,7 +105,7 @@ export default function SetCard({ set, onPress }: SetCardProps) {
     if (t.includes('transportation') || t.includes('travel')) return require('../../../assets/wordset_icons/transportation-travel.png');
     if (t.includes('home') || t.includes('furniture')) return require('../../../assets/wordset_icons/home-furniture.png');
     if (t.includes('culture') || t.includes('entertainment')) return require('../../../assets/wordset_icons/culture-entertainment.png');
-    
+
     return require('../../../assets/wordset_icons/basic-needs.png');
   };
 
@@ -112,114 +116,137 @@ export default function SetCard({ set, onPress }: SetCardProps) {
     return 'Start';
   };
 
-  const getButtonColor = () => {
-    if (isLocked) return 'rgba(100, 100, 100, 0.4)'; // Locked - gray
-    if (isCompleted) return 'rgba(230, 138, 74, 0.35)'; // Review - 35% opacity burnt orange
-    if (isInProgress) return '#d79a35'; // Continue - amber with depth
-    return '#3cb4ac'; // Start (teal, used only for fallback)
-  };
-
-  const getButtonTextColor = () => {
-    if (isLocked) return '#888'; // Gray text for locked
-    // All other states use white text now (Continue/Start/Review)
-    return '#fff';
-  };
-
-  // Press bounce animation (match Home tiles/pills)
+  // Press bounce animation
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const handlePressIn = () => {
-    try { Animated.spring(scaleAnim, { toValue: 0.96, useNativeDriver: true, friction: 7, tension: 280 }).start(); } catch {}
+    Animated.spring(scaleAnim, { toValue: 0.98, useNativeDriver: true, friction: 8, tension: 300 }).start();
   };
-  const handlePressBounce = () => {
-    const v = scaleAnim;
-    try {
-      Animated.sequence([
-        Animated.spring(v, { toValue: 1.05, useNativeDriver: true, friction: 6, tension: 180 }),
-        Animated.spring(v, { toValue: 1, useNativeDriver: true, friction: 7, tension: 140 }),
-      ]).start();
-    } catch {
-      try { v.setValue(1); } catch {}
-    }
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, friction: 6, tension: 200 }).start();
   };
 
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-      <TouchableOpacity 
-        style={[styles.container, isLocked && styles.lockedContainer, isLight && styles.containerLight]} 
+      <TouchableOpacity
+        style={[
+          styles.container,
+          isLight && styles.containerLight,
+          isLocked && styles.lockedContainer,
+          isLocked && isLight && styles.lockedContainerLight,
+        ]}
         onPress={onPress}
         onPressIn={handlePressIn}
-        onPressOut={handlePressBounce}
+        onPressOut={handlePressOut}
         disabled={isLocked}
-        activeOpacity={isLocked ? 1 : 0.7}
+        activeOpacity={0.9}
       >
-      <View style={styles.headerRow}>
-        <Image 
-          source={getIconSource()} 
-          style={[styles.setIcon, isLocked && styles.lockedIcon]} 
-          resizeMode="contain" 
-        />
-        <View style={styles.headerTextArea}>
-          <Text style={[styles.title, isLocked && styles.lockedText, isLight && { color: '#111827' }]}>{cleanTitle(set.title)}</Text>
-          {!isQuiz && (
-            <Text style={[styles.wordsPreviewInline, isLocked && styles.lockedText, isLight && { color: '#6B7280' }]} numberOfLines={1}>
-              {set.words?.slice(0, 3).map(w => w.word).join(', ')}
-              {set.words && set.words.length > 3 && '...'}
-            </Text>
-          )}
-          {isQuiz && !!set.description && (
-            <Text style={[styles.quizPreviewInline, isLocked && styles.lockedText, isLight && { color: '#6B7280' }]} numberOfLines={1}>
-              {set.description}
-            </Text>
-          )}
-        </View>
-        {/* Button moved to absolute overlay for vertical centering */}
-      </View>
-
-      <View style={styles.content} />
-
-      <View style={styles.footer}>
-        {isCompleted && !isLocked && (
-          <View style={styles.statusPill}>
-            <CheckCircle size={16} color={success} />
-            <Text style={styles.statusText}>
-              {typeof set.score === 'number' ? `${Math.round(set.score)}` : '✓'}
-            </Text>
-          </View>
+        {/* Left colored border indicator */}
+        {!isLocked && (
+          <View style={[
+            styles.leftBorder,
+            isCompleted && { backgroundColor: success },
+            isInProgress && { backgroundColor: accent },
+            !isCompleted && !isInProgress && { backgroundColor: '#437F76' },
+          ]} />
         )}
-        {isLocked && (
-          <View style={styles.lockedPill}>
-            <Lock size={14} color="#888" />
-            <Text style={styles.lockedPillText}>Complete previous set first</Text>
-          </View>
-        )}
-      </View>
 
-      {/* Absolute action button overlay (vertically centered on the right) */}
-      <View style={styles.actionOverlay}>
-        <TouchableOpacity 
-          onPress={onPress} 
-          activeOpacity={0.85} 
-          disabled={isLocked}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressBounce}
-        >
-          {(!isCompleted && !isInProgress && !isLocked) ? (
-            <LinearGradient
-              colors={['#1a8d87', '#3cb4ac']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.actionButton, styles.startButton]}
+        {/* Main content row */}
+        <View style={styles.mainRow}>
+          {/* Icon */}
+          <View style={[styles.iconContainer, isLocked && styles.iconContainerLocked]}>
+            <Image
+              source={getIconSource()}
+              style={[styles.setIcon, isLocked && styles.lockedIcon]}
+              resizeMode="contain"
+            />
+          </View>
+
+          {/* Text content */}
+          <View style={styles.textContent}>
+            <Text
+              style={[
+                styles.title,
+                isLight && styles.titleLight,
+                isLocked && styles.lockedText,
+              ]}
+              numberOfLines={2}
             >
-              <Text style={[styles.actionButtonText, { color: '#fff' }]}>{getButtonText()}</Text>
-            </LinearGradient>
-          ) : (
-            <View style={[styles.actionButton, { backgroundColor: getButtonColor() }]}>
-              {isLocked && <Lock size={14} color="#888" style={{ marginRight: 4 }} />}
-              <Text style={[styles.actionButtonText, { color: getButtonTextColor() }]}>{getButtonText()}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
+              {cleanTitle(set.title)}
+            </Text>
+            {!isQuiz && set.words && set.words.length > 0 && (
+              <Text
+                style={[
+                  styles.preview,
+                  isLight && styles.previewLight,
+                  isLocked && styles.lockedPreview,
+                ]}
+                numberOfLines={1}
+              >
+                {set.words.slice(0, 3).map(w => w.word).join(', ')}
+                {set.words.length > 3 && '...'}
+              </Text>
+            )}
+            {isQuiz && set.description && (
+              <Text
+                style={[
+                  styles.preview,
+                  isLight && styles.previewLight,
+                  isLocked && styles.lockedPreview,
+                ]}
+                numberOfLines={1}
+              >
+                {set.description}
+              </Text>
+            )}
+          </View>
+
+          {/* Action button */}
+          <View style={styles.buttonContainer}>
+            {isLocked ? (
+              <View style={[styles.lockedButton, isLight && styles.lockedButtonLight]}>
+                <Lock size={14} color={isLight ? '#9CA3AF' : '#666'} />
+                <Text style={[styles.lockedButtonText, isLight && styles.lockedButtonTextLight]}>Locked</Text>
+              </View>
+            ) : isCompleted ? (
+              <View style={[styles.reviewButton, isLight && styles.reviewButtonLight]}>
+                <Text style={styles.reviewButtonText}>Review</Text>
+              </View>
+            ) : isInProgress ? (
+              <View style={styles.continueButton}>
+                <Text style={styles.continueButtonText}>Continue</Text>
+              </View>
+            ) : (
+              <LinearGradient
+                colors={['#437F76', '#4A9A8F']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.startButton}
+              >
+                <Text style={styles.startButtonText}>Start</Text>
+              </LinearGradient>
+            )}
+          </View>
+        </View>
+
+        {/* Completed badge */}
+        {isCompleted && !isLocked && (
+          <View style={styles.completedBadge}>
+            <CheckCircle size={14} color={success} />
+            <Text style={styles.completedText}>
+              {typeof set.score === 'number' ? `Score: ${Math.round(set.score)}` : 'Completed'}
+            </Text>
+          </View>
+        )}
+
+        {/* Locked message */}
+        {isLocked && (
+          <View style={styles.lockedMessage}>
+            <Lock size={12} color={isLight ? '#9CA3AF' : '#666'} />
+            <Text style={[styles.lockedMessageText, isLight && styles.lockedMessageTextLight]}>
+              Complete previous set first
+            </Text>
+          </View>
+        )}
       </TouchableOpacity>
     </Animated.View>
   );
@@ -227,197 +254,194 @@ export default function SetCard({ set, onPress }: SetCardProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#2C2C2C',
-    borderRadius: 12,
-    padding: 5,
-    marginBottom: 6,
+    backgroundColor: '#2A2D2D',
+    borderRadius: 16,
+    padding: 14,
+    paddingLeft: 18,
+    marginBottom: 10,
     position: 'relative',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   containerLight: {
     backgroundColor: '#FFFFFF',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  headerRow: {
+  lockedContainer: {
+    backgroundColor: '#252525',
+    borderColor: 'rgba(255,255,255,0.03)',
+  },
+  lockedContainerLight: {
+    backgroundColor: '#FAFAFA',
+    borderColor: '#E5E7EB',
+  },
+  leftBorder: {
+    position: 'absolute',
+    left: 0,
+    top: 12,
+    bottom: 12,
+    width: 4,
+    borderRadius: 2,
+  },
+  mainRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 4,
-    marginBottom: 2,
+  },
+  iconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  iconContainerLocked: {
+    backgroundColor: 'rgba(255,255,255,0.02)',
   },
   setIcon: {
-    width: 72,
-    height: 72,
-    marginRight: 6,
+    width: 48,
+    height: 48,
   },
-  headerTextArea: {
+  lockedIcon: {
+    opacity: 0.5,
+  },
+  textContent: {
     flex: 1,
-    // Reserve space so text never runs under the absolute action button
-    paddingRight: 120,
+    paddingRight: 8,
   },
   title: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
+    color: '#FFFFFF',
+    lineHeight: 20,
+    fontFamily: 'Ubuntu-Bold',
+    marginBottom: 4,
+  },
+  titleLight: {
+    color: '#111827',
+  },
+  lockedText: {
+    color: '#888',
+  },
+  preview: {
+    fontSize: 13,
+    color: '#9CA3AF',
     lineHeight: 18,
+    fontFamily: 'Ubuntu-Regular',
+  },
+  previewLight: {
+    color: '#6B7280',
+  },
+  lockedPreview: {
+    color: '#666',
+  },
+  buttonContainer: {
+    marginLeft: 8,
+  },
+  startButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    minWidth: 90,
+    alignItems: 'center',
+  },
+  startButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
     fontFamily: 'Ubuntu-Bold',
   },
-  wordsMeta: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 2,
-  },
-  statusPill: {
-    flexDirection: 'row',
+  continueButton: {
+    backgroundColor: '#437F76',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    minWidth: 90,
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-    borderRadius: 0,
-    backgroundColor: 'transparent',
   },
-  statusText: {
+  continueButtonText: {
+    color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '600',
-    color: '#437F76',
-    letterSpacing: 0.2,
+    fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
   },
-  scorePill: {
-    alignSelf: 'flex-start',
-    marginTop: 6,
-    flexDirection: 'row',
+  reviewButton: {
+    backgroundColor: 'rgba(67, 127, 118, 0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    minWidth: 90,
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: 'rgba(67, 127, 118, 0.12)',
     borderWidth: 1,
     borderColor: 'rgba(67, 127, 118, 0.3)',
   },
-  scoreLabel: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  reviewButtonLight: {
+    backgroundColor: 'rgba(67, 127, 118, 0.1)',
+    borderColor: 'rgba(67, 127, 118, 0.2)',
   },
-  scoreValue: {
-    fontSize: 17,
-    fontWeight: '700',
+  reviewButtonText: {
     color: '#437F76',
-  },
-  content: {
-    marginBottom: 2,
-    minHeight: 6,
-  },
-  quizInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    padding: 8,
-    borderRadius: 8,
-  },
-  quizDescription: {
-    fontSize: 17,
-    color: '#B3B3B3',
-    marginLeft: 10,
-    flex: 1,
-    lineHeight: 20,
-  },
-  quizPreviewInline: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 2,
-    // Extra safety so description never collides with the button
-    paddingRight: 6,
-  },
-  wordsInfo: {
-    flexDirection: 'column',
-    gap: 8,
-  },
-  wordsCount: {
     fontSize: 14,
-    color: '#9CA3AF',
-    fontWeight: '600',
+    fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
   },
-  wordsPreview: {
-    fontSize: 14,
-    color: '#B3B3B3',
-    lineHeight: 16,
-  },
-  wordsPreviewInline: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 1,
-    fontFamily: 'Ubuntu-Regular',
-    // Extra safety so preview never collides with the button
-    paddingRight: 6,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  lockedButton: {
+    backgroundColor: 'rgba(100, 100, 100, 0.3)',
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999, // pill shape
-    minWidth: 92,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 1,
-    elevation: 1,
-  },
-  startButton: {
-    shadowColor: '#1a8d87',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  headerButton: {
-    alignSelf: 'flex-start',
-  },
-  actionOverlay: {
-    position: 'absolute',
-    right: 8,
-    top: 0,
-    bottom: 0,
+    paddingVertical: 10,
+    borderRadius: 20,
+    minWidth: 90,
+    alignItems: 'center',
+    flexDirection: 'row',
     justifyContent: 'center',
+    gap: 6,
   },
-  actionButtonText: {
-    fontSize: 13,
+  lockedButtonLight: {
+    backgroundColor: '#E5E7EB',
+  },
+  lockedButtonText: {
+    color: '#666',
+    fontSize: 14,
     fontWeight: '600',
-    color: '#fff',
+    fontFamily: 'Ubuntu-Medium',
   },
-  playIcon: {
-    marginLeft: 4,
+  lockedButtonTextLight: {
+    color: '#9CA3AF',
   },
-  lockedContainer: {
-    opacity: 0.85,
-    backgroundColor: '#252525',
-  },
-  lockedIcon: {
-    opacity: 0.6,
-  },
-  lockedText: {
-    color: '#A0A0A0',
-  },
-  lockedPill: {
+  completedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 0,
-    paddingVertical: 0,
+    marginTop: 10,
+    paddingLeft: 78,
   },
-  lockedPillText: {
+  completedText: {
     fontSize: 12,
-    color: '#A0A0A0',
+    color: '#437F76',
+    fontWeight: '600',
+    fontFamily: 'Ubuntu-Medium',
+  },
+  lockedMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingLeft: 78,
+  },
+  lockedMessageText: {
+    fontSize: 12,
+    color: '#666',
     fontWeight: '500',
+    fontFamily: 'Ubuntu-Regular',
+  },
+  lockedMessageTextLight: {
+    color: '#9CA3AF',
   },
 });

@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Pressable, Animated, Platform, Linking, Modal, PanResponder, Dimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Pressable, Animated, Platform, Linking, Modal, PanResponder, Dimensions, Alert, DeviceEventEmitter } from 'react-native';
 import { InteractionManager } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg';
-import { Plus, Camera, Type, Flame, Clock, MessageSquare, XCircle, Search, Users, ShieldCheck, BookOpenCheck, Lightbulb, Globe, HeartPulse, Sparkles, Check } from 'lucide-react-native';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop, Pattern, Circle } from 'react-native-svg';
+import { Plus, Camera, Type, Flame, Clock, MessageSquare, XCircle, Search, Users, ShieldCheck, BookOpenCheck, Lightbulb, Globe, HeartPulse, Sparkles, Check, X } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
@@ -18,6 +18,9 @@ import LottieView from 'lottie-react-native';
 import LimitModal from '../lib/LimitModal';
 import { APP_STORE_ID, ANDROID_PACKAGE_NAME, NEWS_API_KEY, NEWS_API_URL, AI_PROXY_URL, BACKEND_BASE_URL, STORY_IMAGE_URL, PRODUCTIVITY_ARTICLES_URL } from '../lib/appConfig';
 import TopStatusPanel from './components/TopStatusPanel';
+import SynonymMatch from './components/SynonymMatch';
+import { SYNONYM_PREDEFINED } from './quiz/data/synonyms-answers';
+import VaultService from '../services/VaultService';
 import { aiProxyService } from '../services/AiProxyService';
 import { getCached, setCached } from '../lib/aiCache';
 import { supabase, SUPABASE_ANON_KEY } from '../lib/supabase';
@@ -25,53 +28,284 @@ import type { Word as MissionWord } from '../core/dailyMissionTypes';
 import { getPhraseImageUrl, PHRASE_IMAGES } from './quiz/data/phrase-images';
 
 const STORY_WORDS_DONE_KEY_PREFIX = '@engniter.storywords.done:';
+const SYNONYM_MATCH_USED_WORDS_KEY = '@engniter.synonymMatch.usedWords';
+
+// Predefined synonyms for common phrasal verbs and daily essentials
+const PHRASAL_VERB_SYNONYMS: Record<string, string> = {
+  'break down': 'malfunction',
+  'give up': 'quit',
+  'pick up': 'collect',
+  'figure out': 'solve',
+  'come up with': 'invent',
+  'look after': 'care for',
+  'put off': 'postpone',
+  'turn down': 'reject',
+  'get along': 'cooperate',
+  'run out of': 'exhaust',
+  'show up': 'arrive',
+  'take off': 'depart',
+  'work out': 'exercise',
+  'hold on': 'wait',
+  'carry on': 'continue',
+  'call off': 'cancel',
+  'set up': 'establish',
+  'find out': 'discover',
+  'bring up': 'mention',
+  'look forward to': 'anticipate',
+  'deal with': 'handle',
+  'take over': 'assume control',
+  'give back': 'return',
+  'point out': 'indicate',
+  'make up': 'invent',
+  'turn up': 'appear',
+  'back up': 'support',
+  'cut down': 'reduce',
+  'drop by': 'visit',
+  'fall apart': 'collapse',
+  'fill in': 'complete',
+  'get over': 'recover',
+  'go through': 'experience',
+  'hang out': 'socialize',
+  'keep up': 'maintain',
+  'put up with': 'tolerate',
+  'run into': 'encounter',
+  'settle down': 'calm',
+  'check in': 'register',
+  'check out': 'examine',
+  'clean up': 'tidy',
+  'come back': 'return',
+  'go on': 'continue',
+  // Daily essentials
+  'accomplish': 'achieve',
+  'adapt': 'adjust',
+  'afford': 'manage',
+  'anticipate': 'expect',
+  'appreciate': 'value',
+  'approach': 'method',
+  'arrange': 'organize',
+  'assume': 'presume',
+  'attempt': 'try',
+  'avoid': 'evade',
+  'benefit': 'advantage',
+  'claim': 'assert',
+  'concern': 'worry',
+  'consider': 'think about',
+  'convince': 'persuade',
+  'crucial': 'vital',
+  'decline': 'decrease',
+  'delay': 'postpone',
+  'efficient': 'effective',
+  'emphasize': 'stress',
+  'encounter': 'meet',
+  'ensure': 'guarantee',
+  'establish': 'create',
+  'evaluate': 'assess',
+  'extend': 'expand',
+  'generate': 'produce',
+  'implement': 'execute',
+  'indicate': 'show',
+  'maintain': 'keep',
+  'obtain': 'get',
+  'occur': 'happen',
+  'participate': 'join',
+  'perceive': 'see',
+  'potential': 'possible',
+  'require': 'need',
+  'resolve': 'solve',
+  'sufficient': 'enough',
+};
+
+// Helper to get synonym for a word
+const getSynonymForWord = async (word: string): Promise<string | null> => {
+  const normalized = word.toLowerCase().trim();
+
+  // 1. Check phrasal verb synonyms first
+  if (PHRASAL_VERB_SYNONYMS[normalized]) {
+    return PHRASAL_VERB_SYNONYMS[normalized];
+  }
+
+  // 2. Check predefined synonyms
+  if (SYNONYM_PREDEFINED[normalized]) {
+    const correctSynonyms = SYNONYM_PREDEFINED[normalized].correct;
+    if (correctSynonyms.length > 0) {
+      return correctSynonyms[Math.floor(Math.random() * correctSynonyms.length)];
+    }
+  }
+
+  // 3. Try AI generation for words without predefined synonyms
+  try {
+    const cacheKey = `synonym:${normalized}`;
+    const cached = await getCached(cacheKey);
+    if (cached) return cached as string;
+
+    const response = await aiProxyService.sendRequest({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a vocabulary helper. Given a word or phrase, provide ONE simple synonym or equivalent expression. Reply with just the synonym, nothing else.',
+        },
+        {
+          role: 'user',
+          content: `Synonym for: ${word}`,
+        },
+      ],
+      max_tokens: 20,
+    });
+
+    const synonym = response?.choices?.[0]?.message?.content?.trim().toLowerCase();
+    if (synonym && synonym !== normalized && synonym.length < 30) {
+      await setCached(cacheKey, synonym, 7 * 24 * 60 * 60 * 1000); // Cache for 7 days
+      return synonym;
+    }
+  } catch (e) {
+    console.log('[SynonymMatch] AI synonym generation failed:', e);
+  }
+
+  return null;
+};
+
+// Get words for SynonymMatch from vault by priority
+const getSynonymMatchWordsFromVault = async (
+  vaultWords: Array<{ id: string; word: string; folderId?: string }>,
+  count: number = 4
+): Promise<{ word: string; synonym: string }[]> => {
+  console.log('[SynonymMatch] Starting vault word selection, total words:', vaultWords.length);
+
+  // Get used word IDs to avoid repetition
+  let usedWordIds: string[] = [];
+  try {
+    const raw = await AsyncStorage.getItem(SYNONYM_MATCH_USED_WORDS_KEY);
+    usedWordIds = raw ? JSON.parse(raw) : [];
+  } catch {}
+
+  const usedSet = new Set(usedWordIds);
+
+  // Priority order for folder sources
+  const folderPriority = [
+    VaultService.DEFAULT_FOLDER_SETS_ID,      // 1. Saved from Sets
+    VaultService.DEFAULT_FOLDER_TRANSLATED_ID, // 2. Translated Words
+    VaultService.DEFAULT_FOLDER_USER_ID,       // 3. My Saved Words (manual)
+    VaultService.DEFAULT_FOLDER_DAILY_ID,      // 4. Daily Essentials
+    VaultService.DEFAULT_FOLDER_PHRASAL_ID,    // 5. Common Phrasal Verbs
+  ];
+
+  const pairs: { word: string; synonym: string }[] = [];
+  const newUsedIds: string[] = [];
+
+  // Log folder distribution
+  for (const fid of folderPriority) {
+    const cnt = vaultWords.filter(w => w.folderId === fid).length;
+    console.log(`[SynonymMatch] Folder ${fid}: ${cnt} words`);
+  }
+
+  // Collect words from each source in priority order
+  for (const folderId of folderPriority) {
+    if (pairs.length >= count) break;
+
+    const sourceWords = vaultWords.filter(
+      w => w.folderId === folderId && !usedSet.has(w.id)
+    );
+
+    console.log(`[SynonymMatch] Checking folder ${folderId}, found ${sourceWords.length} unused words`);
+
+    // Shuffle source words for variety
+    const shuffled = [...sourceWords].sort(() => Math.random() - 0.5);
+
+    for (const w of shuffled) {
+      if (pairs.length >= count) break;
+
+      const synonym = await getSynonymForWord(w.word);
+      console.log(`[SynonymMatch] Word "${w.word}" -> synonym: ${synonym || 'null'}`);
+      if (synonym && synonym.toLowerCase() !== w.word.toLowerCase()) {
+        pairs.push({ word: w.word, synonym });
+        newUsedIds.push(w.id);
+      }
+    }
+  }
+
+  console.log(`[SynonymMatch] Found ${pairs.length} pairs:`, pairs);
+
+  // If still not enough, reset used words and try again from all sources
+  if (pairs.length < count && usedWordIds.length > 0) {
+    usedSet.clear();
+    for (const folderId of folderPriority) {
+      if (pairs.length >= count) break;
+
+      const sourceWords = vaultWords.filter(
+        w => w.folderId === folderId && !newUsedIds.includes(w.id)
+      );
+
+      const shuffled = [...sourceWords].sort(() => Math.random() - 0.5);
+
+      for (const w of shuffled) {
+        if (pairs.length >= count) break;
+
+        const synonym = await getSynonymForWord(w.word);
+        if (synonym && synonym.toLowerCase() !== w.word.toLowerCase()) {
+          pairs.push({ word: w.word, synonym });
+          newUsedIds.push(w.id);
+        }
+      }
+    }
+  }
+
+  // Save used word IDs (keep last 50 to avoid infinite growth)
+  try {
+    const updated = [...usedWordIds, ...newUsedIds].slice(-50);
+    await AsyncStorage.setItem(SYNONYM_MATCH_USED_WORDS_KEY, JSON.stringify(updated));
+  } catch {}
+
+  return pairs;
+};
 
 // Story words with images - definitions for the 44 mapped phrases
+// Example sentences use the exact phrasal verb form to ensure fill-in-blanks work correctly
 const STORY_WORDS_DATA: Record<string, { definition: string; example: string }> = {
-  'miss the bus': { definition: 'to arrive too late to catch the bus', example: 'I missed the bus and had to walk to work.' },
+  'miss the bus': { definition: 'to arrive too late to catch the bus', example: 'If you miss the bus, you will have to walk.' },
   'pick up': { definition: 'to lift something from a surface', example: 'Please pick up that pen from the floor.' },
   'hand in': { definition: 'to submit work or documents', example: 'You need to hand in your report by Friday.' },
-  'work on': { definition: 'to spend time doing or improving something', example: 'I am working on a new project.' },
+  'work on': { definition: 'to spend time doing or improving something', example: 'I need to work on my presentation tonight.' },
   'figure out': { definition: 'to understand or solve something', example: 'I need to figure out how this works.' },
-  'make progress': { definition: 'to move forward or improve', example: 'We are making good progress on the task.' },
+  'make progress': { definition: 'to move forward or improve', example: 'We need to make progress on this project.' },
   'finish up': { definition: 'to complete something', example: 'Let me finish up this email first.' },
-  'agree with': { definition: 'to have the same opinion as someone', example: 'I agree with your suggestion.' },
-  'disagree with': { definition: 'to have a different opinion', example: 'I respectfully disagree with that idea.' },
-  'apologize': { definition: 'to say sorry for something', example: 'I apologize for being late.' },
-  'thank someone': { definition: 'to express gratitude', example: 'I want to thank you for your help.' },
+  'agree with': { definition: 'to have the same opinion as someone', example: 'I agree with your suggestion completely.' },
+  'disagree with': { definition: 'to have a different opinion', example: 'I disagree with that proposal.' },
+  'apologize': { definition: 'to say sorry for something', example: 'I apologize for the inconvenience.' },
+  'thank someone': { definition: 'to express gratitude', example: 'I want to thank someone for helping me.' },
   'ask for help': { definition: 'to request assistance', example: 'Do not hesitate to ask for help.' },
-  'come back': { definition: 'to return to a place', example: 'I will come back tomorrow.' },
-  'leave early': { definition: 'to depart before the usual time', example: 'I need to leave early today.' },
-  'show up': { definition: 'to arrive or appear', example: 'He showed up late to the meeting.' },
-  'stay in': { definition: 'to remain at home', example: 'I decided to stay in tonight.' },
-  'head out': { definition: 'to leave or depart', example: 'I am about to head out.' },
-  'break down': { definition: 'to stop working (machine)', example: 'My car broke down on the highway.' },
+  'come back': { definition: 'to return to a place', example: 'I will come back tomorrow morning.' },
+  'leave early': { definition: 'to depart before the usual time', example: 'I need to leave early for my appointment.' },
+  'show up': { definition: 'to arrive or appear', example: 'Please show up on time for the meeting.' },
+  'stay in': { definition: 'to remain at home', example: 'I prefer to stay in on rainy days.' },
+  'head out': { definition: 'to leave or depart', example: 'We should head out before traffic gets bad.' },
+  'break down': { definition: 'to stop working (machine)', example: 'Cars can break down without warning.' },
   'fix': { definition: 'to repair something', example: 'Can you fix this broken chair?' },
   'deal with': { definition: 'to handle or manage', example: 'I will deal with this problem later.' },
   'avoid': { definition: 'to stay away from', example: 'I try to avoid junk food.' },
-  'prevent': { definition: 'to stop something from happening', example: 'We need to prevent this from happening again.' },
+  'prevent': { definition: 'to stop something from happening', example: 'We must prevent this from happening again.' },
   'decide': { definition: 'to make a choice', example: 'I cannot decide which one to buy.' },
-  'plan ahead': { definition: 'to prepare for the future', example: 'It is important to plan ahead.' },
-  'change mind': { definition: 'to form a new opinion', example: 'I changed my mind about the trip.' },
-  'stick to': { definition: 'to continue doing something', example: 'Stick to the original plan.' },
-  'give up': { definition: 'to stop trying', example: 'Do not give up on your dreams.' },
+  'plan ahead': { definition: 'to prepare for the future', example: 'It is important to plan ahead for success.' },
+  'change mind': { definition: 'to form a new opinion', example: 'People often change mind after reflection.' },
+  'stick to': { definition: 'to continue doing something', example: 'We should stick to the original plan.' },
+  'give up': { definition: 'to stop trying', example: 'Never give up on your dreams.' },
   'pay for': { definition: 'to give money in exchange', example: 'I will pay for dinner tonight.' },
-  'run out of': { definition: 'to have no more of something', example: 'We ran out of milk.' },
-  'save money': { definition: 'to keep money for later', example: 'I am trying to save money for a vacation.' },
-  'spend money': { definition: 'to use money to buy things', example: 'I spent too much money this month.' },
-  'afford': { definition: 'to have enough money for', example: 'I cannot afford a new car.' },
+  'run out of': { definition: 'to have no more of something', example: 'We cannot run out of supplies.' },
+  'save money': { definition: 'to keep money for later', example: 'It is wise to save money for emergencies.' },
+  'spend money': { definition: 'to use money to buy things', example: 'Do not spend money on unnecessary items.' },
+  'afford': { definition: 'to have enough money for', example: 'I cannot afford a new car right now.' },
   'feel confident': { definition: 'to feel sure of yourself', example: 'I feel confident about the exam.' },
   'feel unsure': { definition: 'to feel uncertain', example: 'I feel unsure about my decision.' },
   'stay calm': { definition: 'to remain relaxed', example: 'Try to stay calm during the interview.' },
-  'get stressed': { definition: 'to feel anxious or worried', example: 'I get stressed before deadlines.' },
+  'get stressed': { definition: 'to feel anxious or worried', example: 'I tend to get stressed before deadlines.' },
   'relax': { definition: 'to rest and feel calm', example: 'I like to relax on weekends.' },
   'at first': { definition: 'in the beginning', example: 'At first, it seemed difficult.' },
   'in the end': { definition: 'finally, after everything', example: 'In the end, everything worked out.' },
   'right away': { definition: 'immediately', example: 'I will do it right away.' },
-  'for a while': { definition: 'for some time', example: 'I waited for a while.' },
+  'for a while': { definition: 'for some time', example: 'I waited for a while before leaving.' },
   'on time': { definition: 'punctually, not late', example: 'The train arrived on time.' },
   'take over': { definition: 'to assume control', example: 'She will take over as manager next week.' },
-  'be in charge': { definition: 'to be responsible for', example: 'Who is in charge here?' },
+  'be in charge': { definition: 'to be responsible for', example: 'Who will be in charge of the project?' },
 };
 
 // Get 5 story words with images for today (cycles through all 44 every ~9 days)
@@ -144,6 +378,29 @@ type NewsPrefs = {
   topics: NewsTopicId[];
   hideSports: boolean;
 };
+
+// Module-level preloaded productivity articles cache for instant display
+const PROD_CACHE_KEY = '@engniter.productivity.articles.v3';
+let _preloadedProductivityArticles: NewsItem[] = [];
+let _productivityPreloadPromise: Promise<NewsItem[]> | null = null;
+
+// Start preloading productivity articles immediately when module loads
+const preloadProductivityArticles = async (): Promise<NewsItem[]> => {
+  try {
+    const cached = await AsyncStorage.getItem(PROD_CACHE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed?.articles) && parsed.articles.length > 0) {
+        _preloadedProductivityArticles = parsed.articles;
+        return parsed.articles;
+      }
+    }
+  } catch {}
+  return [];
+};
+
+// Start preload immediately
+_productivityPreloadPromise = preloadProductivityArticles();
 
 // Fallback productivity/lifestyle articles when API doesn't return suitable content
 const FALLBACK_PRODUCTIVITY_ARTICLES: NewsItem[] = [
@@ -756,21 +1013,170 @@ const refineNewsArticles = (
 
 // Tag color mapping for article categories
 const TAG_COLORS: Record<string, { bg: string; text: string }> = {
-  productivity: { bg: '#658DA6', text: '#FFFFFF' },
-  growth: { bg: '#658DA6', text: '#FFFFFF' },
-  creativity: { bg: '#F2F0CE', text: '#4A4A3A' },
-  learning: { bg: '#F2F0CE', text: '#4A4A3A' },
-  wellness: { bg: '#F2DBD5', text: '#5A4A48' },
-  balance: { bg: '#F2DBD5', text: '#5A4A48' },
-  'life tips': { bg: '#F2A7A7', text: '#4A3838' },
-  lifetips: { bg: '#F2A7A7', text: '#4A3838' },
+  productivity: { bg: '#5B8FA8', text: '#FFFFFF' },
+  growth: { bg: '#5B8FA8', text: '#FFFFFF' },
+  creativity: { bg: '#E8A85C', text: '#FFFFFF' },
+  learning: { bg: '#6B9E78', text: '#FFFFFF' },
+  wellness: { bg: '#7BCEC4', text: '#FFFFFF' },
+  balance: { bg: '#7BCEC4', text: '#FFFFFF' },
+  health: { bg: '#7BCEC4', text: '#FFFFFF' },
+  'life tips': { bg: '#9B8DC4', text: '#FFFFFF' },
+  lifetips: { bg: '#9B8DC4', text: '#FFFFFF' },
+  live: { bg: '#E88B9C', text: '#FFFFFF' },
+  motivation: { bg: '#E8A85C', text: '#FFFFFF' },
+  tech: { bg: '#5B8FA8', text: '#FFFFFF' },
+  technology: { bg: '#5B8FA8', text: '#FFFFFF' },
+  business: { bg: '#6B7A8C', text: '#FFFFFF' },
+  science: { bg: '#7BA3C4', text: '#FFFFFF' },
+  entertainment: { bg: '#C47BA3', text: '#FFFFFF' },
+  lifestyle: { bg: '#A8C47B', text: '#FFFFFF' },
+  finance: { bg: '#5C8A6B', text: '#FFFFFF' },
+  travel: { bg: '#5BACB8', text: '#FFFFFF' },
+  food: { bg: '#E8A07B', text: '#FFFFFF' },
+  sports: { bg: '#7B8CE8', text: '#FFFFFF' },
+  politics: { bg: '#8B7A6B', text: '#FFFFFF' },
+  world: { bg: '#6B8B9B', text: '#FFFFFF' },
+  featured: { bg: '#E8A85C', text: '#FFFFFF' },
+  article: { bg: '#9CA3AF', text: '#FFFFFF' },
 };
-const DEFAULT_TAG_COLOR = { bg: '#E5E7EB', text: '#374151' };
+const DEFAULT_TAG_COLOR = { bg: '#9CA3AF', text: '#FFFFFF' };
 
 const getTagColor = (tag: string | undefined) => {
   if (!tag) return DEFAULT_TAG_COLOR;
   const normalized = tag.toLowerCase().trim();
   return TAG_COLORS[normalized] || DEFAULT_TAG_COLOR;
+};
+
+// Card color palettes - each palette has inner card gradient and outer container tint
+// Inspired by podcast/article card designs where card color matches image vibe
+type CardColorPalette = {
+  light: { inner: [string, string]; outer: string };
+  dark: { inner: [string, string]; outer: string };
+};
+
+const CARD_COLOR_PALETTES: CardColorPalette[] = [
+  // Breaker Bay - teal for wellness, health (paled)
+  { light: { inner: ['#8DC4B4', '#9DD4C4'], outer: '#E8F5F1' }, dark: { inner: ['#3A6B5A', '#4A7B6A'], outer: '#1A2E25' } },
+  // Opal - sage/mint for nature, environment (paled)
+  { light: { inner: ['#C4DAD4', '#D4EAE4'], outer: '#F0F6F4' }, dark: { inner: ['#5A7A72', '#6A8A82'], outer: '#1E2E2A' } },
+  // Blue Bayoux - dark blue for tech, business (paled)
+  { light: { inner: ['#7A9AAD', '#8AAABD'], outer: '#E8EEF2' }, dark: { inner: ['#2A4050', '#3A5060'], outer: '#1A2228' } },
+  // Cyan/teal for motivation (paled)
+  { light: { inner: ['#5AADB8', '#6ABDC8'], outer: '#E6F4F6' }, dark: { inner: ['#025A63', '#036A73'], outer: '#1A2A2C' } },
+  // Flush Mahogany - red for live, creativity (paled)
+  { light: { inner: ['#E8A0A0', '#F0B0B0'], outer: '#FCECEC' }, dark: { inner: ['#7A2A2A', '#8A3A3A'], outer: '#2A1A1A' } },
+  // Pearl Bush - cream for lifestyle, food (paled)
+  { light: { inner: ['#EDE5D8', '#F5EDE2'], outer: '#FAF8F4' }, dark: { inner: ['#7A7260', '#8A8270'], outer: '#2A2820' } },
+  // Dusty rose for goals (paled)
+  { light: { inner: ['#E8B4B5', '#F0C4C5'], outer: '#FAF0F0' }, dark: { inner: ['#7A4A4B', '#8A5A5B'], outer: '#2A2020' } },
+  // Burnt Sienna - orange for growth (paled)
+  { light: { inner: ['#F2A890', '#F8B8A0'], outer: '#FDF0EB' }, dark: { inner: ['#8A4A38', '#9A5A48'], outer: '#2A1E1A' } },
+  // Sage grey-green for live (paled)
+  { light: { inner: ['#B4C8C2', '#C4D8D2'], outer: '#F2F5F4' }, dark: { inner: ['#5A6B65', '#6A7B75'], outer: '#1E2422' } },
+  // Light pink for finance (paled)
+  { light: { inner: ['#F8C4C4', '#FCD4D4'], outer: '#FDF5F5' }, dark: { inner: ['#8A5A5A', '#9A6A6A'], outer: '#2A2020' } },
+  // #F2C2D4 - soft pink for balance
+  { light: { inner: ['#F2C2D4', '#F8D2E4'], outer: '#FDF8FA' }, dark: { inner: ['#8A6A7A', '#9A7A8A'], outer: '#2A2025' } },
+  // #D97EB0 - vibrant pink for live news
+  { light: { inner: ['#E9A8CB', '#F0B8D8'], outer: '#FDF0F7' }, dark: { inner: ['#9A5080', '#AA6090'], outer: '#2A1825' } },
+  // #9D7CA6 - purple for live news (alternating)
+  { light: { inner: ['#C4A8CB', '#D0B8D8'], outer: '#F8F0FC' }, dark: { inner: ['#6A5080', '#7A6090'], outer: '#201825' } },
+];
+
+// Map tags/categories to specific color palettes
+// 0: Breaker Bay (teal) - wellness, health
+// 1: Opal (sage) - nature, environment
+// 2: Blue Bayoux (blue) - tech, business
+// 3: #037F8C (cyan) - motivation
+// 4: Flush Mahogany (red) - creativity
+// 5: Pearl Bush (cream) - lifestyle, food
+// 6: #d48384 (dusty rose) - goals
+// 7: Burnt Sienna (orange) - growth
+// 8: #8FA69F (sage grey) - live
+// 9: #F2A2A2 (light pink) - finance
+// 10: #F2C2D4 (soft pink) - balance
+const TAG_TO_PALETTE_INDEX: Record<string, number> = {
+  // Breaker Bay (teal) - wellness, health
+  wellness: 0,
+  health: 0,
+  fitness: 0,
+  // Opal (sage) - nature, environment
+  nature: 1,
+  environment: 1,
+  sustainability: 1,
+  // Blue Bayoux (blue) - tech, business
+  productivity: 2,
+  business: 2,
+  technology: 2,
+  tech: 2,
+  learning: 2,
+  education: 2,
+  science: 2,
+  // #037F8C (cyan) - motivation
+  motivation: 3,
+  'life tips': 3,
+  lifetips: 3,
+  // Flush Mahogany (red) - creativity
+  creativity: 4,
+  arts: 4,
+  culture: 4,
+  design: 4,
+  // Pearl Bush (cream) - lifestyle, food
+  lifestyle: 5,
+  life: 5,
+  food: 5,
+  cooking: 5,
+  recipes: 5,
+  nutrition: 5,
+  general: 5,
+  news: 5,
+  relationships: 5,
+  // #d48384 (dusty rose) - goals
+  goals: 6,
+  // Burnt Sienna (orange) - growth
+  growth: 7,
+  transformation: 7,
+  innovate: 7,
+  // #D97EB0 (vibrant pink) - live
+  live: 11,
+  // #F2A2A2 (light pink) - finance
+  finance: 9,
+  // #F2C2D4 (soft pink) - balance
+  balance: 10,
+};
+
+// Simple hash function for consistent color assignment
+const simpleHash = (str: string): number => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return Math.abs(hash);
+};
+
+// Get card colors based on tag and title for consistent but varied coloring
+// Pass index for alternating colors (e.g., live cards alternate between pink and purple)
+const getCardColors = (tag: string | undefined, title: string | undefined, index?: number): CardColorPalette => {
+  const normalizedTag = (tag || '').toLowerCase().trim();
+
+  // Special handling for "live" tag - alternate between pink (11) and purple (12)
+  if (normalizedTag === 'live' && index !== undefined) {
+    return CARD_COLOR_PALETTES[index % 2 === 0 ? 11 : 12];
+  }
+
+  // First try to match by tag
+  if (normalizedTag && TAG_TO_PALETTE_INDEX[normalizedTag] !== undefined) {
+    return CARD_COLOR_PALETTES[TAG_TO_PALETTE_INDEX[normalizedTag]];
+  }
+
+  // Fall back to hash-based selection using title
+  const hashInput = (title || normalizedTag || 'default').toLowerCase();
+  const hash = simpleHash(hashInput);
+  const paletteIndex = hash % CARD_COLOR_PALETTES.length;
+
+  return CARD_COLOR_PALETTES[paletteIndex];
 };
 
 type HighlightPart = {
@@ -1244,6 +1650,7 @@ export default function HomeScreen(props?: { preview?: boolean }) {
   const colors = getTheme(theme);
   const userProgress = useAppStore(s => s.userProgress);
   const loadProgress = useAppStore(s => s.loadProgress);
+  const words = useAppStore(s => s.words);
   const insets = useSafeAreaInsets();
   const [missionLoading, setMissionLoading] = useState(false);
   const [missionSummary, setMissionSummary] = useState<null | {
@@ -1301,6 +1708,13 @@ export default function HomeScreen(props?: { preview?: boolean }) {
 	  const [showStreakCelebrate, setShowStreakCelebrate] = useState(false);
 	  const countAnim = useRef(new Animated.Value(0)).current;
 	  const [displayCount, setDisplayCount] = useState(0);
+	  // Synonym Match state
+	  const synonymMatchDoneKey = useMemo(() => `@engniter.synonymMatch.done.${todayKey}`, [todayKey]);
+	  const [synonymMatchDone, setSynonymMatchDone] = useState(false);
+	  const [synonymMatchScore, setSynonymMatchScore] = useState<{ score: number; total: number } | null>(null);
+	  const [synonymMatchWords, setSynonymMatchWords] = useState<{ word: string; synonym: string }[]>([]);
+	  const [synonymMatchLoading, setSynonymMatchLoading] = useState(false);
+	  const synonymMatchLoadedFromVault = useRef(false);
 
   const markStoryWordsDoneForToday = useCallback(async () => {
     try {
@@ -1326,6 +1740,53 @@ export default function HomeScreen(props?: { preview?: boolean }) {
       alive = false;
     };
   }, [storyWordsDoneKey]);
+
+  // Load synonym match completion flag
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(synonymMatchDoneKey);
+        if (!alive) return;
+        setSynonymMatchDone(raw === '1');
+      } catch {
+        if (!alive) return;
+        setSynonymMatchDone(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [synonymMatchDoneKey]);
+
+  // Load synonym match words from vault (try to replace defaults with vault words)
+  useEffect(() => {
+    if (synonymMatchDone) return;
+    if (synonymMatchLoadedFromVault.current) return;
+    if (!words || words.length === 0) return;
+
+    synonymMatchLoadedFromVault.current = true;
+
+    // Simple direct approach - get words from daily and phrasal folders
+    const dailyWords = words.filter(w => w.folderId === 'folder-daily-default');
+    const phrasalWords = words.filter(w => w.folderId === 'folder-phrasal-default');
+    const allSourceWords = [...dailyWords, ...phrasalWords];
+
+    // Shuffle for variety
+    const shuffled = [...allSourceWords].sort(() => Math.random() - 0.5);
+
+    const pairs: { word: string; synonym: string }[] = [];
+    for (const w of shuffled) {
+      if (pairs.length >= 4) break;
+      const syn = PHRASAL_VERB_SYNONYMS[w.word.toLowerCase()];
+      if (syn) {
+        pairs.push({ word: w.word, synonym: syn });
+      }
+    }
+
+    if (pairs.length >= 4) {
+      setSynonymMatchWords(pairs);
+    }
+    // If not enough pairs, keep the default fallback words
+  }, [synonymMatchDone, words.length]);
 
   useEffect(() => {
     storyViewerVisibleRef.current = storyViewerVisible;
@@ -1575,8 +2036,20 @@ export default function HomeScreen(props?: { preview?: boolean }) {
 	  const [newsOverrideList, setNewsOverrideList] = useState<NewsItem[] | null>(null);
 	  const [newsList, setNewsList] = useState<NewsItem[]>([]);
 	  const [newsStatus, setNewsStatus] = useState<string>('');
-	  const [productivityArticles, setProductivityArticles] = useState<NewsItem[]>([]);
+	  // Initialize with preloaded articles for instant display (no delay)
+	  const [productivityArticles, setProductivityArticles] = useState<NewsItem[]>(() => _preloadedProductivityArticles);
 	  const productivityFetchedRef = useRef(false);
+
+	  // Ensure preloaded productivity articles are applied immediately
+	  useEffect(() => {
+	    if (_productivityPreloadPromise) {
+	      _productivityPreloadPromise.then(articles => {
+	        if (articles.length > 0 && productivityArticles.length === 0) {
+	          setProductivityArticles(articles);
+	        }
+	      });
+	    }
+	  }, []);
 	  // Use live news when configured; disable cache read/write in dev to avoid loops
 	  const newsConfigured = Boolean(NEWS_API_URL || BACKEND_BASE_URL || NEWS_API_KEY);
 	  const [newsMenuOpen, setNewsMenuOpen] = useState(false);
@@ -1587,17 +2060,22 @@ export default function HomeScreen(props?: { preview?: boolean }) {
   const heroScrollX = useRef(new Animated.Value(0)).current;
   const [newsCardWidth, setNewsCardWidth] = useState(0);
   const NEWS_CAROUSEL_HORIZONTAL_PADDING = 16;
+  const closeNewsModalRef = useRef<() => void>(() => {});
   const newsPan = useRef(
     PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 6,
+      onPanResponderGrant: () => {
+        newsDrag.setValue(0);
+      },
       onPanResponderMove: (_, gestureState) => {
         const dy = Math.max(0, gestureState.dy);
         newsDrag.setValue(dy);
       },
       onPanResponderRelease: (_, gestureState) => {
         const dy = Math.max(0, gestureState.dy);
-        if (dy > 120) {
-          closeNewsModal();
+        if (dy > 80) {
+          closeNewsModalRef.current();
         } else {
           Animated.spring(newsDrag, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
         }
@@ -1609,11 +2087,60 @@ export default function HomeScreen(props?: { preview?: boolean }) {
   ).current;
   const [newsModalArticle, setNewsModalArticle] = useState<NewsItem | null>(null);
   const [modalHighlightParts, setModalHighlightParts] = useState<HighlightPart[] | null>(null);
+  // Vocab preview before reading
+  const [vocabPreviewVisible, setVocabPreviewVisible] = useState(false);
+  const [vocabPreviewArticle, setVocabPreviewArticle] = useState<NewsItem | null>(null);
+  const [vocabPreviewIndex, setVocabPreviewIndex] = useState(0);
+  const [vocabPreviewFlipped, setVocabPreviewFlipped] = useState(false);
+  const [vocabPreviewLoading, setVocabPreviewLoading] = useState(false);
+  const vocabCardAnim = useRef(new Animated.Value(0)).current;
+  // Article reader customization
+  const [articleFontSize, setArticleFontSize] = useState(17);
+  const [articleBgColor, setArticleBgColor] = useState<'default' | 'sepia' | 'dark' | 'black'>('default');
+  const [articleSettingsOpen, setArticleSettingsOpen] = useState(false);
+  const ARTICLE_SETTINGS_KEY = '@engniter.article.settings';
+  // Load article settings from storage
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(ARTICLE_SETTINGS_KEY);
+        if (raw) {
+          const settings = JSON.parse(raw);
+          if (settings.fontSize) setArticleFontSize(settings.fontSize);
+          if (settings.bgColor) setArticleBgColor(settings.bgColor);
+        }
+      } catch {}
+    })();
+  }, []);
+  // Save article settings when changed
+  const saveArticleSettings = async (fontSize: number, bgColor: string) => {
+    try {
+      await AsyncStorage.setItem(ARTICLE_SETTINGS_KEY, JSON.stringify({ fontSize, bgColor }));
+    } catch {}
+  };
+  const getArticleBgStyle = () => {
+    switch (articleBgColor) {
+      case 'sepia': return { backgroundColor: '#F5F0E1' };
+      case 'dark': return { backgroundColor: '#1E3A5F' };
+      case 'black': return { backgroundColor: '#0D0D0D' };
+      default: return theme === 'light' ? { backgroundColor: '#FFFFFF' } : { backgroundColor: '#1E1E1E' };
+    }
+  };
+  const getArticleTextColor = () => {
+    switch (articleBgColor) {
+      case 'sepia': return '#3D3D3D';
+      case 'dark': return '#E5E7EB';
+      case 'black': return '#E5E7EB';
+      default: return theme === 'light' ? '#374151' : '#D1D5DB';
+    }
+  };
   // Quiz state
   const [quizStarted, setQuizStarted] = useState(false);
   const [quizCurrentQ, setQuizCurrentQ] = useState(0);
   const [quizAnswers, setQuizAnswers] = useState<(number | null)[]>([]);
   const [quizShowResult, setQuizShowResult] = useState(false);
+  // Vocab translations toggle in article
+  const [showVocabTranslations, setShowVocabTranslations] = useState(true);
   const quizOptionAnims = useRef([new Animated.Value(0), new Animated.Value(0), new Animated.Value(0), new Animated.Value(0)]).current;
   const quizCorrectAnim = useRef(new Animated.Value(0)).current;
   const quizWrongAnim = useRef(new Animated.Value(0)).current;
@@ -1778,28 +2305,35 @@ export default function HomeScreen(props?: { preview?: boolean }) {
 	      if (unique.length >= 12) break;
 	    }
 
-      // Only use AI-generated productivity articles (skip hardcoded fallbacks to avoid flash)
-      const prodArticles = productivityArticles;
-      const apiArticles = [...unique]; // Save API articles
+      // Mix news and productivity articles (interleaved)
+      const prodArticles = [...productivityArticles];
+      const apiArticles = [...unique]; // Save API/news articles
       const combinedTitles = new Set<string>();
       const combined: NewsItem[] = [];
 
-      // First, add productivity articles (AI-generated or fallback)
-      for (const prodArticle of prodArticles) {
-        const title = (prodArticle.title || '').toLowerCase();
-        if (!combinedTitles.has(title)) {
-          combined.push(prodArticle);
-          combinedTitles.add(title);
+      // Interleave: alternate between news and productivity
+      let newsIdx = 0;
+      let prodIdx = 0;
+      while (combined.length < 12 && (newsIdx < apiArticles.length || prodIdx < prodArticles.length)) {
+        // Add a news article
+        while (newsIdx < apiArticles.length && combined.length < 12) {
+          const article = apiArticles[newsIdx++];
+          const title = (article.title || '').toLowerCase();
+          if (!combinedTitles.has(title)) {
+            combined.push(article);
+            combinedTitles.add(title);
+            break; // Move to productivity
+          }
         }
-      }
-
-      // Then append any API articles that passed the filter
-      for (const apiArticle of apiArticles) {
-        if (combined.length >= 12) break;
-        const title = (apiArticle.title || '').toLowerCase();
-        if (!combinedTitles.has(title)) {
-          combined.push(apiArticle);
-          combinedTitles.add(title);
+        // Add a productivity article
+        while (prodIdx < prodArticles.length && combined.length < 12) {
+          const article = prodArticles[prodIdx++];
+          const title = (article.title || '').toLowerCase();
+          if (!combinedTitles.has(title)) {
+            combined.push(article);
+            combinedTitles.add(title);
+            break; // Move back to news
+          }
         }
       }
 
@@ -2361,16 +2895,18 @@ Avoid fiction and avoid specific unverifiable claims.
 
   // Fetch AI-generated productivity articles from Supabase function
   const fetchProductivityArticles = useCallback(async () => {
-    // First, try to load from local cache immediately to avoid flicker
-    // Using v3 cache key to force refresh for new caching logic
-    const PROD_CACHE_KEY = '@engniter.productivity.articles.v3';
+    // Cache already loaded at module level for instant display
+    // Just check if we need to refresh from API
     let forceRefresh = false;
     try {
       const cached = await AsyncStorage.getItem(PROD_CACHE_KEY);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed?.articles) && parsed.articles.length > 0) {
-          setProductivityArticles(parsed.articles);
+          // Update state if not already set (module preload should have done this)
+          if (productivityArticles.length === 0) {
+            setProductivityArticles(parsed.articles);
+          }
 
           // Check if cache is from today (UTC) and less than 12 hours old
           const fetchedAt = parsed.fetchedAt ? new Date(parsed.fetchedAt) : null;
@@ -2474,24 +3010,11 @@ Avoid fiction and avoid specific unverifiable claims.
       NEWS_API_URL && NEWS_API_URL.trim().length > 0
         ? NEWS_API_URL.trim()
         : `${backendBase || 'http://localhost:4000'}/api/news`;
-	    // Check if local cache is stale (older than 24 hours) or missing and force refresh if so
-	    let forceRefresh = false;
-	    try {
-	      const lastFetched = await AsyncStorage.getItem('@engniter.news.lastFetchedAt');
-	      if (!lastFetched) {
-	        // No timestamp means cache was cleared or first run - force refresh
-	        forceRefresh = true;
-	      } else {
-	        const fetchedTime = new Date(lastFetched).getTime();
-	        const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
-	        if (Date.now() - fetchedTime > TWENTY_FOUR_HOURS) {
-	          forceRefresh = true;
-	        }
-	      }
-	    } catch {
-	      forceRefresh = true; // On error, force refresh to be safe
-	    }
-	    const targetUrl = forceRefresh ? `${baseTargetUrl}${baseTargetUrl.includes('?') ? '&' : '?'}refresh=1` : baseTargetUrl;
+	    // Let the server handle caching - it has its own 24-hour database cache.
+	    // Only force refresh if user explicitly requests it (e.g., pull-to-refresh).
+	    // This avoids slow full refreshes on every app restart when local AsyncStorage is empty.
+	    const forceRefresh = false; // Server-side cache handles freshness
+	    const targetUrl = baseTargetUrl;
 	    const topics = newsPrefs.topics && newsPrefs.topics.length ? newsPrefs.topics : NEWS_DEFAULT_TOPICS;
 	    const include = buildNewsIncludeQuery(topics);
 	    const exclude = newsPrefs.hideSports ? buildNewsExcludeQuery() : '';
@@ -2511,7 +3034,8 @@ Avoid fiction and avoid specific unverifiable claims.
 	      setNewsStatus('Loading live news…');
       const controller = new AbortController();
       // Allow more time for AI-expanded responses coming from the function.
-      const timer = setTimeout(() => controller.abort(), 20000);
+      // Increased to 60s since function may need to fetch external news + AI expand
+      const timer = setTimeout(() => controller.abort(), 60000);
       let res: Response | null = null;
 	      try {
 	        // Try POST first to force a fresh refresh on the Supabase function
@@ -2724,11 +3248,13 @@ Avoid fiction and avoid specific unverifiable claims.
 	  useEffect(() => {
 	    if (!newsConfigured) return;
 	    if (!newsPrefsFromStorageRef.current) return;
+      console.log('[news] newsPrefs changed, scheduling refresh in 650ms');
 	    try {
 	      if (newsPrefsRefreshTimerRef.current) clearTimeout(newsPrefsRefreshTimerRef.current);
 	    } catch {}
 	    newsPrefsRefreshTimerRef.current = setTimeout(() => {
-	      refreshNewsFromApi().catch(() => {});
+        console.log('[news] newsPrefs refresh triggered');
+	      refreshNewsFromApi().catch((e) => console.log('[news] newsPrefs refresh error:', e));
 	    }, 650);
 	    return () => {
 	      try {
@@ -2738,24 +3264,35 @@ Avoid fiction and avoid specific unverifiable claims.
 	  }, [newsPrefs, newsConfigured, refreshNewsFromApi]);
 
   useEffect(() => {
-    if (newsFetchStarted.current) return;
+    if (newsFetchStarted.current) {
+      console.log('[news] Skipping fetch - already started');
+      return;
+    }
     newsFetchStarted.current = true;
+    console.log('[news] Starting initial news fetch...');
     (async () => {
       // 1) Show any cached payload immediately so the UI is never empty
 	      try {
 	        const cached = await loadCachedNews();
+          console.log('[news] Local cache result:', cached ? `${cached.articles.length} articles` : 'null');
 	        if (cached) {
 	          setNewsOverrideList(cached.articles);
 	          setNewsList(cached.articles);
 	          setNewsStatus(cached.status || 'Live feed (cached)');
 	          scheduleNewsHookPrefetch(cached.articles);
 	        }
-	      } catch {}
+	      } catch (e) {
+          console.log('[news] Cache load error:', e);
+        }
       // 2) Always ask the backend for the latest feed; if it has fresher
       //    data than the cache, it will be returned and replace the list.
       try {
+        console.log('[news] Fetching from API...');
         await refreshNewsFromApi();
-      } catch {}
+        console.log('[news] API fetch completed');
+      } catch (e) {
+        console.log('[news] API fetch error:', e);
+      }
     })();
 	  }, [refreshNewsFromApi, scheduleNewsHookPrefetch]);
 
@@ -3210,10 +3747,18 @@ Avoid fiction and avoid specific unverifiable claims.
     updateStoredLevel();
   }, []);
 
+  // Listen for level selection events from placement/level-select screens
+  useEffect(() => {
+    const listener = DeviceEventEmitter.addListener('LEVEL_SELECTED', (level: string) => {
+      if (level) setStoredLevel(level);
+    });
+    return () => listener.remove();
+  }, []);
+
   // Organized sections with softer colors
   const accent = '#187486';
-  // Use theme background (light: #F8F8F8, dark: #1E1E1E)
-  const background = theme === 'light' ? '#F8F8F8' : '#1E1E1E';
+  /// Use theme background (light: #F8F9FB, dark: #1E1E1E)
+  const background = theme === 'light' ? '#F8F9FB' : '#1E1E1E';
   const homeIcons = {
     vault: require('../assets/homepageicons/11.png'),
     quiz: require('../assets/homepageicons/12.png'),
@@ -3498,7 +4043,7 @@ Avoid fiction and avoid specific unverifiable claims.
     );
   };
 
-  const openNewsModal = (article: NewsItem) => {
+  const openNewsModalDirect = (article: NewsItem) => {
     setNewsModalArticle(article);
     setNewsModalVisible(true);
     newsModalAnim.setValue(0);
@@ -3524,7 +4069,157 @@ Avoid fiction and avoid specific unverifiable claims.
     }
   };
 
+  // Get language display name
+  const getLanguageName = (code: string): string => {
+    const names: Record<string, string> = {
+      es: 'Spanish', fr: 'French', de: 'German', it: 'Italian', pt: 'Portuguese',
+      ru: 'Russian', zh: 'Chinese', ja: 'Japanese', ko: 'Korean', ar: 'Arabic',
+      tr: 'Turkish', uz: 'Uzbek', hi: 'Hindi', bn: 'Bengali', vi: 'Vietnamese',
+      th: 'Thai', pl: 'Polish', nl: 'Dutch', sv: 'Swedish', cs: 'Czech',
+      el: 'Greek', he: 'Hebrew', id: 'Indonesian', ms: 'Malay', ro: 'Romanian',
+      uk: 'Ukrainian', hu: 'Hungarian', fi: 'Finnish', da: 'Danish', no: 'Norwegian',
+      ak: 'Akan', tw: 'Twi', ee: 'Ewe', ha: 'Hausa', yo: 'Yoruba', ig: 'Igbo',
+      sw: 'Swahili', am: 'Amharic', zu: 'Zulu', xh: 'Xhosa', af: 'Afrikaans',
+    };
+    return names[code] || code;
+  };
+
+  // Enrich vocab with examples and synonyms for preview
+  const enrichVocabForPreview = async (
+    vocab: { word: string; definition: string; translation?: string }[],
+    targetLang: string
+  ): Promise<{ word: string; definition: string; translation?: string; example?: string; synonyms?: string }[]> => {
+    const langName = getLanguageName(targetLang);
+
+    try {
+      const enriched = await Promise.all(
+        vocab.map(async (item) => {
+          if (!item.word) return item;
+          try {
+            // Get translation
+            const t = await TranslationService.translate(item.word, targetLang);
+            const translation = t?.translation?.trim() || '';
+
+            // Generate example and synonyms using AI in one call
+            let example = '';
+            let synonyms = '';
+
+            if (AI_PROXY_URL) {
+              try {
+                const response = await aiProxyService.complete({
+                  model: 'gpt-4o-mini',
+                  messages: [
+                    {
+                      role: 'user',
+                      content: `For the English word "${item.word}" (meaning: ${item.definition}):
+
+1. Give me 2 English synonyms (just the words, comma-separated)
+2. Write a simple example sentence in ${langName} that uses the ${langName} equivalent of this word
+
+Format your response EXACTLY like this:
+SYNONYMS: word1, word2
+EXAMPLE: [sentence in ${langName}]`
+                    }
+                  ],
+                  maxTokens: 150,
+                });
+
+                const content = response?.content?.trim() || '';
+
+                // Parse the response
+                const synonymsMatch = content.match(/SYNONYMS:\s*(.+?)(?:\n|$)/i);
+                const exampleMatch = content.match(/EXAMPLE:\s*(.+?)(?:\n|$)/i);
+
+                if (synonymsMatch) synonyms = synonymsMatch[1].trim();
+                if (exampleMatch) example = exampleMatch[1].trim();
+              } catch (e) {
+                console.log('AI enrichment error:', e);
+              }
+            }
+
+            return { ...item, translation, example, synonyms };
+          } catch {
+            return item;
+          }
+        })
+      );
+      return enriched;
+    } catch {
+      return vocab;
+    }
+  };
+
+  // Show vocab preview before opening article
+  const openNewsModal = async (article: NewsItem) => {
+    const vocabWords = article.vocab?.slice(0, 5) || [];
+    if (vocabWords.length >= 3) {
+      // Show preview immediately, then enrich with translations
+      setVocabPreviewArticle(article);
+      setVocabPreviewIndex(0);
+      setVocabPreviewFlipped(false);
+      vocabCardAnim.setValue(0);
+      setVocabPreviewVisible(true);
+
+      // Enrich vocab with translations, examples, and synonyms in background
+      const targetLang = primaryLang && primaryLang !== 'en' ? primaryLang : '';
+      if (targetLang) {
+        setVocabPreviewLoading(true);
+        try {
+          const enrichedVocab = await enrichVocabForPreview(vocabWords, targetLang);
+          setVocabPreviewArticle(prev => prev ? { ...prev, vocab: [...enrichedVocab, ...(prev.vocab?.slice(5) || [])] } : prev);
+        } catch {
+          // Use original vocab if enrichment fails
+        } finally {
+          setVocabPreviewLoading(false);
+        }
+      }
+    } else {
+      // Open article directly if not enough vocab
+      openNewsModalDirect(article);
+    }
+  };
+
+  const vocabPreviewNext = () => {
+    const vocabWords = vocabPreviewArticle?.vocab?.slice(0, 5) || [];
+    if (vocabPreviewIndex < vocabWords.length - 1) {
+      // Animate out
+      Animated.timing(vocabCardAnim, { toValue: 1, duration: 150, useNativeDriver: true }).start(() => {
+        setVocabPreviewIndex(prev => prev + 1);
+        setVocabPreviewFlipped(false);
+        vocabCardAnim.setValue(0);
+      });
+    } else {
+      // All words reviewed, open article
+      const articleToOpen = vocabPreviewArticle;
+      setVocabPreviewVisible(false);
+      setVocabPreviewArticle(null);
+      setVocabPreviewIndex(0);
+      setVocabPreviewFlipped(false);
+      setVocabPreviewLoading(false);
+      if (articleToOpen) {
+        setTimeout(() => openNewsModalDirect(articleToOpen), 100);
+      }
+    }
+  };
+
+  const vocabPreviewSkip = () => {
+    const articleToOpen = vocabPreviewArticle;
+    setVocabPreviewVisible(false);
+    setVocabPreviewArticle(null);
+    setVocabPreviewIndex(0);
+    setVocabPreviewFlipped(false);
+    setVocabPreviewLoading(false);
+    if (articleToOpen) {
+      setTimeout(() => openNewsModalDirect(articleToOpen), 100);
+    }
+  };
+
+  const vocabPreviewFlip = () => {
+    setVocabPreviewFlipped(prev => !prev);
+  };
+
   const closeNewsModal = () => {
+    setArticleSettingsOpen(false);
     Animated.timing(newsModalAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => {
       newsDrag.setValue(0);
       setNewsModalVisible(false);
@@ -3534,8 +4229,15 @@ Avoid fiction and avoid specific unverifiable claims.
       setQuizCurrentQ(0);
       setQuizAnswers([]);
       setQuizShowResult(false);
+      // Reset vocab preview state
+      setVocabPreviewArticle(null);
+      setVocabPreviewIndex(0);
+      setVocabPreviewFlipped(false);
+      setVocabPreviewLoading(false);
     });
   };
+  // Keep ref updated for PanResponder
+  closeNewsModalRef.current = closeNewsModal;
 
   // Quiz helper functions
   const resetQuizAnims = () => {
@@ -3641,6 +4343,23 @@ Avoid fiction and avoid specific unverifiable claims.
 
   return (
     <SafeAreaView edges={['left','right']} style={[styles.container, { backgroundColor: background }] }>
+      {/* Dotted background pattern */}
+      <View style={styles.dotContainer} pointerEvents="none">
+        {Array.from({ length: 40 }).map((_, rowIndex) => (
+          <View key={rowIndex} style={styles.dotRow}>
+            {Array.from({ length: 15 }).map((_, colIndex) => (
+              <View
+                key={colIndex}
+                style={[
+                  styles.dot,
+                  { backgroundColor: theme === 'light' ? '#D4D4D4' : '#333333' }
+                ]}
+              />
+            ))}
+          </View>
+        ))}
+      </View>
+
       {/* Fixed top bar; background becomes translucent only after scrolling */}
       <TopStatusPanel
         floating
@@ -3651,7 +4370,7 @@ Avoid fiction and avoid specific unverifiable claims.
       />
 
       <ScrollView
-        style={[styles.scrollView, { backgroundColor: background }]}
+        style={[styles.scrollView, { backgroundColor: 'transparent' }]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
@@ -3669,18 +4388,11 @@ Avoid fiction and avoid specific unverifiable claims.
         {/* Header is fixed above — list starts below */}
 
 	        {!!storyWords.length && (
-	          <View style={[styles.storyWordsCard, theme === 'light' && styles.storyWordsCardLight, storyWordsDoneForToday && { paddingTop: 40 }]}>
-	            {/* Gradient background */}
-	            <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
-	              <Defs>
-	                <SvgLinearGradient id="storyWordsGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-	                  <Stop offset="0%" stopColor={theme === 'light' ? '#FFF7ED' : '#1C1917'} stopOpacity={1} />
-	                  <Stop offset="50%" stopColor={theme === 'light' ? '#FFEDD5' : '#292524'} stopOpacity={1} />
-	                  <Stop offset="100%" stopColor={theme === 'light' ? '#FEF3C7' : '#1C1917'} stopOpacity={1} />
-	                </SvgLinearGradient>
-	              </Defs>
-	              <Rect x={0} y={0} width="100%" height="100%" fill="url(#storyWordsGrad)" rx={16} ry={16} />
-	            </Svg>
+	          <View style={[
+	            styles.storyWordsCard,
+	            theme === 'light' && styles.storyWordsCardLight,
+	            storyWordsDoneForToday && { paddingTop: 40 },
+	          ]}>
 	            <View style={styles.missionHeader}>
 	              <View style={{ flex: 1 }}>
 	                <Text style={[styles.missionTitle, theme === 'light' && styles.missionTitleLight]}>
@@ -3690,46 +4402,42 @@ Avoid fiction and avoid specific unverifiable claims.
 	                  {storyWordsDoneForToday ? 'Done for today.' : '5 words · 5 questions'}
 	                </Text>
 	                <View style={styles.missionPillsRow}>
-	                  <View style={styles.timePill}>
-	                    <Clock size={14} color={'#0D3B4A'} />
-	                    <Text style={styles.timePillText}>≈ 3 min</Text>
-	                  </View>
-	                  {storyWordsDoneForToday ? (
-	                    <View
-	                      style={[
-	                        styles.streakPill,
-	                        { backgroundColor: 'rgba(67,127,118,0.15)' },
-	                      ]}
-	                    >
-	                      <Check size={12} color="#437F76" strokeWidth={3} />
-	                      <Text style={[styles.streakPillText, { color: '#437F76', marginLeft: 4 }]}>Completed</Text>
-	                    </View>
-	                  ) : (
-	                    <View
-	                      style={[
-	                        styles.streakPill,
-	                        {
-	                          backgroundColor:
-	                            theme === 'light' ? 'rgba(248,176,112,0.16)' : 'rgba(248,176,112,0.12)',
-	                        },
-	                      ]}
-	                    >
-	                      <Text style={[styles.streakPillText, { color: '#F8B070' }]}>Daily exercise</Text>
-	                    </View>
-	                  )}
-	                </View>
-	              </View>
-		              {storyWordsDoneForToday ? (
+                  <View style={[styles.timePill, theme === 'light' && styles.timePillLight]}>
+                    <Clock size={14} color={theme === 'light' ? '#0D3B4A' : '#4ED9CB'} />
+                    <Text style={[styles.timePillText, theme === 'light' && styles.timePillTextLight]}>≈ 3 min</Text>
+                  </View>
+                  {storyWordsDoneForToday ? (
+                    <View
+                      style={[
+                        styles.streakPill,
+                        { backgroundColor: 'rgba(78,217,203,0.18)' },
+                      ]}
+                    >
+                      <Check size={12} color="#4ED9CB" strokeWidth={3} />
+                      <Text style={[styles.streakPillText, { color: '#4ED9CB', marginLeft: 4 }]}>Completed</Text>
+                    </View>
+                  ) : (
+                    <View
+                      style={[
+                        styles.streakPill,
+                        {
+                          backgroundColor:
+                            theme === 'light' ? 'rgba(242,94,134,0.16)' : 'rgba(242,94,134,0.12)',
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.streakPillText, { color: '#F25E86' }]}>Daily exercise</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+		              {storyWordsDoneForToday && (
 		                <LottieView
 		                  source={require('../assets/lottie/storywords/donefortoday.json')}
 		                  autoPlay
 		                  loop={false}
 		                  style={{ position: 'absolute', right: -20, top: -40, width: 150, height: 110, transform: [{ scaleX: -1 }] }}
 		                />
-		              ) : (
-		                <Text style={[styles.storyViewedLabel, theme === 'light' && styles.storyViewedLabelLight]}>
-		                  {storyViewedCount}/{storyWords.length}
-		                </Text>
 	              )}
 	            </View>
 
@@ -3738,36 +4446,72 @@ Avoid fiction and avoid specific unverifiable claims.
 	                <Text style={[styles.missionProgressText, theme === 'light' && styles.missionProgressTextLight]}>
 	                  {`${storyViewedCount}/${storyWords.length} viewed`}
 	                </Text>
-	                <View style={styles.missionProgressBar}>
-	                  <View style={[styles.missionProgressFill, { width: `${Math.round(storyProgressRatio * 100)}%` }]} />
-	                </View>
-	              </View>
-	            )}
+                <View style={[styles.missionProgressBar, theme === 'light' && styles.missionProgressBarLight]}>
+                  <View style={[styles.missionProgressFill, { width: `${Math.round(storyProgressRatio * 100)}%` }]} />
+                </View>
+              </View>
+            )}
 
-		            <View style={styles.missionActions}>
-		              <TouchableOpacity
-		                activeOpacity={0.9}
-		                style={[styles.missionPrimary, { flex: 1, alignItems: 'center' }]}
-		                onPress={() => openStoryViewer(storyStartIndex)}
-	              >
-	                <Text style={styles.missionPrimaryText}>{storyCtaLabel}</Text>
-	              </TouchableOpacity>
-	              <TouchableOpacity
-	                activeOpacity={0.9}
-	                style={[
-	                  styles.missionSecondary,
-	                  theme === 'light' && styles.missionSecondaryLight,
-	                  { flex: 1, alignItems: 'center' },
-	                ]}
-	                onPress={storyWordsDoneForToday ? () => router.push('/quiz/learn') : openStoryQuiz}
-	              >
-	                <Text style={[styles.missionSecondaryText, theme === 'light' && styles.missionSecondaryTextLight]}>
-	                  {storyWordsDoneForToday ? 'Continue' : 'Quiz'}
-	                </Text>
-	              </TouchableOpacity>
-	            </View>
-	          </View>
-	        )}
+            <View style={styles.missionActions}>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={[styles.storyWordsCta, { alignItems: 'center' }]}
+                onPress={() => openStoryViewer(storyStartIndex)}
+              >
+                <Text style={styles.storyWordsCtaText}>{storyCtaLabel}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Synonym Match Exercise */}
+        {!synonymMatchDone && !synonymMatchLoading && synonymMatchWords.length > 0 && (
+          <View style={[styles.synonymMatchCard, theme === 'light' && styles.synonymMatchCardLight]}>
+            <View style={styles.synonymMatchHeader}>
+              <Text style={[styles.synonymMatchTitle, theme === 'light' && styles.synonymMatchTitleLight]}>
+                Match Synonyms
+              </Text>
+              <Text style={[styles.synonymMatchSubtitle, theme === 'light' && styles.synonymMatchSubtitleLight]}>
+                Tap cards to match words with their synonyms
+              </Text>
+            </View>
+            <SynonymMatch
+              words={synonymMatchWords}
+              isDarkMode={theme === 'dark'}
+              onComplete={async (score, total) => {
+                setSynonymMatchScore({ score, total });
+                setSynonymMatchDone(true);
+                try {
+                  await AsyncStorage.setItem(synonymMatchDoneKey, '1');
+                } catch {}
+              }}
+            />
+          </View>
+        )}
+
+        {/* Synonym Match Loading */}
+        {!synonymMatchDone && synonymMatchLoading && (
+          <View style={[styles.synonymMatchCard, theme === 'light' && styles.synonymMatchCardLight]}>
+            <View style={styles.synonymMatchHeader}>
+              <Text style={[styles.synonymMatchTitle, theme === 'light' && styles.synonymMatchTitleLight]}>
+                Match Synonyms
+              </Text>
+              <Text style={[styles.synonymMatchSubtitle, theme === 'light' && styles.synonymMatchSubtitleLight]}>
+                Loading words from your vault...
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Synonym Match Completed */}
+        {synonymMatchDone && synonymMatchScore && (
+          <View style={[styles.synonymMatchDoneCard, theme === 'light' && styles.synonymMatchDoneCardLight]}>
+            <Check size={20} color="#10B981" />
+            <Text style={[styles.synonymMatchDoneText, theme === 'light' && styles.synonymMatchDoneTextLight]}>
+              Synonym Match Complete! Score: {synonymMatchScore.score}/{synonymMatchScore.total}
+            </Text>
+          </View>
+        )}
 
         {/* Daily News */}
         <View
@@ -3794,7 +4538,7 @@ Avoid fiction and avoid specific unverifiable claims.
 		          {/* Magazine-style article layout */}
 
 	          {carouselNews.length > 0 && (
-            <View style={{ marginTop: 12, paddingHorizontal: 16 }}>
+            <View style={{ marginTop: 12, paddingHorizontal: 8 }}>
               {/* Featured Hero Article - Compact overlay style */}
               {carouselNews[0] && (
                 <TouchableOpacity
@@ -3812,8 +4556,8 @@ Avoid fiction and avoid specific unverifiable claims.
                       source={{ uri: carouselNews[0].image || fallbackNewsImage }}
                       style={styles.magazineHeroImage}
                     />
-                    {/* Gradient overlay for text readability */}
-                    <View style={styles.magazineHeroGradient} />
+                    {/* Dark gradient overlay for text readability */}
+                    <View style={styles.magazineHeroGradientOverlay} />
                     {/* Content positioned at bottom of image */}
                     <View style={styles.magazineHeroOverlayContent}>
                       <View style={[styles.magazineTag, { marginBottom: 8, backgroundColor: getTagColor(carouselNews[0].tag).bg }]}>
@@ -3824,6 +4568,7 @@ Avoid fiction and avoid specific unverifiable claims.
                       <Text
                         style={[
                           styles.magazineHeroTitle,
+                          { color: '#FFFFFF' },
                           newsFontScale === 2 && { fontSize: 20 },
                           newsFontScale === 0 && { fontSize: 16 },
                         ]}
@@ -3834,8 +4579,8 @@ Avoid fiction and avoid specific unverifiable claims.
                       {!!carouselNews[0].vocab?.length && (
                         <View style={styles.magazineVocabRow}>
                           {carouselNews[0].vocab.slice(0, 3).map((v, i) => (
-                            <View key={`hero-vocab-${i}`} style={styles.magazineVocabChip}>
-                              <Text style={styles.magazineVocabText}>{v.word}</Text>
+                            <View key={`hero-vocab-${i}`} style={[styles.magazineVocabChip, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                              <Text style={[styles.magazineVocabText, { color: '#FFFFFF' }]}>{v.word}</Text>
                             </View>
                           ))}
                         </View>
@@ -3848,147 +4593,132 @@ Avoid fiction and avoid specific unverifiable claims.
               {/* Two Medium Cards Side by Side */}
               {carouselNews.length > 1 && (
                 <View style={styles.magazineDualRow}>
-                  {carouselNews.slice(1, 3).map((item, idx) => (
-                    <TouchableOpacity
-                      key={`dual-${idx}`}
-                      activeOpacity={0.9}
-                      onPress={() => openNewsModal(item)}
-                      style={styles.magazineDualCardWrap}
-                    >
-                      <View
-                        style={[
-                          styles.magazineDualCard,
-                          theme === 'light' && styles.magazineDualCardLight,
-                        ]}
+                  {carouselNews.slice(1, 3).map((item, idx) => {
+                    const palette = getCardColors(item.tag, item.title, idx + 1);
+                    const accentColor = theme === 'light' ? palette.light.inner[0] : palette.dark.inner[0];
+                    return (
+                      <TouchableOpacity
+                        key={`dual-${idx}`}
+                        activeOpacity={0.9}
+                        onPress={() => openNewsModal(item)}
+                        style={[styles.magazineDualCardWrap, {
+                          shadowColor: '#000',
+                          shadowOpacity: 0.08,
+                          shadowRadius: 8,
+                          shadowOffset: { width: 0, height: 2 },
+                          elevation: 3,
+                        }]}
                       >
-                        {/* Gradient background */}
-                        {(() => {
-                          const cardColors = [
-                            { light: ['#FDF2F8', '#FCE7F3'], dark: ['#2D1F2B', '#1F1523'] }, // Rose
-                            { light: ['#F0FDFA', '#CCFBF1'], dark: ['#1A2E2A', '#0F2620'] }, // Teal
-                          ];
-                          const c = cardColors[idx % cardColors.length];
-                          return (
-                            <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
-                              <Defs>
-                                <SvgLinearGradient id={`dualGrad-${idx}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                                  <Stop offset="0%" stopColor={theme === 'light' ? c.light[0] : c.dark[0]} stopOpacity={1} />
-                                  <Stop offset="100%" stopColor={theme === 'light' ? c.light[1] : c.dark[1]} stopOpacity={1} />
-                                </SvgLinearGradient>
-                              </Defs>
-                              <Rect x={0} y={0} width="100%" height="100%" fill={`url(#dualGrad-${idx})`} rx={16} ry={16} />
-                            </Svg>
-                          );
-                        })()}
-                        <Image
-                          source={{ uri: item.image || fallbackNewsImage }}
-                          style={styles.magazineDualImage}
-                        />
-                        <View style={styles.magazineDualContent}>
-                          <View style={[styles.magazineSmallTag, { backgroundColor: getTagColor(item.tag).bg }]}>
-                            <Text style={[styles.magazineSmallTagText, { color: getTagColor(item.tag).text }]}>
-                              {item.tag || 'Article'}
-                            </Text>
+                        <View
+                          style={[
+                            styles.magazineDualCard,
+                            theme === 'light' && styles.magazineDualCardLight,
+                            { borderBottomWidth: 4, borderBottomColor: accentColor },
+                          ]}
+                        >
+                          {/* Image at top */}
+                          <View style={{ padding: 10, paddingBottom: 0 }}>
+                            <Image
+                              source={{ uri: item.image || fallbackNewsImage }}
+                              style={{ width: '100%', height: 110, borderRadius: 10 }}
+                            />
                           </View>
-                          <Text
-                            style={[
-                              styles.magazineDualTitle,
-                              theme === 'light' && styles.magazineDualTitleLight,
-                              newsFontScale === 2 && { fontSize: 15 },
-                              newsFontScale === 0 && { fontSize: 12 },
-                            ]}
-                            numberOfLines={2}
-                          >
-                            {item.hookTitle || item.title}
-                          </Text>
-                          {!!item.vocab?.length && (
-                            <Text style={[styles.magazineDualVocab, theme === 'light' && { color: '#6B7280' }]}>
-                              {item.vocab.slice(0, 2).map(v => v.word).join(' · ')}
+                          <View style={styles.magazineDualContent}>
+                            <View style={[styles.magazineSmallTag, { backgroundColor: getTagColor(item.tag).bg }]}>
+                              <Text style={[styles.magazineSmallTagText, { color: getTagColor(item.tag).text }]}>
+                                {item.tag || 'Article'}
+                              </Text>
+                            </View>
+                            <Text
+                              style={[
+                                styles.magazineDualTitle,
+                                { color: theme === 'light' ? '#111827' : '#F3F4F6' },
+                                newsFontScale === 2 && { fontSize: 15 },
+                                newsFontScale === 0 && { fontSize: 12 },
+                              ]}
+                              numberOfLines={2}
+                            >
+                              {item.hookTitle || item.title}
                             </Text>
-                          )}
+                            {!!item.vocab?.length && (
+                              <Text style={[styles.magazineDualVocab, { color: theme === 'light' ? '#6B7280' : '#9CA3AF' }]}>
+                                {item.vocab.slice(0, 2).map(v => v.word).join(' · ')}
+                              </Text>
+                            )}
+                          </View>
                         </View>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               )}
 
               {/* Compact List of Remaining Articles */}
               {carouselNews.length > 3 && (
                 <View style={{ marginTop: 12 }}>
-                  {carouselNews.slice(3, 8).map((item, idx) => (
-                    <TouchableOpacity
-                      key={`list-${idx}`}
-                      activeOpacity={0.9}
-                      onPress={() => openNewsModal(item)}
-                      style={{ marginBottom: 10 }}
-                    >
-                      <View
-                        style={[
-                          styles.magazineListCard,
-                          theme === 'light' && styles.magazineListCardLight,
-                        ]}
+                  {carouselNews.slice(3, 8).map((item, idx) => {
+                    const palette = getCardColors(item.tag, item.title, idx + 3);
+                    const accentColor = theme === 'light' ? palette.light.inner[0] : palette.dark.inner[0];
+                    return (
+                      <TouchableOpacity
+                        key={`list-${idx}`}
+                        activeOpacity={0.9}
+                        onPress={() => openNewsModal(item)}
+                        style={{
+                          marginBottom: 10,
+                          shadowColor: '#000',
+                          shadowOpacity: 0.06,
+                          shadowRadius: 6,
+                          shadowOffset: { width: 0, height: 2 },
+                          elevation: 2,
+                        }}
                       >
-                        {/* Gradient background */}
-                        {(() => {
-                          const cardColors = [
-                            { light: ['#FAF5FF', '#F3E8FF'], dark: ['#1E1B2E', '#2D2640'] }, // Lavender
-                            { light: ['#FEF3C7', '#FDE68A'], dark: ['#292218', '#1F1A10'] }, // Amber
-                            { light: ['#DBEAFE', '#BFDBFE'], dark: ['#1E2A3B', '#172033'] }, // Sky blue
-                            { light: ['#D1FAE5', '#A7F3D0'], dark: ['#1A2E25', '#132A1F'] }, // Emerald
-                            { light: ['#FFE4E6', '#FECDD3'], dark: ['#2D1F22', '#251518'] }, // Pink
-                          ];
-                          const c = cardColors[idx % cardColors.length];
-                          return (
-                            <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
-                              <Defs>
-                                <SvgLinearGradient id={`listGrad-${idx}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                                  <Stop offset="0%" stopColor={theme === 'light' ? c.light[0] : c.dark[0]} stopOpacity={1} />
-                                  <Stop offset="100%" stopColor={theme === 'light' ? c.light[1] : c.dark[1]} stopOpacity={1} />
-                                </SvgLinearGradient>
-                              </Defs>
-                              <Rect x={0} y={0} width="100%" height="100%" fill={`url(#listGrad-${idx})`} rx={14} ry={14} />
-                            </Svg>
-                          );
-                        })()}
-                        <Image
-                          source={{ uri: item.image || fallbackNewsImage }}
-                          style={styles.magazineListImage}
-                        />
-                        <View style={styles.magazineListContent}>
-                          <View style={[styles.magazineSmallTag, { backgroundColor: getTagColor(item.tag).bg, alignSelf: 'flex-start' }]}>
-                            <Text style={[styles.magazineSmallTagText, { color: getTagColor(item.tag).text }]}>
-                              {item.tag || 'Article'}
-                            </Text>
-                          </View>
-                          <Text
-                            style={[
-                              styles.magazineListTitle,
-                              theme === 'light' && styles.magazineListTitleLight,
-                              newsFontScale === 2 && { fontSize: 16 },
-                              newsFontScale === 0 && { fontSize: 13 },
-                            ]}
-                            numberOfLines={2}
-                          >
-                            {item.hookTitle || item.title}
-                          </Text>
-                          {!!item.vocab?.length && (
-                            <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
-                              {item.vocab.slice(0, 2).map((v, vi) => (
-                                <Text key={`list-vocab-${vi}`} style={[styles.magazineListVocab, theme === 'light' && { color: '#6B7280' }]}>
-                                  {v.word}
-                                </Text>
-                              ))}
+                        <View
+                          style={[
+                            styles.magazineListCard,
+                            theme === 'light' && styles.magazineListCardLight,
+                            { borderLeftWidth: 4, borderLeftColor: accentColor },
+                          ]}
+                        >
+                          <View style={styles.magazineListContent}>
+                            <View style={[styles.magazineSmallTag, { backgroundColor: getTagColor(item.tag).bg, alignSelf: 'flex-start' }]}>
+                              <Text style={[styles.magazineSmallTagText, { color: getTagColor(item.tag).text }]}>
+                                {item.tag || 'Article'}
+                              </Text>
                             </View>
-                          )}
+                            <Text
+                              style={[
+                                styles.magazineListTitle,
+                                { color: theme === 'light' ? '#111827' : '#F3F4F6' },
+                                newsFontScale === 2 && { fontSize: 16 },
+                                newsFontScale === 0 && { fontSize: 13 },
+                              ]}
+                              numberOfLines={2}
+                            >
+                              {item.hookTitle || item.title}
+                            </Text>
+                            {!!item.vocab?.length && (
+                              <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                                {item.vocab.slice(0, 2).map((v, vi) => (
+                                  <Text key={`list-vocab-${vi}`} style={[styles.magazineListVocab, { color: theme === 'light' ? '#6B7280' : '#9CA3AF' }]}>
+                                    {v.word}
+                                  </Text>
+                                ))}
+                              </View>
+                            )}
+                          </View>
+                          {/* Image on the right */}
+                          <Image
+                            source={{ uri: item.image || fallbackNewsImage }}
+                            style={styles.magazineListImage}
+                          />
                         </View>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               )}
 
-              <View style={{ height: 20 }} />
             </View>
           )}
         </View>
@@ -4519,13 +5249,163 @@ Avoid fiction and avoid specific unverifiable claims.
 	          </View>
 	        </Modal>
 
+        {/* Vocab Preview Modal */}
+        <Modal visible={vocabPreviewVisible} transparent animationType="fade" onRequestClose={vocabPreviewSkip}>
+          <View style={[styles.vocabPreviewOverlay, theme === 'light' && styles.vocabPreviewOverlayLight]}>
+            <SafeAreaView style={styles.vocabPreviewSafeArea}>
+              {/* Close button */}
+              <TouchableOpacity onPress={vocabPreviewSkip} style={styles.vocabPreviewCloseBtn}>
+                <X size={24} color={theme === 'light' ? '#374151' : '#9CA3AF'} />
+              </TouchableOpacity>
+
+              {/* Header with article info */}
+              <View style={styles.vocabPreviewHeaderNew}>
+                <View style={[styles.vocabPreviewBadge, { backgroundColor: getTagColor(vocabPreviewArticle?.tag).bg }]}>
+                  <Text style={[styles.vocabPreviewBadgeText, { color: getTagColor(vocabPreviewArticle?.tag).text }]}>
+                    {vocabPreviewArticle?.tag || 'Article'}
+                  </Text>
+                </View>
+                <Text style={[styles.vocabPreviewArticleTitle, theme === 'light' && { color: '#111827' }]} numberOfLines={2}>
+                  {vocabPreviewArticle?.hookTitle || vocabPreviewArticle?.title}
+                </Text>
+              </View>
+
+              {/* Progress bar */}
+              <View style={styles.vocabPreviewProgressContainer}>
+                <View style={[styles.vocabPreviewProgressBg, theme === 'light' && { backgroundColor: '#E5E7EB' }]}>
+                  <View
+                    style={[
+                      styles.vocabPreviewProgressFill,
+                      { width: `${((vocabPreviewIndex + 1) / (vocabPreviewArticle?.vocab?.slice(0, 5).length || 1)) * 100}%` },
+                    ]}
+                  />
+                </View>
+                <Text style={[styles.vocabPreviewProgressText, theme === 'light' && { color: '#6B7280' }]}>
+                  {vocabPreviewIndex + 1} / {vocabPreviewArticle?.vocab?.slice(0, 5).length || 0}
+                </Text>
+              </View>
+
+              {/* Flashcard */}
+              {(() => {
+                const currentWord = vocabPreviewArticle?.vocab?.slice(0, 5)[vocabPreviewIndex];
+                if (!currentWord) return null;
+                return (
+                  <Animated.View
+                    style={[
+                      styles.vocabPreviewCardNew,
+                      theme === 'light' && styles.vocabPreviewCardNewLight,
+                      {
+                        opacity: vocabCardAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+                        transform: [
+                          { scale: vocabCardAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.95] }) },
+                          { translateX: vocabCardAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -30] }) },
+                        ],
+                      },
+                    ]}
+                  >
+                    <TouchableOpacity activeOpacity={1} onPress={vocabPreviewFlip} style={styles.vocabPreviewCardTouchable}>
+                      {!vocabPreviewFlipped ? (
+                        <View style={styles.vocabPreviewCardFront}>
+                          <Text style={[styles.vocabPreviewWordNew, theme === 'light' && { color: '#111827' }]}>
+                            {currentWord.word}
+                          </Text>
+                          <View style={styles.vocabPreviewTapHint}>
+                            <View style={[styles.vocabPreviewTapIcon, theme === 'light' && { backgroundColor: '#E5E7EB' }]}>
+                              <Text style={{ fontSize: 16 }}>👆</Text>
+                            </View>
+                            <Text style={[styles.vocabPreviewTapText, theme === 'light' && { color: '#9CA3AF' }]}>
+                              Tap to reveal meaning
+                            </Text>
+                          </View>
+                        </View>
+                      ) : (
+                        <ScrollView
+                          style={styles.vocabPreviewCardBackScroll}
+                          contentContainerStyle={styles.vocabPreviewCardBack}
+                          showsVerticalScrollIndicator={false}
+                        >
+                          <Text style={[styles.vocabPreviewWordBack, theme === 'light' && { color: '#437F76' }]}>
+                            {currentWord.word}
+                          </Text>
+
+                          {/* Synonyms */}
+                          {(currentWord as any).synonyms && (
+                            <Text style={[styles.vocabPreviewSynonyms, theme === 'light' && { color: '#9CA3AF' }]}>
+                              ≈ {(currentWord as any).synonyms}
+                            </Text>
+                          )}
+
+                          <View style={[styles.vocabPreviewDivider, theme === 'light' && { backgroundColor: '#E5E7EB' }]} />
+
+                          {/* Definition */}
+                          <Text style={[styles.vocabPreviewDefinitionNew, theme === 'light' && { color: '#374151' }]}>
+                            {currentWord.definition}
+                          </Text>
+
+                          {/* Translation & Example combined */}
+                          {currentWord.translation && (
+                            <View style={[styles.vocabPreviewTranslationBox, theme === 'light' && styles.vocabPreviewTranslationBoxLight]}>
+                              <Text style={[styles.vocabPreviewTranslationLabel, theme === 'light' && styles.vocabPreviewTranslationLabelLight]}>Translation</Text>
+                              <Text style={[styles.vocabPreviewTranslationNew, theme === 'light' && styles.vocabPreviewTranslationNewLight]}>
+                                {currentWord.translation}
+                              </Text>
+                              {/* Loading indicator for enrichment */}
+                              {vocabPreviewLoading && !(currentWord as any).example && (
+                                <Text style={[styles.vocabPreviewLoadingInBox, theme === 'light' && { color: '#9CA3AF' }]}>
+                                  Loading example...
+                                </Text>
+                              )}
+                              {/* Example in same box */}
+                              {(currentWord as any).example && (
+                                <View style={[styles.vocabPreviewExampleInBox, theme === 'light' && styles.vocabPreviewExampleInBoxLight]}>
+                                  <Text style={[styles.vocabPreviewExampleLabelInBox, theme === 'light' && styles.vocabPreviewExampleLabelInBoxLight]}>Example</Text>
+                                  <Text style={[styles.vocabPreviewExampleTextInBox, theme === 'light' && styles.vocabPreviewExampleTextInBoxLight]}>
+                                    "{(currentWord as any).example}"
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          )}
+                        </ScrollView>
+                      )}
+                    </TouchableOpacity>
+                  </Animated.View>
+                );
+              })()}
+
+              {/* Bottom actions */}
+              <View style={styles.vocabPreviewBottomActions}>
+                <TouchableOpacity
+                  style={[styles.vocabPreviewSkipBtnNew, theme === 'light' && { borderColor: '#D1D5DB', backgroundColor: '#FFFFFF' }]}
+                  onPress={vocabPreviewSkip}
+                >
+                  <Text style={[styles.vocabPreviewSkipTextNew, theme === 'light' && { color: '#6B7280' }]}>
+                    Skip to Article
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.vocabPreviewNextBtn}
+                  onPress={vocabPreviewNext}
+                >
+                  <Text style={styles.vocabPreviewNextBtnText}>
+                    {vocabPreviewIndex < (vocabPreviewArticle?.vocab?.slice(0, 5).length || 0) - 1
+                      ? 'Got it!'
+                      : 'Start Reading →'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </SafeAreaView>
+          </View>
+        </Modal>
+
 	        <Modal visible={newsModalVisible} transparent animationType="none" onRequestClose={closeNewsModal}>
 	          <View style={styles.newsModalOverlay}>
-	            <TouchableOpacity style={styles.newsModalBackdrop} activeOpacity={1} onPress={closeNewsModal} />
+	            <TouchableOpacity style={styles.newsModalBackdrop} activeOpacity={1} onPress={() => { setArticleSettingsOpen(false); closeNewsModal(); }} />
 	            <Animated.View
               style={[
                 styles.newsModalSheet,
                 theme === 'light' && styles.newsModalSheetLight,
+                getArticleBgStyle(),
                 {
                   opacity: newsModalAnim,
                   transform: [
@@ -4536,17 +5416,122 @@ Avoid fiction and avoid specific unverifiable claims.
                       ),
                     },
                   ],
-                  maxHeight: Dimensions.get('window').height * 0.88,
+                  height: Dimensions.get('window').height * 0.9,
                 },
               ]}
             >
-              <View style={[styles.newsModalHandle, theme === 'light' && styles.newsModalHandleLight]} />
+              <View {...newsPan.panHandlers} style={{ paddingVertical: 12, alignItems: 'center', marginBottom: 4 }}>
+                <View style={[styles.newsModalHandle, { marginBottom: 0 }, articleBgColor === 'sepia' ? { backgroundColor: '#C9B99A' } : (articleBgColor === 'dark' || articleBgColor === 'black') ? { backgroundColor: '#4B5563' } : theme === 'light' ? styles.newsModalHandleLight : null]} />
+              </View>
+              {/* Text Settings Button */}
               <TouchableOpacity
-                onPress={closeNewsModal}
+                onPress={() => setArticleSettingsOpen(!articleSettingsOpen)}
+                style={{ position: 'absolute', top: 8, right: 44, padding: 6, zIndex: 3, backgroundColor: 'transparent' }}
+                hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: '700', color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#0D3B4A' : '#E5E7EB' }}>Aa</Text>
+              </TouchableOpacity>
+              {/* Settings Popup */}
+              {articleSettingsOpen && (
+                <View style={{
+                  position: 'absolute',
+                  top: 40,
+                  right: 12,
+                  backgroundColor: articleBgColor === 'sepia' ? '#FAF7F0' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#2A2A2A' : theme === 'light' ? '#FFFFFF' : '#2A2A2A',
+                  borderRadius: 16,
+                  padding: 16,
+                  zIndex: 100,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 12,
+                  elevation: 8,
+                  width: 240,
+                }}>
+                  {/* Background Color Options */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>
+                    {(['default', 'sepia', 'dark', 'black'] as const).map((bg) => {
+                      const bgColors = { default: theme === 'light' ? '#FFFFFF' : '#1E1E1E', sepia: '#F5F0E1', dark: '#1E3A5F', black: '#0D0D0D' };
+                      const isSelected = articleBgColor === bg;
+                      return (
+                        <TouchableOpacity
+                          key={bg}
+                          onPress={() => {
+                            setArticleBgColor(bg);
+                            saveArticleSettings(articleFontSize, bg);
+                          }}
+                          style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 22,
+                            backgroundColor: bgColors[bg],
+                            borderWidth: isSelected ? 3 : 1,
+                            borderColor: isSelected ? '#3B82F6' : '#9CA3AF',
+                          }}
+                        />
+                      );
+                    })}
+                  </View>
+                  {/* Font Size Slider */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#374151' : '#E5E7EB' }}>Aa</Text>
+                    <View style={{ flex: 1, height: 4, backgroundColor: articleBgColor === 'sepia' ? '#D4C9B5' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#4B5563' : theme === 'light' ? '#E5E7EB' : '#4B5563', borderRadius: 2 }}>
+                      <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${((articleFontSize - 14) / 10) * 100}%`, backgroundColor: '#3B82F6', borderRadius: 2 }} />
+                      <View
+                        style={{
+                          position: 'absolute',
+                          left: `${((articleFontSize - 14) / 10) * 100}%`,
+                          top: -8,
+                          width: 20,
+                          height: 20,
+                          borderRadius: 10,
+                          backgroundColor: '#FFFFFF',
+                          marginLeft: -10,
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.2,
+                          shadowRadius: 4,
+                          elevation: 4,
+                        }}
+                      />
+                    </View>
+                    <Text style={{ fontSize: 20, fontWeight: '700', color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#374151' : '#E5E7EB' }}>Aa</Text>
+                  </View>
+                  {/* Slider Touch Area */}
+                  <View
+                    style={{ marginTop: -20, height: 40, marginHorizontal: 26 }}
+                    onStartShouldSetResponder={() => true}
+                    onMoveShouldSetResponder={() => true}
+                    onResponderMove={(e) => {
+                      const { locationX } = e.nativeEvent;
+                      const width = 240 - 52 - 32; // container width - padding - Aa labels
+                      const percent = Math.max(0, Math.min(1, locationX / width));
+                      const newSize = Math.round(14 + percent * 10);
+                      setArticleFontSize(newSize);
+                    }}
+                    onResponderRelease={() => {
+                      saveArticleSettings(articleFontSize, articleBgColor);
+                    }}
+                  />
+                  {/* Reset Button */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setArticleFontSize(17);
+                      setArticleBgColor('default');
+                      saveArticleSettings(17, 'default');
+                    }}
+                    style={{ alignSelf: 'center', marginTop: 12 }}
+                  >
+                    <Text style={{ color: '#3B82F6', fontWeight: '600', fontSize: 14 }}>Reset to default</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              <TouchableOpacity
+                onPress={() => { setArticleSettingsOpen(false); closeNewsModal(); }}
                 style={{ position: 'absolute', top: 8, right: 8, padding: 4, zIndex: 2, backgroundColor: 'transparent' }}
                 hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
               >
-                <Text style={{ fontSize: 18, fontWeight: '800', color: theme === 'light' ? '#0D3B4A' : '#E5E7EB' }}>×</Text>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#0D3B4A' : '#E5E7EB' }}>×</Text>
               </TouchableOpacity>
               {sheetArticle && (
                 <ScrollView
@@ -4554,30 +5539,19 @@ Avoid fiction and avoid specific unverifiable claims.
                   bounces
                   scrollEventThrottle={16}
                   contentContainerStyle={{
-                    paddingBottom: insets.bottom + 80,
-                    paddingHorizontal: 16,
+                    paddingBottom: insets.bottom + 60,
+                    paddingHorizontal: 10,
                   }}
                 >
 	                  <Image source={{ uri: sheetArticle.image || fallbackNewsImage }} style={styles.newsModalImage} />
 	                  <View style={styles.newsModalTagRow}>
 	                    <Text style={[styles.newsModalTag, { backgroundColor: getTagColor(sheetArticle.tag).bg, color: getTagColor(sheetArticle.tag).text }]}>{(sheetArticle.tag || 'Story').toUpperCase()}</Text>
 	                  </View>
-	                  <Text style={[styles.newsModalTitle, theme === 'light' && styles.newsModalTitleLight]}>
+	                  <Text style={[styles.newsModalTitle, { color: articleBgColor === 'sepia' ? '#3D3D3D' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#0D3B4A' : '#E5E7EB' }]}>
 	                    {sheetArticle.hookTitle || sheetArticle.title}
 	                  </Text>
-	                  {!!sheetArticle.hookTitle &&
-	                    sheetArticle.hookTitle.trim() !== (sheetArticle.title || '').trim() && (
-	                      <Text style={[styles.newsModalOriginalTitle, theme === 'light' && styles.newsModalOriginalTitleLight]}>
-	                        {sheetArticle.title}
-	                      </Text>
-	                    )}
-	                  {!!sheetArticle.whyMatters && (
-	                    <Text style={[styles.newsModalWhy, theme === 'light' && styles.newsModalWhyLight]}>
-	                      {sheetArticle.whyMatters}
-	                    </Text>
-	                  )}
 	                  <Text
-	                    style={[styles.newsModalSummary, theme === 'light' && styles.newsModalSummaryLight]}
+	                    style={[styles.newsModalSummary, { fontSize: articleFontSize, lineHeight: articleFontSize * 1.6, color: getArticleTextColor() }]}
 	                    allowFontScaling={false}
 	                    ellipsizeMode="clip"
                   >
@@ -4589,8 +5563,7 @@ Avoid fiction and avoid specific unverifiable claims.
                         <Text
                           key={part.key}
                           style={[
-                            { fontWeight: '800', color: '#F8B070' },
-                            theme === 'light' && { color: '#9A3412' },
+                            { fontWeight: '800', color: articleBgColor === 'sepia' ? '#B45309' : '#F8B070' },
                           ]}
                           onPress={() => {
                             const word = part.text;
@@ -4619,13 +5592,30 @@ Avoid fiction and avoid specific unverifiable claims.
                     )}
                   </Text>
                   {!!sheetArticle.vocab?.length && (
-                    <View style={[styles.newsGlossary, theme === 'light' && styles.newsGlossaryLight]}>
-                      <Text style={[styles.newsGlossaryTitle, theme === 'light' && styles.newsGlossaryTitleLight]}>Vocabulary</Text>
+                    <View style={[styles.newsGlossary, { backgroundColor: articleBgColor === 'sepia' ? 'rgba(180,160,130,0.15)' : (articleBgColor === 'dark' || articleBgColor === 'black') ? 'rgba(255,255,255,0.05)' : theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)' }]}>
+                      <View style={styles.vocabHeaderRow}>
+                        <Text style={[styles.newsGlossaryTitle, { color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#0D3B4A' : '#E5E7EB' }]}>Vocabulary</Text>
+                        {sheetArticle.vocab.some(v => v.translation) && (
+                          <TouchableOpacity
+                            onPress={() => setShowVocabTranslations(!showVocabTranslations)}
+                            style={[
+                              styles.vocabTranslationToggle,
+                              { backgroundColor: showVocabTranslations ? (articleBgColor === 'sepia' ? 'rgba(180,83,9,0.15)' : 'rgba(248,176,112,0.15)') : 'transparent' },
+                              { borderColor: articleBgColor === 'sepia' ? 'rgba(180,83,9,0.3)' : 'rgba(248,176,112,0.3)' }
+                            ]}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[styles.vocabTranslationToggleText, { color: articleBgColor === 'sepia' ? '#B45309' : '#F8B070' }]}>
+                              {showVocabTranslations ? 'Hide' : 'Show'} translations
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                       {sheetArticle.vocab.map((item, vocabIndex) => (
-                        <Text key={`${item.word || 'word'}-${vocabIndex}`} style={[styles.newsGlossaryItem, theme === 'light' && styles.newsGlossaryItemLight, { fontSize: 15 }]}>
+                        <Text key={`${item.word || 'word'}-${vocabIndex}`} style={[styles.newsGlossaryItem, { color: getArticleTextColor(), fontSize: 15 }]}>
                           <Text style={{ fontWeight: '700' }}>{item.word}</Text> — {item.definition}
-                          {!!item.translation && (
-                            <Text style={{ color: theme === 'light' ? '#9A3412' : '#F8B070' }}> ({item.translation})</Text>
+                          {showVocabTranslations && !!item.translation && (
+                            <Text style={{ color: articleBgColor === 'sepia' ? '#B45309' : '#F8B070' }}> ({item.translation})</Text>
                           )}
                         </Text>
                       ))}
@@ -4634,12 +5624,12 @@ Avoid fiction and avoid specific unverifiable claims.
 
                   {/* Key Takeaways */}
                   {!!sheetArticle.keyTakeaways?.length && (
-                    <View style={[styles.newsGlossary, theme === 'light' && styles.newsGlossaryLight, { marginTop: 16 }]}>
-                      <Text style={[styles.newsGlossaryTitle, theme === 'light' && styles.newsGlossaryTitleLight]}>Key Takeaways</Text>
+                    <View style={[styles.newsGlossary, { marginTop: 16, backgroundColor: articleBgColor === 'sepia' ? 'rgba(180,160,130,0.15)' : (articleBgColor === 'dark' || articleBgColor === 'black') ? 'rgba(255,255,255,0.05)' : theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)' }]}>
+                      <Text style={[styles.newsGlossaryTitle, { color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#0D3B4A' : '#E5E7EB' }]}>Key Takeaways</Text>
                       {sheetArticle.keyTakeaways.map((takeaway, idx) => (
                         <View key={`takeaway-${idx}`} style={{ flexDirection: 'row', marginTop: 8, alignItems: 'flex-start' }}>
-                          <Text style={{ color: '#F8B070', fontSize: 14, marginRight: 8 }}>✦</Text>
-                          <Text style={[styles.newsGlossaryItem, theme === 'light' && styles.newsGlossaryItemLight, { flex: 1, fontSize: 15, marginTop: 0 }]}>
+                          <Text style={{ color: articleBgColor === 'sepia' ? '#B45309' : '#F8B070', fontSize: 14, marginRight: 8 }}>✦</Text>
+                          <Text style={[styles.newsGlossaryItem, { flex: 1, fontSize: 15, marginTop: 0, color: getArticleTextColor() }]}>
                             {takeaway}
                           </Text>
                         </View>
@@ -4651,13 +5641,12 @@ Avoid fiction and avoid specific unverifiable claims.
                   {!!sheetArticle.dailyChallenge && (
                     <View style={[
                       styles.newsGlossary,
-                      theme === 'light' && styles.newsGlossaryLight,
-                      { marginTop: 16, backgroundColor: theme === 'light' ? 'rgba(248,176,112,0.12)' : 'rgba(248,176,112,0.08)' }
+                      { marginTop: 16, backgroundColor: articleBgColor === 'sepia' ? 'rgba(180,83,9,0.1)' : (articleBgColor === 'dark' || articleBgColor === 'black') ? 'rgba(248,176,112,0.08)' : theme === 'light' ? 'rgba(248,176,112,0.12)' : 'rgba(248,176,112,0.08)' }
                     ]}>
-                      <Text style={[styles.newsGlossaryTitle, theme === 'light' && styles.newsGlossaryTitleLight, { color: '#F8B070' }]}>
+                      <Text style={[styles.newsGlossaryTitle, { color: articleBgColor === 'sepia' ? '#B45309' : '#F8B070' }]}>
                         🎯 Today's Challenge
                       </Text>
-                      <Text style={[styles.newsGlossaryItem, theme === 'light' && styles.newsGlossaryItemLight, { fontSize: 15, marginTop: 8 }]}>
+                      <Text style={[styles.newsGlossaryItem, { fontSize: 15, marginTop: 8, color: getArticleTextColor() }]}>
                         {sheetArticle.dailyChallenge}
                       </Text>
                     </View>
@@ -4665,13 +5654,13 @@ Avoid fiction and avoid specific unverifiable claims.
 
                   {/* Comprehension Quiz */}
                   {!!sheetArticle.quiz?.length && (
-                    <View style={[styles.newsGlossary, theme === 'light' && styles.newsGlossaryLight, { marginTop: 16 }]}>
+                    <View style={[styles.newsGlossary, { marginTop: 16, backgroundColor: articleBgColor === 'sepia' ? 'rgba(180,160,130,0.15)' : (articleBgColor === 'dark' || articleBgColor === 'black') ? 'rgba(255,255,255,0.05)' : theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)' }]}>
                       {!quizStarted ? (
                         <>
-                          <Text style={[styles.newsGlossaryTitle, theme === 'light' && styles.newsGlossaryTitleLight]}>
+                          <Text style={[styles.newsGlossaryTitle, { color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#0D3B4A' : '#E5E7EB' }]}>
                             🧠 Comprehension Quiz
                           </Text>
-                          <Text style={[styles.newsGlossaryItem, theme === 'light' && styles.newsGlossaryItemLight, { fontSize: 14, marginTop: 4, opacity: 0.7 }]}>
+                          <Text style={[styles.newsGlossaryItem, { fontSize: 14, marginTop: 4, opacity: 0.7, color: getArticleTextColor() }]}>
                             Test your understanding with {sheetArticle.quiz.length} questions
                           </Text>
                           <TouchableOpacity
@@ -4695,10 +5684,10 @@ Avoid fiction and avoid specific unverifiable claims.
                             <Text style={{ fontSize: 48, marginBottom: 12 }}>
                               {getQuizScore() === sheetArticle.quiz.length ? '🎉' : getQuizScore() >= sheetArticle.quiz.length - 1 ? '👏' : '📚'}
                             </Text>
-                            <Text style={[styles.newsGlossaryTitle, theme === 'light' && styles.newsGlossaryTitleLight, { textAlign: 'center' }]}>
+                            <Text style={[styles.newsGlossaryTitle, { textAlign: 'center', color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#0D3B4A' : '#E5E7EB' }]}>
                               {getQuizScore() === sheetArticle.quiz.length ? 'Perfect Score!' : getQuizScore() >= sheetArticle.quiz.length - 1 ? 'Great Job!' : 'Keep Learning!'}
                             </Text>
-                            <Text style={[styles.newsGlossaryItem, theme === 'light' && styles.newsGlossaryItemLight, { fontSize: 20, marginTop: 8, fontWeight: '700' }]}>
+                            <Text style={[styles.newsGlossaryItem, { fontSize: 20, marginTop: 8, fontWeight: '700', color: getArticleTextColor() }]}>
                               {getQuizScore()} / {sheetArticle.quiz.length}
                             </Text>
                           </Animated.View>
@@ -4714,24 +5703,24 @@ Avoid fiction and avoid specific unverifiable claims.
                               alignItems: 'center',
                             }}
                           >
-                            <Text style={{ color: theme === 'light' ? '#0D3B4A' : '#E5E7EB', fontWeight: '600', fontSize: 15 }}>Try Again</Text>
+                            <Text style={{ color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#0D3B4A' : '#E5E7EB', fontWeight: '600', fontSize: 15 }}>Try Again</Text>
                           </TouchableOpacity>
                         </>
                       ) : (
                         <>
                           {/* Progress bar */}
                           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-                            <View style={{ flex: 1, height: 4, backgroundColor: theme === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)', borderRadius: 2 }}>
+                            <View style={{ flex: 1, height: 4, backgroundColor: articleBgColor === 'sepia' ? 'rgba(0,0,0,0.1)' : (articleBgColor === 'dark' || articleBgColor === 'black') ? 'rgba(255,255,255,0.1)' : theme === 'light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)', borderRadius: 2 }}>
                               <Animated.View
                                 style={{
                                   width: quizProgressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
                                   height: '100%',
-                                  backgroundColor: '#F8B070',
+                                  backgroundColor: articleBgColor === 'sepia' ? '#B45309' : '#F8B070',
                                   borderRadius: 2,
                                 }}
                               />
                             </View>
-                            <Text style={{ color: theme === 'light' ? '#6B7280' : '#9CA3AF', fontSize: 12, marginLeft: 8 }}>
+                            <Text style={{ color: articleBgColor === 'sepia' ? '#6B6B6B' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#9CA3AF' : theme === 'light' ? '#6B7280' : '#9CA3AF', fontSize: 12, marginLeft: 8 }}>
                               {quizCurrentQ + 1}/{sheetArticle.quiz.length}
                             </Text>
                           </View>
@@ -4745,7 +5734,7 @@ Avoid fiction and avoid specific unverifiable claims.
                               ],
                             }}
                           >
-                            <Text style={[styles.newsGlossaryTitle, theme === 'light' && styles.newsGlossaryTitleLight, { fontSize: 17, lineHeight: 24 }]}>
+                            <Text style={[styles.newsGlossaryTitle, { fontSize: 17, lineHeight: 24, color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#0D3B4A' : '#E5E7EB' }]}>
                               {sheetArticle.quiz[quizCurrentQ]?.question}
                             </Text>
                           </Animated.View>
@@ -4781,6 +5770,10 @@ Avoid fiction and avoid specific unverifiable claims.
                                         ? 'rgba(67,127,118,0.2)'
                                         : showWrong
                                         ? 'rgba(239,68,68,0.15)'
+                                        : articleBgColor === 'sepia'
+                                        ? 'rgba(93,78,55,0.08)'
+                                        : (articleBgColor === 'dark' || articleBgColor === 'black')
+                                        ? 'rgba(255,255,255,0.06)'
                                         : theme === 'light'
                                         ? 'rgba(13,59,74,0.06)'
                                         : 'rgba(255,255,255,0.06)',
@@ -4802,6 +5795,10 @@ Avoid fiction and avoid specific unverifiable claims.
                                             ? '#437F76'
                                             : showWrong
                                             ? '#EF4444'
+                                            : articleBgColor === 'sepia'
+                                            ? 'rgba(93,78,55,0.15)'
+                                            : (articleBgColor === 'dark' || articleBgColor === 'black')
+                                            ? 'rgba(255,255,255,0.1)'
                                             : theme === 'light'
                                             ? 'rgba(13,59,74,0.1)'
                                             : 'rgba(255,255,255,0.1)',
@@ -4812,7 +5809,7 @@ Avoid fiction and avoid specific unverifiable claims.
                                       >
                                         <Text
                                           style={{
-                                            color: showCorrect || showWrong ? '#FFFFFF' : theme === 'light' ? '#0D3B4A' : '#E5E7EB',
+                                            color: showCorrect || showWrong ? '#FFFFFF' : articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#0D3B4A' : '#E5E7EB',
                                             fontSize: 12,
                                             fontWeight: '600',
                                           }}
@@ -4823,7 +5820,7 @@ Avoid fiction and avoid specific unverifiable claims.
                                       <Text
                                         style={{
                                           flex: 1,
-                                          color: theme === 'light' ? '#0D3B4A' : '#E5E7EB',
+                                          color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#0D3B4A' : '#E5E7EB',
                                           fontSize: 15,
                                           lineHeight: 21,
                                         }}
@@ -4842,10 +5839,7 @@ Avoid fiction and avoid specific unverifiable claims.
                   )}
                 </ScrollView>
               )}
-              <TouchableOpacity onPress={closeNewsModal} activeOpacity={0.8} style={[styles.newsToggleBtn, { alignSelf: 'stretch', marginTop: 12, alignItems: 'center' }]}>
-                <Text style={[styles.newsToggleText, theme === 'light' && styles.newsToggleTextLight]}>Close</Text>
-              </TouchableOpacity>
-            </Animated.View>
+                          </Animated.View>
           </View>
         </Modal>
 
@@ -4912,10 +5906,10 @@ Avoid fiction and avoid specific unverifiable claims.
 	            try { router.push('/profile'); } catch {}
 	            return;
 	          }
-	          // Immediately guide first‑time users to Placement intro explaining the test
-	          try { router.push('/placement'); } catch {}
-	        }}
-	      />)}
+          // Skip placement intro; go straight to level selection
+          try { router.push('/placement/level-select'); } catch {}
+        }}
+      />)}
 
       {/* Daily streak celebration (once per day) */}
       {showStreakCelebrate && !isPreview && (
@@ -4989,7 +5983,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1E1E1E',
   },
-  
+  dotContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'column',
+    paddingTop: 16,
+    paddingLeft: 16,
+  },
+  dotRow: {
+    flexDirection: 'row',
+    marginBottom: 22,
+  },
+  dot: {
+    width: 2,
+    height: 2,
+    borderRadius: 1,
+    marginRight: 22,
+    opacity: 0.7,
+  },
   scrollView: {
     flex: 1,
   },
@@ -5035,11 +6049,18 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     padding: 16,
     borderRadius: 16,
-    backgroundColor: 'transparent',
-    overflow: 'hidden',
+    backgroundColor: '#1F1F1F',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
   storyWordsCardLight: {
-    backgroundColor: 'transparent',
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(78,217,203,0.3)',
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -5380,16 +6401,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     marginBottom: 4,
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
-  missionTitleLight: { color: '#0D3B4A' },
+  missionTitleLight: { color: '#111827' },
   missionSubtitle: {
     fontSize: 14,
-    color: '#E5E7EB',
+    color: '#9CA3AF',
     lineHeight: 18,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
-  missionSubtitleLight: { color: '#4B5563' },
+  missionSubtitleLight: { color: '#6B7280' },
   missionHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -5409,13 +6430,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: '#FDE9D9',
+    backgroundColor: 'rgba(78,217,203,0.15)',
   },
   timePillText: {
-    color: '#0D3B4A',
+    color: '#4ED9CB',
     fontWeight: '700',
     fontSize: 12,
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
+  },
+  timePillLight: {
+    backgroundColor: 'rgba(78,217,203,0.12)',
+  },
+  timePillTextLight: {
+    color: '#0D3B4A',
   },
   streakPill: {
     flexDirection: 'row',
@@ -5424,14 +6451,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(24,116,134,0.12)',
+    backgroundColor: 'rgba(242,94,134,0.12)',
     alignSelf: 'flex-start',
   },
   streakPillText: {
-    color: '#187486',
+    color: '#F25E86',
     fontWeight: '700',
     fontSize: 12,
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   missionSteps: {
     marginTop: 12,
@@ -5483,20 +6510,35 @@ const styles = StyleSheet.create({
   },
   missionProgressText: {
     fontSize: 12,
-    color: '#E5E7EB',
-    fontFamily: 'Ubuntu-Medium',
+    color: '#9CA3AF',
+    fontFamily: 'Feather-Bold',
   },
-  missionProgressTextLight: { color: '#4B5563' },
+  missionProgressTextLight: { color: '#6B7280' },
   missionProgressBar: {
     height: 6,
-    backgroundColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: '#333',
     borderRadius: 999,
     overflow: 'hidden',
   },
+  missionProgressBarLight: {
+    backgroundColor: '#E5E7EB',
+  },
   missionProgressFill: {
     height: '100%',
-    backgroundColor: '#F8B070',
+    backgroundColor: '#F25E86',
     borderRadius: 999,
+  },
+  storyWordsCta: {
+    backgroundColor: '#F25E86',
+    paddingVertical: 8,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+  },
+  storyWordsCtaText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: 'Feather-Bold',
   },
   rewardStrip: {
     marginTop: 10,
@@ -5566,6 +6608,72 @@ const styles = StyleSheet.create({
     fontFamily: 'Ubuntu-Regular',
   },
   missionHelperLight: { color: '#4B5563' },
+  // Synonym Match styles
+  synonymMatchCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: '#1F1F1F',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  synonymMatchCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.3)',
+  },
+  synonymMatchHeader: {
+    marginBottom: 16,
+  },
+  synonymMatchTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#E5E7EB',
+    marginBottom: 4,
+    fontFamily: 'Feather-Bold',
+  },
+  synonymMatchTitleLight: {
+    color: '#111827',
+  },
+  synonymMatchSubtitle: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontFamily: 'Feather-Bold',
+  },
+  synonymMatchSubtitleLight: {
+    color: '#6B7280',
+  },
+  synonymMatchDoneCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: 'rgba(78,217,203,0.12)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  synonymMatchDoneCardLight: {
+    backgroundColor: 'rgba(78,217,203,0.12)',
+  },
+  synonymMatchDoneText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4ED9CB',
+    fontFamily: 'Feather-Bold',
+  },
+  synonymMatchDoneTextLight: {
+    color: '#0D3B4A',
+  },
   newsCard: {
     marginHorizontal: 16,
     marginBottom: 16,
@@ -5573,7 +6681,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     borderRadius: 14,
     backgroundColor: 'transparent',
-    overflow: 'hidden',
     gap: 10,
   },
   newsCardLight: {
@@ -5597,6 +6704,9 @@ const styles = StyleSheet.create({
   newsGlossaryLight: { backgroundColor: '#F8FAFC', borderColor: '#E5E7EB' },
   newsGlossaryTitle: { fontSize: 12, fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: 'Ubuntu-Bold' },
   newsGlossaryTitleLight: { color: '#6B7280' },
+  vocabHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  vocabTranslationToggle: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
+  vocabTranslationToggleText: { fontSize: 11, fontWeight: '600', fontFamily: 'Ubuntu-Medium' },
   newsGlossaryItem: { fontSize: 13, color: '#D1D5DB', lineHeight: 18, fontFamily: 'Ubuntu-Regular' },
   newsGlossaryItemLight: { color: '#4B5563' },
   newsControlsRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' },
@@ -5669,7 +6779,7 @@ const styles = StyleSheet.create({
   newsExtraSummaryLight: { color: '#4B5563' },
   newsModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
   newsModalBackdrop: { flex: 1 },
-  newsModalSheet: { backgroundColor: '#1E1E1E', borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 18, paddingBottom: 28, maxHeight: '98%' },
+  newsModalSheet: { backgroundColor: '#1E1E1E', borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 18, paddingBottom: 0, maxHeight: '98%' },
   newsModalSheetLight: { backgroundColor: '#FFFFFF' },
   newsModalHandle: { width: 42, height: 4, borderRadius: 999, alignSelf: 'center', backgroundColor: '#4B5563', marginBottom: 12 },
   newsModalHandleLight: { backgroundColor: '#E5E7EB' },
@@ -5910,7 +7020,16 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: '100%',
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.55)',
+  },
+  magazineHeroGradientOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '100%',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 16,
   },
   magazineHeroOverlayContent: {
     position: 'absolute',
@@ -5938,8 +7057,11 @@ const styles = StyleSheet.create({
   magazineHeroTitle: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#0D3B4A',
     lineHeight: 22,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   magazineHeroSummary: {
     fontSize: 13,
@@ -5954,19 +7076,19 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   magazineVocabChip: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(13,59,74,0.12)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
   magazineVocabText: {
-    color: '#FFFFFF',
+    color: '#0D3B4A',
     fontSize: 11,
     fontWeight: '700',
   },
   magazineDualRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
     marginBottom: 4,
   },
   magazineDualCardWrap: {
@@ -5974,22 +7096,23 @@ const styles = StyleSheet.create({
   },
   magazineDualCard: {
     borderRadius: 16,
+    backgroundColor: '#1E1E1E',
     overflow: 'hidden',
-    backgroundColor: 'transparent',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
   },
   magazineDualCardLight: {
-    backgroundColor: 'transparent',
-    shadowOpacity: 0.08,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderBottomWidth: 4,
   },
   magazineDualImage: {
     width: '100%',
-    height: 90,
+    height: 100,
+    borderRadius: 10,
     resizeMode: 'cover',
+    marginHorizontal: 10,
+    marginTop: 10,
+    alignSelf: 'center',
   },
   magazineDualContent: {
     padding: 12,
@@ -6024,26 +7147,30 @@ const styles = StyleSheet.create({
   magazineListCard: {
     flexDirection: 'row',
     borderRadius: 14,
+    backgroundColor: '#1E1E1E',
+    minHeight: 120,
     overflow: 'hidden',
-    backgroundColor: 'transparent',
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
+    borderTopLeftRadius: 2,
+    borderBottomLeftRadius: 2,
   },
   magazineListCardLight: {
-    backgroundColor: 'transparent',
-    shadowOpacity: 0.06,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderLeftWidth: 4,
   },
   magazineListImage: {
-    width: 100,
-    height: 90,
+    width: 130,
+    height: '100%',
+    borderTopRightRadius: 14,
+    borderBottomRightRadius: 14,
     resizeMode: 'cover',
   },
   magazineListContent: {
     flex: 1,
-    padding: 12,
+    paddingVertical: 12,
+    paddingLeft: 14,
+    paddingRight: 8,
     justifyContent: 'center',
   },
   magazineListTitle: {
@@ -6060,6 +7187,306 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: 'rgba(255,255,255,0.55)',
     fontWeight: '600',
+  },
+
+  // Vocab Preview Modal Styles - Full screen elegant design
+  vocabPreviewOverlay: {
+    flex: 1,
+    backgroundColor: '#1A1A1A',
+  },
+  vocabPreviewOverlayLight: {
+    backgroundColor: '#F5F5F5',
+  },
+  vocabPreviewSafeArea: {
+    flex: 1,
+    paddingHorizontal: 24,
+  },
+  vocabPreviewCloseBtn: {
+    alignSelf: 'flex-end',
+    padding: 8,
+    marginTop: 8,
+  },
+  vocabPreviewHeaderNew: {
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  vocabPreviewBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 12,
+  },
+  vocabPreviewBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  vocabPreviewArticleTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    lineHeight: 22,
+    fontFamily: 'Ubuntu-Medium',
+  },
+  vocabPreviewProgressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 32,
+  },
+  vocabPreviewProgressBg: {
+    flex: 1,
+    height: 6,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  vocabPreviewProgressFill: {
+    height: '100%',
+    backgroundColor: '#437F76',
+    borderRadius: 3,
+  },
+  vocabPreviewProgressText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+    minWidth: 36,
+    textAlign: 'right',
+  },
+  vocabPreviewCardNew: {
+    flex: 1,
+    backgroundColor: '#252525',
+    borderRadius: 28,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  vocabPreviewCardNewLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+  },
+  vocabPreviewCardTouchable: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  vocabPreviewCardFront: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vocabPreviewWordNew: {
+    fontSize: 42,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 40,
+    fontFamily: 'Ubuntu-Bold',
+  },
+  vocabPreviewTapHint: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  vocabPreviewTapIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#333',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vocabPreviewTapText: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontFamily: 'Ubuntu-Regular',
+  },
+  vocabPreviewCardBackScroll: {
+    flex: 1,
+    width: '100%',
+  },
+  vocabPreviewCardBack: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  vocabPreviewWordBack: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#437F76',
+    textAlign: 'center',
+    marginBottom: 4,
+    fontFamily: 'Ubuntu-Bold',
+  },
+  vocabPreviewSynonyms: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 12,
+    fontFamily: 'Ubuntu-Regular',
+    fontStyle: 'italic',
+  },
+  vocabPreviewDivider: {
+    width: 60,
+    height: 3,
+    backgroundColor: '#333',
+    borderRadius: 2,
+    marginBottom: 16,
+  },
+  vocabPreviewDefinitionNew: {
+    fontSize: 17,
+    fontWeight: '500',
+    color: '#E5E7EB',
+    textAlign: 'center',
+    lineHeight: 26,
+    paddingHorizontal: 8,
+    fontFamily: 'Ubuntu-Medium',
+  },
+  vocabPreviewTranslationBox: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 14,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  vocabPreviewTranslationBoxLight: {
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    borderColor: 'rgba(0,0,0,0.06)',
+  },
+  vocabPreviewTranslationLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.45)',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  vocabPreviewTranslationLabelLight: {
+    color: '#9CA3AF',
+  },
+  vocabPreviewTranslationNew: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    textAlign: 'center',
+    fontFamily: 'Ubuntu-Medium',
+  },
+  vocabPreviewTranslationNewLight: {
+    color: '#374151',
+  },
+  vocabPreviewLoadingInBox: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+    textAlign: 'center',
+    marginTop: 12,
+    fontStyle: 'italic',
+  },
+  vocabPreviewExampleInBox: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  vocabPreviewExampleInBoxLight: {
+    borderTopColor: 'rgba(0,0,0,0.08)',
+  },
+  vocabPreviewExampleLabelInBox: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.45)',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  vocabPreviewExampleLabelInBoxLight: {
+    color: '#9CA3AF',
+  },
+  vocabPreviewExampleTextInBox: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.85)',
+    lineHeight: 22,
+    fontStyle: 'italic',
+    fontFamily: 'Ubuntu-Regular',
+    textAlign: 'center',
+  },
+  vocabPreviewExampleTextInBoxLight: {
+    color: '#4B5563',
+  },
+  vocabPreviewExampleBox: {
+    marginTop: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 14,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  vocabPreviewExampleLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#6B7280',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  vocabPreviewExampleText: {
+    fontSize: 15,
+    color: '#D1D5DB',
+    lineHeight: 22,
+    fontStyle: 'italic',
+    fontFamily: 'Ubuntu-Regular',
+  },
+  vocabPreviewLoadingBox: {
+    marginTop: 16,
+    paddingVertical: 12,
+  },
+  vocabPreviewLoadingText: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    fontFamily: 'Ubuntu-Regular',
+  },
+  vocabPreviewBottomActions: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingBottom: 16,
+  },
+  vocabPreviewSkipBtnNew: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#333',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vocabPreviewSkipTextNew: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#9CA3AF',
+    fontFamily: 'Ubuntu-Medium',
+  },
+  vocabPreviewNextBtn: {
+    flex: 1.5,
+    paddingVertical: 16,
+    borderRadius: 16,
+    backgroundColor: '#437F76',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vocabPreviewNextBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    fontFamily: 'Ubuntu-Bold',
   },
 
 });

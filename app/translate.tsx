@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Platform, KeyboardAvoidingView, DeviceEventEmitter } from 'react-native';
 // Removed keyboard accessory to let iOS render native keyboard edge
 import { useRouter } from 'expo-router';
 import { useAppStore } from '../lib/store';
@@ -167,7 +167,7 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, paddingTop: 0 }}
+        contentContainerStyle={{ padding: 16, paddingTop: 0, paddingBottom: 100 }}
         keyboardShouldPersistTaps="handled"
         onScroll={(e) => {
           try {
@@ -332,10 +332,14 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
                     targetId = created?.id || folders[0]?.id;
                     title = created?.title || 'Translated Words';
                   }
-                  if (targetId) router.push({ pathname: '/vault-folder', params: { id: targetId, title: title || 'Translated Words' } });
-                  else router.push('/vault');
+                  // Close translate overlay and navigate to folder
+                  if (targetId) {
+                    DeviceEventEmitter.emit('CLOSE_TRANSLATE_AND_NAVIGATE', { pathname: '/vault-folder', params: { id: targetId, title: title || 'Translated Words' } });
+                  } else {
+                    DeviceEventEmitter.emit('CLOSE_TRANSLATE_AND_NAVIGATE', { pathname: '/vault' });
+                  }
                 } catch {
-                  router.push('/vault');
+                  DeviceEventEmitter.emit('CLOSE_TRANSLATE_AND_NAVIGATE', { pathname: '/vault' });
                 }
               }}
               accessibilityLabel="View Saved Translations"

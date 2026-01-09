@@ -192,45 +192,70 @@ export default function WordIntro({
     const key = item.word.toLowerCase();
     const isSaved = savedMap[key];
     return (
-      <View style={[styles.slide, { width: SCREEN_WIDTH - 40 }]}> 
-        {/* Pronunciation button */}
-        <TouchableOpacity
-          style={[styles.speakerBtn, speakingFor === item.word && styles.speakerBtnActive]}
-          onPress={() => {
-            try {
-              if (speakingFor) {
-                Speech?.stop?.();
-                setSpeakingFor(null);
-              }
-              const toSpeak = item.word;
-              setSpeakingFor(toSpeak);
-              Speech?.speak?.(toSpeak, {
-                language: 'en-US',
-                rate: 1.0,
-                pitch: 1.0,
-                onDone: () => setSpeakingFor(prev => (prev === toSpeak ? null : prev)),
-                onStopped: () => setSpeakingFor(prev => (prev === toSpeak ? null : prev)),
-                onError: () => setSpeakingFor(prev => (prev === toSpeak ? null : prev)),
-              });
-            } catch {}
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={`Play pronunciation for ${item.word}`}
-        >
-          <Volume2 size={18} color={speakingFor === item.word ? ACCENT_COLOR : TEXT_MUTED} />
-        </TouchableOpacity>
-        <View style={styles.wordSection}>
-          <Text style={styles.wordLabel}>{item.word}</Text>
-          {item.ipa ? <Text style={styles.wordIpa}>{item.ipa}</Text> : null}
-          <Text style={styles.wordDefinition}>{item.definition}</Text>
+      <View style={[styles.slide, { width: SCREEN_WIDTH - 40 }]}>
+        {/* Glossy overlay effect */}
+        <View style={styles.glossyOverlay} pointerEvents="none" />
+        {/* Header row with word and speaker */}
+        <View style={styles.headerRow}>
+          <View style={styles.wordHeader}>
+            <Text style={styles.wordLabel}>{item.word}</Text>
+            {item.ipa ? <Text style={styles.wordIpa}>{item.ipa}</Text> : null}
+          </View>
+          {/* Pronunciation button */}
+          <TouchableOpacity
+            style={[styles.speakerBtn, speakingFor === item.word && styles.speakerBtnActive]}
+            onPress={() => {
+              try {
+                if (speakingFor) {
+                  Speech?.stop?.();
+                  setSpeakingFor(null);
+                }
+                const toSpeak = item.word;
+                setSpeakingFor(toSpeak);
+                Speech?.speak?.(toSpeak, {
+                  language: 'en-US',
+                  rate: 1.0,
+                  pitch: 1.0,
+                  onDone: () => setSpeakingFor(prev => (prev === toSpeak ? null : prev)),
+                  onStopped: () => setSpeakingFor(prev => (prev === toSpeak ? null : prev)),
+                  onError: () => setSpeakingFor(prev => (prev === toSpeak ? null : prev)),
+                });
+              } catch {}
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`Play pronunciation for ${item.word}`}
+          >
+            <Volume2 size={22} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.exampleCard}>
+        {/* Definition section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Definition</Text>
+          <Text style={styles.definitionText}>{item.definition}</Text>
+        </View>
+
+        {/* Example section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Example</Text>
           <HighlightedExample example={item.example} highlight={item.word} />
         </View>
 
-        {renderSynonyms(item.synonyms)}
+        {/* Synonyms section */}
+        {item.synonyms && item.synonyms.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Synonyms</Text>
+            <View style={styles.synonymWrapper}>
+              {item.synonyms.map(syn => (
+                <View key={syn} style={styles.synonymChip}>
+                  <Text style={styles.synonymText}>{syn}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
+        {/* Save button */}
         <TouchableOpacity
           style={[styles.saveButton, isSaved && styles.saveButtonSaved]}
           onPress={() => handleSave(item)}
@@ -326,107 +351,146 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   slide: {
-    backgroundColor: '#2c2f2f',
-    borderRadius: 20,
+    backgroundColor: '#323535',
+    borderRadius: 24,
     padding: 24,
     marginRight: 20,
-    position: 'relative',
+    borderWidth: 2,
+    borderColor: 'rgba(78, 217, 203, 0.2)',
+    overflow: 'hidden',
+    // 3D shadow effect
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
   },
-  speakerBtn: {
+  glossyOverlay: {
     position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.12)',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '40%',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
-  speakerBtnActive: {
-    backgroundColor: 'rgba(248,176,112,0.12)',
-    borderColor: 'rgba(248,176,112,0.35)',
-  },
-  wordSection: {
-    alignItems: 'center',
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 24,
   },
+  wordHeader: {
+    flex: 1,
+  },
+  speakerBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4ED9CB',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    // 3D effect
+    shadowColor: '#3BB8AC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+  },
+  speakerBtnActive: {
+    backgroundColor: ACCENT_COLOR,
+    borderColor: 'rgba(255,255,255,0.4)',
+    shadowColor: '#CC7A02',
+  },
   wordLabel: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '700',
     color: TEXT_PRIMARY,
-    textTransform: 'capitalize',
+    letterSpacing: -0.5,
   },
   wordIpa: {
-    fontSize: 14,
+    fontSize: 16,
     color: TEXT_MUTED,
     fontStyle: 'italic',
-    marginTop: 6,
+    marginTop: 4,
   },
-  wordDefinition: {
-    fontSize: 14,
-    color: '#E5E7EB',
-    textAlign: 'center',
-    marginTop: 16,
-    lineHeight: 22,
-  },
-  exampleCard: {
+  section: {
     marginBottom: 20,
-    padding: 16,
-    borderRadius: 14,
-    backgroundColor: '#1f1f1f',
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: ACCENT_COLOR,
+    marginBottom: 8,
+    letterSpacing: 0.3,
+  },
+  definitionText: {
+    fontSize: 16,
+    color: TEXT_PRIMARY,
+    lineHeight: 24,
   },
   exampleText: {
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: 15,
+    lineHeight: 24,
     color: '#E5E7EB',
+    fontStyle: 'italic',
   },
   exampleHighlight: {
     color: ACCENT_COLOR,
     fontWeight: '700',
+    fontStyle: 'normal',
   },
   synonymWrapper: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 24,
+    gap: 10,
   },
   synonymChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: SYNONYM_BG,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(78, 217, 203, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(78, 217, 203, 0.3)',
   },
   synonymText: {
-    fontSize: 11,
-    color: SYNONYM_TEXT,
-    textTransform: 'capitalize',
+    fontSize: 14,
+    color: '#ffc09f',
+    fontWeight: '500',
   },
   saveButton: {
     backgroundColor: ACCENT_COLOR,
-    borderRadius: 24,
-    paddingVertical: 14,
+    borderRadius: 28,
+    paddingVertical: 16,
     alignItems: 'center',
-    marginBottom: 24,
+    marginTop: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+    // 3D effect
+    shadowColor: '#CC7A02',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
   },
   saveButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   saveIcon: {
-    width: 22,
-    height: 22,
+    width: 24,
+    height: 24,
   },
   saveButtonSaved: {
-    backgroundColor: BUTTON_SAVED_BG,
+    backgroundColor: '#4ED9CB',
+    shadowColor: '#3BB8AC',
   },
   saveButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#1E1E1E',
+    fontSize: 16,
+    fontWeight: '700',
   },
   saveButtonTextSaved: {
     color: '#fff',

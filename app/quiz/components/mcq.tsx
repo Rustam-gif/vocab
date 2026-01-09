@@ -9,7 +9,8 @@ import {
   Dimensions,
   ScrollView
 } from 'react-native';
-import { ChevronRight } from 'lucide-react-native';
+import { ChevronRight, Volume2 } from 'lucide-react-native';
+import { speak } from '../../../lib/speech';
 import LottieView from 'lottie-react-native';
 import { useAppStore } from '../../../lib/store';
 import { getTheme } from '../../../lib/theme';
@@ -2985,6 +2986,14 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
+          <TouchableOpacity
+            style={[styles.speakButtonCorner, isLight && styles.speakButtonCornerLight]}
+            onPress={() => speak(currentQuestion.word)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Volume2 size={20} color={isLight ? '#0D3B4A' : '#B6E0E2'} />
+          </TouchableOpacity>
+
           <View style={styles.wordHeader}>
             <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{currentQuestion.word}</Text>
             <Text style={[styles.ipaText, isLight && { color: '#6B7280' }]}>{currentQuestion.ipa}</Text>
@@ -3057,7 +3066,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: '#9CA3AF',
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   header: {
     paddingHorizontal: 20,
@@ -3073,7 +3082,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9CA3AF',
     fontWeight: '500',
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   scoreWrapper: {
     alignItems: 'center',
@@ -3086,13 +3095,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#F87171',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   scoreText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#F8B070',
-    fontFamily: 'Ubuntu-Bold',
+    color: '#F25E86',
+    fontFamily: 'Feather-Bold',
   },
   progressBar: {
     height: 6,
@@ -3103,25 +3112,37 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#F8B070',
+    backgroundColor: '#F25E86',
     borderRadius: 3,
   },
   wordHeader: {
     alignItems: 'center',
     marginBottom: 32,
   },
+  speakButtonCorner: {
+    position: 'absolute',
+    top: 4,
+    right: 12,
+    padding: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(182, 224, 226, 0.15)',
+    zIndex: 10,
+  },
+  speakButtonCornerLight: {
+    backgroundColor: 'rgba(13, 59, 74, 0.1)',
+  },
   wordText: {
     fontSize: 32,
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 8,
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   ipaText: {
     fontSize: 18,
     color: '#9CA3AF',
     fontStyle: 'italic',
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   exampleInline: {
     marginTop: 8,
@@ -3129,7 +3150,7 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontStyle: 'italic',
     textAlign: 'center',
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   optionsContainer: {
     marginBottom: 20,
@@ -3142,8 +3163,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   optionButton: {
-    backgroundColor: '#3A3A3A',
-    borderRadius: 12,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 16,
     paddingVertical: 18,
     paddingHorizontal: 20,
     marginBottom: 0,
@@ -3151,35 +3172,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: 72,
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
   },
   // Light mode card color to match Learn cards
-  optionLight: { backgroundColor: '#FFFFFF', borderWidth: StyleSheet.hairlineWidth, borderColor: '#FFFFFF' },
+  optionLight: { backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: 'rgba(78,217,203,0.3)' },
   // Brighter selected state before feedback (dark and light variants)
-  selectedOption: { backgroundColor: 'rgba(248, 176, 112, 0.18)', borderWidth: 2, borderColor: '#F8B070' },
-  selectedOptionLight: { backgroundColor: '#FBE8DB', borderWidth: 2, borderColor: '#F8B070' },
+  selectedOption: { backgroundColor: 'rgba(242,94,134,0.15)', borderWidth: 2, borderColor: '#F25E86' },
+  selectedOptionLight: { backgroundColor: 'rgba(242,94,134,0.1)', borderWidth: 2, borderColor: '#F25E86' },
   // Reveal states
-  // Dark theme strong colors
-  correctOption: { backgroundColor: '#437F76' },
-  wrongOption: { backgroundColor: '#924646' },
-  // Light theme soft, less saturated colors (≈50% tint)
-  correctOptionLight: { backgroundColor: '#A1BFBA' },
-  wrongOptionLight: { backgroundColor: '#C9A3A3' },
+  // Dark theme - teal for correct, pink for wrong
+  correctOption: { backgroundColor: 'rgba(78,217,203,0.2)', borderColor: '#4ED9CB', borderWidth: 2 },
+  wrongOption: { backgroundColor: 'rgba(242,94,134,0.2)', borderColor: '#F25E86', borderWidth: 2 },
+  // Light theme - subtle tints
+  correctOptionLight: { backgroundColor: 'rgba(78,217,203,0.15)', borderColor: '#4ED9CB' },
+  wrongOptionLight: { backgroundColor: 'rgba(242,94,134,0.15)', borderColor: '#F25E86' },
   optionText: {
     fontSize: 16,
     color: '#fff',
     flex: 1,
     fontWeight: '500',
     textAlignVertical: 'center',
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   highlightedWord: {
     fontWeight: 'bold',
-    color: '#F8B070',
-    fontFamily: 'Ubuntu-Bold',
+    color: '#F25E86',
+    fontFamily: 'Feather-Bold',
   },
   nextButton: {
     marginTop: 16,
-    backgroundColor: '#F8B070',
+    backgroundColor: '#F25E86',
     borderRadius: 20,
     paddingVertical: 18,
     paddingHorizontal: 32,
@@ -3191,7 +3214,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   nextButtonDisabled: {
     opacity: 0.6,

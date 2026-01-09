@@ -6,6 +6,7 @@ import { Word, User, Story, ExerciseResult, NewWordPayload } from '../types';
 import { vaultService } from '../services/VaultService';
 import { analyticsService } from '../services/AnalyticsService';
 import { ProgressService } from '../services/ProgressService';
+import { engagementTrackingService } from '../services/EngagementTrackingService';
 
 interface AppState {
   // User state
@@ -94,6 +95,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       const newWord = await vaultService.addWord(wordData);
       if (newWord) {
         set(state => ({ words: [...state.words, newWord] }));
+        // Track word saved event
+        engagementTrackingService.trackEvent('word_saved', null, {
+          word: newWord.word,
+          folderId: newWord.folderId,
+        });
       }
       return newWord;
     } catch (error) {
@@ -117,11 +123,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   deleteWord: async (id) => {
     try {
+      // Get word before deleting for tracking
+      const wordToDelete = get().words.find(w => w.id === id);
       const success = await vaultService.deleteWord(id);
       if (success) {
         set(state => ({
           words: state.words.filter(word => word.id !== id)
         }));
+        // Track word deleted event
+        engagementTrackingService.trackEvent('word_deleted', null, {
+          word: wordToDelete?.word,
+        });
       }
     } catch (error) {
       console.error('Failed to delete word:', error);
@@ -358,6 +370,22 @@ export const useAppStore = create<AppState>((set, get) => ({
   initialize: async () => {
     console.log('[Store] Initializing app...');
 
+    // Diagnostic: Check if AsyncStorage persists across restarts
+    const PERSIST_TEST_KEY = '@engniter.persist_test';
+    try {
+      const existingTest = await AsyncStorage.getItem(PERSIST_TEST_KEY);
+      const now = new Date().toISOString();
+      if (existingTest) {
+        console.log('[Store] PERSIST TEST: Previous value found:', existingTest, '- Storage IS persisting!');
+      } else {
+        console.log('[Store] PERSIST TEST: No previous value - this is first launch or storage was cleared');
+      }
+      await AsyncStorage.setItem(PERSIST_TEST_KEY, now);
+      console.log('[Store] PERSIST TEST: Saved new timestamp:', now);
+    } catch (e) {
+      console.error('[Store] PERSIST TEST FAILED:', e);
+    }
+
     const normalizeTheme = (raw: any): ThemeName | null => {
       if (raw === 'light' || raw === 'dark') return raw;
       if (typeof raw === 'string') {
@@ -379,17 +407,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     let langs: string[] | null = null;
     try {
       const storedTheme = await AsyncStorage.getItem('@engniter.theme');
+      console.log('[Store] Raw stored theme from AsyncStorage:', JSON.stringify(storedTheme));
       const parsedTheme = normalizeTheme(storedTheme);
       if (parsedTheme) themePref = parsedTheme;
+      console.log('[Store] Parsed theme preference:', themePref);
     } catch (err) {
       console.warn('[Store] failed to read saved theme', err);
     }
 
     try {
       const s = await AsyncStorage.getItem('@engniter.langs');
+      console.log('[Store] Raw stored langs from AsyncStorage:', JSON.stringify(s));
       const parsed = s ? JSON.parse(s) : [];
       const normalized = normalizeLangs(parsed);
       if (normalized.length) langs = normalized;
+      console.log('[Store] Parsed language preferences:', langs);
     } catch (err) {
       console.warn('[Store] failed to read saved langs', err);
     }

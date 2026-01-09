@@ -46,7 +46,7 @@ export default function VaultWordScreen() {
       <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
         <View style={[styles.header, isLight && styles.headerLight]}>
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
+            <ArrowLeft size={24} color={isLight ? '#0F766E' : '#4ED9CB'} />
           </TouchableOpacity>
           <Text style={[styles.title, isLight && styles.titleLight]}>Word</Text>
           <View style={{ width: 40 }} />
@@ -62,7 +62,7 @@ export default function VaultWordScreen() {
     <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
       <View style={[styles.header, isLight && styles.headerLight]}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
+          <ArrowLeft size={24} color={isLight ? '#0F766E' : '#4ED9CB'} />
         </TouchableOpacity>
         <Text style={[styles.title, isLight && styles.titleLight]} numberOfLines={1} ellipsizeMode="tail">{item.word}</Text>
         <TouchableOpacity
@@ -74,7 +74,7 @@ export default function VaultWordScreen() {
             } catch {}
           }}
         >
-          <Volume2 size={18} color={isLight ? '#111827' : '#E5E7EB'} />
+          <Volume2 size={18} color={isLight ? '#0F766E' : '#4ED9CB'} />
         </TouchableOpacity>
       </View>
 
@@ -93,7 +93,7 @@ export default function VaultWordScreen() {
               <Text style={[styles.sectionTitle, isLight && { color: '#111827' }]}>Translation</Text>
               {trLoading ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <ActivityIndicator color={colors.accent} />
+                  <ActivityIndicator color="#F25E86" />
                   <Text style={[{ color: '#9CA3AF' }, isLight && { color: '#6B7280' }]}>Translating…</Text>
                 </View>
               ) : translation ? (
@@ -128,18 +128,51 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
   headerLight: {},
   backButton: { padding: 8 },
-  title: { fontSize: 18, fontWeight: '700', color: '#fff', flex: 1, textAlign: 'center', fontFamily: 'Ubuntu-Bold' },
+  title: { fontSize: 18, fontWeight: '700', color: '#fff', flex: 1, textAlign: 'center', fontFamily: 'Feather-Bold' },
   titleLight: { color: '#111827' },
-  speakBtn: { padding: 8, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.06)' },
-  speakBtnLight: { backgroundColor: '#E9E6E0' },
+  speakBtn: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(78,217,203,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(78,217,203,0.25)',
+  },
+  speakBtnLight: { backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: 'rgba(78,217,203,0.3)' },
   content: { flex: 1, padding: 16 },
-  card: { backgroundColor: '#2A2A2A', borderRadius: 16, padding: 16 },
-  cardLight: { backgroundColor: '#FFFFFF' },
-  sectionTitle: { color: '#E28743', fontWeight: '800', marginTop: 6, marginBottom: 6, fontFamily: 'Ubuntu-Bold' },
-  definition: { color: '#E5E7EB', fontSize: 16, lineHeight: 22, fontFamily: 'Ubuntu-Regular' },
-  example: { color: '#9CA3AF', fontSize: 14, fontStyle: 'italic', fontFamily: 'Ubuntu-Regular' },
-  translationBox: { marginTop: 14, padding: 12, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.06)' },
-  translationBoxLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5DED3' },
-  translationText: { color: '#E5E7EB', fontSize: 14, lineHeight: 20, fontFamily: 'Ubuntu-Regular' },
-  translationExample: { color: '#9CA3AF', fontStyle: 'italic', marginTop: 6, fontFamily: 'Ubuntu-Regular' },
+  card: {
+    backgroundColor: '#1F1F1F',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  cardLight: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.3)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  sectionTitle: { color: '#F25E86', fontWeight: '800', marginTop: 6, marginBottom: 6, fontFamily: 'Feather-Bold' },
+  definition: { color: '#E5E7EB', fontSize: 16, lineHeight: 22, fontFamily: 'Feather-Bold' },
+  example: { color: '#9CA3AF', fontSize: 14, fontStyle: 'italic', fontFamily: 'Feather-Bold' },
+  translationBox: {
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#2A2A2A',
+    borderWidth: 1,
+    borderColor: 'rgba(78,217,203,0.15)',
+  },
+  translationBoxLight: { backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: 'rgba(78,217,203,0.3)' },
+  translationText: { color: '#E5E7EB', fontSize: 14, lineHeight: 20, fontFamily: 'Feather-Bold' },
+  translationExample: { color: '#9CA3AF', fontStyle: 'italic', marginTop: 6, fontFamily: 'Feather-Bold' },
 });

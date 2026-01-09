@@ -214,7 +214,7 @@ export default function VaultScreen() {
     return (
       <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.accent} />
+          <ActivityIndicator size="large" color="#F25E86" />
           <Text style={[styles.loadingText, isLight && { color: '#4B5563' }]}>Loading your vocabulary...</Text>
         </View>
       </SafeAreaView>
@@ -238,7 +238,7 @@ export default function VaultScreen() {
             }
           }}
         >
-          <Plus size={24} color={isLight ? '#111827' : '#fff'} />
+          <Plus size={24} color={isLight ? '#0F766E' : '#4ED9CB'} />
         </TouchableOpacity>
       </View>
 
@@ -258,16 +258,16 @@ export default function VaultScreen() {
           <Text style={[styles.guideText, isLight && { color: '#4B5563' }]}>Create folders like “Travel”, “Work”, “Phrasal Verbs”, or “Daily Practice”.</Text>
         </View>
         <TouchableOpacity onPress={() => setShowFolderCreate(true)} style={[styles.guideBtn, isLight && styles.guideBtnLight]}>
-          <Text style={[styles.guideBtnText, isLight && { color: '#0D3B4A' }]}>Create</Text>
+          <Text style={[styles.guideBtnText, isLight && { color: '#FFFFFF' }]}>Create</Text>
         </TouchableOpacity>
       </View>
 
       <View style={[styles.searchContainer, isLight && styles.surfaceCard]}>
-        <Search size={20} color={isLight ? '#6B7280' : '#a0a0a0'} style={styles.searchIcon} />
+        <Search size={20} color={isLight ? '#0F766E' : '#4ED9CB'} style={styles.searchIcon} />
         <TextInput
           style={[styles.searchInput, isLight && { color: '#111827' }]}
           placeholder="Search words..."
-          placeholderTextColor={isLight ? '#6B7280' : '#a0a0a0'}
+          placeholderTextColor={isLight ? '#6B7280' : '#9CA3AF'}
           value={searchQuery}
           onChangeText={setSearchQuery}
           autoCorrect
@@ -282,7 +282,7 @@ export default function VaultScreen() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {foldersToShow.length === 0 ? (
           <View style={styles.emptyState}>
-            <BookOpen size={64} color={isLight ? '#6B7280' : '#a0a0a0'} />
+            <BookOpen size={64} color={isLight ? '#0F766E' : '#4ED9CB'} />
             <Text style={[styles.emptyTitle, isLight && { color: '#111827' }]}>
               {searchQuery ? 'No folders found' : 'No folders yet'}
             </Text>
@@ -342,7 +342,7 @@ export default function VaultScreen() {
                         }}
                         style={{ padding: 6 }}
                       >
-                        <Trash2 size={18} color={isLight ? '#6B7280' : '#a0a0a0'} />
+                        <Trash2 size={18} color="#F25E86" />
                       </TouchableOpacity>
                     )}
                   </TouchableOpacity>
@@ -362,7 +362,7 @@ export default function VaultScreen() {
             <TextInput
               style={[styles.modalInput, isLight && { backgroundColor: '#FFFFFF', color: '#111827' }]}
               placeholder="Enter a word..."
-              placeholderTextColor={isLight ? '#6B7280' : '#a0a0a0'}
+              placeholderTextColor={isLight ? '#6B7280' : '#9CA3AF'}
               value={newWord}
               onChangeText={setNewWord}
               autoFocus
@@ -393,8 +393,8 @@ export default function VaultScreen() {
               <Text style={[styles.modalSectionLabel, isLight && { color: '#6B7280' }]}>Choose a meaning</Text>
               {meaningsLoading && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                  <ActivityIndicator size="small" color={colors.accent} />
-                  <Text style={[{ color: '#a0a0a0' }, isLight && { color: '#6B7280' }]}>Fetching meanings…</Text>
+                  <ActivityIndicator size="small" color="#F25E86" />
+                  <Text style={[{ color: '#9CA3AF' }, isLight && { color: '#6B7280' }]}>Fetching meanings…</Text>
                 </View>
               )}
               {!meaningsLoading && meanings.length > 0 && (
@@ -458,7 +458,7 @@ export default function VaultScreen() {
             <TextInput
               style={[styles.modalInput, isLight && { backgroundColor: '#FFFFFF', color: '#111827' }]}
               placeholder="Folder title"
-              placeholderTextColor={isLight ? '#6B7280' : '#a0a0a0'}
+              placeholderTextColor={isLight ? '#6B7280' : '#9CA3AF'}
               value={newFolderTitle}
               onChangeText={setNewFolderTitle}
               autoFocus
@@ -501,7 +501,7 @@ export default function VaultScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1E1E1E',
   },
   loadingContainer: {
     flex: 1,
@@ -509,10 +509,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    color: '#a0a0a0',
+    color: '#9CA3AF',
     marginTop: 16,
     fontSize: 16,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   header: {
     flexDirection: 'row',
@@ -526,24 +526,28 @@ const styles = StyleSheet.create({
     // no divider in light mode either
   },
   meaningCard: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: '#2A2A2A',
     borderRadius: 12,
     padding: 12,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: 'rgba(78,217,203,0.15)',
   },
-  meaningCardLight: { backgroundColor: '#FFFFFF' },
-  meaningCardActive: { borderColor: '#F8B070', backgroundColor: 'rgba(248,176,112,0.15)' },
-  meaningDef: { color: '#E5E7EB', fontWeight: '700' },
+  meaningCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.3)',
+  },
+  meaningCardActive: { borderColor: '#F25E86', backgroundColor: 'rgba(242,94,134,0.15)' },
+  meaningDef: { color: '#E5E7EB', fontWeight: '700', fontFamily: 'Feather-Bold' },
   meaningDefLight: { color: '#111827' },
-  meaningExample: { color: '#9CA3AF', marginTop: 4, fontStyle: 'italic' },
+  meaningExample: { color: '#9CA3AF', marginTop: 4, fontStyle: 'italic', fontFamily: 'Feather-Bold' },
   meaningExampleLight: { color: '#6B7280' },
   title: {
     fontSize: 22,
     fontWeight: 'bold',
     color: '#fff',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   titleLight: { color: '#111827' },
   addButtonIcon: {
@@ -554,22 +558,60 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: 20,
     marginVertical: 16,
-    backgroundColor: '#2c2f2f',
+    backgroundColor: '#1F1F1F',
     borderRadius: 12,
     paddingHorizontal: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
   surfaceCard: {
     backgroundColor: '#FFFFFF',
-    borderColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.3)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   // Guide styles
-  guideCard: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, marginTop: 8, marginBottom: 6, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, padding: 12 },
-  guideCardLight: { backgroundColor: '#FFFFFF', borderWidth: StyleSheet.hairlineWidth, borderColor: '#E5E7EB' },
-  guideTitle: { color: '#E5E7EB', fontWeight: '800' },
-  guideText: { color: '#9CA3AF', marginTop: 2, fontSize: 12 },
-  guideBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: '#B6E0E2' },
-  guideBtnLight: { backgroundColor: '#B6E0E2' },
-  guideBtnText: { color: '#0D3B4A', fontWeight: '800' },
+  guideCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 6,
+    backgroundColor: '#1F1F1F',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  guideCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.3)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  guideTitle: { color: '#E5E7EB', fontWeight: '800', fontFamily: 'Feather-Bold' },
+  guideText: { color: '#9CA3AF', marginTop: 2, fontSize: 12, fontFamily: 'Feather-Bold' },
+  guideBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: '#F25E86' },
+  guideBtnLight: { backgroundColor: '#F25E86' },
+  guideBtnText: { color: '#FFFFFF', fontWeight: '800', fontFamily: 'Feather-Bold' },
   searchIcon: {
     marginRight: 12,
   },
@@ -578,7 +620,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     paddingVertical: 12,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   content: {
     flex: 1,
@@ -596,22 +638,29 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginTop: 16,
     marginBottom: 8,
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   emptySubtitle: {
     fontSize: 16,
-    color: '#a0a0a0',
+    color: '#9CA3AF',
     textAlign: 'center',
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   wordsList: {
     paddingBottom: 20,
   },
   wordCard: {
-    backgroundColor: '#2c2f2f',
+    backgroundColor: '#1F1F1F',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
   wordHeader: {
     flexDirection: 'row',
@@ -624,7 +673,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     flex: 1,
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   scoreContainer: {
     flexDirection: 'row',
@@ -634,21 +683,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 4,
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   definitionText: {
     fontSize: 16,
-    color: '#e0e0e0',
+    color: '#E5E7EB',
     marginBottom: 8,
     lineHeight: 22,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   exampleText: {
     fontSize: 14,
-    color: '#a0a0a0',
+    color: '#9CA3AF',
     fontStyle: 'italic',
     marginBottom: 12,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   wordFooter: {
     flexDirection: 'row',
@@ -658,7 +707,7 @@ const styles = StyleSheet.create({
   moveButton: {
     marginTop: 10,
     alignSelf: 'flex-start',
-    backgroundColor: '#3A3A3A',
+    backgroundColor: '#2A2A2A',
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 8,
@@ -667,25 +716,27 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   folderChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#3A3A3A',
+    backgroundColor: '#2A2A2A',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
     marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(78,217,203,0.15)',
   },
   folderChipLight: {
-    backgroundColor: '#E9E6E0',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#D7D3CB',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.3)',
   },
   folderChipStatic: {
-    backgroundColor: '#2c2f2f',
+    backgroundColor: '#1F1F1F',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
@@ -693,13 +744,14 @@ const styles = StyleSheet.create({
   },
   folderChipActive: {
     borderWidth: 1,
-    borderColor: '#e28743',
+    borderColor: '#F25E86',
+    backgroundColor: 'rgba(242,94,134,0.15)',
   },
   folderChipText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   folderChipTextLight: {
     color: '#111827',
@@ -709,8 +761,8 @@ const styles = StyleSheet.create({
   },
   practiceText: {
     fontSize: 12,
-    color: '#a0a0a0',
-    fontFamily: 'Ubuntu-Regular',
+    color: '#9CA3AF',
+    fontFamily: 'Feather-Bold',
   },
   dateInfo: {
     flexDirection: 'row',
@@ -718,9 +770,9 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 12,
-    color: '#a0a0a0',
+    color: '#9CA3AF',
     marginLeft: 4,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   modalOverlay: {
     position: 'absolute',
@@ -733,11 +785,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#2c2f2f',
+    backgroundColor: '#1F1F1F',
     borderRadius: 16,
     padding: 24,
     width: '90%',
     maxWidth: 400,
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
   modalTitle: {
     fontSize: 20,
@@ -745,24 +804,24 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginBottom: 20,
     textAlign: 'center',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   modalInput: {
-    backgroundColor: '#3A3A3A',
+    backgroundColor: '#2A2A2A',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     color: '#fff',
     fontSize: 16,
     marginBottom: 20,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   modalSectionLabel: {
-    color: '#a0a0a0',
+    color: '#9CA3AF',
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.3,
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   modalButtons: {
     flexDirection: 'row',
@@ -775,37 +834,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: '#444',
+    backgroundColor: '#2A2A2A',
+    borderWidth: 1,
+    borderColor: 'rgba(78,217,203,0.2)',
   },
   cancelButtonLight: {
-    backgroundColor: '#E9E6E0',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.3)',
   },
   cancelButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   cancelButtonTextLight: {
     color: '#374151',
   },
   addButton: {
-    backgroundColor: '#e28743',
+    backgroundColor: '#F25E86',
   },
   addButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   newFolderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#2c2f2f',
+    backgroundColor: '#1F1F1F',
     borderRadius: 12,
     padding: 14,
     marginBottom: 8,
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
   },
   folderIcon: {
     width: 40,
@@ -819,26 +884,33 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   folderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2c2f2f',
+    backgroundColor: '#1F1F1F',
     borderRadius: 12,
     padding: 14,
     marginBottom: 8,
+    borderWidth: 1.5,
+    borderColor: 'rgba(78,217,203,0.15)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
   folderTitle: {
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   folderSubtitle: {
-    color: '#a0a0a0',
+    color: '#9CA3AF',
     fontSize: 13,
     marginTop: 2,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
 });

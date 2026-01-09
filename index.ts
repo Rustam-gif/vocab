@@ -15,6 +15,7 @@ import './lib/polyfills';
           const input = args[0];
           const url = typeof input === 'string' ? input : (input?.url || String(input));
           console.warn('[SafeFetch] network error for:', url);
+          console.warn('[SafeFetch] actual error:', e instanceof Error ? e.message : String(e));
         } catch {}
       }
       try {

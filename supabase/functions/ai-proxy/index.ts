@@ -142,6 +142,12 @@ serve(async (req) => {
   }
 
   try {
+    // Use max_completion_tokens for newer models (o1, gpt-5, etc.), max_tokens for others
+    const useNewTokenParam = model.startsWith('o1') || model.startsWith('gpt-5');
+    const tokenParam = useNewTokenParam
+      ? { max_completion_tokens: maxTokens }
+      : { max_tokens: maxTokens };
+
     const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -151,7 +157,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model,
         temperature,
-        max_tokens: maxTokens,
+        ...tokenParam,
         messages,
       }),
     });

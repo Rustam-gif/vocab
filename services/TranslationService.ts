@@ -84,7 +84,7 @@ No markdown, no commentary. Word: "${word}"`;
           { role: 'user', content: prompt },
         ],
         temperature: 0.2,
-        maxTokens: 160,
+        maxTokens: 500,
       });
       const content = resp?.content || '';
       let data: any = null;
@@ -182,7 +182,7 @@ No markdown, no commentary. Word: "${word}"`;
           { role: 'user', content: prompt },
         ],
         temperature: 0.2,
-        maxTokens: 160,
+        maxTokens: 500,
       });
       const content = resp?.content || '';
       let data: any = null;

@@ -12,6 +12,7 @@ module.exports = mergeConfig(defaultConfig, {
     assetExts: [
       ...defaultConfig.resolver.assetExts.filter(ext => ext !== 'svg'),
       'riv',
+      'lottie',
     ],
     sourceExts: [...defaultConfig.resolver.sourceExts, 'svg'],
     extraNodeModules: {

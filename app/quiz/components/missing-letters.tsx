@@ -45,25 +45,25 @@ const DARK_COLORS = {
   bg: '#1E1E1E',
   text: '#FFFFFF',
   sub: '#9CA3AF',
-  slotNeutral: '#2F2F2F',
-  slotCorrect: '#437F76',
-  slotWrong: '#924646',
-  accent: '#F8B070',
-  border: '#3A3A3A',
-  hint: '#353535',
+  slotNeutral: '#3A3A3A',
+  slotCorrect: 'rgba(78,217,203,0.22)',
+  slotWrong: 'rgba(242,94,134,0.22)',
+  accent: '#F25E86',
+  border: '#333',
+  hint: '#2A2A2A',
 };
 
 const LIGHT_THEME = getTheme('light');
 const LIGHT_COLORS = {
   bg: LIGHT_THEME.background,      // '#F2E3D0'
   text: LIGHT_THEME.text,          // '#111827'
-  sub: LIGHT_THEME.subtext,        // '#4B5563'
-  slotNeutral: LIGHT_THEME.surface, // '#F9F1E7'
-  slotCorrect: '#A1BFBA',          // soft green
-  slotWrong: '#C9A3A3',            // soft red
-  accent: LIGHT_THEME.accent,      // '#F8B070'
-  border: LIGHT_THEME.border,      // '#F9F1E7'
-  hint: '#E5E7EB',
+  sub: '#6B7280',
+  slotNeutral: '#FFFFFF',
+  slotCorrect: 'rgba(78,217,203,0.18)',
+  slotWrong: 'rgba(242,94,134,0.18)',
+  accent: '#F25E86',
+  border: 'rgba(78,217,203,0.3)',
+  hint: '#F3F4F6',
 };
 
 type Slot = {
@@ -435,7 +435,7 @@ const darkStyles = StyleSheet.create({
     fontSize: 14,
     color: DARK_COLORS.sub,
     fontWeight: '500',
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   scoreWrapper: {
     alignItems: 'center',
@@ -448,13 +448,13 @@ const darkStyles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#F87171',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   scoreText: {
     fontSize: 16,
     fontWeight: '600',
     color: DARK_COLORS.accent,
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   progressBar: {
     height: 6,
@@ -477,13 +477,14 @@ const darkStyles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   ipa: {
     marginTop: 6,
     color: DARK_COLORS.sub,
     fontSize: 14,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
+    fontStyle: 'italic',
   },
   slotsRow: {
     position: 'absolute',
@@ -502,7 +503,7 @@ const darkStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: DARK_COLORS.border,
+    borderColor: 'rgba(78,217,203,0.15)',
   },
   slotFocused: {
     borderWidth: 3,
@@ -518,7 +519,7 @@ const darkStyles = StyleSheet.create({
     color: DARK_COLORS.text,
     fontSize: 20,
     fontWeight: '700',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   button: {
     backgroundColor: DARK_COLORS.accent,
@@ -538,7 +539,7 @@ const darkStyles = StyleSheet.create({
     color: DARK_COLORS.text,
     fontSize: 16,
     fontWeight: '700',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
 });
 
@@ -560,7 +561,7 @@ const lightStyles = StyleSheet.create({
     fontSize: 14,
     color: LIGHT_COLORS.sub,
     fontWeight: '500',
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
   scoreWrapper: {
     alignItems: 'center',
@@ -573,13 +574,13 @@ const lightStyles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#F87171',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   scoreText: {
     fontSize: 16,
     fontWeight: '600',
     color: LIGHT_COLORS.accent,
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   progressBar: {
     height: 6,
@@ -602,13 +603,14 @@ const lightStyles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   ipa: {
     marginTop: 6,
     color: LIGHT_COLORS.sub,
     fontSize: 14,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
+    fontStyle: 'italic',
   },
   slotsRow: {
     position: 'absolute',
@@ -627,7 +629,7 @@ const lightStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: LIGHT_COLORS.border,
+    borderColor: 'rgba(78,217,203,0.3)',
   },
   slotFocused: {
     borderWidth: 3,
@@ -643,7 +645,7 @@ const lightStyles = StyleSheet.create({
     color: LIGHT_COLORS.text,
     fontSize: 20,
     fontWeight: '700',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   button: {
     backgroundColor: LIGHT_COLORS.accent,
@@ -663,6 +665,6 @@ const lightStyles = StyleSheet.create({
     color: LIGHT_COLORS.text,
     fontSize: 16,
     fontWeight: '700',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
 });

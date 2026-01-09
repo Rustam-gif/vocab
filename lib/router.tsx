@@ -5,6 +5,8 @@ import PreloadService from '../services/PreloadService';
 import { DeviceEventEmitter } from 'react-native';
 import LimitModal from './LimitModal';
 import { supabase } from './supabase';
+import { User } from 'lucide-react-native';
+import { engagementTrackingService } from '../services/EngagementTrackingService';
 
 // Helper to map Supabase user to app user format
 const mapSupabaseUser = (user: any, progress?: any) => {
@@ -62,10 +64,11 @@ function normalize(input: string | Route): Route {
 
 // Helper to determine which tab a route belongs to
 function getTabForRoute(pathname: string): string {
-  if (pathname.startsWith('/quiz')) return 'quiz';
+  if (pathname.startsWith('/quiz') || pathname.startsWith('/placement')) return 'quiz';
   if (pathname.startsWith('/story')) return 'story';
-  if (pathname.startsWith('/vault')) return 'vault';
-  if (pathname.startsWith('/profile') || pathname.startsWith('/stats') || pathname.startsWith('/journal') || pathname.startsWith('/settings')) return 'account';
+  // Include all vault-related routes: /vault, /vault-folder, /vault-word, /flashcards, /word-sprint
+  if (pathname.startsWith('/vault') || pathname === '/vault-folder' || pathname === '/vault-word' || pathname === '/flashcards' || pathname === '/word-sprint') return 'vault';
+  if (pathname.startsWith('/profile') || pathname.startsWith('/stats') || pathname.startsWith('/journal') || pathname.startsWith('/settings') || pathname.startsWith('/report')) return 'account';
   return 'home';
 }
 
@@ -302,6 +305,10 @@ function ScreenFor(pathname: string): React.ComponentType<any> {
       return require('../app/placement/index').default;
     case '/placement/test':
       return require('../app/placement/test').default;
+    case '/placement/level-select':
+      return require('../app/placement/level-select').default;
+    case '/placement/word-test':
+      return require('../app/placement/word-test').default;
 	    case '/placement/result':
 	      return require('../app/placement/result').default;
 	    case '/story/StoryExercise':
@@ -548,6 +555,11 @@ export function RouteRenderer() {
     PreloadService.preloadForRoute(top.pathname).catch(() => {});
   }, [top.pathname]);
 
+  // Track screen views for engagement analytics
+  React.useEffect(() => {
+    engagementTrackingService.trackScreenView(top.pathname);
+  }, [top.pathname]);
+
   // Interactive back-swipe disabled to ensure stability. Use header back/taps.
 
   const overlayPaths = new Set<string>(['/translate']);
@@ -576,9 +588,26 @@ export function RouteRenderer() {
 
   // Tab switching function that preserves state
   const switchToTab = React.useCallback((tabKey: string, defaultRoute: Route) => {
-    // Save current stack to current tab before switching
     const currentTabKey = currentTabRef.current;
     const currentStack = stackRef.current;
+
+    // Home tab should always reset to home screen, never restore saved stack
+    if (tabKey === 'home') {
+      if (currentTabKey !== 'home') {
+        ctx.setTabStacks(prev => ({ ...prev, [currentTabKey]: [...currentStack] }));
+      }
+      ctx.setCurrentTab('home');
+      ctx.setStack([{ pathname: '/' }]);
+      return;
+    }
+
+    // If clicking the same tab that's already active, reset to default route
+    if (tabKey === currentTabKey) {
+      ctx.setStack([defaultRoute]);
+      return;
+    }
+
+    // Save current stack to current tab before switching
     ctx.setTabStacks(prev => ({ ...prev, [currentTabKey]: [...currentStack] }));
 
     // Switch to new tab
@@ -594,11 +623,11 @@ export function RouteRenderer() {
   }, [ctx.setTabStacks, ctx.setCurrentTab, ctx.setStack]);
 
   const navItems = [
-    { key: 'home', label: 'Home', icon: require('../assets/homepageicons/11.png'), go: () => switchToTab('home', { pathname: '/' }) },
-    { key: 'story', label: 'Story', icon: require('../assets/homepageicons/13.png'), go: () => switchToTab('story', { pathname: '/story/StoryExercise' }) },
-    { key: 'quiz', label: 'Learn', icon: require('../assets/homepageicons/12.png'), go: () => switchToTab('quiz', { pathname: '/quiz/learn' }) },
-    { key: 'vault', label: 'Vault', icon: require('../assets/homepageicons/book.png'), go: () => switchToTab('vault', { pathname: '/vault' }) },
-    { key: 'account', label: 'Profile', icon: require('../assets/homepageicons/15.png'), go: () => switchToTab('account', { pathname: '/profile' }) },
+    { key: 'home', label: 'Home', icon: require('../assets/homepageicons/11.png'), color: '#D97EB0', go: () => switchToTab('home', { pathname: '/' }) },
+    { key: 'story', label: 'Story', icon: require('../assets/homepageicons/13.png'), color: '#2D4B73', go: () => switchToTab('story', { pathname: '/story/StoryExercise' }) },
+    { key: 'quiz', label: 'Learn', icon: require('../assets/homepageicons/12.png'), color: '#F2AB27', go: () => switchToTab('quiz', { pathname: '/quiz/learn' }) },
+    { key: 'vault', label: 'Vault', icon: require('../assets/homepageicons/book.png'), color: '#C4A484', go: () => switchToTab('vault', { pathname: '/vault' }) },
+    { key: 'account', label: 'Profile', icon: null, lucideIcon: User, color: '#E07850', go: () => switchToTab('account', { pathname: '/profile' }) },
   ] as const;
   // Bottom-sheet style overlay for Translate
   const sheetAnim = React.useRef(new Animated.Value(0)).current; // 0 closed, 1 open
@@ -689,6 +718,27 @@ export function RouteRenderer() {
     });
     return () => sub.remove();
   }, [sheetAnim]);
+
+  // Close translate overlay and navigate to a new route
+  React.useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('CLOSE_TRANSLATE_AND_NAVIGATE', (payload: { pathname: string; params?: Record<string, any> }) => {
+      // Close the sheet with animation
+      try {
+        sheetClosingRef.current = true;
+        Animated.timing(sheetAnim, { toValue: 0, duration: 240, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => {
+          setSheetRoute(null);
+          sheetClosingRef.current = false;
+          // Navigate to the new route after sheet is closed
+          ctx.setStack([{ pathname: payload.pathname, params: payload.params }]);
+        });
+      } catch {
+        setSheetRoute(null);
+        sheetClosingRef.current = false;
+        ctx.setStack([{ pathname: payload.pathname, params: payload.params }]);
+      }
+    });
+    return () => sub.remove();
+  }, [sheetAnim, ctx]);
 
   // Scale pulse for active nav item to reduce visual flash on tab switch
   const navScalesRef = React.useRef<Record<string, Animated.Value>>({});
@@ -854,21 +904,14 @@ export function RouteRenderer() {
           position: 'absolute',
           left: 0,
           right: 0,
-          bottom: 8,
+          bottom: 0,
           zIndex: 50,
-          borderRadius: 26,
-          overflow: 'hidden',
-          shadowColor: '#000',
-          shadowOpacity: themeName === 'light' ? 0.1 : 0.25,
-          shadowRadius: 16,
-          shadowOffset: { width: 0, height: 4 },
-          elevation: themeName === 'light' ? 14 : 16,
           transform: [{ translateY: navAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 120] }) }],
           opacity: navAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
         }}
         {...dockPan.panHandlers}
       >
-        <View style={{ borderRadius: 18, overflow: 'hidden' }}>
+        <View style={{ overflow: 'hidden' }}>
           <View
             style={{
               position: 'absolute',
@@ -876,7 +919,7 @@ export function RouteRenderer() {
               bottom: 0,
               left: 0,
               right: 0,
-              backgroundColor: themeName === 'light' ? 'rgba(255,255,255,0.78)' : 'rgba(12,14,16,0.78)',
+              backgroundColor: themeName === 'light' ? '#FFFFFF' : '#0C0E10',
             }}
           />
           <View
@@ -884,16 +927,9 @@ export function RouteRenderer() {
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-around',
-              paddingVertical: 8,
+              paddingVertical: 10,
               paddingHorizontal: 12,
-              borderRadius: 18,
-              borderWidth: 1,
-              borderColor: themeName === 'light' ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.1)',
-              shadowColor: '#000',
-              shadowOpacity: themeName === 'light' ? 0.06 : 0.18,
-              shadowRadius: 10,
-              shadowOffset: { width: 0, height: 4 },
-              elevation: themeName === 'light' ? 12 : 14,
+              paddingBottom: 24,
             }}
           >
           {navItems.map((item, idx) => (
@@ -914,16 +950,19 @@ export function RouteRenderer() {
                   borderRadius: 10,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  borderWidth: active ? 3 : 0,
-                  borderColor: active ? '#F8B070' : 'transparent',
+                  backgroundColor: 'transparent',
                   opacity: 1,
                   transform: [
                     { scale: getNavScale(item.key) },
                   ],
                 }}
               >
-                <Image source={item.icon} style={{ width: 24, height: 24 }} resizeMode="contain" />
-                <Text style={{ marginTop: 1, fontSize: 9.5, fontWeight: '700', color: themeName === 'light' ? '#0F172A' : '#E5E7EB' }}>
+                {item.icon ? (
+                  <Image source={item.icon} style={{ width: 24, height: 24, opacity: active ? 1 : 0.5, ...(item.color ? { tintColor: item.color } : {}) }} resizeMode="contain" />
+                ) : item.lucideIcon ? (
+                  <item.lucideIcon size={24} color={item.color || '#888'} fill={item.color || '#888'} style={{ opacity: active ? 1 : 0.5 }} />
+                ) : null}
+                <Text style={{ marginTop: 1, fontSize: 9.5, fontWeight: active ? '700' : '500', color: active ? (themeName === 'light' ? '#0F172A' : '#E5E7EB') : (themeName === 'light' ? '#9CA3AF' : '#6B7280') }}>
                   {item.label}
                 </Text>
               </Animated.View>

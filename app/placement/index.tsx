@@ -83,15 +83,15 @@ export default function PlacementIntro() {
             }
           ]}
         >
-          <Text style={[styles.title, isLight && styles.titleLight]}>Placement Test</Text>
-          <Text style={[styles.subtitle, isLight && styles.subtitleLight]}>Find your level so practice fits you.</Text>
+          <Text style={[styles.title, isLight && styles.titleLight]}>Quick Assessment</Text>
+          <Text style={[styles.subtitle, isLight && styles.subtitleLight]}>Let's find your vocabulary level.</Text>
 
           <View style={[styles.infoRowBox, isLight && styles.infoRowBoxLight]}>
-            <Text style={[styles.infoRow, isLight && styles.infoRowLight]}>• Takes about 8–12 minutes</Text>
-            <Text style={[styles.infoRow, isLight && styles.infoRowLight]}>• Quick multiple choice</Text>
+            <Text style={[styles.infoRow, isLight && styles.infoRowLight]}>• Takes about 1–2 minutes</Text>
+            <Text style={[styles.infoRow, isLight && styles.infoRowLight]}>• Swipe words you know</Text>
           </View>
 
-          <TouchableOpacity onPress={() => router.replace('/placement/test')} activeOpacity={0.9}>
+          <TouchableOpacity onPress={() => router.replace('/placement/level-select')} activeOpacity={0.9}>
             <Animated.View style={{ transform: [{ scale: pulse }] }}>
               <LinearGradient
                 colors={isLight ? ['#F8B070', '#F2935C'] : ['#7CE7A0', '#1a8d87']}
@@ -105,7 +105,7 @@ export default function PlacementIntro() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => router.push('/quiz/level-select')}
+            onPress={() => router.replace('/quiz/level-select')}
             activeOpacity={0.9}
             style={[styles.skipBtn, isLight && styles.skipBtnLight]}
           >
@@ -120,7 +120,7 @@ export default function PlacementIntro() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121315',
+    backgroundColor: '#1E1E1E',
   },
   containerLight: {
     backgroundColor: '#F8F8F8',
@@ -134,9 +134,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   headerTitle: {
-    color: '#E5E7EB',
+    color: '#fff',
     fontSize: 17,
-    fontWeight: '800',
+    fontWeight: '600',
+    fontFamily: 'Ubuntu-Medium',
   },
   headerTitleLight: {
     color: '#111827',
@@ -150,27 +151,27 @@ const styles = StyleSheet.create({
     height: 220,
   },
   card: {
-    backgroundColor: '#1E2124',
-    borderRadius: 22,
+    backgroundColor: '#2A2D2D',
+    borderRadius: 16,
     padding: 22,
     borderWidth: 1,
-    borderColor: '#2A3033',
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   cardLight: {
     backgroundColor: '#FFFFFF',
-    borderColor: '#E5DED3',
-    shadowOpacity: 0.1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   title: {
-    color: '#E5E7EB',
+    color: '#fff',
     fontSize: 24,
-    fontWeight: '900',
+    fontWeight: '600',
     marginBottom: 6,
+    fontFamily: 'Ubuntu-Medium',
   },
   titleLight: {
     color: '#111827',
@@ -180,26 +181,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     marginBottom: 14,
+    fontFamily: 'Ubuntu-Medium',
   },
   subtitleLight: {
     color: '#6B7280',
   },
   infoRowBox: {
-    backgroundColor: '#262D30',
+    backgroundColor: 'rgba(67, 127, 118, 0.15)',
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#353D42',
+    borderColor: 'rgba(67, 127, 118, 0.3)',
   },
   infoRowBoxLight: {
-    backgroundColor: '#FBF8F4',
-    borderColor: '#E5DED3',
+    backgroundColor: 'rgba(67, 127, 118, 0.08)',
+    borderColor: 'rgba(67, 127, 118, 0.2)',
   },
   infoRow: {
     color: '#D1D5DB',
     fontSize: 14,
     marginVertical: 3,
     fontWeight: '500',
+    fontFamily: 'Ubuntu-Medium',
   },
   infoRowLight: {
     color: '#4B5563',
@@ -209,35 +212,33 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
-    shadowColor: '#7CE7A0',
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
   },
   ctaText: {
     color: '#0D1117',
-    fontWeight: '900',
+    fontWeight: '600',
     fontSize: 17,
+    fontFamily: 'Ubuntu-Medium',
   },
   skipBtn: {
     marginTop: 14,
     alignItems: 'center',
     paddingVertical: 14,
     borderRadius: 14,
-    backgroundColor: '#262D30',
-    borderWidth: 1,
-    borderColor: '#353D42',
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: '#437F76',
   },
   skipBtnLight: {
-    backgroundColor: '#F3F0EB',
-    borderColor: '#E5DED3',
+    backgroundColor: 'rgba(67, 127, 118, 0.08)',
+    borderColor: '#437F76',
   },
   skipLabel: {
-    color: '#E5E7EB',
-    fontWeight: '700',
+    color: '#437F76',
+    fontWeight: '600',
     fontSize: 15,
+    fontFamily: 'Ubuntu-Medium',
   },
   skipLabelLight: {
-    color: '#374151',
+    color: '#437F76',
   },
 });
