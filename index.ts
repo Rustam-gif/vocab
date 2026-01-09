@@ -1,3 +1,6 @@
+// Ensure gesture + Reanimated are initialized before any RN imports
+import 'react-native-gesture-handler';
+import 'react-native-reanimated';
 // Critical polyfills must be loaded before anything else
 import './lib/polyfills';
 // Safe global fetch: prevent redbox on offline/connection errors

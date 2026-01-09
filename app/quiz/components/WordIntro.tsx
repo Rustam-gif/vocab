@@ -6,21 +6,22 @@ import {
   TouchableOpacity,
   FlatList,
   Dimensions,
+  Animated,
 } from 'react-native';
-import { Volume2 } from 'lucide-react-native';
+import { Volume2, ChevronLeft, ChevronRight, Bookmark } from 'lucide-react-native';
 import Speech from '../../../lib/speech';
 import LottieView from 'lottie-react-native';
 import { levels } from '../data/levels';
 import { useAppStore } from '../../../lib/store';
 import type { NewWordPayload } from '../../../types';
-import AnimatedNextButton from './AnimatedNextButton';
+import LinearGradient from 'react-native-linear-gradient';
 
 const ACCENT_COLOR = '#F8B070';
-const SYNONYM_BG = '#3A3A3A';
-const SYNONYM_TEXT = '#E5E7EB';
-const BUTTON_SAVED_BG = '#437F76';
+const ACCENT_TEAL = '#4ED9CB';
 const TEXT_MUTED = '#9CA3AF';
 const TEXT_PRIMARY = '#F9FAFB';
+const CARD_BG_START = '#2A2D2E';
+const CARD_BG_END = '#1A1C1D';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -99,9 +100,11 @@ export default function WordIntro({
   const { addWord, words: savedWords } = useAppStore(state => ({ addWord: state.addWord, words: state.words }));
   const [savedMap, setSavedMap] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
-  // Lottie refs keyed per word so the bookmark can animate on tap
   const bookmarkRefs = useRef<Record<string, LottieView | null>>({});
   const [speakingFor, setSpeakingFor] = useState<string | null>(null);
+
+  // Animated progress bar
+  const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const existing = new Set(savedWords.map(w => w.word.toLowerCase()));
@@ -114,15 +117,31 @@ export default function WordIntro({
 
   useEffect(() => {
     if (wordsData.length > 0) {
-      onProgressChange((currentIndex + 1) / wordsData.length);
+      const progress = (currentIndex + 1) / wordsData.length;
+      onProgressChange(progress);
+      // Animate progress bar
+      Animated.spring(progressAnim, {
+        toValue: progress,
+        useNativeDriver: false,
+        tension: 50,
+        friction: 8,
+      }).start();
     } else {
       onProgressChange(0);
     }
-  }, [currentIndex, wordsData.length, onProgressChange]);
+  }, [currentIndex, wordsData.length, onProgressChange, progressAnim]);
 
   const scrollToIndex = useCallback((index: number) => {
     flatListRef.current?.scrollToIndex({ index, animated: true });
   }, []);
+
+  const handlePrev = useCallback(() => {
+    if (currentIndex > 0) {
+      const prev = currentIndex - 1;
+      setCurrentIndex(prev);
+      scrollToIndex(prev);
+    }
+  }, [currentIndex, scrollToIndex]);
 
   const handleNext = useCallback(() => {
     if (currentIndex < wordsData.length - 1) {
@@ -175,108 +194,102 @@ export default function WordIntro({
     setCurrentIndex(index);
   }, []);
 
-  const renderSynonyms = (synonyms: string[] | undefined) => {
-    if (!synonyms || synonyms.length === 0) return null;
-    return (
-      <View style={styles.synonymWrapper}>
-        {synonyms.map(syn => (
-          <View key={syn} style={styles.synonymChip}>
-            <Text style={styles.synonymText}>{syn}</Text>
-          </View>
-        ))}
-      </View>
-    );
-  };
-
   const renderItem = ({ item }: { item: IntroWord }) => {
     const key = item.word.toLowerCase();
     const isSaved = savedMap[key];
     return (
-      <View style={[styles.slide, { width: SCREEN_WIDTH - 40 }]}>
-        {/* Glossy overlay effect */}
-        <View style={styles.glossyOverlay} pointerEvents="none" />
-        {/* Header row with word and speaker */}
-        <View style={styles.headerRow}>
-          <View style={styles.wordHeader}>
-            <Text style={styles.wordLabel}>{item.word}</Text>
-            {item.ipa ? <Text style={styles.wordIpa}>{item.ipa}</Text> : null}
-          </View>
-          {/* Pronunciation button */}
-          <TouchableOpacity
-            style={[styles.speakerBtn, speakingFor === item.word && styles.speakerBtnActive]}
-            onPress={() => {
-              try {
-                if (speakingFor) {
-                  Speech?.stop?.();
-                  setSpeakingFor(null);
-                }
-                const toSpeak = item.word;
-                setSpeakingFor(toSpeak);
-                Speech?.speak?.(toSpeak, {
-                  language: 'en-US',
-                  rate: 1.0,
-                  pitch: 1.0,
-                  onDone: () => setSpeakingFor(prev => (prev === toSpeak ? null : prev)),
-                  onStopped: () => setSpeakingFor(prev => (prev === toSpeak ? null : prev)),
-                  onError: () => setSpeakingFor(prev => (prev === toSpeak ? null : prev)),
-                });
-              } catch {}
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`Play pronunciation for ${item.word}`}
-          >
-            <Volume2 size={22} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
+      <View style={[styles.slideOuter, { width: SCREEN_WIDTH - 40 }]}>
+        <LinearGradient
+          colors={[CARD_BG_START, CARD_BG_END]}
+          style={styles.slide}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+        >
+          {/* Decorative accent glow */}
+          <View style={styles.accentGlow} pointerEvents="none" />
 
-        {/* Definition section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Definition</Text>
-          <Text style={styles.definitionText}>{item.definition}</Text>
-        </View>
-
-        {/* Example section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Example</Text>
-          <HighlightedExample example={item.example} highlight={item.word} />
-        </View>
-
-        {/* Synonyms section */}
-        {item.synonyms && item.synonyms.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Synonyms</Text>
-            <View style={styles.synonymWrapper}>
-              {item.synonyms.map(syn => (
-                <View key={syn} style={styles.synonymChip}>
-                  <Text style={styles.synonymText}>{syn}</Text>
-                </View>
-              ))}
+          {/* Header row with word and actions */}
+          <View style={styles.headerRow}>
+            <View style={styles.wordHeader}>
+              <Text style={styles.wordLabel}>{item.word}</Text>
+              {item.ipa ? <Text style={styles.wordIpa}>{item.ipa}</Text> : null}
+            </View>
+            <View style={styles.headerActions}>
+              {/* Pronunciation button */}
+              <TouchableOpacity
+                style={[styles.iconBtn, speakingFor === item.word && styles.iconBtnActive]}
+                onPress={() => {
+                  try {
+                    if (speakingFor) {
+                      Speech?.stop?.();
+                      setSpeakingFor(null);
+                    }
+                    const toSpeak = item.word;
+                    setSpeakingFor(toSpeak);
+                    Speech?.speak?.(toSpeak, {
+                      language: 'en-US',
+                      rate: 1.0,
+                      pitch: 1.0,
+                      onDone: () => setSpeakingFor(prev => (prev === toSpeak ? null : prev)),
+                      onStopped: () => setSpeakingFor(prev => (prev === toSpeak ? null : prev)),
+                      onError: () => setSpeakingFor(prev => (prev === toSpeak ? null : prev)),
+                    });
+                  } catch {}
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Play pronunciation for ${item.word}`}
+              >
+                <Volume2 size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+              {/* Save button */}
+              <TouchableOpacity
+                style={[styles.iconBtn, isSaved && styles.iconBtnSaved]}
+                onPress={() => handleSave(item)}
+                disabled={isSaved || saving}
+                accessibilityRole="button"
+                accessibilityLabel={isSaved ? 'Word saved' : 'Save to vault'}
+              >
+                {!isSaved ? (
+                  <LottieView
+                    ref={(r) => { bookmarkRefs.current[key] = r; }}
+                    source={require('../../../assets/lottie/Bookmark.json')}
+                    autoPlay={false}
+                    loop={false}
+                    style={styles.bookmarkIcon}
+                  />
+                ) : (
+                  <Bookmark size={20} color="#FFFFFF" fill="#FFFFFF" />
+                )}
+              </TouchableOpacity>
             </View>
           </View>
-        )}
 
-        {/* Save button */}
-        <TouchableOpacity
-          style={[styles.saveButton, isSaved && styles.saveButtonSaved]}
-          onPress={() => handleSave(item)}
-          disabled={isSaved || saving}
-          accessibilityRole="button"
-        >
-          <View style={styles.saveButtonContent}>
-            {!isSaved && (
-              <LottieView
-                ref={(r) => { bookmarkRefs.current[key] = r; }}
-                source={require('../../../assets/lottie/Bookmark.json')}
-                autoPlay={false}
-                loop={false}
-                style={styles.saveIcon}
-              />
-            )}
-            <Text style={[styles.saveButtonText, isSaved && styles.saveButtonTextSaved]}>
-              {isSaved ? 'Saved' : 'Save to Vault'}
-            </Text>
+          {/* Definition section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>DEFINITION</Text>
+            <Text style={styles.definitionText}>{item.definition}</Text>
           </View>
-        </TouchableOpacity>
+
+          {/* Example section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>EXAMPLE</Text>
+            <HighlightedExample example={item.example} highlight={item.word} />
+          </View>
+
+          {/* Synonyms section */}
+          {item.synonyms && item.synonyms.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>SYNONYMS</Text>
+              <View style={styles.synonymWrapper}>
+                {item.synonyms.map(syn => (
+                  <View key={syn} style={styles.synonymChip}>
+                    <Text style={styles.synonymText}>{syn}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+        </LinearGradient>
       </View>
     );
   };
@@ -285,24 +298,52 @@ export default function WordIntro({
     return (
       <View style={styles.emptyContainer}>
         <Text style={styles.emptyText}>No words to review.</Text>
-        <AnimatedNextButton
-          onPress={() => onPhaseComplete(0, 0)}
-        />
+        <TouchableOpacity style={styles.continueBtn} onPress={() => onPhaseComplete(0, 0)}>
+          <Text style={styles.continueBtnText}>Continue</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
+  const isLastWord = currentIndex === wordsData.length - 1;
+  const isFirstWord = currentIndex === 0;
+
   return (
     <View style={styles.container}>
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={handleSkip} accessibilityRole="button">
-          <Text style={styles.skipText}>Skip intro</Text>
-        </TouchableOpacity>
-        <Text style={styles.counterText}>
-          {currentIndex + 1} / {wordsData.length}
-        </Text>
+      {/* Top section with progress */}
+      <View style={styles.topSection}>
+        <View style={styles.topBar}>
+          <TouchableOpacity onPress={handleSkip} accessibilityRole="button" style={styles.skipBtn}>
+            <Text style={styles.skipText}>Skip intro</Text>
+          </TouchableOpacity>
+          <View style={styles.progressInfo}>
+            <Text style={styles.progressText}>
+              <Text style={styles.progressCurrent}>{currentIndex + 1}</Text>
+              <Text style={styles.progressDivider}> / </Text>
+              <Text style={styles.progressTotal}>{wordsData.length}</Text>
+            </Text>
+          </View>
+        </View>
+
+        {/* Animated progress bar */}
+        <View style={styles.progressBarContainer}>
+          <View style={styles.progressBarBg}>
+            <Animated.View
+              style={[
+                styles.progressBarFill,
+                {
+                  width: progressAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0%', '100%'],
+                  }),
+                },
+              ]}
+            />
+          </View>
+        </View>
       </View>
 
+      {/* Word cards carousel */}
       <FlatList
         ref={flatListRef}
         data={wordsData}
@@ -316,10 +357,37 @@ export default function WordIntro({
         extraData={savedMap}
       />
 
-      <View style={styles.actionsRow}>
-        <AnimatedNextButton
+      {/* Navigation dots */}
+      <View style={styles.dotsContainer}>
+        {wordsData.map((_, idx) => (
+          <View
+            key={idx}
+            style={[
+              styles.dot,
+              idx === currentIndex && styles.dotActive,
+            ]}
+          />
+        ))}
+      </View>
+
+      {/* Bottom navigation */}
+      <View style={styles.navRow}>
+        <TouchableOpacity
+          style={[styles.navBtn, styles.navBtnPrev, isFirstWord && styles.navBtnDisabled]}
+          onPress={handlePrev}
+          disabled={isFirstWord}
+        >
+          <ChevronLeft size={24} color={isFirstWord ? '#555' : '#FFF'} />
+          <Text style={[styles.navBtnText, isFirstWord && styles.navBtnTextDisabled]}>Prev</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.navBtn, styles.navBtnNext]}
           onPress={handleNext}
-        />
+        >
+          <Text style={styles.navBtnText}>{isLastWord ? 'Start' : 'Next'}</Text>
+          <ChevronRight size={24} color="#FFF" />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -328,52 +396,87 @@ export default function WordIntro({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingVertical: 24,
+    paddingTop: 16,
+  },
+  topSection: {
+    paddingHorizontal: 20,
+    marginBottom: 16,
   },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 16,
+    marginBottom: 12,
+  },
+  skipBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
   skipText: {
     fontSize: 14,
     color: TEXT_MUTED,
     fontWeight: '500',
   },
-  counterText: {
-    fontSize: 14,
-    color: TEXT_MUTED,
+  progressInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  progressText: {
+    fontSize: 16,
     fontWeight: '600',
+  },
+  progressCurrent: {
+    color: ACCENT_TEAL,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  progressDivider: {
+    color: TEXT_MUTED,
+  },
+  progressTotal: {
+    color: TEXT_MUTED,
+  },
+  progressBarContainer: {
+    paddingHorizontal: 4,
+  },
+  progressBarBg: {
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: ACCENT_TEAL,
+    borderRadius: 3,
   },
   sliderContent: {
     paddingHorizontal: 20,
   },
+  slideOuter: {
+    marginRight: 20,
+  },
   slide: {
-    backgroundColor: '#323535',
     borderRadius: 24,
     padding: 24,
-    marginRight: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(78, 217, 203, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(78, 217, 203, 0.25)',
     overflow: 'hidden',
-    // 3D shadow effect
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 12,
+    minHeight: 380,
   },
-  glossyOverlay: {
+  accentGlow: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '40%',
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    top: -50,
+    right: -50,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(78, 217, 203, 0.08)',
   },
   headerRow: {
     flexDirection: 'row',
@@ -384,47 +487,53 @@ const styles = StyleSheet.create({
   wordHeader: {
     flex: 1,
   },
-  speakerBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  headerActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  iconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4ED9CB',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
-    // 3D effect
-    shadowColor: '#3BB8AC',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
+    backgroundColor: 'rgba(78, 217, 203, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(78, 217, 203, 0.3)',
   },
-  speakerBtnActive: {
+  iconBtnActive: {
     backgroundColor: ACCENT_COLOR,
-    borderColor: 'rgba(255,255,255,0.4)',
-    shadowColor: '#CC7A02',
+    borderColor: 'rgba(248, 176, 112, 0.5)',
+  },
+  iconBtnSaved: {
+    backgroundColor: '#437F76',
+    borderColor: 'rgba(67, 127, 118, 0.5)',
+  },
+  bookmarkIcon: {
+    width: 28,
+    height: 28,
   },
   wordLabel: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: '700',
     color: TEXT_PRIMARY,
     letterSpacing: -0.5,
   },
   wordIpa: {
-    fontSize: 16,
+    fontSize: 15,
     color: TEXT_MUTED,
     fontStyle: 'italic',
     marginTop: 4,
   },
   section: {
-    marginBottom: 20,
+    marginBottom: 18,
   },
   sectionLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: ACCENT_COLOR,
-    marginBottom: 8,
-    letterSpacing: 0.3,
+    fontSize: 11,
+    fontWeight: '700',
+    color: ACCENT_TEAL,
+    marginBottom: 6,
+    letterSpacing: 1.2,
   },
   definitionText: {
     fontSize: 16,
@@ -433,8 +542,8 @@ const styles = StyleSheet.create({
   },
   exampleText: {
     fontSize: 15,
-    lineHeight: 24,
-    color: '#E5E7EB',
+    lineHeight: 23,
+    color: '#D1D5DB',
     fontStyle: 'italic',
   },
   exampleHighlight: {
@@ -445,73 +554,77 @@ const styles = StyleSheet.create({
   synonymWrapper: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   synonymChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: 'rgba(78, 217, 203, 0.15)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: 'rgba(248, 176, 112, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(78, 217, 203, 0.3)',
+    borderColor: 'rgba(248, 176, 112, 0.25)',
   },
   synonymText: {
-    fontSize: 14,
-    color: '#ffc09f',
-    fontWeight: '500',
+    fontSize: 13,
+    color: ACCENT_COLOR,
+    fontWeight: '600',
   },
-  saveButton: {
-    backgroundColor: ACCENT_COLOR,
-    borderRadius: 28,
-    paddingVertical: 16,
+  dotsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
-    // 3D effect
-    shadowColor: '#CC7A02',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 16,
   },
-  saveButtonContent: {
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  dotActive: {
+    backgroundColor: ACCENT_TEAL,
+    width: 24,
+  },
+  navRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    gap: 16,
+  },
+  navBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 16,
+    gap: 6,
   },
-  saveIcon: {
-    width: 24,
-    height: 24,
+  navBtnPrev: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
-  saveButtonSaved: {
-    backgroundColor: '#4ED9CB',
-    shadowColor: '#3BB8AC',
+  navBtnNext: {
+    backgroundColor: ACCENT_TEAL,
+    shadowColor: ACCENT_TEAL,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
-  saveButtonText: {
-    color: '#1E1E1E',
+  navBtnDisabled: {
+    opacity: 0.4,
+  },
+  navBtnText: {
     fontSize: 16,
     fontWeight: '700',
+    color: '#FFF',
   },
-  saveButtonTextSaved: {
-    color: '#fff',
-  },
-  actionsRow: {
-    paddingHorizontal: 20,
-    marginTop: 8,
-  },
-  startButton: {
-    backgroundColor: ACCENT_COLOR,
-    borderRadius: 24,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  nextButton: {
-    alignSelf: 'stretch',
-  },
-  startButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+  navBtnTextDisabled: {
+    color: '#555',
   },
   emptyContainer: {
     flex: 1,
@@ -524,5 +637,16 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
     marginBottom: 20,
     textAlign: 'center',
+  },
+  continueBtn: {
+    backgroundColor: ACCENT_TEAL,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  continueBtnText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

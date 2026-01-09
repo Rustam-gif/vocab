@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { RouterProvider, RouteRenderer } from './lib/router';
 import LottieView from 'lottie-react-native';
 import { View, StyleSheet, Platform, TextInput, AppState, AppStateStatus } from 'react-native';
@@ -134,42 +135,44 @@ export default function App() {
 
 
   return (
-    <SafeAreaProvider>
-      <RouterProvider>
-        <RouteRenderer />
-        {/* No custom keyboard accessory; use native keyboard UI */}
-        {showLaunch && (
-          <View
-            style={[styles.launchOverlay, themeName === 'light' && { backgroundColor: colors.background }]}
-            pointerEvents="none"
-          >
-            <LottieView
-              ref={launchRef}
-              source={require('./assets/lottie/launch.json')}
-              autoPlay
-              loop={false}
-              speed={0.7}
-              onError={() => {
-                if (finishedRef.current) return;
-                finishedRef.current = true;
-                setShowLaunch(false);
-                try { Launch.markDone(); } catch {}
-              }}
-              onAnimationFinish={() => {
-                if (finishedRef.current) return;
-                finishedRef.current = true;
-                if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-                setTimeout(() => {
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <RouterProvider>
+          <RouteRenderer />
+          {/* No custom keyboard accessory; use native keyboard UI */}
+          {showLaunch && (
+            <View
+              style={[styles.launchOverlay, themeName === 'light' && { backgroundColor: colors.background }]}
+              pointerEvents="none"
+            >
+              <LottieView
+                ref={launchRef}
+                source={require('./assets/lottie/launch.json')}
+                autoPlay
+                loop={false}
+                speed={0.7}
+                onError={() => {
+                  if (finishedRef.current) return;
+                  finishedRef.current = true;
                   setShowLaunch(false);
                   try { Launch.markDone(); } catch {}
-                }, 2000);
-              }}
-              style={styles.launchLottie}
-            />
-          </View>
-        )}
-      </RouterProvider>
-    </SafeAreaProvider>
+                }}
+                onAnimationFinish={() => {
+                  if (finishedRef.current) return;
+                  finishedRef.current = true;
+                  if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+                  setTimeout(() => {
+                    setShowLaunch(false);
+                    try { Launch.markDone(); } catch {}
+                  }, 2000);
+                }}
+                style={styles.launchLottie}
+              />
+            </View>
+          )}
+        </RouterProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
