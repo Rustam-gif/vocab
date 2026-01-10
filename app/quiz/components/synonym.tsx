@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { useAppStore } from '../../../lib/store';
 import { getTheme } from '../../../lib/theme';
-import { Vibration } from 'react-native';
 import { analyticsService } from '../../../services/AnalyticsService';
 import AnimatedNextButton from './AnimatedNextButton';
 import { Volume2 } from 'lucide-react-native';
@@ -25,8 +24,8 @@ interface SynonymProps {
   setId: string;
   levelId: string;
   onPhaseComplete: (score: number, totalQuestions: number) => void;
-  sharedScore: number;
-  onScoreShare: (newScore: number) => void;
+  hearts: number;
+  onHeartLost: () => void;
   wordRange?: { start: number; end: number };
   wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
 }
@@ -734,7 +733,7 @@ const CORRECT_COLOR_LIGHT = '#4ED9CB';
 const INCORRECT_COLOR_LIGHT = '#F25E86';
 const ACCENT_COLOR = '#F25E86';
 
-export default function SynonymComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange, wordsOverride }: SynonymProps) {
+export default function SynonymComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride }: SynonymProps) {
   const themeName = useAppStore(s => s.theme);
   const recordResult = useAppStore(s => s.recordExerciseResult);
   const colors = getTheme(themeName);
@@ -911,10 +910,8 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
   const [revealed, setRevealed] = useState(false);
-  const [displayScore, setDisplayScore] = useState(sharedScore);
   const [phaseCorrect, setPhaseCorrect] = useState(0);
-  const pendingScoreRef = useRef<number | null>(null);
-  const deductionAnim = useRef(new Animated.Value(0)).current;
+  const heartLostAnim = useRef(new Animated.Value(1)).current;
   const itemStartRef = useRef<number>(Date.now());
   const optionAnims = useRef<Animated.Value[]>([]);
 
@@ -963,17 +960,15 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
     if (anims.length) Animated.stagger(40, anims).start();
   }, [currentIndex]);
 
-  useEffect(() => {
-    setDisplayScore(sharedScore);
-  }, [sharedScore]);
-
-  useEffect(() => {
-    if (pendingScoreRef.current !== null && pendingScoreRef.current !== sharedScore) {
-      const next = pendingScoreRef.current;
-      pendingScoreRef.current = null;
-      onScoreShare(next);
-    }
-  }, [displayScore, onScoreShare, sharedScore]);
+  const triggerHeartLostAnimation = () => {
+    heartLostAnim.setValue(1.3);
+    Animated.spring(heartLostAnim, {
+      toValue: 1,
+      friction: 3,
+      tension: 100,
+      useNativeDriver: true,
+    }).start();
+  };
 
   const toggleSelection = (choice: string) => {
     if (revealed) return;
@@ -1003,20 +998,15 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
   const handleSubmit = async () => {
     if (nextDisabled || revealed) return;
 
-    Vibration.vibrate(10);
-
     const incorrectSelections = selected.filter(choice => !currentWord.correct.includes(choice)).length;
     const selectedCorrect = incorrectSelections === 0;
 
     if (selectedCorrect) {
       setPhaseCorrect(prev => prev + 1);
     } else {
-      setDisplayScore(prev => {
-        const next = Math.max(0, prev - 5);
-        pendingScoreRef.current = next;
-        return next;
-      });
-      triggerDeductionAnimation();
+      // Lose a heart on wrong answer
+      onHeartLost();
+      triggerHeartLostAnimation();
     }
     setRevealed(true);
 
@@ -1049,25 +1039,7 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
     }
   };
 
-  const triggerDeductionAnimation = () => {
-    deductionAnim.stopAnimation();
-    deductionAnim.setValue(0);
-    Animated.timing(deductionAnim, {
-      toValue: 1,
-      duration: 700,
-      useNativeDriver: true,
-    }).start();
-  };
-
   const progress = currentIndex / wordsData.length;
-  const deductionOpacity = deductionAnim.interpolate({
-    inputRange: [0, 0.2, 1],
-    outputRange: [0, 1, 0],
-  });
-  const deductionTranslateY = deductionAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -35],
-  });
 
   const isLastWord = currentIndex === wordsData.length - 1;
   const handlePrimary = () => {
@@ -1095,20 +1067,13 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, shar
               <Text style={[styles.progressText, isLight && { color: '#6B7280' }]}>
                 Word {currentIndex + 1} of {wordsData.length}
               </Text>
-              <View style={styles.scoreWrapper}>
-                <Animated.Text
-                  style={[
-                    styles.deductionText,
-                    {
-                      opacity: deductionOpacity,
-                      transform: [{ translateY: deductionTranslateY }],
-                    },
-                  ]}
-                >
-                  -5
-                </Animated.Text>
-                <Text style={styles.scoreText}>{displayScore}</Text>
-              </View>
+              <Animated.View style={[styles.heartsContainer, { transform: [{ scale: heartLostAnim }] }]}>
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <Text key={i} style={styles.heartIcon}>
+                    {i < hearts ? '❤️' : '🤍'}
+                  </Text>
+                ))}
+              </Animated.View>
             </View>
             <View style={[styles.progressBar, isLight && { backgroundColor: '#E5E7EB' }]}>
               <Animated.View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
@@ -1217,6 +1182,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     minWidth: 48,
   },
+  heartsContainer: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  heartIcon: {
+    fontSize: 18,
+  },
   deductionText: {
     position: 'absolute',
     top: -20,
@@ -1250,7 +1222,7 @@ const styles = StyleSheet.create({
   },
   speakButtonCorner: {
     position: 'absolute',
-    top: 4,
+    top: 56,
     right: 12,
     padding: 10,
     borderRadius: 20,

@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { useAppStore } from '../../../lib/store';
 import { getTheme } from '../../../lib/theme';
-import { Vibration } from 'react-native';
 import { analyticsService } from '../../../services/AnalyticsService';
 import { levels } from '../data/levels';
 import AnimatedNextButton from './AnimatedNextButton';
@@ -27,8 +26,8 @@ interface SentenceUsageProps {
   setId: string;
   levelId: string;
   onPhaseComplete: (score: number, totalQuestions: number) => void;
-  sharedScore: number;
-  onScoreShare: (score: number) => void;
+  hearts: number;
+  onHeartLost: () => void;
   wordRange?: { start: number; end: number };
   wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
 }
@@ -1278,7 +1277,7 @@ interface OptionRow {
   key: string;
 }
 
-export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange, wordsOverride }: SentenceUsageProps) {
+export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride }: SentenceUsageProps) {
   const recordResult = useAppStore(s => s.recordExerciseResult);
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
@@ -1303,19 +1302,40 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
       if (wordRange) {
         words = words.slice(wordRange.start, wordRange.end);
       }
-      // Helper to blank out the target word in a sentence
+      // Helper to blank out the target word in a sentence and truncate
       const blankOutWord = (sentence: string, targetWord: string): string => {
         const s = (sentence || '').trim();
         if (!s) return '…';
+
+        let blanked = s;
         const regex = new RegExp(`\\b${targetWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-        if (regex.test(s)) return s.replace(regex, '…');
-        const tokens = s.match(/[A-Za-z'']+/g) || [];
-        const targetLower = targetWord.toLowerCase();
-        let foundIdx = tokens.findIndex(t => t.toLowerCase().includes(targetLower) || targetLower.includes(t.toLowerCase()));
-        if (foundIdx === -1) foundIdx = Math.floor(tokens.length / 2);
-        const tokenToReplace = tokens[foundIdx];
-        const idx = s.indexOf(tokenToReplace);
-        return idx !== -1 ? s.slice(0, idx) + '…' + s.slice(idx + tokenToReplace.length) : '…';
+        if (regex.test(s)) {
+          blanked = s.replace(regex, '…');
+        } else {
+          const tokens = s.match(/[A-Za-z'']+/g) || [];
+          const targetLower = targetWord.toLowerCase();
+          let foundIdx = tokens.findIndex(t => t.toLowerCase().includes(targetLower) || targetLower.includes(t.toLowerCase()));
+          if (foundIdx === -1) foundIdx = Math.floor(tokens.length / 2);
+          const tokenToReplace = tokens[foundIdx];
+          const idx = s.indexOf(tokenToReplace);
+          blanked = idx !== -1 ? s.slice(0, idx) + '…' + s.slice(idx + tokenToReplace.length) : '…';
+        }
+
+        // Truncate to max 8 words, keeping the blank visible
+        const MAX_WORDS = 8;
+        const wordList = blanked.split(/\s+/);
+        if (wordList.length <= MAX_WORDS) return blanked;
+
+        const blankIdx = wordList.findIndex(w => w.includes('…'));
+        if (blankIdx === -1) return wordList.slice(0, MAX_WORDS).join(' ') + '...';
+
+        let start = Math.max(0, blankIdx - 3);
+        let end = Math.min(wordList.length, blankIdx + 5);
+
+        let result = wordList.slice(start, end).join(' ');
+        if (start > 0) result = '... ' + result;
+        if (end < wordList.length) result = result + ' ...';
+        return result;
       };
 
       return words.map((w, wordIdx) => {
@@ -1355,35 +1375,66 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
       words = words.slice(wordRange.start, wordRange.end);
     }
 
-    // Helper to blank out the target word in a sentence
+    // Helper to blank out the target word in a sentence and truncate to max words
     const blankOutWord = (sentence: string, targetWord: string): string => {
       const s = sentence.trim();
       if (!s) return '…';
-      
+
+      let blanked = s;
       // Try to find and replace the exact target word (case-insensitive)
       const regex = new RegExp(`\\b${targetWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
       if (regex.test(s)) {
-        return s.replace(regex, '…');
+        blanked = s.replace(regex, '…');
+      } else {
+        // If word not found exactly, try finding any form of it in the middle
+        const tokens = s.match(/[A-Za-z'']+/g) || [];
+        const targetLower = targetWord.toLowerCase();
+        let foundIdx = tokens.findIndex(t => t.toLowerCase().includes(targetLower) || targetLower.includes(t.toLowerCase()));
+
+        if (foundIdx === -1) {
+          foundIdx = Math.floor(tokens.length / 2);
+        }
+
+        const tokenToReplace = tokens[foundIdx];
+        const idx = s.indexOf(tokenToReplace);
+        if (idx !== -1) {
+          blanked = s.slice(0, idx) + '…' + s.slice(idx + tokenToReplace.length);
+        } else {
+          return '…';
+        }
       }
-      
-      // If word not found exactly, try finding any form of it in the middle
-      const tokens = s.match(/[A-Za-z'']+/g) || [];
-      const targetLower = targetWord.toLowerCase();
-      let foundIdx = tokens.findIndex(t => t.toLowerCase().includes(targetLower) || targetLower.includes(t.toLowerCase()));
-      
-      if (foundIdx === -1) {
-        // Default to middle word
-        foundIdx = Math.floor(tokens.length / 2);
+
+      // Truncate to max 8 words, keeping the blank visible
+      const MAX_WORDS = 8;
+      const words = blanked.split(/\s+/);
+      if (words.length <= MAX_WORDS) return blanked;
+
+      // Find the blank position
+      const blankIdx = words.findIndex(w => w.includes('…'));
+      if (blankIdx === -1) return words.slice(0, MAX_WORDS).join(' ') + '...';
+
+      // Keep words around the blank
+      const wordsBeforeBlank = 3;
+      const wordsAfterBlank = 4;
+      let start = Math.max(0, blankIdx - wordsBeforeBlank);
+      let end = Math.min(words.length, blankIdx + wordsAfterBlank + 1);
+
+      // Adjust if we have room
+      const totalWords = end - start;
+      if (totalWords < MAX_WORDS) {
+        const extra = MAX_WORDS - totalWords;
+        if (start > 0) {
+          start = Math.max(0, start - Math.ceil(extra / 2));
+        }
+        if (end < words.length) {
+          end = Math.min(words.length, end + Math.floor(extra / 2));
+        }
       }
-      
-      // Replace the found token
-      const tokenToReplace = tokens[foundIdx];
-      const idx = s.indexOf(tokenToReplace);
-      if (idx !== -1) {
-        return s.slice(0, idx) + '…' + s.slice(idx + tokenToReplace.length);
-      }
-      
-      return '…';
+
+      let result = words.slice(start, end).join(' ');
+      if (start > 0) result = '... ' + result;
+      if (end < words.length) result = result + ' ...';
+      return result;
     };
 
     // Build items based on mode
@@ -1516,9 +1567,7 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
   const [selected, setSelected] = useState<number | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
-  const [displayScore, setDisplayScore] = useState(sharedScore);
-  const pendingScoreRef = useRef<number | null>(null);
-  const deductionAnim = useRef(new Animated.Value(0)).current;
+  const heartLostAnim = useRef(new Animated.Value(1)).current;
   const itemStartRef = useRef<number>(Date.now());
 
   const item = useMemo(() => itemsData[index], [itemsData, index]);
@@ -1536,17 +1585,15 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
     itemStartRef.current = Date.now();
   }, [item]);
 
-  useEffect(() => {
-    setDisplayScore(sharedScore);
-  }, [sharedScore]);
-
-  useEffect(() => {
-    if (pendingScoreRef.current !== null && pendingScoreRef.current !== sharedScore) {
-      const next = pendingScoreRef.current;
-      pendingScoreRef.current = null;
-      onScoreShare(next);
-    }
-  }, [displayScore, onScoreShare, sharedScore]);
+  const triggerHeartLostAnimation = () => {
+    heartLostAnim.setValue(1.3);
+    Animated.spring(heartLostAnim, {
+      toValue: 1,
+      friction: 3,
+      tension: 100,
+      useNativeDriver: true,
+    }).start();
+  };
 
   const progress = index / itemsData.length;
 
@@ -1558,8 +1605,6 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
   const handleSubmit = () => {
     if (selected === null || revealed) return;
 
-    Vibration.vibrate(10);
-
     const chosen = options[selected];
     if (chosen.isCorrect) {
       setCorrectCount(prev => prev + 1);
@@ -1567,12 +1612,9 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
     } else {
       const correctSentence = options.find(o => o.isCorrect)?.text ?? '';
       AccessibilityInfo.announceForAccessibility(`Incorrect. Correct sentence is ${correctSentence}`);
-      setDisplayScore(prev => {
-        const next = Math.max(0, prev - 5);
-        pendingScoreRef.current = next;
-        return next;
-      });
-      triggerDeductionAnimation();
+      // Lose a heart on wrong answer
+      onHeartLost();
+      triggerHeartLostAnimation();
     }
 
     setRevealed(true);
@@ -1602,25 +1644,6 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
     }
   };
 
-  const triggerDeductionAnimation = () => {
-    deductionAnim.stopAnimation();
-    deductionAnim.setValue(0);
-    Animated.timing(deductionAnim, {
-      toValue: 1,
-      duration: 700,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const deductionOpacity = deductionAnim.interpolate({
-    inputRange: [0, 0.2, 1],
-    outputRange: [0, 1, 0],
-  });
-  const deductionTranslateY = deductionAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -35],
-  });
-
   return (
     <View style={[styles.container, isLight && { backgroundColor: colors.background }]}>
       <ScrollView
@@ -1631,20 +1654,13 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
       >
         <View style={styles.progressContainer}>
           <Text style={[styles.progressText, isLight && { color: '#6B7280' }]}>Word {index + 1} of {itemsData.length}</Text>
-          <View style={styles.scoreWrapper}>
-            <Animated.Text
-              style={[
-                styles.deductionText,
-                {
-                  opacity: deductionOpacity,
-                  transform: [{ translateY: deductionTranslateY }],
-                },
-              ]}
-            >
-              -5
-            </Animated.Text>
-            <Text style={styles.scoreText}>{displayScore}</Text>
-          </View>
+          <Animated.View style={[styles.heartsContainer, { transform: [{ scale: heartLostAnim }] }]}>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Text key={i} style={styles.heartIcon}>
+                {i < hearts ? '❤️' : '🤍'}
+              </Text>
+            ))}
+          </Animated.View>
         </View>
         <View style={[styles.progressBar, isLight && { backgroundColor: '#E5E7EB' }]}>
           <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
@@ -1747,6 +1763,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     minWidth: 48,
+  },
+  heartsContainer: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  heartIcon: {
+    fontSize: 18,
   },
   deductionText: {
     position: 'absolute',

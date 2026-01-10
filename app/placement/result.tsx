@@ -13,24 +13,25 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { levels } from '../quiz/data/levels';
 import { SetProgressService } from '../../services/SetProgressService';
+import LottieView from 'lottie-react-native';
 import { useAppStore } from '../../lib/store';
-import { LinearGradient } from '../../lib/LinearGradient';
-import { getVisibleLevels } from './diagnostic-words';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 const HIGHEST_LEVEL_KEY = '@engniter.highestLevel';
 const PLACEMENT_LEVEL_KEY = '@engniter.placementLevel';
 
+const ACCENT_ORANGE = '#F2935C';
+const ACCENT_PINK = '#F25E86';
+const BG_DARK = '#1E1E1E';
+
 export default function PlacementResult() {
   const router = useRouter();
   const params = useLocalSearchParams<{
-    // New flow params
     selectedLevel?: string;
     determinedLevel?: string;
     appLevel?: string;
     knownCount?: string;
     totalCount?: string;
-    // Legacy params (for old test.tsx if still used)
     levelId?: string;
     ability?: string;
     confidence?: string;
@@ -39,8 +40,8 @@ export default function PlacementResult() {
     q?: string;
   }>();
 
-  const themeName = useAppStore(s => s.theme);
-  const isLight = themeName === 'light';
+  // Keep hook count consistent
+  const _theme = useAppStore(s => s.theme);
 
   // Animation refs
   const fadeIn = useRef(new Animated.Value(0)).current;
@@ -48,16 +49,16 @@ export default function PlacementResult() {
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const pulse = useRef(new Animated.Value(1)).current;
 
-  // Determine which flow we're using
   const isNewFlow = !!params.determinedLevel;
-
-  // Extract values based on flow
   const determinedLevel = params.determinedLevel || 'beginner';
   const appLevel = params.appLevel || params.levelId || 'beginner';
   const knownCount = parseInt(params.knownCount || '0', 10);
   const totalCount = parseInt(params.totalCount || '12', 10);
 
   useEffect(() => {
+    // Hide nav bar on this screen
+    DeviceEventEmitter.emit('NAV_VISIBILITY', 'hide');
+
     // Entry animations
     Animated.parallel([
       Animated.timing(fadeIn, {
@@ -78,36 +79,15 @@ export default function PlacementResult() {
         useNativeDriver: true,
       }),
     ]).start();
-
-    // Pulse animation for button
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1.03,
-          duration: 800,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 800,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
   }, []);
 
   useEffect(() => {
-    // Persist recommended level
     AsyncStorage.setItem(SELECTED_LEVEL_KEY, appLevel).catch(() => {});
 
-    // Store placement level for filtering
     if (isNewFlow) {
       AsyncStorage.setItem(PLACEMENT_LEVEL_KEY, determinedLevel).catch(() => {});
     }
 
-    // Update highest achieved core level and mark lower levels as completed
     (async () => {
       try {
         const coreOrder = [
@@ -129,7 +109,6 @@ export default function PlacementResult() {
           await AsyncStorage.setItem(HIGHEST_LEVEL_KEY, appLevel);
         }
 
-        // Mark all lower core levels as completed
         await SetProgressService.initialize();
         const recIndex = coreOrder.indexOf(appLevel);
         if (recIndex > 0) {
@@ -151,18 +130,12 @@ export default function PlacementResult() {
   const handleContinue = () => {
     DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
     DeviceEventEmitter.emit('LEVEL_SELECTED', appLevel);
-    router.replace('/');
+    // Navigate to the learn screen instead of home
+    router.replace('/quiz/learn');
   };
-
-  const handleRetake = () => {
-    router.replace('/placement/level-select');
-  };
-
-  const levelLabel = getLevelLabel(determinedLevel);
-  const levelEmoji = getLevelEmoji(determinedLevel);
 
   return (
-    <View style={[styles.container, isLight && styles.containerLight]}>
+    <View style={styles.container}>
       <SafeAreaView style={styles.safe}>
         <Animated.View
           style={[
@@ -173,65 +146,44 @@ export default function PlacementResult() {
             },
           ]}
         >
-          {/* Emoji */}
-          <Text style={styles.emoji}>{levelEmoji}</Text>
+          {/* Success Icon */}
+          <View style={styles.iconWrap}>
+            <LottieView
+              source={require('../../assets/lottie/success1.json')}
+              autoPlay
+              loop={false}
+              style={styles.successAnimation}
+            />
+          </View>
 
-          {/* Title */}
-          <Text style={[styles.title, isLight && styles.titleLight]}>
-            Your Level
+          {/* Motivational Title */}
+          <Text style={styles.title}>You're All Set!</Text>
+
+          {/* Motivational Message */}
+          <Text style={styles.subtitle}>
+            Your personalized learning path is ready
           </Text>
 
-          {/* Level */}
-          <Text style={[styles.level, isLight && styles.levelLight]}>
-            {levelLabel}
-          </Text>
+          {/* Encouragement */}
+          <View style={styles.encouragementCard}>
+            <Text style={styles.encouragementText}>
+              We've customized your vocabulary journey based on your responses.
+              Every expert was once a beginner — let's start building your word power!
+            </Text>
+          </View>
 
-          {/* Stats */}
-          {isNewFlow && (
-            <View style={[styles.statsCard, isLight && styles.statsCardLight]}>
-              <View style={styles.statRow}>
-                <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>
-                  Words Known
-                </Text>
-                <Text style={[styles.statValue, isLight && styles.statValueLight]}>
-                  {knownCount} / {totalCount}
-                </Text>
-              </View>
-              <View style={styles.statRow}>
-                <Text style={[styles.statLabel, isLight && styles.statLabelLight]}>
-                  Starting Level
-                </Text>
-                <Text style={[styles.statValue, isLight && styles.statValueLight]}>
-                  {appLevel.charAt(0).toUpperCase() + appLevel.slice(1).replace('-', ' ')}
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* Message */}
-          <Text style={[styles.message, isLight && styles.messageLight]}>
-            {getMessage(determinedLevel)}
-          </Text>
+          {/* Stats hint */}
+          <View style={styles.statsHint}>
+            <Text style={styles.statsHintText}>
+              You recognized <Text style={styles.statsHighlight}>{knownCount}</Text> out of {totalCount} words
+            </Text>
+          </View>
 
           {/* CTA Button */}
-          <TouchableOpacity onPress={handleContinue} activeOpacity={0.9}>
-            <Animated.View style={{ transform: [{ scale: pulse }] }}>
-              <LinearGradient
-                colors={isLight ? ['#F8B070', '#F2935C'] : ['#7CE7A0', '#1a8d87']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.cta}
-              >
-                <Text style={styles.ctaText}>Start Learning</Text>
-              </LinearGradient>
-            </Animated.View>
-          </TouchableOpacity>
-
-          {/* Retake link */}
-          <TouchableOpacity onPress={handleRetake} style={styles.retakeBtn}>
-            <Text style={[styles.retakeText, isLight && styles.retakeTextLight]}>
-              Retake Assessment
-            </Text>
+          <TouchableOpacity onPress={handleContinue} activeOpacity={0.9} style={styles.ctaWrap}>
+            <View style={styles.cta}>
+              <Text style={styles.ctaText}>Start Learning</Text>
+            </View>
           </TouchableOpacity>
         </Animated.View>
       </SafeAreaView>
@@ -239,52 +191,10 @@ export default function PlacementResult() {
   );
 }
 
-function getLevelLabel(level: string): string {
-  switch (level) {
-    case 'beginner':
-      return 'Beginner';
-    case 'intermediate':
-      return 'Intermediate';
-    case 'advanced':
-      return 'Advanced';
-    default:
-      return level.charAt(0).toUpperCase() + level.slice(1);
-  }
-}
-
-function getLevelEmoji(level: string): string {
-  switch (level) {
-    case 'beginner':
-      return '🌱';
-    case 'intermediate':
-      return '📚';
-    case 'advanced':
-      return '🎯';
-    default:
-      return '🚀';
-  }
-}
-
-function getMessage(level: string): string {
-  switch (level) {
-    case 'beginner':
-      return "Great start! We'll begin with foundational vocabulary to build your confidence.";
-    case 'intermediate':
-      return "Nice! You have a solid foundation. We'll help you expand to conversational fluency.";
-    case 'advanced':
-      return "Impressive! You have strong vocabulary. We'll focus on advanced and nuanced words.";
-    default:
-      return "Let's get started with vocabulary practice!";
-  }
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
-  },
-  containerLight: {
-    backgroundColor: '#F8F8F8',
+    backgroundColor: BG_DARK,
   },
   safe: {
     flex: 1,
@@ -294,100 +204,74 @@ const styles = StyleSheet.create({
   content: {
     alignItems: 'center',
   },
-  emoji: {
-    fontSize: 64,
-    marginBottom: 16,
+  iconWrap: {
+    width: 140,
+    height: 140,
+    marginBottom: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  successAnimation: {
+    width: 140,
+    height: 140,
   },
   title: {
-    color: '#9CA3AF',
+    color: '#F9FAFB',
+    fontSize: 32,
+    fontWeight: '700',
+    marginBottom: 8,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    color: ACCENT_ORANGE,
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 8,
-    fontFamily: 'Ubuntu-Medium',
+    marginBottom: 32,
   },
-  titleLight: {
-    color: '#6B7280',
-  },
-  level: {
-    color: '#fff',
-    fontSize: 36,
-    fontWeight: '600',
-    marginBottom: 24,
-    fontFamily: 'Ubuntu-Medium',
-  },
-  levelLight: {
-    color: '#111827',
-  },
-  statsCard: {
-    backgroundColor: '#2A2D2D',
-    borderRadius: 16,
-    padding: 16,
-    width: '100%',
-    marginBottom: 24,
+  encouragementCard: {
+    backgroundColor: 'rgba(242, 147, 92, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(242, 147, 92, 0.15)',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
   },
-  statsCardLight: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E5E7EB',
-  },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  statLabel: {
-    color: '#9CA3AF',
-    fontSize: 14,
-    fontFamily: 'Ubuntu-Medium',
-  },
-  statLabelLight: {
-    color: '#6B7280',
-  },
-  statValue: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Ubuntu-Medium',
-  },
-  statValueLight: {
-    color: '#111827',
-  },
-  message: {
-    color: '#9CA3AF',
+  encouragementText: {
+    color: '#D1D5DB',
     fontSize: 15,
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32,
-    paddingHorizontal: 20,
-    fontFamily: 'Ubuntu-Medium',
+    lineHeight: 24,
   },
-  messageLight: {
+  statsHint: {
+    marginBottom: 32,
+  },
+  statsHintText: {
     color: '#6B7280',
+    fontSize: 14,
+  },
+  statsHighlight: {
+    color: ACCENT_ORANGE,
+    fontWeight: '700',
+  },
+  ctaWrap: {
+    width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: ACCENT_PINK,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
   },
   cta: {
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    borderRadius: 14,
+    paddingVertical: 18,
     alignItems: 'center',
+    borderRadius: 16,
+    backgroundColor: ACCENT_PINK,
   },
   ctaText: {
-    color: '#0D1117',
-    fontWeight: '600',
-    fontSize: 17,
-    fontFamily: 'Ubuntu-Medium',
-  },
-  retakeBtn: {
-    marginTop: 20,
-    padding: 12,
-  },
-  retakeText: {
-    color: '#9CA3AF',
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Ubuntu-Medium',
-  },
-  retakeTextLight: {
-    color: '#6B7280',
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 18,
+    letterSpacing: 0.3,
   },
 });

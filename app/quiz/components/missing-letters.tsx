@@ -33,7 +33,7 @@ export interface MissingLettersProps {
   theme?: 'dark' | 'light';
   wordIndex: number;
   totalWords: number;
-  sharedScore: number;
+  hearts: number;
 }
 
 // Enable LayoutAnimation on Android
@@ -101,7 +101,7 @@ function pickHintPositions(letterIndices: number[]): number[] {
   return Array.from(new Set(result));
 }
 
-export default function MissingLetters({ word, ipa, clue, onResult, onNext, theme = 'dark', wordIndex, totalWords, sharedScore }: MissingLettersProps) {
+export default function MissingLetters({ word, ipa, clue, onResult, onNext, theme = 'dark', wordIndex, totalWords, hearts }: MissingLettersProps) {
   const displayWord = useMemo(() => word, [word]);
   const lettersOnly = useMemo(() => normalize(word), [word]);
 
@@ -139,9 +139,7 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
   const inputRefs = useRef<Array<TextInputRef | null>>([]);
   const pendingFocusRef = useRef<number | null>(null);
   const evaluationTimeout = useRef<NodeJS.Timeout | null>(null);
-  const [displayScore, setDisplayScore] = useState(sharedScore);
-  const prevScoreRef = useRef(sharedScore);
-  const deductionAnim = useRef(new Animated.Value(0)).current;
+  const heartLostAnim = useRef(new Animated.Value(1)).current;
   const slotAnims = useRef<Animated.Value[]>([]);
 
   useEffect(() => {
@@ -163,20 +161,6 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
       clearTimeout(evaluationTimeout.current);
     }
   }, []);
-
-  useEffect(() => {
-    if (sharedScore < prevScoreRef.current) {
-      deductionAnim.stopAnimation();
-      deductionAnim.setValue(0);
-      Animated.timing(deductionAnim, {
-        toValue: 1,
-        duration: 700,
-        useNativeDriver: true,
-      }).start();
-    }
-    prevScoreRef.current = sharedScore;
-    setDisplayScore(sharedScore);
-  }, [sharedScore, deductionAnim]);
 
   // Bubble-in animation for the letter slots on each word
   useEffect(() => {
@@ -322,34 +306,19 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
   // Select styles and palette by theme
   const themeStyles = theme === 'light' ? lightStyles : darkStyles;
   const pal = theme === 'light' ? LIGHT_COLORS : DARK_COLORS;
-  const deductionOpacity = deductionAnim.interpolate({
-    inputRange: [0, 0.2, 1],
-    outputRange: [0, 1, 0],
-  });
-  const deductionTranslateY = deductionAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -35],
-  });
   const progress = totalWords > 0 ? (wordIndex / totalWords) : 0;
 
   return (
     <View style={themeStyles.container}>
       <View style={themeStyles.progressContainer}>
         <Text style={themeStyles.progressText}>Word {wordIndex + 1} of {totalWords}</Text>
-        <View style={themeStyles.scoreWrapper}>
-          <Animated.Text
-            style={[
-              themeStyles.deductionText,
-              {
-                opacity: deductionOpacity,
-                transform: [{ translateY: deductionTranslateY }],
-              },
-            ]}
-          >
-            -5
-          </Animated.Text>
-          <Text style={themeStyles.scoreText}>{displayScore}</Text>
-        </View>
+        <Animated.View style={[themeStyles.heartsContainer, { transform: [{ scale: heartLostAnim }] }]}>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <Text key={i} style={themeStyles.heartIcon}>
+              {i < hearts ? '❤️' : '🤍'}
+            </Text>
+          ))}
+        </Animated.View>
       </View>
       <View style={themeStyles.progressBar}>
         <View style={[themeStyles.progressFill, { width: `${Math.min(100, progress * 100)}%` }]} />
@@ -441,6 +410,13 @@ const darkStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     minWidth: 48,
+  },
+  heartsContainer: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  heartIcon: {
+    fontSize: 18,
   },
   deductionText: {
     position: 'absolute',
@@ -567,6 +543,13 @@ const lightStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     minWidth: 48,
+  },
+  heartsContainer: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  heartIcon: {
+    fontSize: 18,
   },
   deductionText: {
     position: 'absolute',

@@ -1,52 +1,60 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Dimensions,
   DeviceEventEmitter,
+  Animated,
+  PanResponder,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useAppStore } from '../../lib/store';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  runOnJS,
-  interpolate,
-  Extrapolate,
-} from 'react-native-reanimated';
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { DiagnosticWord, getShuffledWords, calculateLevel, mapToAppLevel } from './diagnostic-words';
+import { useAppStore } from '../../lib/store';
+import LottieView from 'lottie-react-native';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const CARD_W = Math.min(340, SCREEN_WIDTH - 40);
+const CARD_H = Math.min(400, Math.round(SCREEN_HEIGHT * 0.45));
+const SWIPE_THRESHOLD = 80;
+
+const ACCENT_ORANGE = '#F2935C';
+const ACCENT_GREEN = '#4ADE80';
+const ACCENT_RED = '#F87171';
+const BG_DARK = '#1E1E1E';
 
 export default function WordTest() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const selectedLevel = (params.selectedLevel as string) || 'beginner';
 
-  const themeName = useAppStore(s => s.theme);
-  const isLight = themeName === 'light';
+  // Keep hook count consistent
+  const _theme = useAppStore(s => s.theme);
 
   const [words] = useState<DiagnosticWord[]>(() => getShuffledWords());
   const [currentIndex, setCurrentIndex] = useState(0);
   const [knownWords, setKnownWords] = useState<DiagnosticWord[]>([]);
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [showCoach, setShowCoach] = useState(true);
 
   // Animation values
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const cardOpacity = useSharedValue(1);
-  const scale = useSharedValue(1);
+  const panX = useRef(new Animated.Value(0)).current;
+  const cardOpacity = useRef(new Animated.Value(1)).current;
+  const nextCardScale = useRef(new Animated.Value(0.95)).current;
+  const nextCardTranslateY = useRef(new Animated.Value(15)).current;
 
   useEffect(() => {
     DeviceEventEmitter.emit('NAV_VISIBILITY', 'hide');
     return () => DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
   }, []);
+
+  // Coach overlay timer
+  useEffect(() => {
+    if (!showCoach) return;
+    const timer = setTimeout(() => setShowCoach(false), 3000);
+    return () => clearTimeout(timer);
+  }, [showCoach]);
 
   const goToResult = useCallback((known: DiagnosticWord[]) => {
     const determinedLevel = calculateLevel(known);
@@ -69,337 +77,391 @@ export default function WordTest() {
 
     let newKnownWords = knownWords;
     if (direction === 'right') {
-      // User knows this word
       newKnownWords = [...knownWords, currentWord];
       setKnownWords(newKnownWords);
     }
 
     if (currentIndex >= words.length - 1) {
-      // Last card - go to results
       goToResult(direction === 'right' ? newKnownWords : knownWords);
     } else {
-      // Next card
       setCurrentIndex(prev => prev + 1);
-      // Reset animation values for next card
-      translateX.value = 0;
-      translateY.value = 0;
-      cardOpacity.value = 1;
-      scale.value = 1;
-      setIsAnimating(false);
+      panX.setValue(0);
+      cardOpacity.setValue(1);
+      nextCardScale.setValue(0.95);
+      nextCardTranslateY.setValue(15);
     }
-  }, [currentIndex, words, knownWords, goToResult, translateX, translateY, cardOpacity, scale]);
+  }, [currentIndex, words, knownWords, goToResult, panX, cardOpacity, nextCardScale, nextCardTranslateY]);
 
-  const panGesture = Gesture.Pan()
-    .enabled(!isAnimating)
-    .onUpdate((event) => {
-      translateX.value = event.translationX;
-      translateY.value = event.translationY * 0.5;
-      scale.value = interpolate(
-        Math.abs(event.translationX),
-        [0, SCREEN_WIDTH / 2],
-        [1, 0.95],
-        Extrapolate.CLAMP
-      );
-    })
-    .onEnd((event) => {
-      if (Math.abs(event.translationX) > SWIPE_THRESHOLD) {
-        // Swipe completed
-        const direction = event.translationX > 0 ? 'right' : 'left';
-        setIsAnimating(true);
+  const handleSwipeCompleteRef = useRef(handleSwipeComplete);
+  useEffect(() => {
+    handleSwipeCompleteRef.current = handleSwipeComplete;
+  }, [handleSwipeComplete]);
 
-        translateX.value = withTiming(
-          direction === 'right' ? SCREEN_WIDTH * 1.5 : -SCREEN_WIDTH * 1.5,
-          { duration: 300 },
-          () => {
-            runOnJS(handleSwipeComplete)(direction);
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 8,
+        onPanResponderMove: (_, g) => {
+          panX.setValue(g.dx);
+          const progress = Math.min(Math.abs(g.dx) / SWIPE_THRESHOLD, 1);
+          nextCardScale.setValue(0.95 + progress * 0.05);
+          nextCardTranslateY.setValue(15 - progress * 15);
+        },
+        onPanResponderRelease: (_, g) => {
+          const goLeft = g.dx <= -SWIPE_THRESHOLD;
+          const goRight = g.dx >= SWIPE_THRESHOLD;
+
+          if (!goLeft && !goRight) {
+            Animated.spring(panX, { toValue: 0, useNativeDriver: true, friction: 6 }).start();
+            Animated.spring(nextCardScale, { toValue: 0.95, useNativeDriver: true }).start();
+            Animated.spring(nextCardTranslateY, { toValue: 15, useNativeDriver: true }).start();
+            return;
           }
-        );
-        cardOpacity.value = withTiming(0, { duration: 250 });
-      } else {
-        // Return to center
-        translateX.value = withSpring(0, { damping: 15, stiffness: 150 });
-        translateY.value = withSpring(0, { damping: 15, stiffness: 150 });
-        scale.value = withSpring(1, { damping: 15, stiffness: 150 });
-      }
-    });
 
-  const cardStyle = useAnimatedStyle(() => {
-    const rotate = interpolate(
-      translateX.value,
-      [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
-      [-15, 0, 15],
-      Extrapolate.CLAMP
-    );
-
-    return {
-      transform: [
-        { translateX: translateX.value },
-        { translateY: translateY.value },
-        { rotate: `${rotate}deg` },
-        { scale: scale.value },
-      ],
-      opacity: cardOpacity.value,
-    };
-  });
-
-  const knowLabelStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(
-      translateX.value,
-      [0, SWIPE_THRESHOLD],
-      [0, 1],
-      Extrapolate.CLAMP
-    );
-    return { opacity };
-  });
-
-  const dontKnowLabelStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(
-      translateX.value,
-      [-SWIPE_THRESHOLD, 0],
-      [1, 0],
-      Extrapolate.CLAMP
-    );
-    return { opacity };
-  });
+          const toValue = goLeft ? -SCREEN_WIDTH * 1.5 : SCREEN_WIDTH * 1.5;
+          Animated.parallel([
+            Animated.timing(panX, {
+              toValue,
+              duration: 250,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: true,
+            }),
+            Animated.timing(cardOpacity, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+            Animated.spring(nextCardScale, { toValue: 1, useNativeDriver: true }),
+            Animated.spring(nextCardTranslateY, { toValue: 0, useNativeDriver: true }),
+          ]).start(() => {
+            handleSwipeCompleteRef.current(goRight ? 'right' : 'left');
+          });
+        },
+        onPanResponderTerminate: () => {
+          Animated.spring(panX, { toValue: 0, useNativeDriver: true }).start();
+        },
+      }),
+    [panX, cardOpacity, nextCardScale, nextCardTranslateY]
+  );
 
   const currentWord = words[currentIndex];
-  const progress = ((currentIndex + 1) / words.length) * 100;
+  const nextWord = currentIndex + 1 < words.length ? words[currentIndex + 1] : null;
+  const progress = (currentIndex + 1) / words.length;
+
+  const cardRotate = panX.interpolate({
+    inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
+    outputRange: ['-10deg', '0deg', '10deg'],
+    extrapolate: 'clamp',
+  });
+
+  const knowLabelOpacity = panX.interpolate({
+    inputRange: [0, SWIPE_THRESHOLD],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+
+  const dontKnowLabelOpacity = panX.interpolate({
+    inputRange: [-SWIPE_THRESHOLD, 0],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={[styles.container, isLight && styles.containerLight]}>
-        <SafeAreaView style={styles.safe}>
-          {/* Progress */}
-          <View style={styles.progressContainer}>
-            <Text style={[styles.progressText, isLight && styles.progressTextLight]}>
-              {currentIndex + 1} / {words.length}
-            </Text>
-            <View style={[styles.progressBar, isLight && styles.progressBarLight]}>
-              <View
-                style={[
-                  styles.progressFill,
-                  isLight && styles.progressFillLight,
-                  { width: `${progress}%` },
-                ]}
-              />
-            </View>
-          </View>
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safe}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Word Check</Text>
+          <Text style={styles.headerProgress}>{currentIndex + 1}/{words.length}</Text>
+        </View>
 
-          {/* Instructions */}
-          <Text style={[styles.instructions, isLight && styles.instructionsLight]}>
-            Do you know this word?
-          </Text>
+        {/* Progress Bar */}
+        <View style={styles.progressBarBg}>
+          <View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
+        </View>
 
-          {/* Card */}
-          <View style={styles.cardContainer}>
-            <GestureDetector gesture={panGesture}>
-              <Animated.View style={[styles.card, isLight && styles.cardLight, cardStyle]}>
-                {/* Know label */}
-                <Animated.View style={[styles.swipeLabel, styles.knowLabel, knowLabelStyle]}>
-                  <Text style={styles.knowLabelText}>I KNOW</Text>
-                </Animated.View>
+        {/* Instructions */}
+        <Text style={styles.instructions}>Do you know this word?</Text>
 
-                {/* Don't Know label */}
-                <Animated.View style={[styles.swipeLabel, styles.dontKnowLabel, dontKnowLabelStyle]}>
-                  <Text style={styles.dontKnowLabelText}>DON'T KNOW</Text>
-                </Animated.View>
+        {/* Cards Stack */}
+        <View style={styles.cardContainer}>
+          {/* Next Card (behind) */}
+          {nextWord && (
+            <Animated.View
+              style={[
+                styles.nextCardWrap,
+                {
+                  transform: [
+                    { scale: nextCardScale },
+                    { translateY: nextCardTranslateY },
+                  ],
+                },
+              ]}
+            >
+              <View style={styles.nextCard}>
+                <Text style={styles.nextCardWord}>{nextWord.word}</Text>
+              </View>
+            </Animated.View>
+          )}
 
-                <Text style={[styles.word, isLight && styles.wordLight]}>
-                  {currentWord?.word}
-                </Text>
-                <Text style={[styles.phonetic, isLight && styles.phoneticLight]}>
-                  {currentWord?.phonetic}
-                </Text>
-
-                <View style={styles.divider} />
-
-                <Text style={[styles.definition, isLight && styles.definitionLight]}>
-                  {currentWord?.definition}
-                </Text>
+          {/* Current Card */}
+          <Animated.View
+            style={[
+              styles.cardOuter,
+              {
+                opacity: cardOpacity,
+                transform: [
+                  { translateX: panX },
+                  { rotate: cardRotate },
+                ],
+              },
+            ]}
+            {...panResponder.panHandlers}
+          >
+            <View style={styles.card}>
+              {/* Know label */}
+              <Animated.View style={[styles.swipeLabel, styles.knowLabel, { opacity: knowLabelOpacity }]}>
+                <Text style={styles.knowLabelText}>KNOW</Text>
               </Animated.View>
-            </GestureDetector>
-          </View>
 
-          {/* Swipe hints */}
-          <View style={styles.hintsContainer}>
-            <View style={styles.hint}>
-              <Text style={[styles.hintArrow, { color: '#EF4444' }]}>{'<'}</Text>
-              <Text style={[styles.hintText, isLight && styles.hintTextLight]}>Don't Know</Text>
+              {/* Don't Know label */}
+              <Animated.View style={[styles.swipeLabel, styles.dontKnowLabel, { opacity: dontKnowLabelOpacity }]}>
+                <Text style={styles.dontKnowLabelText}>SKIP</Text>
+              </Animated.View>
+
+              <Text style={styles.word}>{currentWord?.word}</Text>
+              <Text style={styles.phonetic}>{currentWord?.phonetic}</Text>
+
+              <View style={styles.divider} />
+
+              <Text style={styles.definition}>{currentWord?.definition}</Text>
+
+              {/* Coach overlay */}
+              {showCoach && (
+                <View style={styles.coachWrap} pointerEvents="none">
+                  <LottieView
+                    source={require('../../assets/lottie/HandSwipe.json')}
+                    autoPlay
+                    loop
+                    style={styles.coachAnimation}
+                  />
+                </View>
+              )}
             </View>
-            <View style={styles.hint}>
-              <Text style={[styles.hintText, isLight && styles.hintTextLight]}>I Know</Text>
-              <Text style={[styles.hintArrow, { color: '#10B981' }]}>{'>'}</Text>
-            </View>
+          </Animated.View>
+        </View>
+
+        {/* Swipe hints */}
+        <View style={styles.hintsContainer}>
+          <View style={styles.hintLeft}>
+            <Text style={styles.hintArrowLeft}>←</Text>
+            <Text style={styles.hintTextLeft}>Skip</Text>
           </View>
-        </SafeAreaView>
-      </View>
-    </GestureHandlerRootView>
+          <View style={styles.hintRight}>
+            <Text style={styles.hintTextRight}>Know</Text>
+            <Text style={styles.hintArrowRight}>→</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
-  },
-  containerLight: {
-    backgroundColor: '#F8F8F8',
+    backgroundColor: BG_DARK,
   },
   safe: {
     flex: 1,
-    padding: 20,
+    paddingHorizontal: 20,
   },
-  progressContainer: {
-    marginBottom: 20,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
   },
-  progressText: {
-    color: '#9CA3AF',
-    fontSize: 14,
+  headerTitle: {
+    color: '#F9FAFB',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  headerProgress: {
+    color: ACCENT_ORANGE,
+    fontSize: 16,
     fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 8,
-    fontFamily: 'Ubuntu-Medium',
   },
-  progressTextLight: {
-    color: '#6B7280',
+  progressBarBg: {
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 2,
+    marginBottom: 24,
   },
-  progressBar: {
-    height: 6,
-    backgroundColor: '#2A2D2D',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressBarLight: {
-    backgroundColor: '#E5E7EB',
-  },
-  progressFill: {
+  progressBarFill: {
     height: '100%',
-    backgroundColor: '#437F76',
-    borderRadius: 3,
-  },
-  progressFillLight: {
-    backgroundColor: '#437F76',
+    backgroundColor: ACCENT_ORANGE,
+    borderRadius: 2,
   },
   instructions: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '600',
+    color: '#9CA3AF',
+    fontSize: 16,
+    fontWeight: '500',
     textAlign: 'center',
-    marginBottom: 24,
-    fontFamily: 'Ubuntu-Medium',
-  },
-  instructionsLight: {
-    color: '#111827',
+    marginBottom: 20,
   },
   cardContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  nextCardWrap: {
+    position: 'absolute',
+    width: CARD_W,
+    height: CARD_H,
+  },
+  nextCard: {
+    width: CARD_W,
+    height: CARD_H,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#252829',
+    opacity: 0.5,
+  },
+  nextCardWord: {
+    color: '#4B5563',
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  cardOuter: {
+    width: CARD_W,
+    height: CARD_H,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
+  },
   card: {
-    width: SCREEN_WIDTH - 60,
-    backgroundColor: '#2A2D2D',
+    width: CARD_W,
+    height: CARD_H,
     borderRadius: 20,
     padding: 32,
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2A2D2E',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
   },
-  cardLight: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
   swipeLabel: {
     position: 'absolute',
-    top: 24,
-    paddingHorizontal: 16,
+    top: 20,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
-    borderWidth: 3,
+    borderWidth: 2,
   },
   knowLabel: {
     right: 20,
-    borderColor: '#10B981',
-    transform: [{ rotate: '15deg' }],
+    borderColor: ACCENT_GREEN,
+    backgroundColor: 'rgba(74, 222, 128, 0.1)',
+    transform: [{ rotate: '10deg' }],
   },
   knowLabelText: {
-    color: '#10B981',
-    fontSize: 18,
-    fontWeight: '900',
+    color: ACCENT_GREEN,
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
   dontKnowLabel: {
     left: 20,
-    borderColor: '#EF4444',
-    transform: [{ rotate: '-15deg' }],
+    borderColor: ACCENT_RED,
+    backgroundColor: 'rgba(248, 113, 113, 0.1)',
+    transform: [{ rotate: '-10deg' }],
   },
   dontKnowLabelText: {
-    color: '#EF4444',
-    fontSize: 18,
-    fontWeight: '900',
+    color: ACCENT_RED,
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
   word: {
-    color: '#fff',
-    fontSize: 42,
-    fontWeight: '600',
-    marginTop: 40,
+    color: '#F9FAFB',
+    fontSize: 34,
+    fontWeight: '700',
     marginBottom: 8,
-    fontFamily: 'Ubuntu-Medium',
-  },
-  wordLight: {
-    color: '#111827',
+    letterSpacing: -0.5,
+    textAlign: 'center',
   },
   phonetic: {
-    color: '#9CA3AF',
-    fontSize: 18,
-    marginBottom: 24,
-    fontFamily: 'Ubuntu-Medium',
-  },
-  phoneticLight: {
     color: '#6B7280',
+    fontSize: 16,
+    fontStyle: 'italic',
+    marginBottom: 28,
   },
   divider: {
-    width: 60,
+    width: 40,
     height: 3,
-    backgroundColor: '#437F76',
+    backgroundColor: ACCENT_ORANGE,
     borderRadius: 2,
-    marginBottom: 24,
+    marginBottom: 28,
   },
   definition: {
-    color: '#D1D5DB',
+    color: '#9CA3AF',
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 24,
-    fontFamily: 'Ubuntu-Medium',
+    paddingHorizontal: 12,
   },
-  definitionLight: {
-    color: '#4B5563',
+  coachWrap: {
+    position: 'absolute',
+    bottom: 24,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  coachAnimation: {
+    width: 80,
+    height: 80,
   },
   hintsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 24,
+    paddingTop: 12,
   },
-  hint: {
+  hintLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  hintArrow: {
-    fontSize: 24,
-    fontWeight: '900',
+  hintRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  hintText: {
-    color: '#9CA3AF',
+  hintArrowLeft: {
+    color: ACCENT_RED,
+    fontSize: 24,
+    fontWeight: '600',
+  },
+  hintArrowRight: {
+    color: ACCENT_GREEN,
+    fontSize: 24,
+    fontWeight: '600',
+  },
+  hintTextLeft: {
+    color: '#6B7280',
     fontSize: 14,
     fontWeight: '600',
   },
-  hintTextLight: {
+  hintTextRight: {
     color: '#6B7280',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

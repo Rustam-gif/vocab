@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Image, Animated, Easing, InteractionManager, Dimensions, DeviceEventEmitter } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Image, Animated, Easing, InteractionManager, Dimensions, DeviceEventEmitter, Platform } from 'react-native';
+
+// Use local haptic feedback shim (no-op since native module not available)
+import ReactNativeHapticFeedback from '../../lib/haptics';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
 import LottieView from 'lottie-react-native';
@@ -15,7 +18,7 @@ import { getTheme } from '../../lib/theme';
 import TopStatusPanel from '../components/TopStatusPanel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LimitModal from '../../lib/LimitModal';
-import { Lock, Check, Star, CheckCircle } from 'lucide-react-native';
+import { Lock, Check, Star, CheckCircle, Flag, Trophy } from 'lucide-react-native';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { LinearGradient } from '../../lib/LinearGradient';
 
@@ -59,6 +62,8 @@ export default function LearnScreen() {
   const levelPulseOpacity = useRef(new Animated.Value(0.4)).current;
   const [currentSetIndex, setCurrentSetIndex] = useState<number>(0);
   const hasAnimatedEntrance = useRef(false);
+  const passedStageGates = useRef<Set<number>>(new Set());
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Breathing animation for current level outer ring
   useEffect(() => {
@@ -242,6 +247,30 @@ export default function LearnScreen() {
 
       const withQuizzes = buildWithQuizzes(baseSets as any);
 
+      // Find the most recent completed quiz index
+      const findLastCompletedQuizIndex = () => {
+        for (let i = withQuizzes.length - 1; i >= 0; i--) {
+          const s = withQuizzes[i];
+          if ((s as any).type === 'quiz') {
+            const flags = SetProgressService.getSetFlags(activeLevelId, s.id);
+            const isCompleted = typeof flags.completed === 'boolean' ? flags.completed : !!s.completed;
+            if (isCompleted) return i;
+          }
+        }
+        return -1;
+      };
+
+      // Find the next quiz index after a given index
+      const findNextQuizIndex = (afterIndex: number) => {
+        for (let i = afterIndex + 1; i < withQuizzes.length; i++) {
+          if ((withQuizzes[i] as any).type === 'quiz') return i;
+        }
+        return withQuizzes.length; // No more quizzes
+      };
+
+      const lastCompletedQuizIdx = findLastCompletedQuizIndex();
+      const nextQuizIdx = lastCompletedQuizIdx >= 0 ? findNextQuizIndex(lastCompletedQuizIdx) : findNextQuizIndex(-1);
+
       const setsWithProgress = withQuizzes.map((set, index) => {
         const flags = SetProgressService.getSetFlags(activeLevelId, set.id);
         const baseSet = {
@@ -255,9 +284,17 @@ export default function LearnScreen() {
           return { ...baseSet, locked: false } as any;
         }
 
+        // First set is always unlocked
         if (index === 0) {
           return baseSet;
         }
+
+        // If a quiz was completed, unlock all sets until the next quiz
+        if (lastCompletedQuizIdx >= 0 && index > lastCompletedQuizIdx && index <= nextQuizIdx) {
+          return { ...baseSet, locked: false };
+        }
+
+        // Default: check if previous set is completed
         const prevSet = withQuizzes[index - 1];
         const prevFlags = SetProgressService.getSetFlags(activeLevelId, prevSet.id);
         const prevCompleted = typeof prevFlags.completed === 'boolean' ? prevFlags.completed : !!prevSet.completed;
@@ -313,7 +350,10 @@ export default function LearnScreen() {
       return;
     }
 
-    if (set.locked) {
+    const isQuizSet = (set as any).type === 'quiz';
+
+    // Allow locked quiz nodes to be pressed (Skip ahead feature)
+    if (set.locked && !isQuizSet) {
       return;
     }
 
@@ -350,6 +390,67 @@ export default function LearnScreen() {
     if (newIndex === -1) return;
     setCurrentSetIndex(newIndex);
   }, [currentLevel]);
+
+  // Calculate stage gate positions and trigger haptic when scrolling past
+  const stageGateIndices = useRef<number[]>([]);
+  useEffect(() => {
+    if (!currentLevel) return;
+    // Find indices where stage gates appear (after quizzes)
+    const indices: number[] = [];
+    currentLevel.sets.forEach((set, index) => {
+      if (index > 0 && (currentLevel.sets[index - 1] as any).type === 'quiz') {
+        indices.push(index);
+      }
+    });
+    stageGateIndices.current = indices;
+    passedStageGates.current.clear();
+  }, [currentLevel]);
+
+  // Track stage gate Y positions
+  const stageGatePositions = useRef<Map<number, number>>(new Map());
+
+  // Soft haptic feedback using react-native-haptic-feedback
+  const triggerHaptic = useCallback((style: 'light' | 'medium' | 'heavy' = 'medium') => {
+    if (Platform.OS !== 'ios' || !ReactNativeHapticFeedback) return;
+
+    try {
+      const options = {
+        enableVibrateFallback: false,
+        ignoreAndroidSystemSettings: false,
+      };
+
+      // Use soft, playful haptics
+      switch (style) {
+        case 'light':
+          ReactNativeHapticFeedback.trigger('selection', options);
+          break;
+        case 'medium':
+          ReactNativeHapticFeedback.trigger('impactLight', options);
+          break;
+        case 'heavy':
+          ReactNativeHapticFeedback.trigger('impactMedium', options);
+          break;
+      }
+    } catch {
+      // Haptic feedback not available
+    }
+  }, []);
+
+  const handleScroll = useCallback((event: any) => {
+    const scrollY = event.nativeEvent.contentOffset.y;
+    const viewportHeight = event.nativeEvent.layoutMeasurement.height;
+    const viewportCenter = scrollY + viewportHeight / 2;
+
+    stageGatePositions.current.forEach((gateY, stageNumber) => {
+      // Check if stage gate is now in the center of viewport
+      const isInView = Math.abs(viewportCenter - gateY) < 100;
+
+      if (isInView && !passedStageGates.current.has(stageNumber)) {
+        passedStageGates.current.add(stageNumber);
+        triggerHaptic('light');
+      }
+    });
+  }, [triggerHaptic]);
 
   const getIconSource = (title: string, type?: string) => {
     if (type === 'quiz') return require('../../assets/wordset_icons/quiz.png');
@@ -456,13 +557,45 @@ export default function LearnScreen() {
           // Locked nodes show gray edge
           isLocked && styles.coinEdgeLocked,
           isLocked && !isLight && { backgroundColor: '#3A3A3A' },
+          // Quiz nodes get purple/pink color
+          isQuiz && !isCompleted && !isLocked && { backgroundColor: '#9333EA' },
           isQuiz && isCompleted && { backgroundColor: '#C94A6A' },
+          isQuiz && isLocked && { backgroundColor: '#6B21A8' },
         ]} />
+
+        {/* "Skip ahead" or "Review" label for quiz nodes */}
+        {isQuiz && !isCompleted && (() => {
+          const quizScore = (set as any).score;
+          const hasFailed = typeof quizScore === 'number' && quizScore > 0 && quizScore < 70;
+
+          return (
+            <Animated.View
+              style={[
+                styles.skipAheadLabel,
+                {
+                  transform: [{ scale: levelPulseAnim }],
+                  opacity: levelPulseOpacity.interpolate({
+                    inputRange: [0.2, 0.5],
+                    outputRange: [1, 0.7],
+                  }),
+                },
+              ]}
+            >
+              <Text style={[
+                styles.skipAheadText,
+                isLocked && styles.skipAheadTextLocked,
+                hasFailed && styles.skipAheadTextFailed,
+              ]}>
+                {hasFailed ? 'Review sets!' : isLocked ? 'Skip ahead!' : 'Take Quiz!'}
+              </Text>
+            </Animated.View>
+          );
+        })()}
 
         {/* Main coin face */}
         <TouchableOpacity
           onPress={() => handleSetPress(set)}
-          disabled={isLocked}
+          disabled={isLocked && !isQuiz}
           activeOpacity={0.9}
           style={[
             styles.coinFace,
@@ -473,9 +606,12 @@ export default function LearnScreen() {
             // Completed nodes show as teal
             isCompleted && styles.coinFaceCompleted,
             // Locked nodes show as gray
-            isLocked && styles.coinFaceLocked,
-            isLocked && !isLight && { backgroundColor: '#4A4A4A', borderColor: 'rgba(255,255,255,0.1)' },
+            isLocked && !isQuiz && styles.coinFaceLocked,
+            isLocked && !isQuiz && !isLight && { backgroundColor: '#4A4A4A', borderColor: 'rgba(255,255,255,0.1)' },
+            // Quiz nodes get purple/pink color
+            isQuiz && !isCompleted && !isLocked && { backgroundColor: '#A855F7', borderColor: 'rgba(255,255,255,0.4)' },
             isQuiz && isCompleted && { backgroundColor: '#F25E86' },
+            isQuiz && isLocked && { backgroundColor: '#7C3AED', borderColor: 'rgba(255,255,255,0.2)' },
           ]}
         >
           {/* Glossy reflection highlight */}
@@ -526,14 +662,41 @@ export default function LearnScreen() {
     );
   };
 
+  // Get the next level in progression
+  const getNextLevel = () => {
+    if (!activeLevelId) return null;
+    const currentIdx = CORE_ORDER.indexOf(activeLevelId);
+    if (currentIdx === -1 || currentIdx >= CORE_ORDER.length - 1) return null;
+    return CORE_ORDER[currentIdx + 1];
+  };
+
+  const handleNextLevel = async () => {
+    const nextLevelId = getNextLevel();
+    if (!nextLevelId) return;
+
+    // Update stored level
+    await AsyncStorage.setItem(SELECTED_LEVEL_KEY, nextLevelId);
+    await AsyncStorage.setItem(HIGHEST_LEVEL_KEY, nextLevelId);
+
+    // Emit event and update state
+    DeviceEventEmitter.emit('LEVEL_SELECTED', nextLevelId);
+    setActiveLevelId(nextLevelId);
+    setHighestLevel(nextLevelId);
+
+    // Reset animation flag for new level
+    hasAnimatedEntrance.current = false;
+  };
+
   const renderStarNode = () => {
     const allCompleted = progress.completed === progress.total && progress.total > 0;
     const lastIndex = currentLevel.sets.length;
     const position = getNodePosition(lastIndex);
     const offsetX = getNodeOffset(position);
+    const nextLevelId = getNextLevel();
+    const nextLevel = nextLevelId ? levels.find(l => l.id === nextLevelId) : null;
 
     return (
-      <View style={[styles.nodeWrapper, { left: offsetX - NODE_SIZE / 2 }]}>
+      <View style={[styles.nodeWrapper, { left: offsetX - NODE_SIZE / 2, height: allCompleted && nextLevel ? NODE_SIZE + 80 : NODE_SIZE + 8 }]}>
         <View style={[
           styles.node,
           styles.starNode,
@@ -552,55 +715,79 @@ export default function LearnScreen() {
             {allCompleted ? 'Mastery!' : 'Complete all'}
           </Text>
         </View>
+
+        {/* Next Level Button */}
+        {allCompleted && nextLevel && (
+          <TouchableOpacity
+            onPress={handleNextLevel}
+            activeOpacity={0.9}
+            style={styles.nextLevelButton}
+          >
+            <Text style={styles.nextLevelButtonText}>Continue to {nextLevel.name}</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   };
 
-  // Render cat character decoration at specific positions
-  const renderCatCharacter = (index: number, type: 'sitting' | 'playing', side: 'left' | 'right') => {
+  // Render character decoration at specific positions
+  const renderCharacter = (index: number, type: 'giraffe' | 'sloth' | 'monkey' | 'chameleon' | 'fox', side: 'left' | 'right') => {
     const position = getNodePosition(index);
     const nodeX = getNodeOffset(position);
-    // Position cat within screen bounds
-    const catSize = 120;
-    let catOffsetX;
-    let catOffsetY = -10; // Default top position
+    // Position character within screen bounds - increased size
+    const charSize = 130;
+    let charOffsetX;
+    let charOffsetY = -20; // Default top position
 
     if (side === 'right') {
       // Position to the right of the node, but not off screen
-      catOffsetX = Math.min(nodeX + NODE_SIZE + 10, SCREEN_WIDTH - catSize - 10);
+      charOffsetX = Math.min(nodeX + NODE_SIZE + 5, SCREEN_WIDTH - charSize - 5);
     } else {
       // Position in the empty area on the far left side
-      catOffsetX = 40;
+      charOffsetX = 10;
       // Move up to sit in the empty space between connectors
-      catOffsetY = NODE_SPACING / 2 - catSize / 2 - 110;
+      charOffsetY = NODE_SPACING / 2 - charSize / 2 - 90;
     }
     // Flip horizontally based on side
     const flipScale = side === 'left' ? -1 : 1;
 
-    const catSource = type === 'sitting'
-      ? require('../../assets/lottie/learn/Meditating_Giraffe.json')
-      : require('../../assets/lottie/learn/Sloth_sleeping.json');
+    const getCharacterSource = () => {
+      switch (type) {
+        case 'giraffe':
+          return require('../../assets/lottie/learn/Meditating_Giraffe.json');
+        case 'sloth':
+          return require('../../assets/lottie/learn/Sloth_sleeping.json');
+        case 'monkey':
+          return require('../../assets/lottie/learn/Monkey.lottie');
+        case 'chameleon':
+          return require('../../assets/lottie/learn/Chameleon.lottie');
+        case 'fox':
+          return require('../../assets/lottie/learn/Meditating_Fox.lottie');
+        default:
+          return require('../../assets/lottie/learn/Meditating_Giraffe.json');
+      }
+    };
 
     return (
       <View
-        key={`cat-${type}-${index}`}
+        key={`char-${type}-${index}`}
         style={[
           styles.catCharacterWrapper,
-          { left: catOffsetX, top: catOffsetY },
+          { left: charOffsetX, top: charOffsetY },
         ]}
       >
         <LottieView
-          source={catSource}
+          source={getCharacterSource()}
           autoPlay
           loop
-          style={{ width: catSize, height: catSize, transform: [{ scaleX: flipScale }] }}
+          style={{ width: charSize, height: charSize, transform: [{ scaleX: flipScale }] }}
         />
         {/* Ground shadow */}
         <View
           style={{
             position: 'absolute',
-            top: catSize - 25,
-            left: catSize / 2 - 35,
+            top: charSize - 25,
+            left: charSize / 2 - 35,
             width: 70,
             height: 14,
             borderRadius: 35,
@@ -615,163 +802,130 @@ export default function LearnScreen() {
     );
   };
 
-  // Render a level stage marker in the path as a big circle
-  const renderLevelStage = (level: Level, isActive: boolean, isLocked: boolean, levelIndex: number) => {
-    const isCompleted = highestLevel != null && getLevelWeight(level.id) < getLevelWeight(highestLevel);
-    const isCurrent = activeLevelId === level.id;
-    const offsetX = SCREEN_WIDTH / 2; // Center level nodes
 
-    const nodeColor = isCompleted ? completedColor : isCurrent ? accent : lockedColor;
 
-    // Initialize level animation if needed
-    if (!levelNodeAnims.current[levelIndex]) {
-      levelNodeAnims.current[levelIndex] = new Animated.Value(0);
-      // Start entrance animation
-      setTimeout(() => {
-        Animated.spring(levelNodeAnims.current[levelIndex], {
-          toValue: 1,
-          friction: 6,
-          tension: 50,
-          useNativeDriver: true,
-        }).start();
-      }, levelIndex * 150);
-    }
-
-    const levelAnim = levelNodeAnims.current[levelIndex];
-    const entranceScale = levelAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] });
-    const entranceOpacity = levelAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+  // Render stage gate after quiz
+  const renderStageGate = (stageNumber: number, isUnlocked: boolean) => {
+    // Store the Y position of this stage gate
+    const onStageGateLayout = (event: any) => {
+      const { y } = event.nativeEvent.layout;
+      stageGatePositions.current.set(stageNumber, y);
+    };
 
     return (
-      <Animated.View
-        key={`level-stage-${level.id}`}
-        style={[
-          styles.levelNodeWrapper,
-          {
-            opacity: entranceOpacity,
-            transform: [{ scale: entranceScale }],
-          },
-        ]}
-      >
-        {/* Coin container - centers the 3D coin */}
-        <View style={styles.levelCoinContainer}>
-          {/* 3D coin edge for level node */}
-          <View style={[
-            styles.levelCoinEdge,
-            isCurrent && styles.levelCoinEdgeCurrent,
-            isCompleted && styles.levelCoinEdgeCompleted,
-            isLocked && styles.levelCoinEdgeLocked,
-            isLocked && !isLight && { backgroundColor: '#3A3A3A' },
-          ]} />
+      <View style={styles.stageGateContainer} onLayout={onStageGateLayout}>
+        {/* Decorative line left */}
+        <View style={[styles.stageGateLine, !isUnlocked && styles.stageGateLineLocked]} />
 
-          {/* Level coin face */}
-          <TouchableOpacity
-            onPress={() => !isLocked && handleLevelSelect(level.id)}
-            activeOpacity={isLocked ? 1 : 0.9}
-            style={[
-              styles.levelCoinFace,
-              isCurrent && styles.levelCoinFaceCurrent,
-              isCompleted && styles.levelCoinFaceCompleted,
-              isLocked && styles.levelCoinFaceLocked,
-              isLocked && !isLight && { backgroundColor: '#4A4A4A', borderColor: 'rgba(255,255,255,0.1)' },
-            ]}
-          >
-            {isCompleted ? (
-              <Check size={50} color="#fff" strokeWidth={3} />
+        {/* Stage badge */}
+        <View style={[styles.stageGateBadge, !isUnlocked && styles.stageGateBadgeLocked]}>
+          <View style={[styles.stageGateInner, !isUnlocked && styles.stageGateInnerLocked]}>
+            {isUnlocked ? (
+              <Trophy size={24} color="#FFD700" fill="#FFD700" />
             ) : (
-              <Image source={getLevelIcon(level.id)} style={[styles.levelCoinIcon, isLocked && styles.levelCoinIconLocked]} resizeMode="contain" />
+              <Flag size={24} color={isLight ? '#9CA3AF' : '#666'} />
             )}
-          </TouchableOpacity>
+          </View>
         </View>
-      </Animated.View>
-    );
-  };
 
-  // Render vertical connector between level stages
-  const renderLevelConnector = (isCompleted: boolean) => {
-    const lineColor = isCompleted ? (isLight ? '#C4C4C4' : '#5A5A5A') : (isLight ? '#E5E7EB' : '#3A3A3A');
-    return (
-      <View style={styles.levelConnector}>
-        <View style={[styles.levelConnectorLine, { backgroundColor: lineColor }]} />
+        {/* Decorative line right */}
+        <View style={[styles.stageGateLine, !isUnlocked && styles.stageGateLineLocked]} />
+
+        {/* Stage label */}
+        <View style={styles.stageGateLabelWrap}>
+          <Text style={[styles.stageGateLabel, !isUnlocked && styles.stageGateLabelLocked]}>
+            {isUnlocked ? `Chapter ${stageNumber + 2}` : `Pass Quiz`}
+          </Text>
+        </View>
       </View>
     );
   };
 
-  // Separate core and specialized levels
-  const coreLevels = sortedLevels.filter(l => CORE_SET.has(l.id));
-  const specializedLevels = sortedLevels.filter(l => !CORE_SET.has(l.id));
+  // Build the path for current level only
+  const buildCurrentLevelPath = () => {
+    if (!currentLevel) return null;
 
-  // Build the full path with levels and sets
-  const buildFullPath = () => {
-    const pathElements: JSX.Element[] = [];
-    let globalSetIndex = 0;
+    const setsToRender = currentLevel.sets;
 
-    coreLevels.forEach((level, levelIndex) => {
-      const isCurrentLevel = activeLevelId === level.id;
-      const isCompletedLevel = highestLevel != null && getLevelWeight(level.id) < getLevelWeight(highestLevel);
-      const isLockedLevel = highestLevel != null
-        ? getLevelWeight(level.id) > getLevelWeight(highestLevel) + 1
-        : levelIndex > 0;
+    // Track which stage we're in (increments after each quiz)
+    let currentStage = 0;
 
-      // Add level stage
-      pathElements.push(renderLevelStage(level, isCurrentLevel, isLockedLevel && levelIndex > 0, levelIndex));
-
-      // Show sets for this level
-      const levelSets = isCurrentLevel && currentLevel ? currentLevel.sets : level.sets;
-      if (levelSets && levelSets.length > 0) {
-        // For non-current levels, mark all sets as locked
-        const setsToRender = isCurrentLevel && currentLevel
-          ? levelSets
-          : levelSets.map(s => ({ ...s, locked: isLockedLevel, completed: isCompletedLevel }));
-
-        pathElements.push(
-          <View key={`sets-${level.id}`} style={styles.levelSetsContainer}>
-            {setsToRender.map((set, index) => (
-              <View key={`path-item-${index}`}>
-                {/* Show sitting cat on the right side - only for current level */}
-                {isCurrentLevel && index === 2 && renderCatCharacter(index, 'sitting', 'right')}
-                {/* Show playing cat on the left side - only for current level */}
-                {isCurrentLevel && index === 6 && renderCatCharacter(index, 'playing', 'left')}
-                {renderNode(set as any, index, isCurrentLevel)}
-                {renderConnector(index, setsToRender.length)}
-              </View>
-            ))}
-            {/* Final connector to star */}
-            {setsToRender.length > 0 && (() => {
-              const starConnectorHeight = NODE_SPACING - NODE_SIZE + 20;
-              const lastX = getNodeOffset(getNodePosition(setsToRender.length - 1));
-              const starX = getNodeOffset(getNodePosition(setsToRender.length));
-              const midY = starConnectorHeight / 2;
-              const starPathD = `M ${lastX} 0 C ${lastX} ${midY}, ${starX} ${midY}, ${starX} ${starConnectorHeight}`;
-              return (
-                <View style={styles.connectorWrapper}>
-                  <Svg height={starConnectorHeight} width={SCREEN_WIDTH}>
-                    <Path
-                      d={starPathD}
-                      stroke={isLight ? '#E5E7EB' : '#3A3A3A'}
-                      strokeWidth={3}
-                      strokeDasharray="8,8"
-                      fill="none"
-                    />
-                  </Svg>
-                </View>
-              );
-            })()}
-            {renderStarNode()}
+    return (
+      <View style={styles.levelSetsContainer}>
+        {/* Level header banner */}
+        <View style={[styles.levelBanner, isLight && styles.levelBannerLight]}>
+          <View style={styles.levelBannerEdge} />
+          <View style={styles.levelBannerContent}>
+            {/* Icon circle */}
+            <View style={styles.levelBannerIconCircle}>
+              <Image source={getLevelIcon(currentLevel.id)} style={styles.levelBannerIcon} resizeMode="contain" />
+            </View>
+            {/* Info */}
+            <View style={styles.levelBannerInfo}>
+              <Text style={styles.levelBannerTitle}>{currentLevel.name}</Text>
+              <Text style={styles.levelBannerSubtitle}>Level {currentLevel.cefr}</Text>
+            </View>
+            {/* Progress badge */}
+            <View style={styles.levelBannerBadge}>
+              <Text style={styles.levelBannerBadgeText}>{progress.completed}/{progress.total}</Text>
+            </View>
           </View>
-        );
-      }
+        </View>
 
-      // Add connector to next level
-      if (levelIndex < coreLevels.length - 1) {
-        pathElements.push(
-          <View key={`level-connector-${levelIndex}`}>
-            {renderLevelConnector(isCompletedLevel)}
-          </View>
-        );
-      }
-    });
+        {/* Sets path */}
+        {setsToRender.map((set, index) => {
+          const isQuiz = (set as any).type === 'quiz';
+          const isQuizCompleted = isQuiz && set.completed;
 
-    return pathElements;
+          // Check if previous item was a completed quiz (to show stage gate)
+          const prevSet = index > 0 ? setsToRender[index - 1] : null;
+          const showStageGate = prevSet && (prevSet as any).type === 'quiz';
+          const stageUnlocked = prevSet && prevSet.completed;
+
+          if (showStageGate) {
+            currentStage++;
+          }
+
+          return (
+            <View key={`path-item-${index}`}>
+              {/* Stage gate after quiz */}
+              {showStageGate && renderStageGate(currentStage - 1, !!stageUnlocked)}
+
+              {/* Show characters every 3 circles, alternating sides */}
+              {index === 2 && renderCharacter(index, 'monkey', 'right')}
+              {index === 5 && renderCharacter(index, 'giraffe', 'left')}
+              {index === 8 && renderCharacter(index, 'chameleon', 'right')}
+              {index === 11 && renderCharacter(index, 'fox', 'left')}
+              {index === 14 && renderCharacter(index, 'sloth', 'right')}
+              {renderNode(set as any, index, true)}
+              {renderConnector(index, setsToRender.length)}
+            </View>
+          );
+        })}
+        {/* Final connector to star */}
+        {setsToRender.length > 0 && (() => {
+          const starConnectorHeight = NODE_SPACING - NODE_SIZE + 20;
+          const lastX = getNodeOffset(getNodePosition(setsToRender.length - 1));
+          const starX = getNodeOffset(getNodePosition(setsToRender.length));
+          const midY = starConnectorHeight / 2;
+          const starPathD = `M ${lastX} 0 C ${lastX} ${midY}, ${starX} ${midY}, ${starX} ${starConnectorHeight}`;
+          return (
+            <View style={styles.connectorWrapper}>
+              <Svg height={starConnectorHeight} width={SCREEN_WIDTH}>
+                <Path
+                  d={starPathD}
+                  stroke={isLight ? '#E5E7EB' : '#3A3A3A'}
+                  strokeWidth={3}
+                  strokeDasharray="8,8"
+                  fill="none"
+                />
+              </Svg>
+            </View>
+          );
+        })()}
+        {renderStarNode()}
+      </View>
+    );
   };
 
   // Subtle gradient colors for depth - slightly more visible
@@ -789,42 +943,47 @@ export default function LearnScreen() {
       >
         <TopStatusPanel floating includeTopInset />
         <ScrollView
+          ref={scrollViewRef}
           style={{ flex: 1, paddingTop: contentTop }}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
         >
-          {/* Path with levels as stages */}
+          {/* Path for current level only */}
           <View style={styles.pathContainer}>
-            {buildFullPath()}
+            {buildCurrentLevelPath()}
           </View>
 
           <View style={{ height: 100 }} />
         </ScrollView>
 
-        {/* TEST BUTTON - Remove after testing */}
-        <TouchableOpacity
-          style={{
-            position: 'absolute',
-            bottom: 100,
-            right: 20,
-            backgroundColor: '#F8B070',
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            borderRadius: 20,
-          }}
-          onPress={async () => {
-            if (!currentLevel || !activeLevelId) return;
-            // Find first uncompleted set
-            const currentSet = currentLevel.sets.find(s => !s.completed && !s.locked);
-            if (currentSet) {
-              await SetProgressService.markCompleted(activeLevelId, currentSet.id, 100);
-              refreshLevel();
-            }
-          }}
-        >
-          <Text style={{ color: '#fff', fontWeight: '600' }}>Test: Complete Set</Text>
-        </TouchableOpacity>
       </LinearGradient>
+
+      {/* TEST BUTTON - Remove after testing */}
+      <TouchableOpacity
+        style={{
+          position: 'absolute',
+          bottom: 100,
+          right: 20,
+          backgroundColor: '#F8B070',
+          paddingHorizontal: 16,
+          paddingVertical: 10,
+          borderRadius: 20,
+        }}
+        onPress={async () => {
+          if (!currentLevel || !activeLevelId) return;
+          triggerHaptic('medium');
+          // Find first uncompleted set
+          const currentSet = currentLevel.sets.find(s => !s.completed && !s.locked);
+          if (currentSet) {
+            await SetProgressService.markCompleted(activeLevelId, currentSet.id, 100);
+            refreshLevel();
+          }
+        }}
+      >
+        <Text style={{ color: '#fff', fontWeight: '600' }}>Test: Complete Set</Text>
+      </TouchableOpacity>
 
       <LimitModal
         visible={showSignupModal}
@@ -1212,6 +1371,190 @@ const styles = StyleSheet.create({
   levelSetsContainer: {
     paddingTop: 8,
     paddingBottom: 16,
+  },
+  levelBanner: {
+    marginHorizontal: 24,
+    marginBottom: 28,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  levelBannerLight: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  levelBannerEdge: {
+    position: 'absolute',
+    top: 6,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#CC7A02',
+    borderRadius: 16,
+  },
+  levelBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8B070',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  levelBannerIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  levelBannerIcon: {
+    width: 30,
+    height: 30,
+    tintColor: '#F8B070',
+  },
+  levelBannerInfo: {
+    flex: 1,
+  },
+  levelBannerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  levelBannerSubtitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.85)',
+  },
+  levelBannerBadge: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  levelBannerBadgeText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  nextLevelButton: {
+    marginTop: 16,
+    backgroundColor: '#F8B070',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 25,
+    shadowColor: '#F8B070',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  nextLevelButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  // Stage Gate Styles
+  stageGateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 20,
+    paddingHorizontal: 20,
+  },
+  stageGateLine: {
+    flex: 1,
+    height: 3,
+    backgroundColor: '#F8B070',
+    borderRadius: 2,
+  },
+  stageGateLineLocked: {
+    backgroundColor: '#4A4A4A',
+  },
+  stageGateBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#F8B070',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 12,
+    shadowColor: '#F8B070',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  stageGateBadgeLocked: {
+    backgroundColor: '#3A3A3A',
+    shadowOpacity: 0,
+  },
+  stageGateInner: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#2A2D2E',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,215,0,0.3)',
+  },
+  stageGateInnerLocked: {
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  stageGateLabelWrap: {
+    position: 'absolute',
+    bottom: -20,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  stageGateLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#F8B070',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  stageGateLabelLocked: {
+    color: '#666',
+  },
+  skipAheadLabel: {
+    position: 'absolute',
+    top: -28,
+    left: -24,
+    width: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  skipAheadText: {
+    backgroundColor: '#A855F7',
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    overflow: 'hidden',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  skipAheadTextLocked: {
+    backgroundColor: '#7C3AED',
+  },
+  skipAheadTextFailed: {
+    backgroundColor: '#F97316',
   },
   catCharacterWrapper: {
     position: 'absolute',

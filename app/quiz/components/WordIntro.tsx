@@ -14,7 +14,7 @@ import LottieView from 'lottie-react-native';
 import { levels } from '../data/levels';
 import { useAppStore } from '../../../lib/store';
 import type { NewWordPayload } from '../../../types';
-import LinearGradient from 'react-native-linear-gradient';
+import { LinearGradient } from '../../../lib/LinearGradient';
 
 const ACCENT_COLOR = '#F8B070';
 const ACCENT_TEAL = '#4ED9CB';

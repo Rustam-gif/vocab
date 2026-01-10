@@ -25,12 +25,12 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
   const pages = useMemo(() => [
     {
       title: 'Tired of forgetting new words?',
-      body: 'You meet them today, they’re gone tomorrow. Vocadoo is here to change that.',
+      body: "You meet them today, they're gone tomorrow. Vocadoo is here to change that.",
       lottie: require('../../assets/lottie/Onboarding/1.json'),
     },
     {
       title: 'Welcome to Vocadoo',
-      body: 'Save the words that matter and we’ll turn them into quick, focused practice.',
+      body: "Save the words that matter and we'll turn them into quick, focused practice.",
       lottie: require('../../assets/lottie/Onboarding/2.json'),
     },
     {
@@ -58,13 +58,13 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
     },
     {
       title: 'Pick Your Language',
-      body: 'Choose your language and we’ll translate while you learn.',
+      body: "Choose your language and we'll translate while you learn.",
       lottie: require('../../assets/lottie/Onboarding/LanguageTranslator.json'),
       type: 'lang' as const,
     },
     {
       title: 'Set a Tiny Daily Goal',
-      body: 'Even 5 minutes a day works. Choose a time and we’ll build around it.',
+      body: "Even 5 minutes a day works. Choose a time and we'll build around it.",
       image: undefined as any,
       type: 'time' as const,
     },
@@ -95,7 +95,8 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
 
   // Theme preview state (independent of current app theme while selecting)
   // IMPORTANT: declare hooks before any conditional return to keep hook order stable
-  const [previewTheme, setPreviewTheme] = useState<'light' | 'dark'>(isLight ? 'light' : 'dark');
+  // Default to dark theme for onboarding
+  const [previewTheme, setPreviewTheme] = useState<'light' | 'dark'>('dark');
   const previewIsLight = previewTheme === 'light';
   const previewScale = useRef(new Animated.Value(1)).current;
   const [langSearch, setLangSearch] = useState('');
@@ -223,6 +224,14 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
     DeviceEventEmitter.emit('NAV_VISIBILITY', visible ? 'hide' : 'show');
     return () => DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
   }, [visible]);
+
+  // Set dark theme as default when onboarding starts
+  useEffect(() => {
+    if (visible) {
+      setTheme('dark');
+      setPreviewTheme('dark');
+    }
+  }, [visible, setTheme]);
 
   const formatCountdown = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -424,24 +433,21 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
                         />
                       ) : null}
                       <View style={styles.subCard}>
-                        <Text style={[styles.subHeadline, isLight && styles.subHeadlineLight]}>70% off yearly</Text>
-                        <Text style={[styles.subBody, isLight && styles.subBodyLight]}>
-                          Save big: missions, streaks, unlimited saves.
-                        </Text>
+                        <Text style={[styles.subHeadline, isLight && styles.subHeadlineLight]}>70% Off</Text>
                         <Text style={[styles.countdownText, isLight && styles.countdownTextLight]}>
-                          Offer ends in {formatCountdown(countdown)}
+                          Ends in {formatCountdown(countdown)}
                         </Text>
                         <View style={styles.subBenefits}>
-                        <Text style={[styles.subBenefit, isLight && styles.subBenefitLight]}>All missions unlocked</Text>
-                        <Text style={[styles.subBenefit, isLight && styles.subBenefitLight]}>Faster XP & streak boosts</Text>
-                        <Text style={[styles.subBenefit, isLight && styles.subBenefitLight]}>Vault saves without limits</Text>
+                        <Text style={[styles.subBenefit, isLight && styles.subBenefitLight]}>• Unlimited saves</Text>
+                        <Text style={[styles.subBenefit, isLight && styles.subBenefitLight]}>• All missions</Text>
+                        <Text style={[styles.subBenefit, isLight && styles.subBenefitLight]}>• XP boosts</Text>
                         {annualPriceDisplay && (
                           <View style={styles.priceRow}>
                             {annualPriceOriginal && (
-                              <Text style={[styles.oldPrice, isLight && styles.oldPriceLight]}>{annualPriceOriginal} </Text>
+                              <Text style={[styles.oldPrice, isLight && styles.oldPriceLight]}>{annualPriceOriginal}</Text>
                             )}
                             <Text style={[styles.newPrice, isLight && styles.newPriceLight]}>
-                              {annualPriceDisplay} · 70% off
+                              {annualPriceDisplay}
                             </Text>
                           </View>
                         )}
@@ -615,14 +621,6 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
 
         {pages[index]?.type !== 'subscribe' && (
           <View style={styles.footer}>
-            <View style={styles.dotsRow}>
-              {pages.map((_, i) => (
-                <View
-                  key={i}
-                  style={[styles.dot, i === index ? (isLight ? styles.dotActiveLight : styles.dotActive) : (isLight ? styles.dotLight : styles.dotDark)]}
-                />
-              ))}
-            </View>
             {/* Hide Next on language page until a language is selected */}
             {(pages[index]?.type !== 'lang' || (selectedLangs && selectedLangs.length > 0)) && (
               <View style={[styles.btnRow, { justifyContent: 'center' }]}>

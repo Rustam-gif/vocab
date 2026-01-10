@@ -12,7 +12,7 @@ import {
   Platform,
   UIManager,
 } from 'react-native';
-import { Volume2, Bookmark, Check, Globe, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react-native';
+import { Volume2, Bookmark, Check, Globe, ChevronRight } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 import Speech from '../../../lib/speech';
 import { useRouter } from 'expo-router';
@@ -55,6 +55,146 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+// Use local haptic feedback shim (no-op since native module not available)
+import ReactNativeHapticFeedback from '../../../lib/haptics';
+
+// Safe haptic feedback helper
+const triggerCelebrationHaptic = (type: 'pop' | 'success' | 'soft' = 'pop') => {
+  if (Platform.OS !== 'ios') return;
+  const options = { enableVibrateFallback: false, ignoreAndroidSystemSettings: false };
+  switch (type) {
+    case 'pop':
+      ReactNativeHapticFeedback.trigger('impactLight', options);
+      break;
+    case 'success':
+      ReactNativeHapticFeedback.trigger('notificationSuccess', options);
+      break;
+    case 'soft':
+      ReactNativeHapticFeedback.trigger('selection', options);
+      break;
+  }
+};
+
+// Result screen component with auto-transition
+function ResultScreen({
+  wordsCount,
+  isLight,
+  onComplete
+}: {
+  wordsCount: number;
+  isLight: boolean;
+  onComplete: () => void;
+}) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const exitScaleAnim = useRef(new Animated.Value(1)).current;
+  const hasTransitioned = useRef(false);
+
+  useEffect(() => {
+    // Entry animation - fade in and scale up
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 50,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Celebratory haptic pattern - like fireworks! Starts immediately
+    // Pattern: quick pops building up, then a big finale
+    const hapticPattern = [
+      // Initial burst - rocket launch!
+      { delay: 0, type: 'pop' as const },
+      { delay: 100, type: 'soft' as const },
+      { delay: 200, type: 'pop' as const },
+      // Building excitement
+      { delay: 400, type: 'soft' as const },
+      { delay: 500, type: 'pop' as const },
+      { delay: 600, type: 'soft' as const },
+      { delay: 700, type: 'pop' as const },
+      // Fireworks crescendo
+      { delay: 900, type: 'pop' as const },
+      { delay: 1000, type: 'soft' as const },
+      { delay: 1100, type: 'pop' as const },
+      { delay: 1200, type: 'pop' as const },
+      { delay: 1300, type: 'soft' as const },
+      // Grand finale!
+      { delay: 1500, type: 'pop' as const },
+      { delay: 1600, type: 'pop' as const },
+      { delay: 1700, type: 'success' as const },
+    ];
+
+    const timeouts = hapticPattern.map(({ delay, type }) =>
+      setTimeout(() => triggerCelebrationHaptic(type), delay)
+    );
+
+    return () => timeouts.forEach(t => clearTimeout(t));
+  }, []);
+
+  const handleAnimationFinish = () => {
+    if (hasTransitioned.current) return;
+    hasTransitioned.current = true;
+
+    // Wait a moment then zoom in and fade out
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(exitScaleAnim, {
+          toValue: 1.5,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        onComplete();
+      });
+    }, 600);
+  };
+
+  return (
+    <Animated.View
+      style={[
+        styles.container,
+        styles.resultContainer,
+        isLight && styles.containerLight,
+        {
+          opacity: fadeAnim,
+          transform: [
+            { scale: Animated.multiply(scaleAnim, exitScaleAnim) },
+          ],
+        },
+      ]}
+    >
+      <View style={styles.resultContent}>
+        <View style={styles.rocketWrap}>
+          <LottieView
+            source={require('../../../assets/lottie/learn/Rocket_loader.json')}
+            autoPlay
+            loop={false}
+            style={styles.rocketAnimation}
+            onAnimationFinish={handleAnimationFinish}
+          />
+        </View>
+        <Text style={[styles.resultTitle, isLight && { color: '#111827' }]}>
+          You're Ready!
+        </Text>
+        <Text style={[styles.resultSubtitle, isLight && { color: '#6B7280' }]}>
+          You've learned {wordsCount} new words.{'\n'}Let's put your knowledge to the test!
+        </Text>
+      </View>
+    </Animated.View>
+  );
+}
+
 export default function WordIntroComponent({ setId, levelId, onComplete }: WordIntroProps) {
   const router = useRouter();
   const { addWord } = useAppStore();
@@ -65,6 +205,7 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
   const [words, setWords] = useState<Word[]>([]);
   const [savedWords, setSavedWords] = useState<Set<string>>(new Set());
   const [savingWords, setSavingWords] = useState<Set<string>>(new Set());
+  const [showResultScreen, setShowResultScreen] = useState(false);
   const languagePrefs = useAppStore(s => s.languagePreferences);
   const targetLang = languagePrefs?.[0] || '';
   const [trMap, setTrMap] = useState<Record<string, any>>({});
@@ -80,7 +221,6 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
 
   // Animations
   const cardScale = useRef(new Animated.Value(1)).current;
-  const progressAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   // Pulse animation for current indicator
@@ -102,18 +242,6 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
     pulse.start();
     return () => pulse.stop();
   }, []);
-
-  // Update progress animation
-  useEffect(() => {
-    if (words.length > 0) {
-      Animated.spring(progressAnim, {
-        toValue: (currentIndex + 1) / words.length,
-        friction: 8,
-        tension: 40,
-        useNativeDriver: false,
-      }).start();
-    }
-  }, [currentIndex, words.length]);
 
   useEffect(() => {
     loadWords();
@@ -208,16 +336,9 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setCurrentIndex(nextIndex);
     } else {
-      handleStartPractice();
-    }
-  };
-
-  const goToPrev = () => {
-    if (currentIndex > 0) {
-      const prevIndex = currentIndex - 1;
-      scrollerRef.current?.scrollTo({ x: prevIndex * SCREEN_WIDTH, animated: true });
+      // Show result screen with rocket animation
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setCurrentIndex(prevIndex);
+      setShowResultScreen(true);
     }
   };
 
@@ -243,7 +364,6 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
   };
 
   const currentWord = words[Math.min(currentIndex, words.length - 1)];
-  const isLastCard = currentIndex >= words.length - 1;
 
   const renderWordCard = (word: Word, idx: number) => {
     const isSaved = savedWords.has(word.word);
@@ -281,7 +401,12 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
             {/* Header with word */}
             <View style={styles.cardHeader}>
               <View style={styles.wordSection}>
-                <Text style={[styles.wordText, isLight && styles.wordTextLight]}>
+                <Text
+                  style={[styles.wordText, isLight && styles.wordTextLight]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                >
                   {word.word}
                 </Text>
                 <Text style={styles.phoneticText}>{word.phonetic}</Text>
@@ -402,32 +527,31 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
     );
   }
 
-  const progressWidth = progressAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0%', '100%'],
-  });
+  // Result screen with rocket animation
+  if (showResultScreen) {
+    return (
+      <ResultScreen
+        wordsCount={words.length}
+        isLight={isLight}
+        onComplete={handleStartPractice}
+      />
+    );
+  }
 
   return (
     <View style={[styles.container, isLight && styles.containerLight]}>
-      {/* Top section with progress */}
-      <View style={styles.topSection}>
-        {/* Progress indicator */}
-        <View style={styles.progressContainer}>
-          <Text style={[styles.progressText, isLight && styles.progressTextLight]}>
-            {currentIndex + 1} <Text style={styles.progressTotal}>of {words.length}</Text>
-          </Text>
-          <View style={[styles.progressBar, isLight && styles.progressBarLight]}>
-            <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
-          </View>
-        </View>
-
-        {/* Title */}
-        <View style={styles.titleContainer}>
-          <Sparkles size={20} color={ACCENT_ORANGE} />
-          <Text style={[styles.titleText, isLight && styles.titleTextLight]}>
-            Learn New Words
-          </Text>
-        </View>
+      {/* Navigation dots - above cards */}
+      <View style={styles.dotsContainer}>
+        {words.map((_, idx) => (
+          <Animated.View
+            key={idx}
+            style={[
+              styles.dot,
+              idx === currentIndex && styles.dotActive,
+              idx === currentIndex && { transform: [{ scale: pulseAnim }] },
+            ]}
+          />
+        ))}
       </View>
 
       {/* Word cards carousel */}
@@ -452,40 +576,14 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
 
       {/* Bottom navigation */}
       <View style={styles.bottomSection}>
-        {/* Navigation dots */}
-        <View style={styles.dotsContainer}>
-          {words.map((_, idx) => (
-            <Animated.View
-              key={idx}
-              style={[
-                styles.dot,
-                idx === currentIndex && styles.dotActive,
-                idx === currentIndex && { transform: [{ scale: pulseAnim }] },
-              ]}
-            />
-          ))}
-        </View>
-
-        {/* Navigation buttons */}
-        <View style={styles.navButtons}>
+        {/* Navigation button - centered */}
+        <View style={styles.navButtonContainer}>
           <TouchableOpacity
-            style={[styles.navButton, styles.navButtonSecondary, currentIndex === 0 && styles.navButtonDisabled]}
-            onPress={goToPrev}
-            disabled={currentIndex === 0}
-          >
-            <ChevronLeft size={24} color={currentIndex === 0 ? '#555' : '#fff'} />
-            <Text style={[styles.navButtonText, currentIndex === 0 && styles.navButtonTextDisabled]}>
-              Previous
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.navButton, styles.navButtonPrimary]}
+            style={styles.nextButtonFull}
             onPress={goToNext}
+            activeOpacity={0.8}
           >
-            <Text style={styles.navButtonTextPrimary}>
-              {isLastCard ? 'Start Practice' : 'Next'}
-            </Text>
+            <Text style={styles.nextButtonText}>Next</Text>
             <ChevronRight size={24} color="#1A1A1A" />
           </TouchableOpacity>
         </View>
@@ -803,7 +901,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 8,
-    marginBottom: 20,
+    marginTop: 16,
+    marginBottom: 16,
   },
   dot: {
     width: 8,
@@ -815,45 +914,31 @@ const styles = StyleSheet.create({
     width: 24,
     backgroundColor: ACCENT_TEAL,
   },
-  navButtons: {
-    flexDirection: 'row',
-    gap: 12,
+  navButtonContainer: {
+    alignItems: 'center',
+    paddingBottom: 20,
   },
-  navButton: {
-    flex: 1,
+  nextButtonFull: {
+    backgroundColor: ACCENT_TEAL,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 16,
-    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 48,
+    borderRadius: 28,
+    gap: 6,
+    shadowColor: ACCENT_TEAL,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  navButtonSecondary: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  navButtonPrimary: {
-    backgroundColor: ACCENT_TEAL,
-    flex: 1.5,
-  },
-  navButtonDisabled: {
-    opacity: 0.5,
-  },
-  navButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#fff',
-    fontFamily: 'Ubuntu-Medium',
-  },
-  navButtonTextDisabled: {
-    color: '#555',
-  },
-  navButtonTextPrimary: {
+  nextButtonText: {
     fontSize: 16,
     fontWeight: '700',
     color: '#1A1A1A',
     fontFamily: 'Ubuntu-Bold',
+    letterSpacing: 0.3,
   },
 
   // Modal styles
@@ -923,5 +1008,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
     fontFamily: 'Ubuntu-Bold',
+  },
+
+  // Result screen styles
+  resultContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  resultContent: {
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  rocketWrap: {
+    width: 180,
+    height: 180,
+    marginBottom: 24,
+  },
+  rocketAnimation: {
+    width: 180,
+    height: 180,
+  },
+  resultTitle: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 12,
+    fontFamily: 'Ubuntu-Bold',
+    textAlign: 'center',
+  },
+  resultSubtitle: {
+    fontSize: 16,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 40,
+    fontFamily: 'Ubuntu-Regular',
   },
 });

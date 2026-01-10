@@ -22,8 +22,8 @@ interface MCQProps {
   setId: string;
   levelId: string;
   onPhaseComplete: (score: number, totalQuestions: number) => void;
-  sharedScore: number;
-  onScoreShare: (newScore: number) => void;
+  hearts: number;
+  onHeartLost: () => void;
   wordRange?: { start: number; end: number };
   // Optional override list for dynamic quizzes not present in levels.ts
   wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
@@ -1932,12 +1932,11 @@ const typedFallbacks = (setTitle: string, pos: 'verb'|'noun'|'adjective'): strin
   return ['A general concept related to subject'];
 };
 
-export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedScore, onScoreShare, wordRange, wordsOverride }: MCQProps) {
+export default function MCQComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride }: MCQProps) {
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
-  const [displayScore, setDisplayScore] = useState(sharedScore);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -1945,32 +1944,19 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, sharedSc
   const [isAnswered, setIsAnswered] = useState(false);
   const [isProcessingNext, setIsProcessingNext] = useState(false);
   const [phaseCorrect, setPhaseCorrect] = useState(0);
-  const pendingScoreRef = useRef<number | null>(null);
   const optionAnims = useRef<Animated.Value[]>([]);
-  
+  const heartLostAnim = useRef(new Animated.Value(1)).current;
+
   // Animation refs
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
-  const deductionAnim = useRef(new Animated.Value(0)).current;
   const questionStartRef = useRef<number>(Date.now());
 
   useEffect(() => {
     console.log('MCQComponent - useEffect triggered:', { setId, levelId, wordRange, hasOverride: !!wordsOverride });
     generateQuestions();
   }, [setId, levelId, wordRange?.start, wordRange?.end, wordsOverride && (wordsOverride as any).length]);
-
-  useEffect(() => {
-    setDisplayScore(sharedScore);
-  }, [sharedScore]);
-
-  useEffect(() => {
-    if (pendingScoreRef.current !== null && pendingScoreRef.current !== sharedScore) {
-      const next = pendingScoreRef.current;
-      pendingScoreRef.current = null;
-      onScoreShare(next);
-    }
-  }, [displayScore, onScoreShare, sharedScore]);
 
   // Prepare bubble entrance animation for options whenever the question changes
   useEffect(() => {
@@ -2826,22 +2812,19 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
     if (correct) {
       setPhaseCorrect(prev => prev + 1);
     } else {
-      setDisplayScore(prev => {
-        const next = Math.max(0, prev - 5);
-        pendingScoreRef.current = next;
-        return next;
-      });
-      triggerDeductionAnimation();
+      // Lose a heart on wrong answer
+      onHeartLost();
+      triggerHeartLostAnimation();
     }
     setIsProcessingNext(false);
   };
 
-  const triggerDeductionAnimation = () => {
-    deductionAnim.stopAnimation();
-    deductionAnim.setValue(0);
-    Animated.timing(deductionAnim, {
+  const triggerHeartLostAnimation = () => {
+    heartLostAnim.setValue(1.3);
+    Animated.spring(heartLostAnim, {
       toValue: 1,
-      duration: 700,
+      friction: 3,
+      tension: 100,
       useNativeDriver: true,
     }).start();
   };
@@ -2892,14 +2875,6 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
   }
 
   const currentQuestion = questions[currentWordIndex];
-  const deductionOpacity = deductionAnim.interpolate({
-    inputRange: [0, 0.2, 1],
-    outputRange: [0, 1, 0],
-  });
-  const deductionTranslateY = deductionAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -35],
-  });
 
   const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -2936,26 +2911,19 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
 
   return (
     <View style={[styles.container, isLight && { backgroundColor: colors.background }]}>
-      {/* Header with Progress and Score */}
+      {/* Header with Progress and Hearts */}
       <View style={styles.header}>
         <View style={styles.progressContainer}>
           <Text style={[styles.progressText, (mcqThemeHack as any).theme === 'light' && { color: '#6B7280' }]}>
             Word {currentWordIndex + 1} of {questions.length}
           </Text>
-          <View style={styles.scoreWrapper}>
-            <Animated.Text
-              style={[
-                styles.deductionText,
-                {
-                  opacity: deductionOpacity,
-                  transform: [{ translateY: deductionTranslateY }],
-                },
-              ]}
-            >
-              -5
-            </Animated.Text>
-            <Text style={styles.scoreText}>{displayScore}</Text>
-          </View>
+          <Animated.View style={[styles.heartsContainer, { transform: [{ scale: heartLostAnim }] }]}>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Text key={i} style={styles.heartIcon}>
+                {i < hearts ? '❤️' : '🤍'}
+              </Text>
+            ))}
+          </Animated.View>
         </View>
         <View style={[styles.progressBar, isLight && { backgroundColor: '#E5E7EB' }]}>
           <Animated.View 
@@ -3089,6 +3057,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     minWidth: 48,
   },
+  heartsContainer: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  heartIcon: {
+    fontSize: 18,
+  },
   deductionText: {
     position: 'absolute',
     top: -20,
@@ -3156,10 +3131,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   nextButtonContainer: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    paddingTop: 16,
     alignItems: 'center',
   },
   optionButton: {

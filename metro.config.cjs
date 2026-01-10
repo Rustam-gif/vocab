@@ -20,6 +20,7 @@ module.exports = mergeConfig(defaultConfig, {
       'react-native-sound': path.resolve(__dirname, 'lib/rnsound'),
       'lottie-react-native': path.resolve(__dirname, 'lib/lottie-proxy'),
       '@react-navigation/native': path.resolve(__dirname, 'lib/reactNavigation'),
+      'react-native-haptic-feedback': path.resolve(__dirname, 'lib/haptics'),
     },
   },
 });

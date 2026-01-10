@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Pressable,
 import { InteractionManager } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop, Pattern, Circle } from 'react-native-svg';
+import { LinearGradient } from '../lib/LinearGradient';
 import { Plus, Camera, Type, Flame, Clock, MessageSquare, XCircle, Search, Users, ShieldCheck, BookOpenCheck, Lightbulb, Globe, HeartPulse, Sparkles, Check, X } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppStore } from '../lib/store';
@@ -5900,25 +5901,69 @@ EXAMPLE: [sentence in ${langName}]`
 	        visible={showOnboarding}
 	        theme={theme}
 	        onClose={async (next) => {
-	          setShowOnboarding(false);
 	          try { await AsyncStorage.setItem('@engniter.onboarding_done_v1', '1'); } catch {}
 	          if (next === 'profile') {
-	            try { router.push('/profile'); } catch {}
+	            try { router.replace('/profile'); } catch {}
+	            // Small delay before hiding modal to prevent flash
+	            setTimeout(() => setShowOnboarding(false), 100);
 	            return;
 	          }
-          // Skip placement intro; go straight to level selection
-          try { router.push('/placement/level-select'); } catch {}
+          // Navigate first, then hide modal to prevent flash of home screen
+          try { router.replace('/placement/level-select'); } catch {}
+          setTimeout(() => setShowOnboarding(false), 100);
         }}
       />)}
 
       {/* Daily streak celebration (once per day) */}
       {showStreakCelebrate && !isPreview && (
         <View style={styles.celebrateOverlay}>
-          <View style={[styles.celebrateCard, theme === 'light' && styles.celebrateCardLight]}> 
-            <LottieView source={require('../assets/lottie/flame.json')} autoPlay loop style={{ width: 140, height: 140 }} />
-            <Text style={[styles.celebrateCount, theme === 'light' && styles.celebrateCountLight]}>{displayCount}</Text>
-            <Text style={[styles.celebrateLabel, theme === 'light' && styles.celebrateLabelLight]}>day streak</Text>
-            <Text style={[styles.celebrateHint, theme === 'light' && styles.celebrateHintLight]}>Keep it up — practice again tomorrow!</Text>
+          <LinearGradient
+            colors={theme === 'light' ? ['#FFFFFF', '#F8F9FA'] : ['#2A2D2E', '#1A1C1D']}
+            style={[styles.celebrateCard]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+          >
+            {/* Decorative glow */}
+            <View style={styles.celebrateGlow} pointerEvents="none" />
+
+            {/* Flame animation */}
+            <View style={styles.celebrateFlameWrap}>
+              <LottieView source={require('../assets/lottie/flame.json')} autoPlay loop style={{ width: 120, height: 120 }} />
+            </View>
+
+            {/* Streak count */}
+            <View style={styles.celebrateCountWrap}>
+              <Text style={[styles.celebrateCount, theme === 'light' && styles.celebrateCountLight]}>{displayCount}</Text>
+            </View>
+            <Text style={[styles.celebrateLabel, theme === 'light' && styles.celebrateLabelLight]}>Day Streak</Text>
+
+            {/* Week progress */}
+            <View style={styles.celebrateWeekRow}>
+              {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, idx) => {
+                const streakCount = userProgress?.streak || 0;
+                const todayIdx = new Date().getDay();
+                const adjustedTodayIdx = todayIdx === 0 ? 6 : todayIdx - 1;
+                const isCompleted = idx <= adjustedTodayIdx && idx >= adjustedTodayIdx - (streakCount - 1);
+                const isToday = idx === adjustedTodayIdx;
+                return (
+                  <View key={idx} style={[styles.celebrateDayCol]}>
+                    <Text style={[styles.celebrateDayLabel, theme === 'light' && { color: '#6B7280' }]}>{day}</Text>
+                    <View style={[
+                      styles.celebrateDayDot,
+                      isCompleted && styles.celebrateDayDotActive,
+                      isToday && styles.celebrateDayDotToday,
+                    ]}>
+                      {isCompleted && <Text style={styles.celebrateDayCheck}>✓</Text>}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.celebrateHint, theme === 'light' && styles.celebrateHintLight]}>
+              You're on fire! Keep practicing daily.
+            </Text>
+
             <TouchableOpacity
               style={styles.celebrateBtn}
               onPress={async () => {
@@ -5931,10 +5976,18 @@ EXAMPLE: [sentence in ${langName}]`
                   ]);
                 } catch {}
               }}
+              activeOpacity={0.8}
             >
-              <Text style={styles.celebrateBtnText}>Awesome</Text>
+              <LinearGradient
+                colors={['#4ED9CB', '#3BB8AC']}
+                style={styles.celebrateBtnGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Text style={styles.celebrateBtnText}>Continue</Text>
+              </LinearGradient>
             </TouchableOpacity>
-          </View>
+          </LinearGradient>
         </View>
       )}
 
@@ -6961,29 +7014,105 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
   celebrateCard: {
     width: '90%',
-    maxWidth: 420,
-    borderRadius: 16,
-    backgroundColor: '#1E1E1E',
+    maxWidth: 380,
+    borderRadius: 28,
     alignItems: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: 16,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(78, 217, 203, 0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.4,
+    shadowRadius: 32,
+    elevation: 16,
   },
-  celebrateCardLight: { backgroundColor: '#FFFFFF' },
-  celebrateCount: { fontSize: 64, color: '#F8B070', fontWeight: '900', marginTop: 6 },
+  celebrateGlow: {
+    position: 'absolute',
+    top: -100,
+    left: '50%',
+    marginLeft: -150,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: 'rgba(78, 217, 203, 0.06)',
+  },
+  celebrateFlameWrap: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  celebrateCountWrap: {
+    marginTop: 8,
+  },
+  celebrateCount: { fontSize: 72, color: '#F8B070', fontWeight: '900', lineHeight: 80 },
   celebrateCountLight: { color: '#E06620' },
-  celebrateLabel: { color: '#E5E7EB', fontWeight: '800', marginTop: -6, textTransform: 'lowercase' },
-  celebrateLabelLight: { color: '#111827' },
-  celebrateHint: { marginTop: 12, color: '#9CA3AF', textAlign: 'center' },
+  celebrateLabel: { color: '#9CA3AF', fontWeight: '700', fontSize: 16, textTransform: 'uppercase', letterSpacing: 2, marginTop: -4 },
+  celebrateLabelLight: { color: '#6B7280' },
+  celebrateWeekRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+    gap: 8,
+  },
+  celebrateDayCol: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  celebrateDayLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  celebrateDayDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  celebrateDayDotActive: {
+    backgroundColor: 'rgba(78, 217, 203, 0.15)',
+    borderColor: 'rgba(78, 217, 203, 0.4)',
+  },
+  celebrateDayDotToday: {
+    backgroundColor: '#4ED9CB',
+    borderColor: '#4ED9CB',
+    shadowColor: '#4ED9CB',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+  },
+  celebrateDayCheck: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  celebrateHint: { marginTop: 20, color: '#9CA3AF', textAlign: 'center', fontSize: 15, lineHeight: 22 },
   celebrateHintLight: { color: '#6B7280' },
-  celebrateBtn: { marginTop: 16, backgroundColor: '#F8B070', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12 },
-  celebrateBtnText: { color: '#0D3B4A', fontWeight: '800' },
+  celebrateBtn: { marginTop: 24, borderRadius: 16, overflow: 'hidden' },
+  celebrateBtnGradient: {
+    paddingHorizontal: 48,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  celebrateBtnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 17, letterSpacing: 0.5 },
   navBar: { paddingHorizontal: 12, gap: 10 },
   navItem: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, backgroundColor: '#2A3033', borderWidth: 1, borderColor: '#364147', marginRight: 10, alignItems: 'center', width: 84 },
   navItemLight: { backgroundColor: '#E9F4F1', borderColor: '#D7E7E2' },

@@ -9,33 +9,39 @@ import { levels } from './data/levels';
 
 const ACCENT = '#F8B070';
 const CORRECT_COLOR = '#437F76';
+const HEART_COLOR = '#E53935';
+const TOTAL_HEARTS = 5;
 
 export default function AtlasResults() {
   const router = useRouter();
   const { loadProgress } = useAppStore();
   const themeName = useAppStore(s => s.theme);
   const isLight = themeName === 'light';
-  const { score, totalQuestions, setId, levelId, points, exerciseType } = useLocalSearchParams<{
+  const { score, totalQuestions, setId, levelId, hearts: heartsParam, exerciseType } = useLocalSearchParams<{
     score?: string;
     totalQuestions?: string;
     setId?: string;
     levelId?: string;
-    points?: string;
+    hearts?: string;
     exerciseType?: string;
   }>();
 
-  const numericPoints = useMemo(() => {
-    const parsedPoints = parseInt(points || '', 10);
-    if (!Number.isNaN(parsedPoints)) return Math.max(0, parsedPoints);
-    const correct = parseInt(score || '0', 10);
-    const total = parseInt(totalQuestions || '0', 10);
-    if (Number.isNaN(correct) || Number.isNaN(total) || total === 0) return Math.max(0, correct * 20);
-    return Math.max(0, Math.round((correct / total) * 100));
-  }, [points, score, totalQuestions]);
+  // Parse hearts from params (default to 5 if not provided)
+  const heartsRemaining = useMemo(() => {
+    const parsed = parseInt(heartsParam || '5', 10);
+    return Number.isNaN(parsed) ? 5 : Math.max(0, Math.min(5, parsed));
+  }, [heartsParam]);
 
-  const [displayPoints, setDisplayPoints] = useState(0);
+  // Animation values for each heart
+  const heartAnims = useRef(
+    Array.from({ length: TOTAL_HEARTS }, () => ({
+      scale: new Animated.Value(0),
+      opacity: new Animated.Value(0),
+    }))
+  ).current;
   const [showDoneButton, setShowDoneButton] = useState(false);
   const [hideLottie, setHideLottie] = useState(false);
+  const [heartsAnimated, setHeartsAnimated] = useState(false);
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const buttonsOpacity = useRef(new Animated.Value(0)).current;
@@ -56,21 +62,51 @@ export default function AtlasResults() {
     } catch {}
   }, []);
 
-  useEffect(() => {
-    setDisplayPoints(0);
-    const target = Math.round(numericPoints);
-    const step = target > 0 ? Math.max(1, Math.ceil(target / 40)) : 1;
-    const interval = setInterval(() => {
-      setDisplayPoints(prev => {
-        const next = Math.min(prev + step, target);
-        if (next >= target) {
-          clearInterval(interval);
-        }
-        return next;
-      });
-    }, 20);
-    return () => clearInterval(interval);
-  }, [numericPoints]);
+  // Animate hearts appearing one by one with bounce effect
+  const animateHearts = useCallback(() => {
+    if (heartsAnimated) return;
+    setHeartsAnimated(true);
+
+    // Staggered animation for each heart
+    const animations = heartAnims.map((anim, index) => {
+      const isActive = index < heartsRemaining;
+      return Animated.sequence([
+        Animated.delay(index * 150), // Stagger each heart
+        Animated.parallel([
+          Animated.spring(anim.scale, {
+            toValue: isActive ? 1 : 0.8,
+            friction: 4,
+            tension: 100,
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim.opacity, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+        ]),
+        // Extra bounce for active hearts
+        ...(isActive ? [
+          Animated.sequence([
+            Animated.timing(anim.scale, {
+              toValue: 1.2,
+              duration: 150,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: true,
+            }),
+            Animated.timing(anim.scale, {
+              toValue: 1,
+              duration: 150,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: true,
+            }),
+          ]),
+        ] : []),
+      ]);
+    });
+
+    Animated.parallel(animations).start();
+  }, [heartAnims, heartsRemaining, heartsAnimated]);
 
   useEffect(() => {
     // Start animation immediately
@@ -88,10 +124,16 @@ export default function AtlasResults() {
         useNativeDriver: true,
       }),
     ]);
-    
+
     // Reset visibility/animation states on enter
     setHideLottie(false);
     lottieStarted.current = false;
+    setHeartsAnimated(false);
+    // Reset heart animations
+    heartAnims.forEach(anim => {
+      anim.scale.setValue(0);
+      anim.opacity.setValue(0);
+    });
 
     sequence.start(() => {
       // Start from the beginning reliably
@@ -100,15 +142,16 @@ export default function AtlasResults() {
       const fallback = setTimeout(() => {
         setHideLottie(true);
         setShowDoneButton(true);
+        animateHearts();
       }, 2500);
       return () => clearTimeout(fallback);
     });
-    
+
     return () => {
       // Cleanup animation state so next mount is fresh
       try { lottieRef.current?.reset?.(); } catch {}
     };
-  }, [scaleAnim, opacityAnim, playLottieFromStart]);
+  }, [scaleAnim, opacityAnim, playLottieFromStart, heartAnims, animateHearts]);
 
   // Animate buttons in smoothly once they are revealed
   useEffect(() => {
@@ -245,6 +288,7 @@ export default function AtlasResults() {
               onAnimationFinish={() => {
                 setHideLottie(true);
                 setShowDoneButton(true);
+                animateHearts();
               }}
             />
           </Animated.View>
@@ -268,9 +312,34 @@ export default function AtlasResults() {
             <CheckCircle size={72} color={CORRECT_COLOR} />
           </Animated.View>
         )}
-        <View style={styles.scoreSection}>
-          <Text style={[styles.pointsText, isLight && styles.pointsTextLight]}>{displayPoints}</Text>
-          <Text style={[styles.label, isLight && styles.labelLight]}>Score Achieved</Text>
+        <View style={styles.heartsSection}>
+          <View style={styles.heartsRow}>
+            {heartAnims.map((anim, index) => {
+              const isActive = index < heartsRemaining;
+              return (
+                <Animated.Text
+                  key={index}
+                  style={[
+                    styles.heartIcon,
+                    {
+                      opacity: anim.opacity,
+                      transform: [{ scale: anim.scale }],
+                    },
+                    !isActive && styles.heartLost,
+                  ]}
+                >
+                  {isActive ? '❤️' : '🤍'}
+                </Animated.Text>
+              );
+            })}
+          </View>
+          <Text style={[styles.heartsLabel, isLight && styles.heartsLabelLight]}>
+            {heartsRemaining === TOTAL_HEARTS
+              ? 'Perfect! All Hearts!'
+              : heartsRemaining > 0
+              ? `${heartsRemaining} Heart${heartsRemaining !== 1 ? 's' : ''} Remaining`
+              : 'No Hearts Left'}
+          </Text>
         </View>
         <View style={styles.buttonContainer}>
           {showDoneButton ? (
@@ -332,27 +401,31 @@ const styles = StyleSheet.create({
     width: 110,
     height: 110,
   },
-  label: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  labelLight: {
-    color: '#6B7280',
-  },
-  pointsText: {
-    fontSize: 38,
-    fontWeight: '700',
-    color: ACCENT,
-  },
-  pointsTextLight: {
-    color: '#e28743',
-  },
-  scoreSection: {
+  heartsSection: {
     alignItems: 'center',
     marginTop: 24,
+    gap: 12,
+  },
+  heartsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
+  },
+  heartIcon: {
+    fontSize: 36,
+  },
+  heartLost: {
+    opacity: 0.5,
+  },
+  heartsLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: ACCENT,
+    textAlign: 'center',
+  },
+  heartsLabelLight: {
+    color: '#e28743',
   },
   buttonContainer: {
     marginTop: 94,
