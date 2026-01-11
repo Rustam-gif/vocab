@@ -20,10 +20,13 @@ const CARD_W = Math.min(340, SCREEN_WIDTH - 40);
 const CARD_H = Math.min(400, Math.round(SCREEN_HEIGHT * 0.45));
 const SWIPE_THRESHOLD = 80;
 
-const ACCENT_ORANGE = '#F2935C';
+// Colors matching Learn section
+const ACCENT_ORANGE = '#FE9602';
+const ACCENT_TEAL = '#4ED9CB';
 const ACCENT_GREEN = '#4ADE80';
 const ACCENT_RED = '#F87171';
 const BG_DARK = '#1E1E1E';
+const CARD_BORDER = 'rgba(78, 217, 203, 0.35)';
 
 export default function WordTest() {
   const router = useRouter();
@@ -285,24 +288,26 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: '#F9FAFB',
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
   },
   headerProgress: {
     color: ACCENT_ORANGE,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
   },
   progressBarBg: {
-    height: 4,
+    height: 5,
     backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 2,
+    borderRadius: 3,
     marginBottom: 24,
   },
   progressBarFill: {
     height: '100%',
     backgroundColor: ACCENT_ORANGE,
-    borderRadius: 2,
+    borderRadius: 3,
   },
   instructions: {
     color: '#9CA3AF',
@@ -310,6 +315,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     marginBottom: 20,
+    fontFamily: 'Ubuntu-Medium',
   },
   cardContainer: {
     flex: 1,
@@ -329,19 +335,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#252829',
     opacity: 0.5,
+    borderWidth: 2,
+    borderColor: 'rgba(78, 217, 203, 0.15)',
   },
   nextCardWord: {
     color: '#4B5563',
     fontSize: 28,
     fontWeight: '700',
+    fontFamily: 'Feather-Bold',
   },
   cardOuter: {
     width: CARD_W,
     height: CARD_H,
     borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
+    shadowColor: ACCENT_TEAL,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 10,
   },
@@ -353,8 +362,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#2A2D2E',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 2,
+    borderColor: CARD_BORDER,
   },
   swipeLabel: {
     position: 'absolute',
@@ -375,6 +384,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 1,
+    fontFamily: 'Ubuntu-Bold',
   },
   dontKnowLabel: {
     left: 20,
@@ -387,23 +397,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 1,
+    fontFamily: 'Ubuntu-Bold',
   },
   word: {
     color: '#F9FAFB',
-    fontSize: 34,
+    fontSize: 36,
     fontWeight: '700',
     marginBottom: 8,
     letterSpacing: -0.5,
     textAlign: 'center',
+    fontFamily: 'Feather-Bold',
   },
   phonetic: {
     color: '#6B7280',
     fontSize: 16,
     fontStyle: 'italic',
     marginBottom: 28,
+    fontFamily: 'Feather-Bold',
   },
   divider: {
-    width: 40,
+    width: 50,
     height: 3,
     backgroundColor: ACCENT_ORANGE,
     borderRadius: 2,
@@ -411,10 +424,11 @@ const styles = StyleSheet.create({
   },
   definition: {
     color: '#9CA3AF',
-    fontSize: 16,
+    fontSize: 17,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 26,
     paddingHorizontal: 12,
+    fontFamily: 'Feather-Bold',
   },
   coachWrap: {
     position: 'absolute',
@@ -458,10 +472,12 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Medium',
   },
   hintTextRight: {
     color: '#6B7280',
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: 'Ubuntu-Medium',
   },
 });

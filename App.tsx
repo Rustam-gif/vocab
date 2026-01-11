@@ -13,8 +13,22 @@ import { engagementTrackingService } from './services/EngagementTrackingService'
 
 console.log('=== APP.TSX MODULE LOADED ===');
 
+// Set default keyboard appearance based on theme (will be updated when theme changes)
+if (TextInput.defaultProps == null) {
+  TextInput.defaultProps = {};
+}
+// Set initial default to dark (most common)
+TextInput.defaultProps.keyboardAppearance = 'dark';
+
 export default function App() {
   const themeName = useAppStore(s => s.theme);
+
+  // Update keyboard appearance when theme changes
+  useEffect(() => {
+    if (TextInput.defaultProps) {
+      TextInput.defaultProps.keyboardAppearance = themeName === 'dark' ? 'dark' : 'light';
+    }
+  }, [themeName]);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
 
   // Load persisted settings on startup BEFORE rendering

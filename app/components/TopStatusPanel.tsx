@@ -188,7 +188,7 @@ export default function TopStatusPanel({
               activeOpacity={0.9}
               accessibilityLabel="Translate"
             >
-              <Repeat2 size={14} color={theme === 'light' ? '#0D3B4A' : '#0D3B4A'} />
+              <Repeat2 size={14} color="#FFFFFF" />
             </TouchableOpacity>
           </Animated.View>
 
@@ -213,7 +213,7 @@ export default function TopStatusPanel({
                 onPressOut={() => pressBounce(proScale)}
                 activeOpacity={0.9}
               >
-                <Crown size={16} color={theme === 'light' ? '#0D3B4A' : '#0D3B4A'} />
+                <Crown size={16} color="#1A1A1A" />
                 <Text style={styles.subBtnText}>Pro</Text>
               </TouchableOpacity>
             )}
@@ -263,19 +263,71 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 16,
     minHeight: 26,
-    backgroundColor: 'rgba(26,32,36,0.9)',
-    borderWidth: 1,
-    borderColor: 'rgba(248,176,112,0.35)',
+    backgroundColor: '#2A2D2E',
+    borderWidth: 2,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 1, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 3,
   },
-  streakPillLight: { backgroundColor: '#FFF7ED', borderColor: '#FBD38D' },
-  streakText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
+  streakPillLight: { backgroundColor: '#FFF7ED', borderColor: '#1A1A1A' },
+  streakText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14, fontFamily: 'Ubuntu-Bold' },
   streakTextLight: { color: '#0D3B4A' },
   rightRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  translateBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, minHeight: 30, backgroundColor: '#F09898', borderWidth: 1, borderColor: '#E08181' },
-  translateBtnLight: { backgroundColor: '#F09898', borderColor: '#E08181' },
-  subBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, minHeight: 30, backgroundColor: '#B6E0E2', borderWidth: 1, borderColor: '#93CBD0' },
-  subBtnLight: { backgroundColor: '#B6E0E2', borderColor: '#7FB2B6' },
-  subBtnText: { color: '#0D3B4A', fontWeight: '800', fontSize: 14 },
-  offerBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, minHeight: 24, backgroundColor: '#0BBF9E', borderWidth: 1, borderColor: '#099E82' },
-  offerBtnText: { color: '#0b1a2d', fontWeight: '800', fontSize: 11 },
+  translateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    minHeight: 30,
+    backgroundColor: '#F25E86',
+    borderWidth: 2,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 1, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  translateBtnLight: { backgroundColor: '#F25E86', borderColor: '#1A1A1A' },
+  subBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    minHeight: 30,
+    backgroundColor: '#4ED9CB',
+    borderWidth: 2,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 1, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  subBtnLight: { backgroundColor: '#4ED9CB', borderColor: '#1A1A1A' },
+  subBtnText: { color: '#1A1A1A', fontWeight: '700', fontSize: 14, fontFamily: 'Ubuntu-Bold' },
+  offerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minHeight: 24,
+    backgroundColor: '#F8B070',
+    borderWidth: 2,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 1, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 3,
+  },
+  offerBtnText: { color: '#1A1A1A', fontWeight: '700', fontSize: 11, fontFamily: 'Ubuntu-Bold' },
 });

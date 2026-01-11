@@ -109,13 +109,13 @@ export const calculateLevel = (
   // Weighted score: beginner=1, intermediate=2, advanced=3
   const score = beginnerKnown * 1 + intermediateKnown * 2 + advancedKnown * 3;
 
-  // Thresholds:
-  // Advanced: knows most intermediate + some advanced (score >= 10)
-  // Intermediate: knows beginner + some intermediate (score >= 6)
-  // Beginner: default
-  if (score >= 10 && advancedKnown >= 2) {
+  // Thresholds (easier - only true beginners stay at beginner):
+  // Advanced: score >= 8 AND knows at least 1 advanced word
+  // Intermediate: score >= 4 AND knows at least 1 intermediate word
+  // Beginner: only if very low score (true beginners)
+  if (score >= 8 && advancedKnown >= 1) {
     return 'advanced';
-  } else if (score >= 6 && intermediateKnown >= 2) {
+  } else if (score >= 4 && intermediateKnown >= 1) {
     return 'intermediate';
   }
   return 'beginner';

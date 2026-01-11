@@ -27,6 +27,7 @@ interface MCQProps {
   wordRange?: { start: number; end: number };
   // Optional override list for dynamic quizzes not present in levels.ts
   wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
+  showUfoAnimation?: boolean;
 }
 
 interface Question {
@@ -1932,7 +1933,7 @@ const typedFallbacks = (setTitle: string, pos: 'verb'|'noun'|'adjective'): strin
   return ['A general concept related to subject'];
 };
 
-export default function MCQComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride }: MCQProps) {
+export default function MCQComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride, showUfoAnimation }: MCQProps) {
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
@@ -1952,6 +1953,17 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, hearts, 
   const slideAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const questionStartRef = useRef<number>(Date.now());
+  const mountFadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Fade in on mount
+  useEffect(() => {
+    Animated.timing(mountFadeAnim, {
+      toValue: 1,
+      duration: 400,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   useEffect(() => {
     console.log('MCQComponent - useEffect triggered:', { setId, levelId, wordRange, hasOverride: !!wordsOverride });
@@ -2910,35 +2922,51 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
   };
 
   return (
-    <View style={[styles.container, isLight && { backgroundColor: colors.background }]}>
-      {/* Header with Progress and Hearts */}
-      <View style={styles.header}>
-        <View style={styles.progressContainer}>
-          <Text style={[styles.progressText, (mcqThemeHack as any).theme === 'light' && { color: '#6B7280' }]}>
-            Word {currentWordIndex + 1} of {questions.length}
-          </Text>
-          <Animated.View style={[styles.heartsContainer, { transform: [{ scale: heartLostAnim }] }]}>
-            {[0, 1, 2, 3, 4].map((i) => (
-              <Text key={i} style={styles.heartIcon}>
-                {i < hearts ? '❤️' : '🤍'}
-              </Text>
-            ))}
-          </Animated.View>
-        </View>
-        <View style={[styles.progressBar, isLight && { backgroundColor: '#E5E7EB' }]}>
-          <Animated.View 
+    <Animated.View style={[styles.container, isLight && { backgroundColor: colors.background }, { opacity: mountFadeAnim }]}>
+      {/* Compact Header with Progress and Hearts */}
+      <View style={styles.topHeaderRow}>
+        <View style={[styles.progressBarPill, isLight && { backgroundColor: '#E5E7EB' }]}>
+          <Animated.View
             style={[
-              styles.progressFill, 
-              { 
+              styles.progressFillPill,
+              {
                 width: progressAnim.interpolate({
                   inputRange: [0, 1],
                   outputRange: ['0%', '100%'],
                   extrapolate: 'clamp',
                 })
               }
-            ]} 
+            ]}
           />
         </View>
+        <Animated.View style={[styles.heartsContainerSmall, { transform: [{ scale: heartLostAnim }] }]}>
+          <View style={{ position: 'relative' }}>
+            <LottieView
+              source={require('../../../assets/lottie/learn/heart_away.lottie')}
+              autoPlay={showUfoAnimation}
+              loop={false}
+              speed={1}
+              style={{ width: 96, height: 96 }}
+              key={showUfoAnimation ? 'playing' : 'idle'}
+            />
+            {showUfoAnimation && (
+              <LottieView
+                source={require('../../../assets/lottie/learn/Ufo_animation.lottie')}
+                autoPlay
+                loop={false}
+                speed={2}
+                style={{
+                  width: 100,
+                  height: 100,
+                  position: 'absolute',
+                  top: -30,
+                  left: -2,
+                }}
+              />
+            )}
+          </View>
+          <Text style={[styles.heartCount, { marginLeft: -30 }, isLight && { color: '#EF4444' }]}>{hearts}</Text>
+        </Animated.View>
       </View>
 
       <Animated.View
@@ -2950,20 +2978,21 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
       >
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: 100 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          <TouchableOpacity
-            style={[styles.speakButtonCorner, isLight && styles.speakButtonCornerLight]}
-            onPress={() => speak(currentQuestion.word)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Volume2 size={20} color={isLight ? '#0D3B4A' : '#B6E0E2'} />
-          </TouchableOpacity>
-
           <View style={styles.wordHeader}>
-            <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{currentQuestion.word}</Text>
+            <View style={styles.wordRow}>
+              <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{currentQuestion.word}</Text>
+              <TouchableOpacity
+                style={[styles.speakButtonInline, isLight && styles.speakButtonInlineLight]}
+                onPress={() => speak(currentQuestion.word)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Volume2 size={20} color={isLight ? '#0D3B4A' : '#B6E0E2'} />
+              </TouchableOpacity>
+            </View>
             <Text style={[styles.ipaText, isLight && { color: '#6B7280' }]}>{currentQuestion.ipa}</Text>
             <Text style={[styles.exampleInline, isLight && { color: '#6B7280' }]}>
               {renderSentenceWithHighlight(currentQuestion.example, currentQuestion.word)}
@@ -2997,7 +3026,12 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
                     onPress={() => handleAnswerSelect(index)}
                     disabled={isAnswered}
                   >
-                    <Text style={[styles.optionText, isLight && { color: '#111827' }]}>
+                    <Text style={[
+                      styles.optionText,
+                      isLight && { color: '#111827' },
+                      (showFeedback && index === currentQuestion.correctAnswer) && { color: '#4ED9CB' },
+                      (showFeedback && isSelected && !isCorrectOption) && { color: '#F25E86' },
+                    ]}>
                       {option}
                     </Text>
                   </TouchableOpacity>
@@ -3016,7 +3050,7 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
           </View>
         )}
       </Animated.View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -3036,9 +3070,47 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontFamily: 'Feather-Bold',
   },
+  topHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    marginTop: -4,
+    marginBottom: 12,
+    gap: 12,
+    paddingLeft: 56,
+    paddingRight: 24,
+    height: 24,
+  },
+  progressBarPill: {
+    flex: 1,
+    height: 12,
+    backgroundColor: '#3A3A3A',
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginRight: 8,
+  },
+  progressFillPill: {
+    height: '100%',
+    backgroundColor: '#7AC231',
+    borderRadius: 7,
+  },
+  heartsContainerSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  heartEmoji: {
+    fontSize: 18,
+  },
+  heartCount: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#EF4444',
+    fontFamily: 'Feather-Bold',
+  },
   header: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 8,
   },
   progressContainer: {
     flexDirection: 'row',
@@ -3094,23 +3166,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
   },
-  speakButtonCorner: {
-    position: 'absolute',
-    top: 4,
-    right: 12,
-    padding: 10,
+  wordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  speakButtonInline: {
+    padding: 8,
     borderRadius: 20,
     backgroundColor: 'rgba(182, 224, 226, 0.15)',
-    zIndex: 10,
   },
-  speakButtonCornerLight: {
+  speakButtonInlineLight: {
     backgroundColor: 'rgba(13, 59, 74, 0.1)',
   },
   wordText: {
     fontSize: 32,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 8,
     fontFamily: 'Feather-Bold',
   },
   ipaText: {
@@ -3118,6 +3190,7 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontStyle: 'italic',
     fontFamily: 'Feather-Bold',
+    marginTop: 8,
   },
   exampleInline: {
     marginTop: 8,
@@ -3132,8 +3205,8 @@ const styles = StyleSheet.create({
   },
   nextButtonContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 24,
-    paddingTop: 16,
+    paddingBottom: 70,
+    paddingTop: 8,
     alignItems: 'center',
   },
   optionButton: {
@@ -3146,21 +3219,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: 72,
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
   },
   // Light mode card color to match Learn cards
-  optionLight: { backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: 'rgba(78,217,203,0.3)' },
+  optionLight: { backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: 'rgba(78,217,203,0.3)', borderBottomWidth: 4, borderRightWidth: 4, borderBottomColor: 'rgba(78,217,203,0.4)', borderRightColor: 'rgba(78,217,203,0.35)' },
   // Brighter selected state before feedback (dark and light variants)
-  selectedOption: { backgroundColor: 'rgba(242,94,134,0.15)', borderWidth: 2, borderColor: '#F25E86' },
-  selectedOptionLight: { backgroundColor: 'rgba(242,94,134,0.1)', borderWidth: 2, borderColor: '#F25E86' },
+  selectedOption: { backgroundColor: 'rgba(242,94,134,0.08)', borderWidth: 2, borderColor: '#F25E86', borderBottomWidth: 4, borderRightWidth: 4, borderBottomColor: '#F25E86', borderRightColor: '#F25E86' },
+  selectedOptionLight: { backgroundColor: 'rgba(242,94,134,0.05)', borderWidth: 2, borderColor: '#F25E86', borderBottomWidth: 4, borderRightWidth: 4, borderBottomColor: '#F25E86', borderRightColor: '#F25E86' },
   // Reveal states
   // Dark theme - teal for correct, pink for wrong
-  correctOption: { backgroundColor: 'rgba(78,217,203,0.2)', borderColor: '#4ED9CB', borderWidth: 2 },
-  wrongOption: { backgroundColor: 'rgba(242,94,134,0.2)', borderColor: '#F25E86', borderWidth: 2 },
+  correctOption: { backgroundColor: 'rgba(78,217,203,0.04)', borderColor: '#4ED9CB', borderWidth: 2, borderBottomWidth: 4, borderRightWidth: 4, borderBottomColor: '#4ED9CB', borderRightColor: '#4ED9CB' },
+  wrongOption: { backgroundColor: 'rgba(242,94,134,0.04)', borderColor: '#F25E86', borderWidth: 2, borderBottomWidth: 4, borderRightWidth: 4, borderBottomColor: '#F25E86', borderRightColor: '#F25E86' },
   // Light theme - subtle tints
-  correctOptionLight: { backgroundColor: 'rgba(78,217,203,0.15)', borderColor: '#4ED9CB' },
-  wrongOptionLight: { backgroundColor: 'rgba(242,94,134,0.15)', borderColor: '#F25E86' },
+  correctOptionLight: { backgroundColor: 'rgba(78,217,203,0.03)', borderColor: '#4ED9CB', borderWidth: 2, borderBottomWidth: 4, borderRightWidth: 4, borderBottomColor: '#4ED9CB', borderRightColor: '#4ED9CB' },
+  wrongOptionLight: { backgroundColor: 'rgba(242,94,134,0.03)', borderColor: '#F25E86', borderWidth: 2, borderBottomWidth: 4, borderRightWidth: 4, borderBottomColor: '#F25E86', borderRightColor: '#F25E86' },
   optionText: {
     fontSize: 16,
     color: '#fff',

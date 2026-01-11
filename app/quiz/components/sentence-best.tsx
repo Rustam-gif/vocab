@@ -229,8 +229,9 @@ const styles = StyleSheet.create({
     backgroundColor: INCORRECT_COLOR,
   },
   footer: {
-    marginTop: 32,
+    marginTop: 12,
     alignItems: 'center',
+    paddingBottom: 70,
   },
   primaryButton: {
     backgroundColor: ACCENT_COLOR,

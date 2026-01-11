@@ -1,19 +1,47 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import LottieView from 'lottie-react-native';
-import { BookOpen, CheckCircle } from 'lucide-react-native';
+import { BookOpen } from 'lucide-react-native';
 import { ProgressService } from '../../services/ProgressService';
 import { useAppStore } from '../../lib/store';
 import { levels } from './data/levels';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from '../../lib/LinearGradient';
+import ReactNativeHapticFeedback from '../../lib/haptics';
+import LottieView from 'lottie-react-native';
 
-const ACCENT = '#F8B070';
-const CORRECT_COLOR = '#437F76';
-const HEART_COLOR = '#E53935';
+// Colors matching Learn section
+const DARK_BG = '#1E1E1E';
 const TOTAL_HEARTS = 5;
+
+// Haptic feedback helper with intensity levels
+const triggerHaptic = (type: 'pop' | 'medium' | 'heavy' | 'success' | 'soft' = 'pop') => {
+  if (Platform.OS !== 'ios') return;
+  const options = { enableVibrateFallback: false, ignoreAndroidSystemSettings: false };
+  try {
+    switch (type) {
+      case 'pop':
+        ReactNativeHapticFeedback.trigger('impactLight', options);
+        break;
+      case 'medium':
+        ReactNativeHapticFeedback.trigger('impactMedium', options);
+        break;
+      case 'heavy':
+        ReactNativeHapticFeedback.trigger('impactHeavy', options);
+        break;
+      case 'success':
+        ReactNativeHapticFeedback.trigger('notificationSuccess', options);
+        break;
+      case 'soft':
+        ReactNativeHapticFeedback.trigger('selection', options);
+        break;
+    }
+  } catch {}
+};
 
 export default function AtlasResults() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { loadProgress } = useAppStore();
   const themeName = useAppStore(s => s.theme);
   const isLight = themeName === 'light';
@@ -32,177 +60,97 @@ export default function AtlasResults() {
     return Number.isNaN(parsed) ? 5 : Math.max(0, Math.min(5, parsed));
   }, [heartsParam]);
 
-  // Animation values for each heart
-  const heartAnims = useRef(
-    Array.from({ length: TOTAL_HEARTS }, () => ({
-      scale: new Animated.Value(0),
-      opacity: new Animated.Value(0),
-    }))
-  ).current;
-  const [showDoneButton, setShowDoneButton] = useState(false);
-  const [hideLottie, setHideLottie] = useState(false);
-  const [heartsAnimated, setHeartsAnimated] = useState(false);
-  const scaleAnim = useRef(new Animated.Value(0)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-  const buttonsOpacity = useRef(new Animated.Value(0)).current;
-  const buttonsTranslateY = useRef(new Animated.Value(8)).current;
-  const lottieRef = useRef<LottieView>(null);
-  const lottieStarted = useRef(false);
-  const playLottieFromStart = useCallback(() => {
-    // Ensure we start exactly at frame 0 every time and only once
-    if (lottieStarted.current) return;
-    lottieStarted.current = true;
-    try {
-      lottieRef.current?.reset?.();
-      // Defer to next frame to ensure layout is ready
-      requestAnimationFrame(() => {
-        // Play full animation from start; no hard-coded end frame
-        lottieRef.current?.play?.();
-      });
-    } catch {}
-  }, []);
-
-  // Animate hearts appearing one by one with bounce effect
-  const animateHearts = useCallback(() => {
-    if (heartsAnimated) return;
-    setHeartsAnimated(true);
-
-    // Staggered animation for each heart
-    const animations = heartAnims.map((anim, index) => {
-      const isActive = index < heartsRemaining;
-      return Animated.sequence([
-        Animated.delay(index * 150), // Stagger each heart
-        Animated.parallel([
-          Animated.spring(anim.scale, {
-            toValue: isActive ? 1 : 0.8,
-            friction: 4,
-            tension: 100,
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim.opacity, {
-            toValue: 1,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-        ]),
-        // Extra bounce for active hearts
-        ...(isActive ? [
-          Animated.sequence([
-            Animated.timing(anim.scale, {
-              toValue: 1.2,
-              duration: 150,
-              easing: Easing.out(Easing.cubic),
-              useNativeDriver: true,
-            }),
-            Animated.timing(anim.scale, {
-              toValue: 1,
-              duration: 150,
-              easing: Easing.out(Easing.cubic),
-              useNativeDriver: true,
-            }),
-          ]),
-        ] : []),
-      ]);
-    });
-
-    Animated.parallel(animations).start();
-  }, [heartAnims, heartsRemaining, heartsAnimated]);
+  // Simple fade-in animation
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
 
   useEffect(() => {
-    // Start animation immediately
-    const sequence = Animated.parallel([
-      Animated.timing(scaleAnim, {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 1170,
-        easing: Easing.out(Easing.back(1.1)),
+        duration: 400,
         useNativeDriver: true,
       }),
-      Animated.timing(opacityAnim, {
+      Animated.spring(scaleAnim, {
         toValue: 1,
-        duration: 1170,
-        easing: Easing.out(Easing.cubic),
+        friction: 8,
+        tension: 40,
         useNativeDriver: true,
       }),
-    ]);
+    ]).start();
 
-    // Reset visibility/animation states on enter
-    setHideLottie(false);
-    lottieStarted.current = false;
-    setHeartsAnimated(false);
-    // Reset heart animations
-    heartAnims.forEach(anim => {
-      anim.scale.setValue(0);
-      anim.opacity.setValue(0);
-    });
+    // Celebration haptic pattern - victory sequence!
+    // Extended and intense celebration for completing the quiz
+    const hapticPattern = [
+      // Phase 1: Victory announcement (0-600ms)
+      { delay: 0, type: 'heavy' as const },
+      { delay: 150, type: 'medium' as const },
+      { delay: 300, type: 'heavy' as const },
+      { delay: 450, type: 'medium' as const },
+      { delay: 600, type: 'heavy' as const },
 
-    sequence.start(() => {
-      // Start from the beginning reliably
-      playLottieFromStart();
-      // Fallback: if Lottie never calls onAnimationFinish (e.g., device glitch), reveal UI anyway
-      const fallback = setTimeout(() => {
-        setHideLottie(true);
-        setShowDoneButton(true);
-        animateHearts();
-      }, 2500);
-      return () => clearTimeout(fallback);
-    });
+      // Phase 2: Celebration pulse (900-1800ms)
+      { delay: 900, type: 'medium' as const },
+      { delay: 1050, type: 'pop' as const },
+      { delay: 1200, type: 'medium' as const },
+      { delay: 1350, type: 'pop' as const },
+      { delay: 1500, type: 'medium' as const },
+      { delay: 1650, type: 'heavy' as const },
 
-    return () => {
-      // Cleanup animation state so next mount is fresh
-      try { lottieRef.current?.reset?.(); } catch {}
-    };
-  }, [scaleAnim, opacityAnim, playLottieFromStart, heartAnims, animateHearts]);
+      // Phase 3: Building excitement (2000-3000ms)
+      { delay: 2000, type: 'pop' as const },
+      { delay: 2150, type: 'medium' as const },
+      { delay: 2300, type: 'pop' as const },
+      { delay: 2450, type: 'medium' as const },
+      { delay: 2600, type: 'heavy' as const },
+      { delay: 2800, type: 'medium' as const },
 
-  // Animate buttons in smoothly once they are revealed
-  useEffect(() => {
-    if (showDoneButton) {
-      buttonsOpacity.setValue(0);
-      buttonsTranslateY.setValue(8);
-      Animated.parallel([
-        Animated.timing(buttonsOpacity, {
-          toValue: 1,
-          duration: 280,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(buttonsTranslateY, {
-          toValue: 0,
-          duration: 280,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [showDoneButton, buttonsOpacity, buttonsTranslateY]);
+      // Phase 4: Fireworks burst (3200-4200ms)
+      { delay: 3200, type: 'medium' as const },
+      { delay: 3350, type: 'heavy' as const },
+      { delay: 3500, type: 'medium' as const },
+      { delay: 3650, type: 'heavy' as const },
+      { delay: 3800, type: 'medium' as const },
+      { delay: 3950, type: 'heavy' as const },
+      { delay: 4100, type: 'heavy' as const },
+
+      // Phase 5: Grand finale (4400-5500ms)
+      { delay: 4400, type: 'heavy' as const },
+      { delay: 4550, type: 'heavy' as const },
+      { delay: 4700, type: 'heavy' as const },
+      { delay: 4900, type: 'heavy' as const },
+      { delay: 5100, type: 'heavy' as const },
+      { delay: 5300, type: 'success' as const },
+    ];
+
+    const timeouts = hapticPattern.map(({ delay, type }) =>
+      setTimeout(() => triggerHaptic(type), delay)
+    );
+
+    return () => timeouts.forEach(t => clearTimeout(t));
+  }, [fadeAnim, scaleAnim]);
 
   const handleDone = async () => {
-    // Award XP for quiz completion
     try {
       const correct = parseInt(score || '0', 10);
       const total = parseInt(totalQuestions || '0', 10);
-      const type = exerciseType || 'mcq'; // Default to MCQ if not specified
-      
+      const type = exerciseType || 'mcq';
+
       if (total > 0) {
         const result = await ProgressService.recordExerciseCompletion(
           type,
           correct,
           total,
-          0 // Time tracking can be added later
+          0
         );
-        
+
         console.log(`[Quiz Results] XP Awarded: +${result.xpGained} XP (Level ${result.newLevel})`);
-        if (result.leveledUp) {
-          console.log(`🎉 Level Up! Now Level ${result.newLevel}`);
-        }
-        
-        // Refresh progress display
         await loadProgress();
       }
     } catch (error) {
       console.error('Failed to award XP:', error);
     }
 
-    // Go to Learn section for the same level; replace history to avoid back to results
     if (levelId) {
       router.replace(`/quiz/learn?level=${levelId}`);
     } else {
@@ -210,7 +158,6 @@ export default function AtlasResults() {
     }
   };
 
-  // Compute the words for this set; handles both static sets and dynamically generated quiz sets
   const resolveWordsForSet = useCallback(() => {
     if (!levelId || !setId) return [] as any[];
     const level = levels.find(l => l.id === levelId);
@@ -218,7 +165,6 @@ export default function AtlasResults() {
     const set = level.sets.find(s => String(s.id) === String(setId));
     if (set?.words?.length) return set.words;
 
-    // Dynamically inserted recap quizzes (quiz-1, quiz-2, ...)
     if (!/^quiz-\d+$/.test(String(setId))) return [] as any[];
     const baseSets = level.sets.filter(s => {
       const n = Number(s.id);
@@ -236,7 +182,6 @@ export default function AtlasResults() {
   }, [levelId, setId]);
 
   const handleCreateStory = () => {
-    // Use ALL words from the set; trim, filter empties, and de-duplicate
     const words = resolveWordsForSet();
     if (!words.length) return;
 
@@ -247,243 +192,247 @@ export default function AtlasResults() {
           .filter(Boolean)
       )
     );
-    
-    // Navigate to story exercise with words as query params.
-    // Pass source so Back from Story goes Home instead of returning to Results.
+
     router.push({
       pathname: '/story/StoryExercise',
       params: { words: wordsToUse.join(','), from: 'results' }
     });
   };
 
+  const getSuccessMessage = () => {
+    if (heartsRemaining === TOTAL_HEARTS) return 'Perfect!';
+    if (heartsRemaining >= 4) return 'Excellent!';
+    if (heartsRemaining >= 3) return 'Well Done!';
+    if (heartsRemaining >= 2) return 'Good Job!';
+    if (heartsRemaining >= 1) return 'Keep Going!';
+    return 'Try Again!';
+  };
+
+  const renderHearts = () => {
+    const hearts = [];
+    for (let i = 0; i < TOTAL_HEARTS; i++) {
+      const isActive = i < heartsRemaining;
+      hearts.push(
+        <Text key={i} style={[styles.heartEmoji, !isActive && styles.heartLost]}>
+          {isActive ? '❤️' : '🩶'}
+        </Text>
+      );
+    }
+    return hearts;
+  };
+
+  // Background gradient colors
+  const gradientColors = isLight
+    ? ['#FFFFFF', '#F5F5F5', '#EBEBEB']
+    : ['#2A2A2A', '#222222', '#1A1A1A'];
+
   return (
-    <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
-      <View style={styles.content}>
-        {!hideLottie ? (
-          <Animated.View
-            style={[
-              styles.animationWrapper,
-              {
-                transform: [
-                  {
-                    scale: scaleAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.45, 1],
-                    }),
-                  },
-                ],
-                opacity: opacityAnim,
-              },
-            ]}
-          >
+    <View style={[styles.container, isLight && styles.containerLight]}>
+      {/* Background fill for notch */}
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: isLight ? '#FFFFFF' : '#2A2A2A' }} />
+
+      <LinearGradient
+        colors={gradientColors}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={styles.gradient}
+      >
+        <Animated.View
+          style={[
+            styles.content,
+            { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
+          ]}
+        >
+          {/* Finish animation */}
+          <View style={styles.checkSection}>
             <LottieView
-              ref={lottieRef}
-              source={require('../../assets/lottie/Check.json')}
-              autoPlay={false}
-              loop={false}
-              style={styles.lottieAnimation}
-              speed={0.6}
-              resizeMode="contain"
-              onLayout={playLottieFromStart}
-              onAnimationFinish={() => {
-                setHideLottie(true);
-                setShowDoneButton(true);
-                animateHearts();
-              }}
+              source={require('../../assets/lottie/learn/finish.lottie')}
+              autoPlay
+              loop
+              style={{ width: 150, height: 150 }}
             />
-          </Animated.View>
-        ) : (
-          <Animated.View
-            style={[
-              styles.animationWrapper,
-              {
-                transform: [
-                  {
-                    scale: scaleAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.45, 1],
-                    }),
-                  },
-                ],
-                opacity: opacityAnim,
-              },
-            ]}
-          >
-            <CheckCircle size={72} color={CORRECT_COLOR} />
-          </Animated.View>
-        )}
-        <View style={styles.heartsSection}>
-          <View style={styles.heartsRow}>
-            {heartAnims.map((anim, index) => {
-              const isActive = index < heartsRemaining;
-              return (
-                <Animated.Text
-                  key={index}
-                  style={[
-                    styles.heartIcon,
-                    {
-                      opacity: anim.opacity,
-                      transform: [{ scale: anim.scale }],
-                    },
-                    !isActive && styles.heartLost,
-                  ]}
-                >
-                  {isActive ? '❤️' : '🤍'}
-                </Animated.Text>
-              );
-            })}
           </View>
-          <Text style={[styles.heartsLabel, isLight && styles.heartsLabelLight]}>
-            {heartsRemaining === TOTAL_HEARTS
-              ? 'Perfect! All Hearts!'
-              : heartsRemaining > 0
-              ? `${heartsRemaining} Heart${heartsRemaining !== 1 ? 's' : ''} Remaining`
-              : 'No Hearts Left'}
+
+          {/* Success message */}
+          <Text style={[styles.successMessage, isLight && styles.successMessageLight]}>
+            {getSuccessMessage()}
           </Text>
-        </View>
-        <View style={styles.buttonContainer}>
-          {showDoneButton ? (
-            <Animated.View
-              style={[
-                styles.buttonsAnimated,
-                { opacity: buttonsOpacity, transform: [{ translateY: buttonsTranslateY }] },
-              ]}
-            >
-              <TouchableOpacity style={styles.primaryButton} onPress={handleDone}>
-                <Text style={[styles.primaryButtonText, isLight && { color: '#111827' }]}>Done</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.storyButton} onPress={handleCreateStory}>
-                <BookOpen size={22} color={isLight ? '#111827' : '#FFFFFF'} />
-                <Text style={[styles.storyButtonText, isLight && { color: '#111827' }]}>Create Story with These Words</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          ) : (
-            // Render invisible buttons to reserve exact layout space and prevent content shift
-            <View style={styles.ghostContainer} pointerEvents="none">
-              <View style={[styles.primaryButton, styles.ghost]}>
-                <Text style={[styles.primaryButtonText, styles.ghostText]}>Done</Text>
-              </View>
-              <View style={[styles.storyButton, styles.ghost]}>
-                <BookOpen size={22} color="#FFFFFF" />
-                <Text style={[styles.storyButtonText, styles.ghostText]}>Create Story with These Words</Text>
-              </View>
+
+          {/* Hearts display */}
+          <View style={[styles.heartsCard, isLight && styles.heartsCardLight]}>
+            <View style={styles.heartsRow}>
+              {renderHearts()}
             </View>
-          )}
-        </View>
-      </View>
-    </SafeAreaView>
+            <Text style={[styles.heartsLabel, isLight && styles.heartsLabelLight]}>
+              {heartsRemaining} of {TOTAL_HEARTS} hearts remaining
+            </Text>
+          </View>
+
+          {/* Buttons */}
+          <View style={styles.buttonsContainer}>
+            {/* Continue button */}
+            <TouchableOpacity
+              style={styles.continueButton}
+              onPress={handleDone}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.continueButtonText}>CONTINUE</Text>
+            </TouchableOpacity>
+
+            {/* Create Story button */}
+            <TouchableOpacity
+              style={styles.storyButton}
+              onPress={handleCreateStory}
+              activeOpacity={0.8}
+            >
+              <BookOpen size={18} color="#FFFFFF" />
+              <Text style={styles.storyButtonText}>CREATE STORY</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: DARK_BG,
   },
   containerLight: {
     backgroundColor: '#F8F8F8',
+  },
+  gradient: {
+    flex: 1,
   },
   content: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 18,
-    paddingHorizontal: 32,
+    paddingHorizontal: 24,
   },
-  animationWrapper: {
-    width: 110,
-    height: 110,
+
+  // Finish animation section
+  checkSection: {
+    width: 150,
+    height: 150,
+    marginBottom: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
   },
-  lottieAnimation: {
-    width: 110,
-    height: 110,
+
+  // Success message
+  successMessage: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 32,
+    textAlign: 'center',
+    fontFamily: 'Ubuntu-Bold',
   },
-  heartsSection: {
+  successMessageLight: {
+    color: '#1E1E1E',
+  },
+
+  // Hearts card - matching exercise card style
+  heartsCard: {
+    backgroundColor: 'rgba(30, 30, 30, 0.6)',
+    paddingVertical: 20,
+    paddingHorizontal: 32,
+    borderRadius: 16,
     alignItems: 'center',
-    marginTop: 24,
-    gap: 12,
+    marginBottom: 48,
+    borderWidth: 2,
+    borderColor: 'rgba(78, 217, 203, 0.3)',
+  },
+  heartsCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(78, 217, 203, 0.4)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   heartsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    marginBottom: 12,
   },
-  heartIcon: {
-    fontSize: 36,
+  heartEmoji: {
+    fontSize: 28,
   },
   heartLost: {
-    opacity: 0.5,
+    opacity: 0.35,
   },
   heartsLabel: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: ACCENT,
+    color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',
+    fontFamily: 'Ubuntu-Medium',
   },
   heartsLabelLight: {
-    color: '#e28743',
+    color: '#6B7280',
   },
-  buttonContainer: {
-    marginTop: 94,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
+
+  // Buttons container
+  buttonsContainer: {
     width: '100%',
-  },
-  ghostContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 16,
-    width: '100%',
   },
-  buttonsAnimated: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-    width: '100%',
-  },
-  ghost: {
-    opacity: 0,
-  },
-  ghostText: {
-    color: 'transparent',
-  },
-  primaryButton: {
-    backgroundColor: ACCENT,
+
+  // Continue button
+  continueButton: {
+    paddingHorizontal: 48,
     paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 18,
-    minWidth: 200,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  storyButton: {
-    backgroundColor: '#437F76',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 18,
-    flexDirection: 'row',
+    borderRadius: 25,
+    backgroundColor: '#F25E86',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 5,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    minWidth: 280,
-    shadowColor: '#437F76',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+  },
+  continueButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 1.5,
+    fontFamily: 'Ubuntu-Bold',
+  },
+
+  // Story button
+  storyButton: {
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 22,
+    backgroundColor: '#4ED9CB',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   storyButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#FFFFFF',
+    letterSpacing: 1,
+    fontFamily: 'Ubuntu-Bold',
   },
 });

@@ -2693,7 +2693,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 90,
+    paddingBottom: 52,
     zIndex: 80,
   },
   footerOverlayLight: {
@@ -2754,9 +2754,16 @@ const styles = StyleSheet.create({
   checkButton: {
     flex: 1,
     backgroundColor: '#F25E86',
-    borderRadius: 12,
+    borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 5,
   },
   checkButtonDisabled: {
     // Keep the button bright even when disabled so it doesn't look dimmed
@@ -2765,9 +2772,9 @@ const styles = StyleSheet.create({
   },
   checkButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#FFFFFF',
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Bold',
   },
   // Save toast styles
   saveToastWrap: {

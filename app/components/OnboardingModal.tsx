@@ -696,7 +696,7 @@ const styles = StyleSheet.create({
   primaryText: { color: '#FFFFFF', fontWeight: '700', fontSize: 18, fontFamily: 'Feather-Bold' },
   subPrimaryBtn: { alignSelf: 'stretch', marginTop: 12 },
   // Practice time chips
-  timeRow: { flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  timeRow: { flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center', width: '100%' },
   timePill: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 24, borderWidth: 2, borderColor: '#E2E8F0', backgroundColor: '#FFFFFF' },
   timePillLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' },
   timePillActive: { backgroundColor: '#F25E86', borderColor: '#F25E86' },

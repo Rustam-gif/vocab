@@ -20,9 +20,13 @@ const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 const HIGHEST_LEVEL_KEY = '@engniter.highestLevel';
 const PLACEMENT_LEVEL_KEY = '@engniter.placementLevel';
 
-const ACCENT_ORANGE = '#F2935C';
-const ACCENT_PINK = '#F25E86';
+// Colors matching Learn section
+const ACCENT_ORANGE = '#FE9602';
+const ACCENT_ORANGE_DARK = '#CC7A02';
+const ACCENT_TEAL = '#4ED9CB';
+const ACCENT_TEAL_DARK = '#3BB8AC';
 const BG_DARK = '#1E1E1E';
+const CARD_BORDER = 'rgba(78, 217, 203, 0.35)';
 
 export default function PlacementResult() {
   const router = useRouter();
@@ -180,10 +184,8 @@ export default function PlacementResult() {
           </View>
 
           {/* CTA Button */}
-          <TouchableOpacity onPress={handleContinue} activeOpacity={0.9} style={styles.ctaWrap}>
-            <View style={styles.cta}>
-              <Text style={styles.ctaText}>Start Learning</Text>
-            </View>
+          <TouchableOpacity onPress={handleContinue} activeOpacity={0.8} style={styles.cta}>
+            <Text style={styles.ctaText}>Start Learning</Text>
           </TouchableOpacity>
         </Animated.View>
       </SafeAreaView>
@@ -221,17 +223,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 8,
     letterSpacing: -0.5,
+    fontFamily: 'Feather-Bold',
   },
   subtitle: {
     color: ACCENT_ORANGE,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 32,
+    fontFamily: 'Ubuntu-Medium',
   },
   encouragementCard: {
-    backgroundColor: 'rgba(242, 147, 92, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(242, 147, 92, 0.15)',
+    backgroundColor: 'rgba(78, 217, 203, 0.08)',
+    borderWidth: 2,
+    borderColor: CARD_BORDER,
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
@@ -241,6 +245,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 24,
+    fontFamily: 'Ubuntu-Medium',
   },
   statsHint: {
     marginBottom: 32,
@@ -248,30 +253,32 @@ const styles = StyleSheet.create({
   statsHintText: {
     color: '#6B7280',
     fontSize: 14,
+    fontFamily: 'Ubuntu-Medium',
   },
   statsHighlight: {
     color: ACCENT_ORANGE,
     fontWeight: '700',
-  },
-  ctaWrap: {
-    width: '100%',
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: ACCENT_PINK,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    fontFamily: 'Ubuntu-Bold',
   },
   cta: {
+    width: '100%',
     paddingVertical: 18,
     alignItems: 'center',
-    borderRadius: 16,
-    backgroundColor: ACCENT_PINK,
+    borderRadius: 20,
+    backgroundColor: '#F25E86',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 5,
   },
   ctaText: {
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 18,
     letterSpacing: 0.3,
+    fontFamily: 'Ubuntu-Bold',
   },
 });

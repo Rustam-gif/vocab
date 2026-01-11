@@ -17,6 +17,7 @@ import { Easing } from 'react-native';
 import * as Haptics from '../../../lib/haptics';
 import type { TextInput as TextInputRef } from 'react-native';
 import AnimatedNextButton from './AnimatedNextButton';
+import LottieView from 'lottie-react-native';
 
 export type MissingLettersResult = {
   isCorrect: boolean;
@@ -34,6 +35,7 @@ export interface MissingLettersProps {
   wordIndex: number;
   totalWords: number;
   hearts: number;
+  showUfoAnimation?: boolean;
 }
 
 // Enable LayoutAnimation on Android
@@ -101,7 +103,7 @@ function pickHintPositions(letterIndices: number[]): number[] {
   return Array.from(new Set(result));
 }
 
-export default function MissingLetters({ word, ipa, clue, onResult, onNext, theme = 'dark', wordIndex, totalWords, hearts }: MissingLettersProps) {
+export default function MissingLetters({ word, ipa, clue, onResult, onNext, theme = 'dark', wordIndex, totalWords, hearts, showUfoAnimation }: MissingLettersProps) {
   const displayWord = useMemo(() => word, [word]);
   const lettersOnly = useMemo(() => normalize(word), [word]);
 
@@ -313,11 +315,32 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
       <View style={themeStyles.progressContainer}>
         <Text style={themeStyles.progressText}>Word {wordIndex + 1} of {totalWords}</Text>
         <Animated.View style={[themeStyles.heartsContainer, { transform: [{ scale: heartLostAnim }] }]}>
-          {[0, 1, 2, 3, 4].map((i) => (
-            <Text key={i} style={themeStyles.heartIcon}>
-              {i < hearts ? '❤️' : '🤍'}
-            </Text>
-          ))}
+          <View style={{ position: 'relative', flexDirection: 'row', alignItems: 'center' }}>
+            <LottieView
+              source={require('../../../assets/lottie/learn/heart_away.lottie')}
+              autoPlay={showUfoAnimation}
+              loop={false}
+              speed={1}
+              style={{ width: 96, height: 96 }}
+              key={showUfoAnimation ? 'playing' : 'idle'}
+            />
+            {showUfoAnimation && (
+              <LottieView
+                source={require('../../../assets/lottie/learn/Ufo_animation.lottie')}
+                autoPlay
+                loop={false}
+                speed={2}
+                style={{
+                  width: 100,
+                  height: 100,
+                  position: 'absolute',
+                  top: -30,
+                  left: -2,
+                }}
+              />
+            )}
+            <Text style={[themeStyles.heartIcon, { marginLeft: -30 }]}>{hearts}</Text>
+          </View>
         </Animated.View>
       </View>
       <View style={themeStyles.progressBar}>
@@ -368,6 +391,8 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
                 spellCheck={false}
                 autoComplete="off"
                 keyboardType="default"
+                keyboardAppearance={theme === 'dark' ? 'dark' : 'light'}
+                textContentType="none"
                 placeholder={s.isHint ? undefined : ''}
                 placeholderTextColor={pal.sub}
               />
@@ -377,7 +402,7 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
       </View>
 
       {completed && (
-        <View style={{ marginTop: 'auto', paddingBottom: 20 }}>
+        <View style={{ marginTop: 'auto', paddingBottom: 70 }}>
           <AnimatedNextButton
             onPress={onNext}
           />

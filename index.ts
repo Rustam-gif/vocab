@@ -57,9 +57,11 @@ TextInput.defaultProps = TextInput.defaultProps || {};
 TextInput.defaultProps.style = [TextInput.defaultProps.style, { fontFamily: 'Ubuntu-Regular' }];
 
 import App from './App';
-// Dev-only health diagnostics
-import { installHealthCheck } from './lib/dev/healthCheck';
 
-installHealthCheck();
+// Dev-only health diagnostics - only import and run in development
+if (__DEV__) {
+  const { installHealthCheck } = require('./lib/dev/healthCheck');
+  installHealthCheck();
+}
 
 AppRegistry.registerComponent('vocabworking', () => App);

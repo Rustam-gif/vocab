@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Image, Animated, Easing, InteractionManager, Dimensions, DeviceEventEmitter, Platform } from 'react-native';
 
 // Use local haptic feedback shim (no-op since native module not available)
@@ -64,21 +64,29 @@ export default function LearnScreen() {
   const hasAnimatedEntrance = useRef(false);
   const passedStageGates = useRef<Set<number>>(new Set());
   const scrollViewRef = useRef<ScrollView>(null);
+  const isScrollingRef = useRef(false);
+  const scrollEndTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Ensure nav bar is visible when this screen is shown
+  useEffect(() => {
+    DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
+  }, []);
 
   // Breathing animation for current level outer ring
+  // Using longer duration to reduce CPU usage
   useEffect(() => {
     const breathing = Animated.loop(
       Animated.sequence([
         Animated.parallel([
           Animated.timing(levelPulseAnim, {
             toValue: 1.08,
-            duration: 1800,
+            duration: 2500,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: true,
           }),
           Animated.timing(levelPulseOpacity, {
             toValue: 0.2,
-            duration: 1800,
+            duration: 2500,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: true,
           }),
@@ -86,13 +94,13 @@ export default function LearnScreen() {
         Animated.parallel([
           Animated.timing(levelPulseAnim, {
             toValue: 1,
-            duration: 1800,
+            duration: 2500,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: true,
           }),
           Animated.timing(levelPulseOpacity, {
             toValue: 0.5,
-            duration: 1800,
+            duration: 2500,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: true,
           }),
@@ -186,12 +194,6 @@ export default function LearnScreen() {
     });
     return () => t.cancel?.();
   }, [loadStoredLevel]);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadStoredLevel();
-    }, [loadStoredLevel])
-  );
 
   const refreshLevel = useCallback(async () => {
     if (!activeLevelId) {
@@ -289,8 +291,10 @@ export default function LearnScreen() {
           return baseSet;
         }
 
-        // If a quiz was completed, unlock all sets until the next quiz
-        if (lastCompletedQuizIdx >= 0 && index > lastCompletedQuizIdx && index <= nextQuizIdx) {
+        // After a completed quiz, only unlock the FIRST set after it (not all sets until next quiz)
+        // The rest should unlock one-by-one as each set is completed
+        if (lastCompletedQuizIdx >= 0 && index === lastCompletedQuizIdx + 1) {
+          // This is the first set after the last completed quiz - unlock it
           return { ...baseSet, locked: false };
         }
 
@@ -344,7 +348,65 @@ export default function LearnScreen() {
     }, [refreshLevel])
   );
 
-  const handleSetPress = (set: VocabSet & { locked?: boolean }) => {
+  // Check if the previous level has at least one completed quiz
+  // Skip ahead is only available if there's a previous level AND it's completed
+  const isPreviousLevelCompleted = useCallback(() => {
+    if (!activeLevelId) return false;
+    const currentIdx = CORE_ORDER.indexOf(activeLevelId);
+    // First level (beginner) - no previous level, so skip ahead not available
+    if (currentIdx <= 0) return false;
+
+    const prevLevelId = CORE_ORDER[currentIdx - 1];
+    const prevLevel = levels.find(l => l.id === prevLevelId);
+    if (!prevLevel) return false;
+
+    // Check if any quiz in the previous level is completed
+    for (const set of prevLevel.sets) {
+      if ((set as any).type === 'quiz') {
+        const flags = SetProgressService.getSetFlags(prevLevelId, set.id);
+        if (flags.completed) return true;
+      }
+    }
+    // Also check if all regular sets are completed (level fully done)
+    const completedCount = prevLevel.sets.filter(s => {
+      const flags = SetProgressService.getSetFlags(prevLevelId, s.id);
+      return flags.completed;
+    }).length;
+    if (completedCount >= prevLevel.sets.length) return true;
+
+    return false;
+  }, [activeLevelId]);
+
+  // Check if skip ahead is available for a specific quiz
+  // Only the FIRST incomplete quiz can show skip ahead
+  const canQuizSkipAhead = useCallback((quizSet: VocabSet, allSets: VocabSet[]) => {
+    if (!activeLevelId) return false;
+
+    // Find all quizzes in the current level
+    const quizzes = allSets.filter(s => (s as any).type === 'quiz');
+    const quizIndex = quizzes.findIndex(q => q.id === quizSet.id);
+
+    if (quizIndex < 0) return false;
+
+    // For the first quiz in a level, check if previous level is completed
+    if (quizIndex === 0) {
+      return isPreviousLevelCompleted();
+    }
+
+    // For subsequent quizzes, check if ALL previous quizzes are completed
+    for (let i = 0; i < quizIndex; i++) {
+      const prevQuiz = quizzes[i];
+      const flags = SetProgressService.getSetFlags(activeLevelId, prevQuiz.id);
+      if (!flags.completed) {
+        return false; // Previous quiz not completed, can't skip ahead
+      }
+    }
+
+    // All previous quizzes completed, check if previous level is also completed
+    return isPreviousLevelCompleted();
+  }, [activeLevelId, isPreviousLevelCompleted]);
+
+  const handleSetPress = (set: VocabSet & { locked?: boolean }, allSets?: VocabSet[]) => {
     if (!activeLevelId) {
       router.push('/quiz/level-select');
       return;
@@ -353,7 +415,13 @@ export default function LearnScreen() {
     const isQuizSet = (set as any).type === 'quiz';
 
     // Allow locked quiz nodes to be pressed (Skip ahead feature)
+    // But only if the previous level has been completed
     if (set.locked && !isQuizSet) {
+      return;
+    }
+
+    // For locked quiz sets, check if this specific quiz can skip ahead
+    if (set.locked && isQuizSet && allSets && !canQuizSkipAhead(set, allSets)) {
       return;
     }
 
@@ -436,7 +504,23 @@ export default function LearnScreen() {
     }
   }, []);
 
+  // Debounced scroll handler to prevent excessive haptic triggers
+  const lastHapticTime = useRef(0);
   const handleScroll = useCallback((event: any) => {
+    // Mark as scrolling and clear any pending end timer
+    isScrollingRef.current = true;
+    if (scrollEndTimer.current) {
+      clearTimeout(scrollEndTimer.current);
+    }
+    // Set timer to mark scroll as ended after 150ms of no scroll events
+    scrollEndTimer.current = setTimeout(() => {
+      isScrollingRef.current = false;
+    }, 150);
+
+    const now = Date.now();
+    // Only check for haptic feedback every 500ms to prevent jank
+    if (now - lastHapticTime.current < 500) return;
+
     const scrollY = event.nativeEvent.contentOffset.y;
     const viewportHeight = event.nativeEvent.layoutMeasurement.height;
     const viewportCenter = scrollY + viewportHeight / 2;
@@ -447,6 +531,7 @@ export default function LearnScreen() {
 
       if (isInView && !passedStageGates.current.has(stageNumber)) {
         passedStageGates.current.add(stageNumber);
+        lastHapticTime.current = now;
         triggerHaptic('light');
       }
     });
@@ -489,6 +574,26 @@ export default function LearnScreen() {
   // Extra padding to prevent level circle from overlapping with status bar
   const contentTop = insets.top + 20;
 
+  // Memoize connector paths to prevent recalculation on every render
+  // Must be before any early returns to avoid hook order issues
+  const connectorPaths = useMemo(() => {
+    if (!currentLevel) return [];
+    return currentLevel.sets.map((set, index) => {
+      if (index >= currentLevel.sets.length - 1) return null;
+      const currentPos = getNodePosition(index);
+      const nextPos = getNodePosition(index + 1);
+      const currentX = getNodeOffset(currentPos);
+      const nextX = getNodeOffset(nextPos);
+      const connectorHeight = NODE_SPACING - NODE_SIZE + 20;
+      const midY = connectorHeight / 2;
+      return {
+        pathD: `M ${currentX} 0 C ${currentX} ${midY}, ${nextX} ${midY}, ${nextX} ${connectorHeight}`,
+        height: connectorHeight,
+        isCompleted: set?.completed,
+      };
+    });
+  }, [currentLevel?.sets?.length, currentLevel?.sets?.map(s => s.completed).join(',')]);
+
   if (!currentLevel) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -506,7 +611,7 @@ export default function LearnScreen() {
     );
   }
 
-  const renderNode = (set: VocabSet & { locked?: boolean }, index: number, isCurrentLevel: boolean) => {
+  const renderNode = (set: VocabSet & { locked?: boolean }, index: number, isCurrentLevel: boolean, allSets: VocabSet[]) => {
     const position = getNodePosition(index);
     const offsetX = getNodeOffset(position);
     const isLocked = set.locked;
@@ -514,6 +619,8 @@ export default function LearnScreen() {
     const isQuiz = (set as any).type === 'quiz';
     // Only the first uncompleted, unlocked node in the CURRENT level is "current"
     const isCurrent = isCurrentLevel && index === currentSetIndex;
+    // Check if this specific quiz can skip ahead (only first incomplete quiz)
+    const quizCanSkipAhead = isQuiz && isLocked && canQuizSkipAhead(set, allSets);
 
     const anim = nodeAnims.current[index] || new Animated.Value(1);
     const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
@@ -546,27 +653,38 @@ export default function LearnScreen() {
         )}
 
         {/* 3D coin edge (darker bottom) */}
-        <View style={[
-          styles.coinEdge,
-          // Available nodes show teal edge
-          !isLocked && !isCompleted && !isCurrent && styles.coinEdgeCompleted,
-          // Current node shows orange edge
-          isCurrent && styles.coinEdgeActive,
-          // Completed nodes show teal edge
-          isCompleted && styles.coinEdgeCompleted,
-          // Locked nodes show gray edge
-          isLocked && styles.coinEdgeLocked,
-          isLocked && !isLight && { backgroundColor: '#3A3A3A' },
-          // Quiz nodes get purple/pink color
-          isQuiz && !isCompleted && !isLocked && { backgroundColor: '#9333EA' },
-          isQuiz && isCompleted && { backgroundColor: '#C94A6A' },
-          isQuiz && isLocked && { backgroundColor: '#6B21A8' },
-        ]} />
+        {(() => {
+          const isQuizDisabled = isQuiz && isLocked && !quizCanSkipAhead;
+          return (
+            <View style={[
+              styles.coinEdge,
+              // Available nodes show teal edge
+              !isLocked && !isCompleted && !isCurrent && styles.coinEdgeCompleted,
+              // Current node shows orange edge
+              isCurrent && styles.coinEdgeActive,
+              // Completed nodes show teal edge
+              isCompleted && styles.coinEdgeCompleted,
+              // Locked nodes show gray edge
+              isLocked && !isQuiz && styles.coinEdgeLocked,
+              isLocked && !isQuiz && !isLight && { backgroundColor: '#3A3A3A' },
+              // Quiz nodes that can't skip ahead show gray
+              isQuizDisabled && styles.coinEdgeLocked,
+              isQuizDisabled && !isLight && { backgroundColor: '#3A3A3A', opacity: 0.6 },
+              // Quiz nodes get purple/pink color (only if not disabled)
+              isQuiz && !isCompleted && !isLocked && { backgroundColor: '#9333EA' },
+              isQuiz && isCompleted && { backgroundColor: '#C94A6A' },
+              quizCanSkipAhead && { backgroundColor: '#6B21A8' },
+            ]} />
+          );
+        })()}
 
         {/* "Skip ahead" or "Review" label for quiz nodes */}
         {isQuiz && !isCompleted && (() => {
           const quizScore = (set as any).score;
           const hasFailed = typeof quizScore === 'number' && quizScore > 0 && quizScore < 70;
+
+          // Don't show "Skip ahead" label if this quiz can't skip ahead
+          if (isLocked && !quizCanSkipAhead) return null;
 
           return (
             <Animated.View
@@ -593,35 +711,43 @@ export default function LearnScreen() {
         })()}
 
         {/* Main coin face */}
-        <TouchableOpacity
-          onPress={() => handleSetPress(set)}
-          disabled={isLocked && !isQuiz}
-          activeOpacity={0.9}
-          style={[
-            styles.coinFace,
-            // Available nodes (not locked, not completed) show as teal
-            !isLocked && !isCompleted && !isCurrent && styles.coinFaceCompleted,
-            // Current node shows as orange
-            isCurrent && styles.coinFaceActive,
-            // Completed nodes show as teal
-            isCompleted && styles.coinFaceCompleted,
-            // Locked nodes show as gray
-            isLocked && !isQuiz && styles.coinFaceLocked,
-            isLocked && !isQuiz && !isLight && { backgroundColor: '#4A4A4A', borderColor: 'rgba(255,255,255,0.1)' },
-            // Quiz nodes get purple/pink color
-            isQuiz && !isCompleted && !isLocked && { backgroundColor: '#A855F7', borderColor: 'rgba(255,255,255,0.4)' },
-            isQuiz && isCompleted && { backgroundColor: '#F25E86' },
-            isQuiz && isLocked && { backgroundColor: '#7C3AED', borderColor: 'rgba(255,255,255,0.2)' },
-          ]}
-        >
-          {/* Glossy reflection highlight */}
-          <View style={styles.coinReflection} pointerEvents="none" />
-          <Image
-            source={getIconSource(set.title, (set as any).type)}
-            style={[styles.coinIcon, isLocked && styles.coinIconLocked]}
-            resizeMode="contain"
-          />
-        </TouchableOpacity>
+        {(() => {
+          const isQuizDisabled = isQuiz && isLocked && !quizCanSkipAhead;
+          return (
+            <TouchableOpacity
+              onPress={() => handleSetPress(set, allSets)}
+              disabled={isLocked && (!isQuiz || !quizCanSkipAhead)}
+              activeOpacity={0.9}
+              style={[
+                styles.coinFace,
+                // Available nodes (not locked, not completed) show as teal
+                !isLocked && !isCompleted && !isCurrent && styles.coinFaceCompleted,
+                // Current node shows as orange
+                isCurrent && styles.coinFaceActive,
+                // Completed nodes show as teal
+                isCompleted && styles.coinFaceCompleted,
+                // Locked nodes show as gray
+                isLocked && !isQuiz && styles.coinFaceLocked,
+                isLocked && !isQuiz && !isLight && { backgroundColor: '#4A4A4A', borderColor: 'rgba(255,255,255,0.1)' },
+                // Quiz nodes that can't skip ahead show gray
+                isQuizDisabled && styles.coinFaceLocked,
+                isQuizDisabled && !isLight && { backgroundColor: '#4A4A4A', borderColor: 'rgba(255,255,255,0.1)', opacity: 0.6 },
+                // Quiz nodes get purple/pink color (only if not disabled)
+                isQuiz && !isCompleted && !isLocked && { backgroundColor: '#A855F7', borderColor: 'rgba(255,255,255,0.4)' },
+                isQuiz && isCompleted && { backgroundColor: '#F25E86' },
+                quizCanSkipAhead && { backgroundColor: '#7C3AED', borderColor: 'rgba(255,255,255,0.2)' },
+              ]}
+            >
+              {/* Glossy reflection highlight */}
+              <View style={styles.coinReflection} pointerEvents="none" />
+              <Image
+                source={getIconSource(set.title, (set as any).type)}
+                style={[styles.coinIcon, (isLocked || isQuizDisabled) && styles.coinIconLocked]}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+          );
+        })()}
 
       </Animated.View>
     );
@@ -629,29 +755,16 @@ export default function LearnScreen() {
 
   const renderConnector = (index: number, total: number) => {
     if (index >= total - 1) return null;
+    const cached = connectorPaths[index];
+    if (!cached) return null;
 
-    const currentPos = getNodePosition(index);
-    const nextPos = getNodePosition(index + 1);
-    const currentX = getNodeOffset(currentPos);
-    const nextX = getNodeOffset(nextPos);
-
-    const set = currentLevel.sets[index];
-    const isCompleted = set?.completed;
-    const lineColor = isCompleted ? (isLight ? '#C4C4C4' : '#5A5A5A') : (isLight ? '#E5E7EB' : '#3A3A3A');
-
-    const connectorHeight = NODE_SPACING - NODE_SIZE + 20;
-
-    // Create smooth bezier curve between nodes
-    const midY = connectorHeight / 2;
-    const controlX1 = currentX;
-    const controlX2 = nextX;
-    const pathD = `M ${currentX} 0 C ${controlX1} ${midY}, ${controlX2} ${midY}, ${nextX} ${connectorHeight}`;
+    const lineColor = cached.isCompleted ? (isLight ? '#C4C4C4' : '#5A5A5A') : (isLight ? '#E5E7EB' : '#3A3A3A');
 
     return (
       <View key={`connector-${index}`} style={styles.connectorWrapper}>
-        <Svg height={connectorHeight} width={SCREEN_WIDTH}>
+        <Svg height={cached.height} width={SCREEN_WIDTH}>
           <Path
-            d={pathD}
+            d={cached.pathD}
             stroke={lineColor}
             strokeWidth={3}
             strokeDasharray="8,8"
@@ -730,26 +843,22 @@ export default function LearnScreen() {
     );
   };
 
-  // Render character decoration at specific positions
-  const renderCharacter = (index: number, type: 'giraffe' | 'sloth' | 'monkey' | 'chameleon' | 'fox', side: 'left' | 'right') => {
-    const position = getNodePosition(index);
-    const nodeX = getNodeOffset(position);
-    // Position character within screen bounds - increased size
-    const charSize = 130;
+  // Render character decoration at specific positions - aligned on same row as node
+  const renderCharacter = (index: number, type: 'giraffe' | 'sloth' | 'monkey' | 'chameleon' | 'fox', side: 'left' | 'right', isActive: boolean = true) => {
+    const charSize = 110;
+    // Center vertically with the node
+    const charOffsetY = (NODE_SIZE - charSize) / 2 - 10;
     let charOffsetX;
-    let charOffsetY = -20; // Default top position
 
     if (side === 'right') {
-      // Position to the right of the node, but not off screen
-      charOffsetX = Math.min(nodeX + NODE_SIZE + 5, SCREEN_WIDTH - charSize - 5);
+      // Position on the right edge of the screen
+      charOffsetX = SCREEN_WIDTH - charSize - 15;
     } else {
-      // Position in the empty area on the far left side
-      charOffsetX = 10;
-      // Move up to sit in the empty space between connectors
-      charOffsetY = NODE_SPACING / 2 - charSize / 2 - 90;
+      // Position on the left edge of the screen
+      charOffsetX = 15;
     }
-    // Flip horizontally based on side
-    const flipScale = side === 'left' ? -1 : 1;
+    // Flip horizontally - face toward the center/node
+    const flipScale = side === 'left' ? 1 : -1;
 
     const getCharacterSource = () => {
       switch (type) {
@@ -773,29 +882,25 @@ export default function LearnScreen() {
         key={`char-${type}-${index}`}
         style={[
           styles.catCharacterWrapper,
-          { left: charOffsetX, top: charOffsetY },
+          { left: charOffsetX, top: charOffsetY, opacity: isActive ? 1 : 0.4 },
         ]}
       >
         <LottieView
           source={getCharacterSource()}
-          autoPlay
-          loop
+          autoPlay={isActive}
+          loop={isActive}
           style={{ width: charSize, height: charSize, transform: [{ scaleX: flipScale }] }}
         />
         {/* Ground shadow */}
         <View
           style={{
             position: 'absolute',
-            top: charSize - 25,
-            left: charSize / 2 - 35,
-            width: 70,
-            height: 14,
-            borderRadius: 35,
-            backgroundColor: 'rgba(0,0,0,0.12)',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.1,
-            shadowRadius: 6,
+            top: charSize - 20,
+            left: charSize / 2 - 30,
+            width: 60,
+            height: 12,
+            borderRadius: 30,
+            backgroundColor: 'rgba(0,0,0,0.15)',
           }}
         />
       </View>
@@ -891,13 +996,13 @@ export default function LearnScreen() {
               {/* Stage gate after quiz */}
               {showStageGate && renderStageGate(currentStage - 1, !!stageUnlocked)}
 
-              {/* Show characters every 3 circles, alternating sides */}
-              {index === 2 && renderCharacter(index, 'monkey', 'right')}
-              {index === 5 && renderCharacter(index, 'giraffe', 'left')}
-              {index === 8 && renderCharacter(index, 'chameleon', 'right')}
-              {index === 11 && renderCharacter(index, 'fox', 'left')}
-              {index === 14 && renderCharacter(index, 'sloth', 'right')}
-              {renderNode(set as any, index, true)}
+              {/* Show characters every 3 circles, alternating sides - animate only when area is reached */}
+              {index === 2 && renderCharacter(index, 'monkey', 'right', !set.locked)}
+              {index === 5 && renderCharacter(index, 'giraffe', 'left', !set.locked)}
+              {index === 8 && renderCharacter(index, 'chameleon', 'right', !set.locked)}
+              {index === 11 && renderCharacter(index, 'fox', 'left', !set.locked)}
+              {index === 14 && renderCharacter(index, 'sloth', 'right', !set.locked)}
+              {renderNode(set as any, index, true, setsToRender)}
               {renderConnector(index, setsToRender.length)}
             </View>
           );
@@ -941,6 +1046,22 @@ export default function LearnScreen() {
         end={{ x: 0.5, y: 1 }}
         style={{ flex: 1 }}
       >
+        {/* Background fill for notch/status bar area - inside gradient for proper stacking */}
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: insets.top + 50,
+          backgroundColor: isLight ? '#FFFFFF' : '#2A2A2A',
+          zIndex: 5,
+          borderBottomWidth: 2,
+          borderBottomColor: '#1A1A1A',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.3,
+          shadowRadius: 0,
+        }} />
         <TopStatusPanel floating includeTopInset />
         <ScrollView
           ref={scrollViewRef}
@@ -948,7 +1069,8 @@ export default function LearnScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
-          scrollEventThrottle={16}
+          scrollEventThrottle={100}
+          removeClippedSubviews={Platform.OS === 'ios'}
         >
           {/* Path for current level only */}
           <View style={styles.pathContainer}>
@@ -1174,6 +1296,7 @@ const styles = StyleSheet.create({
   coinIconLocked: {
     opacity: 1,
     tintColor: '#888888',
+    shadowOpacity: 0,
   },
   completedBadge: {
     position: 'absolute',
@@ -1374,24 +1497,23 @@ const styles = StyleSheet.create({
   },
   levelBanner: {
     marginHorizontal: 24,
+    marginTop: 20,
     marginBottom: 28,
     borderRadius: 16,
-    overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 5,
+    overflow: 'visible',
   },
   levelBannerLight: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    borderColor: '#1A1A1A',
   },
   levelBannerEdge: {
-    position: 'absolute',
-    top: 6,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#CC7A02',
-    borderRadius: 16,
+    display: 'none',
   },
   levelBannerContent: {
     flexDirection: 'row',
@@ -1399,9 +1521,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8B070',
     paddingVertical: 16,
     paddingHorizontal: 16,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 13,
   },
   levelBannerIconCircle: {
     width: 52,
@@ -1427,16 +1547,18 @@ const styles = StyleSheet.create({
   levelBannerTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1A1A1A',
     marginBottom: 2,
+    fontFamily: 'Feather-Bold',
   },
   levelBannerSubtitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.85)',
+    color: 'rgba(26,26,26,0.7)',
+    fontFamily: 'Ubuntu-Medium',
   },
   levelBannerBadge: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.5)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
@@ -1444,25 +1566,29 @@ const styles = StyleSheet.create({
   levelBannerBadgeText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1A1A1A',
+    fontFamily: 'Ubuntu-Bold',
   },
   nextLevelButton: {
     marginTop: 16,
-    backgroundColor: '#F8B070',
+    backgroundColor: '#F25E86',
     paddingHorizontal: 24,
     paddingVertical: 14,
-    borderRadius: 25,
-    shadowColor: '#F8B070',
-    shadowOffset: { width: 0, height: 4 },
+    borderRadius: 20,
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 3 },
     shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 0,
+    elevation: 5,
   },
   nextLevelButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
     textAlign: 'center',
+    fontFamily: 'Ubuntu-Bold',
   },
   // Stage Gate Styles
   stageGateContainer: {

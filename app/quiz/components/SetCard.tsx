@@ -216,14 +216,9 @@ export default function SetCard({ set, onPress }: SetCardProps) {
                 <Text style={styles.continueButtonText}>Continue</Text>
               </View>
             ) : (
-              <LinearGradient
-                colors={['#437F76', '#4A9A8F']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.startButton}
-              >
+              <View style={styles.startButton}>
                 <Text style={styles.startButtonText}>Start</Text>
-              </LinearGradient>
+              </View>
             )}
           </View>
         </View>
@@ -351,6 +346,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     minWidth: 90,
     alignItems: 'center',
+    backgroundColor: '#F25E86',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 5,
   },
   startButtonText: {
     color: '#FFFFFF',
@@ -359,12 +362,19 @@ const styles = StyleSheet.create({
     fontFamily: 'Ubuntu-Bold',
   },
   continueButton: {
-    backgroundColor: '#437F76',
+    backgroundColor: '#F25E86',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
     minWidth: 90,
     alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 5,
   },
   continueButtonText: {
     color: '#FFFFFF',

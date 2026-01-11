@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
+  Easing,
   AccessibilityInfo,
   ViewStyle,
   TextStyle,
@@ -17,6 +18,7 @@ import { levels } from '../data/levels';
 import AnimatedNextButton from './AnimatedNextButton';
 import { Volume2 } from 'lucide-react-native';
 import { speak } from '../../../lib/speech';
+import LottieView from 'lottie-react-native';
 
 const ACCENT_COLOR = '#F25E86';
 const CORRECT_COLOR = '#4ED9CB';
@@ -30,6 +32,7 @@ interface SentenceUsageProps {
   onHeartLost: () => void;
   wordRange?: { start: number; end: number };
   wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
+  showUfoAnimation?: boolean;
 }
 
 interface UsageSentence {
@@ -1277,7 +1280,7 @@ interface OptionRow {
   key: string;
 }
 
-export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride }: SentenceUsageProps) {
+export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride, showUfoAnimation }: SentenceUsageProps) {
   const recordResult = useAppStore(s => s.recordExerciseResult);
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
@@ -1569,6 +1572,17 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
   const [correctCount, setCorrectCount] = useState(0);
   const heartLostAnim = useRef(new Animated.Value(1)).current;
   const itemStartRef = useRef<number>(Date.now());
+  const mountFadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Fade in on mount
+  useEffect(() => {
+    Animated.timing(mountFadeAnim, {
+      toValue: 1,
+      duration: 400,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   const item = useMemo(() => itemsData[index], [itemsData, index]);
 
@@ -1645,27 +1659,48 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
   };
 
   return (
-    <View style={[styles.container, isLight && { backgroundColor: colors.background }]}>
+    <Animated.View style={[styles.container, isLight && { backgroundColor: colors.background }, { opacity: mountFadeAnim }]}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        <View style={styles.progressContainer}>
-          <Text style={[styles.progressText, isLight && { color: '#6B7280' }]}>Word {index + 1} of {itemsData.length}</Text>
-          <Animated.View style={[styles.heartsContainer, { transform: [{ scale: heartLostAnim }] }]}>
-            {[0, 1, 2, 3, 4].map((i) => (
-              <Text key={i} style={styles.heartIcon}>
-                {i < hearts ? '❤️' : '🤍'}
-              </Text>
-            ))}
+        <View style={styles.topHeaderRow}>
+          <View style={[styles.progressBarPill, isLight && { backgroundColor: '#E5E7EB' }]}>
+            <View style={[styles.progressFillPill, { width: `${progress * 100}%` }]} />
+          </View>
+          <Animated.View style={[styles.heartsContainerSmall, { transform: [{ scale: heartLostAnim }] }]}>
+            <View style={{ position: 'relative' }}>
+              <LottieView
+                source={require('../../../assets/lottie/learn/heart_away.lottie')}
+                autoPlay={showUfoAnimation}
+                loop={false}
+                speed={1}
+                style={{ width: 96, height: 96 }}
+                key={showUfoAnimation ? 'playing' : 'idle'}
+              />
+              {showUfoAnimation && (
+                <LottieView
+                  source={require('../../../assets/lottie/learn/Ufo_animation.lottie')}
+                  autoPlay
+                  loop={false}
+                  speed={2}
+                  style={{
+                    width: 100,
+                    height: 100,
+                    position: 'absolute',
+                    top: -30,
+                    left: -2,
+                  }}
+                />
+              )}
+            </View>
+            <Text style={[styles.heartCount, { marginLeft: -30 }, isLight && { color: '#EF4444' }]}>{hearts}</Text>
           </Animated.View>
         </View>
-        <View style={[styles.progressBar, isLight && { backgroundColor: '#E5E7EB' }]}>
-          <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-        </View>
 
+        <View style={{ height: 24 }} />
         <Text style={[styles.headerText, isLight && { color: '#111827' }]}>Natural Usage</Text>
         <Text style={[styles.subHeaderText, isLight && { color: '#6B7280' }]}>
           {item.mode === 'word' ? 'Select the word that correctly completes the sentence.' : 'Pick the sentence that uses the word correctly.'}
@@ -1736,7 +1771,7 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
           label={revealed ? 'NEXT' : 'REVEAL'}
         />
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -1745,13 +1780,51 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1E1E1E',
     paddingHorizontal: 20,
-    paddingVertical: 24,
+    paddingVertical: 12,
   },
   progressContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  topHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    marginTop: -4,
+    marginBottom: 12,
+    gap: 12,
+    paddingLeft: 56,
+    paddingRight: 24,
+    height: 24,
+  },
+  progressBarPill: {
+    flex: 1,
+    height: 12,
+    backgroundColor: '#3A3A3A',
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginRight: 8,
+  },
+  progressFillPill: {
+    height: '100%',
+    backgroundColor: '#7AC231',
+    borderRadius: 7,
+  },
+  heartsContainerSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  heartEmoji: {
+    fontSize: 18,
+  },
+  heartCount: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#EF4444',
+    fontFamily: 'Feather-Bold',
   },
   progressText: {
     fontSize: 14,
@@ -1848,18 +1921,30 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
   },
   optionLight: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.3)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
   },
   cardSelected: {
     borderWidth: 2,
     borderColor: '#F25E86',
-    backgroundColor: 'rgba(242,94,134,0.15)',
+    backgroundColor: 'rgba(242,94,134,0.08)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: '#F25E86',
+    borderRightColor: '#F25E86',
   },
   optionText: {
     color: '#fff',
@@ -1868,22 +1953,40 @@ const styles = StyleSheet.create({
     fontFamily: 'Feather-Bold',
   },
   cardCorrect: {
-    backgroundColor: 'rgba(78,217,203,0.2)',
+    backgroundColor: 'rgba(78,217,203,0.04)',
     borderColor: '#4ED9CB',
     borderWidth: 2,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: '#4ED9CB',
+    borderRightColor: '#4ED9CB',
   },
   cardIncorrect: {
-    backgroundColor: 'rgba(242,94,134,0.2)',
+    backgroundColor: 'rgba(242,94,134,0.04)',
     borderColor: '#F25E86',
     borderWidth: 2,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: '#F25E86',
+    borderRightColor: '#F25E86',
   },
   cardCorrectLight: {
-    backgroundColor: 'rgba(78,217,203,0.15)',
+    backgroundColor: 'rgba(78,217,203,0.03)',
     borderColor: '#4ED9CB',
+    borderWidth: 2,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: '#4ED9CB',
+    borderRightColor: '#4ED9CB',
   },
   cardIncorrectLight: {
-    backgroundColor: 'rgba(242,94,134,0.15)',
+    backgroundColor: 'rgba(242,94,134,0.03)',
+    borderWidth: 2,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
     borderColor: '#F25E86',
+    borderBottomColor: '#F25E86',
+    borderRightColor: '#F25E86',
   },
   correctText: {
     color: CORRECT_COLOR,
@@ -1903,8 +2006,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Feather-Bold',
   },
   footer: {
-    marginTop: 32,
+    marginTop: 12,
     alignItems: 'center',
+    paddingBottom: 50,
   },
   primaryButton: {
     backgroundColor: ACCENT_COLOR,

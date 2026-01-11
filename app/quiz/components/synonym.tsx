@@ -19,6 +19,7 @@ import AnimatedNextButton from './AnimatedNextButton';
 import { Volume2 } from 'lucide-react-native';
 import { speak } from '../../../lib/speech';
 import { levels } from '../data/levels';
+import LottieView from 'lottie-react-native';
 
 interface SynonymProps {
   setId: string;
@@ -28,6 +29,7 @@ interface SynonymProps {
   onHeartLost: () => void;
   wordRange?: { start: number; end: number };
   wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
+  showUfoAnimation?: boolean;
 }
 
 interface WordEntry {
@@ -733,7 +735,7 @@ const CORRECT_COLOR_LIGHT = '#4ED9CB';
 const INCORRECT_COLOR_LIGHT = '#F25E86';
 const ACCENT_COLOR = '#F25E86';
 
-export default function SynonymComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride }: SynonymProps) {
+export default function SynonymComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride, showUfoAnimation }: SynonymProps) {
   const themeName = useAppStore(s => s.theme);
   const recordResult = useAppStore(s => s.recordExerciseResult);
   const colors = getTheme(themeName);
@@ -914,6 +916,17 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
   const heartLostAnim = useRef(new Animated.Value(1)).current;
   const itemStartRef = useRef<number>(Date.now());
   const optionAnims = useRef<Animated.Value[]>([]);
+  const mountFadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Fade in on mount
+  useEffect(() => {
+    Animated.timing(mountFadeAnim, {
+      toValue: 1,
+      duration: 400,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   const currentWord = useMemo(() => wordsData[currentIndex], [wordsData, currentIndex]);
   const requiredCount = 3; // Always require 3 correct synonyms
@@ -1054,31 +1067,47 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
   const primaryLabel = revealed ? (isLastWord ? 'Finish' : 'Next') : 'Next';
 
   return (
-    <View style={[styles.container, isLight && { backgroundColor: colors.background }]}>
+    <Animated.View style={[styles.container, isLight && { backgroundColor: colors.background }, { opacity: mountFadeAnim }]}>
+      <View style={styles.topHeaderRow}>
+        <View style={[styles.progressBarPill, isLight && { backgroundColor: '#E5E7EB' }]}>
+          <Animated.View style={[styles.progressFillPill, { width: `${progress * 100}%` }]} />
+        </View>
+        <Animated.View style={[styles.heartsContainerSmall, { transform: [{ scale: heartLostAnim }] }]}>
+          <View style={{ position: 'relative' }}>
+            <LottieView
+              source={require('../../../assets/lottie/learn/heart_away.lottie')}
+              autoPlay={showUfoAnimation}
+              loop={false}
+              speed={1}
+              style={{ width: 96, height: 96 }}
+              key={showUfoAnimation ? 'playing' : 'idle'}
+            />
+            {showUfoAnimation && (
+              <LottieView
+                source={require('../../../assets/lottie/learn/Ufo_animation.lottie')}
+                autoPlay
+                loop={false}
+                speed={2}
+                style={{
+                  width: 100,
+                  height: 100,
+                  position: 'absolute',
+                  top: -30,
+                  left: -2,
+                }}
+              />
+            )}
+          </View>
+          <Text style={[styles.heartCount, { marginLeft: -30 }, isLight && { color: '#EF4444' }]}>{hearts}</Text>
+        </Animated.View>
+      </View>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingTop: 16, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
         <View style={styles.body}>
-          <View style={styles.topRow}>
-            <View style={styles.progressContainer}>
-              <Text style={[styles.progressText, isLight && { color: '#6B7280' }]}>
-                Word {currentIndex + 1} of {wordsData.length}
-              </Text>
-              <Animated.View style={[styles.heartsContainer, { transform: [{ scale: heartLostAnim }] }]}>
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <Text key={i} style={styles.heartIcon}>
-                    {i < hearts ? '❤️' : '🤍'}
-                  </Text>
-                ))}
-              </Animated.View>
-            </View>
-            <View style={[styles.progressBar, isLight && { backgroundColor: '#E5E7EB' }]}>
-              <Animated.View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-            </View>
-          </View>
 
           <TouchableOpacity
             style={[styles.speakButtonCorner, isLight && styles.speakButtonCornerLight]}
@@ -1147,7 +1176,7 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
           disabled={primaryDisabled}
         />
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -1156,11 +1185,49 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1E1E1E',
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 24,
+    paddingTop: 12,
+    paddingBottom: 12,
   },
   body: {
     flex: 1,
+  },
+  topHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    marginTop: -4,
+    marginBottom: 12,
+    gap: 12,
+    paddingLeft: 56,
+    paddingRight: 24,
+    height: 24,
+  },
+  progressBarPill: {
+    flex: 1,
+    height: 12,
+    backgroundColor: '#3A3A3A',
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginRight: 8,
+  },
+  progressFillPill: {
+    height: '100%',
+    backgroundColor: '#7AC231',
+    borderRadius: 7,
+  },
+  heartsContainerSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  heartEmoji: {
+    fontSize: 18,
+  },
+  heartCount: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#EF4444',
+    fontFamily: 'Feather-Bold',
   },
   topRow: {
     marginBottom: 16,
@@ -1279,49 +1346,85 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
     minHeight: 88,
   },
   optionLight: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.3)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
   },
   optionSelected: {
     borderColor: '#F25E86',
-    backgroundColor: 'rgba(242,94,134,0.15)',
+    backgroundColor: 'rgba(242,94,134,0.08)',
     borderWidth: 2,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: '#F25E86',
+    borderRightColor: '#F25E86',
   },
   optionCorrect: {
-    backgroundColor: 'rgba(78,217,203,0.2)',
+    backgroundColor: 'rgba(78,217,203,0.04)',
     borderColor: '#4ED9CB',
     borderWidth: 2,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: '#4ED9CB',
+    borderRightColor: '#4ED9CB',
   },
   optionIncorrect: {
-    backgroundColor: 'rgba(242,94,134,0.2)',
+    backgroundColor: 'rgba(242,94,134,0.04)',
     borderColor: '#F25E86',
     borderWidth: 2,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: '#F25E86',
+    borderRightColor: '#F25E86',
   },
   optionCorrectLight: {
-    backgroundColor: 'rgba(78,217,203,0.25)',
+    backgroundColor: 'rgba(78,217,203,0.03)',
     borderColor: '#4ED9CB',
     borderWidth: 2,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: '#4ED9CB',
+    borderRightColor: '#4ED9CB',
   },
   optionIncorrectLight: {
-    backgroundColor: 'rgba(242,94,134,0.25)',
+    backgroundColor: 'rgba(242,94,134,0.03)',
     borderColor: '#F25E86',
     borderWidth: 2,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: '#F25E86',
+    borderRightColor: '#F25E86',
   },
   optionCorrectOutline: {
     borderColor: '#4ED9CB',
-    backgroundColor: 'rgba(78,217,203,0.15)',
+    backgroundColor: 'rgba(78,217,203,0.03)',
     borderWidth: 2,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: '#4ED9CB',
+    borderRightColor: '#4ED9CB',
   },
   optionCorrectOutlineLight: {
     borderColor: '#4ED9CB',
-    backgroundColor: 'rgba(78,217,203,0.2)',
+    backgroundColor: 'rgba(78,217,203,0.03)',
     borderWidth: 2,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: '#4ED9CB',
+    borderRightColor: '#4ED9CB',
   },
   optionText: {
     color: '#fff',
@@ -1332,6 +1435,7 @@ const styles = StyleSheet.create({
   footerButtons: {
     alignItems: 'center',
     paddingTop: 12,
+    paddingBottom: 70,
   },
   primaryButton: {
     paddingVertical: 14,

@@ -231,11 +231,11 @@ export default function SynonymMatch({ words, isDarkMode, onComplete }: SynonymM
 
   // Neutral/matched colors for cards
   const NEUTRAL_COLOR = isDarkMode
-    ? { bg: '#2A2A2A', text: '#E5E7EB', border: 'rgba(78,217,203,0.15)' }
-    : { bg: '#FFFFFF', text: '#111827', border: 'rgba(78,217,203,0.3)' };
+    ? { bg: '#2A2A2A', text: '#E5E7EB', border: '#1A1A1A' }
+    : { bg: '#FFFFFF', text: '#111827', border: '#1A1A1A' };
   const MATCHED_COLOR = isDarkMode
-    ? { bg: 'rgba(78,217,203,0.22)', text: '#E5E7EB', border: '#4ED9CB' }
-    : { bg: 'rgba(78,217,203,0.18)', text: '#111827', border: '#4ED9CB' };
+    ? { bg: 'rgba(30,144,255,0.15)', text: '#1E90FF', border: '#1E90FF' }
+    : { bg: 'rgba(30,144,255,0.12)', text: '#1E90FF', border: '#1E90FF' };
 
   const renderCard = (card: Card, index: number) => {
     const isSelected = selectedCards.includes(card.id);
@@ -265,7 +265,10 @@ export default function SynonymMatch({ words, isDarkMode, onComplete }: SynonymM
         <TouchableOpacity
           style={[
             styles.card,
-            { backgroundColor: color.bg, borderColor: color.border },
+            {
+              backgroundColor: color.bg,
+              borderColor: color.border,
+            },
             isSelected && !isMatched && styles.cardSelected,
             isIncorrect && styles.cardIncorrect,
           ]}
@@ -331,16 +334,17 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 8,
-    borderWidth: 1.5,
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 5,
   },
   cardSelected: {
     borderWidth: 3,
@@ -365,7 +369,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#4ED9CB',
+    backgroundColor: '#1999D6',
     justifyContent: 'center',
     alignItems: 'center',
   },

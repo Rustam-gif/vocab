@@ -120,9 +120,11 @@ export default function DialogueSimple({ onPhaseComplete, sharedScore, onScoreSh
       </View>
 
       {isAnswered && (
-        <AnimatedNextButton
-          onPress={handleNext}
-        />
+        <View style={{ paddingBottom: 70 }}>
+          <AnimatedNextButton
+            onPress={handleNext}
+          />
+        </View>
       )}
     </View>
   );

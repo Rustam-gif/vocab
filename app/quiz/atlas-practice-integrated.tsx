@@ -7,9 +7,11 @@ import {
   TouchableOpacity,
   Animated,
   Easing,
+  StatusBar,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
+import { X } from 'lucide-react-native';
+import LottieView from 'lottie-react-native';
 import WordIntroComponent from './components/word-intro';
 import MCQComponent from './components/mcq';
 import SynonymComponent from './components/synonym';
@@ -95,6 +97,7 @@ export default function AtlasPracticeIntegrated() {
         ]
   );
   const [hearts, setHearts] = useState(5);
+  const [showUfoAnimation, setShowUfoAnimation] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
@@ -102,10 +105,16 @@ export default function AtlasPracticeIntegrated() {
 
   // Handle losing a heart
   const handleHeartLost = () => {
+    // Show UFO animation for 4 seconds
+    setShowUfoAnimation(true);
+    setTimeout(() => {
+      setShowUfoAnimation(false);
+    }, 4000);
+
     setHearts(prev => {
       const newHearts = Math.max(0, prev - 1);
       if (newHearts === 0) {
-        setGameOver(true);
+        setTimeout(() => setGameOver(true), 1500);
       }
       return newHearts;
     });
@@ -114,6 +123,7 @@ export default function AtlasPracticeIntegrated() {
   // Restart the exercise
   const handleRestart = () => {
     setHearts(5);
+    setShowUfoAnimation(false);
     setGameOver(false);
     setCurrentPhase(0);
     setShowingIntro(true);
@@ -312,6 +322,7 @@ export default function AtlasPracticeIntegrated() {
           wordIndex={mlIndex}
           totalWords={words.length}
           hearts={hearts}
+          showUfoAnimation={showUfoAnimation}
           onResult={({ mistakes, usedReveal }) => {
             const hasMistake = (mistakes || 0) > 0 || usedReveal;
             if (hasMistake) {
@@ -350,6 +361,7 @@ export default function AtlasPracticeIntegrated() {
         onHeartLost={handleHeartLost}
         wordRange={wordRange}
         wordsOverride={computedQuizWords || undefined}
+        showUfoAnimation={showUfoAnimation}
       />
     );
   };
@@ -412,9 +424,11 @@ export default function AtlasPracticeIntegrated() {
   const shouldShowExerciseIntro = showingIntro && phases[currentPhase]?.id !== 'intro';
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Minimal Header - just back button */}
-      <View style={styles.headerMinimal}>
+    <View style={[styles.wrapper, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isLight ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        {/* Minimal Header - just back button */}
+        <View style={styles.headerMinimal}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={async () => {
@@ -425,7 +439,7 @@ export default function AtlasPracticeIntegrated() {
             router.back();
           }}
         >
-          <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
+          <X size={24} color={isLight ? '#9CA3AF' : '#6B7280'} strokeWidth={2.5} />
         </TouchableOpacity>
       </View>
 
@@ -443,8 +457,10 @@ export default function AtlasPracticeIntegrated() {
         ) : (
           getCurrentPhaseComponent()
         )}
-      </View>
-    </SafeAreaView>
+        </View>
+
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -459,80 +475,134 @@ type ExerciseIntroScreenProps = {
 };
 
 function ExerciseIntroScreen({ introContent, hearts, phaseIndex, totalPhases, isLight, onStart }: ExerciseIntroScreenProps) {
+  const containerScale = useRef(new Animated.Value(0.8)).current;
+  const containerOpacity = useRef(new Animated.Value(0)).current;
   const iconScale = useRef(new Animated.Value(0)).current;
   const titleOpacity = useRef(new Animated.Value(0)).current;
   const titleSlide = useRef(new Animated.Value(20)).current;
   const descOpacity = useRef(new Animated.Value(0)).current;
   const progressOpacity = useRef(new Animated.Value(0)).current;
   const countdownWidth = useRef(new Animated.Value(1)).current;
+  const isExitingRef = useRef(false);
+
+  // Exit animation function
+  const handleExit = () => {
+    if (isExitingRef.current) return;
+    isExitingRef.current = true;
+
+    Animated.parallel([
+      Animated.timing(containerOpacity, {
+        toValue: 0,
+        duration: 200,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(containerScale, {
+        toValue: 1.05,
+        duration: 200,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onStart();
+    });
+  };
 
   useEffect(() => {
     // Reset animations
+    containerScale.setValue(0.8);
+    containerOpacity.setValue(0);
     iconScale.setValue(0);
     titleOpacity.setValue(0);
     titleSlide.setValue(20);
     descOpacity.setValue(0);
     progressOpacity.setValue(0);
     countdownWidth.setValue(1);
+    isExitingRef.current = false;
 
-    // Staggered entrance animation
-    Animated.sequence([
-      // Progress indicator fades in
-      Animated.timing(progressOpacity, {
+    // Container zoom-in animation (runs immediately)
+    Animated.parallel([
+      Animated.spring(containerScale, {
         toValue: 1,
-        duration: 300,
-        useNativeDriver: false,
-      }),
-      // Icon bounces in
-      Animated.spring(iconScale, {
-        toValue: 1,
-        friction: 5,
-        tension: 100,
+        friction: 8,
+        tension: 60,
         useNativeDriver: true,
       }),
-      // Title slides up
-      Animated.parallel([
-        Animated.timing(titleOpacity, {
-          toValue: 1,
-          duration: 300,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(titleSlide, {
-          toValue: 0,
-          duration: 300,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]),
-      // Description fades in
-      Animated.timing(descOpacity, {
+      Animated.timing(containerOpacity, {
         toValue: 1,
         duration: 250,
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      // Start countdown AFTER intro animations complete
-      Animated.timing(countdownWidth, {
-        toValue: 0,
-        duration: 2000,
-        easing: Easing.linear,
-        useNativeDriver: false,
-      }).start();
-    });
+    ]).start();
 
-    // Auto-start after intro animations (~1.2s) + countdown (2s) = ~3.2s
+    // Staggered entrance animation for content (slightly delayed)
+    setTimeout(() => {
+      Animated.sequence([
+        // Progress indicator fades in
+        Animated.timing(progressOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: false,
+        }),
+        // Icon bounces in
+        Animated.spring(iconScale, {
+          toValue: 1,
+          friction: 5,
+          tension: 100,
+          useNativeDriver: true,
+        }),
+        // Title slides up
+        Animated.parallel([
+          Animated.timing(titleOpacity, {
+            toValue: 1,
+            duration: 250,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(titleSlide, {
+            toValue: 0,
+            duration: 250,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]),
+        // Description fades in
+        Animated.timing(descOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        // Start countdown AFTER intro animations complete
+        Animated.timing(countdownWidth, {
+          toValue: 0,
+          duration: 2000,
+          easing: Easing.linear,
+          useNativeDriver: false,
+        }).start();
+      });
+    }, 100);
+
+    // Auto-start after intro animations complete
     const autoStartTimer = setTimeout(() => {
-      onStart();
-    }, 3200);
+      handleExit();
+    }, 4500);
 
     return () => clearTimeout(autoStartTimer);
-  }, [phaseIndex, onStart]);
+  }, [phaseIndex]);
 
   if (!introContent) return null;
 
   return (
-    <View style={styles.exerciseIntroContainer}>
+    <Animated.View
+      style={[
+        styles.exerciseIntroContainer,
+        {
+          opacity: containerOpacity,
+          transform: [{ scale: containerScale }],
+        },
+      ]}
+    >
       {/* Progress indicator */}
       <Animated.View style={[styles.exerciseIntroProgress, { opacity: progressOpacity }]}>
         <View style={styles.exerciseIntroProgressDots}>
@@ -547,13 +617,15 @@ function ExerciseIntroScreen({ introContent, hearts, phaseIndex, totalPhases, is
             />
           ))}
         </View>
-        {/* Hearts display */}
+        {/* Hearts display with Lottie */}
         <View style={styles.exerciseIntroHearts}>
-          {[0, 1, 2, 3, 4].map(i => (
-            <Text key={i} style={styles.exerciseIntroHeart}>
-              {i < hearts ? '❤️' : '🤍'}
-            </Text>
-          ))}
+          <LottieView
+            source={require('../../assets/lottie/learn/heart_away.lottie')}
+            autoPlay
+            loop
+            style={styles.heartsLottie}
+          />
+          <Text style={styles.heartsCount}>{hearts}</Text>
         </View>
       </Animated.View>
 
@@ -594,28 +666,13 @@ function ExerciseIntroScreen({ introContent, hearts, phaseIndex, totalPhases, is
         {introContent.description}
       </Animated.Text>
 
-      {/* Countdown bar */}
-      <View style={styles.countdownBarContainer}>
-        <Animated.View
-          style={[
-            styles.countdownBar,
-            {
-              width: countdownWidth.interpolate({
-                inputRange: [0, 1],
-                outputRange: ['0%', '100%'],
-              }),
-            },
-          ]}
-        />
-      </View>
-
       {/* Tap to skip hint */}
-      <TouchableOpacity onPress={onStart} activeOpacity={0.7}>
+      <TouchableOpacity onPress={handleExit} activeOpacity={0.7}>
         <Text style={[styles.skipHint, isLight && styles.skipHintLight]}>
           Tap anywhere to start now
         </Text>
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -751,6 +808,9 @@ function GameOverScreen({ isLight, onTryAgain, onBackToLearn }: GameOverScreenPr
 }
 
 const styles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+  },
   container: {
     flex: 1,
     backgroundColor: '#1E1E1E',
@@ -758,11 +818,13 @@ const styles = StyleSheet.create({
   headerMinimal: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingTop: 0,
+    paddingBottom: 0,
+    height: 32,
   },
   backButton: {
-    padding: 8,
+    padding: 0,
   },
   // Exercise Intro Screen styles
   exerciseIntroContainer: {
@@ -799,7 +861,34 @@ const styles = StyleSheet.create({
   },
   exerciseIntroHearts: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
+  },
+  heartsLottie: {
+    width: 96,
+    height: 96,
+  },
+  heartsCount: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#F25E86',
+    fontFamily: 'Ubuntu-Bold',
+    marginLeft: -30,
+  },
+  ufoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    zIndex: 1000,
+  },
+  ufoAnimationLarge: {
+    width: 280,
+    height: 280,
   },
   exerciseIntroHeart: {
     fontSize: 18,
@@ -905,16 +994,18 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   gameOverButton: {
-    backgroundColor: '#F8B070',
+    backgroundColor: '#F25E86',
     paddingVertical: 16,
     paddingHorizontal: 48,
-    borderRadius: 16,
+    borderRadius: 20,
     minWidth: 220,
-    shadowColor: '#F8B070',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 5,
   },
   gameOverButtonSecondary: {
     paddingVertical: 12,
@@ -923,9 +1014,9 @@ const styles = StyleSheet.create({
   gameOverButtonText: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#1E1E1E',
+    color: '#FFFFFF',
     textAlign: 'center',
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Bold',
   },
   gameOverButtonTextSecondary: {
     fontSize: 15,

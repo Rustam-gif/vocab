@@ -609,11 +609,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.15)',
   },
   navBtnNext: {
-    backgroundColor: ACCENT_TEAL,
-    shadowColor: ACCENT_TEAL,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    backgroundColor: '#F25E86',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 5,
   },
   navBtnDisabled: {
     opacity: 0.4,
@@ -622,6 +625,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFF',
+    fontFamily: 'Ubuntu-Bold',
   },
   navBtnTextDisabled: {
     color: '#555',

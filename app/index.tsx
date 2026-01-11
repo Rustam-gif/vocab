@@ -3006,11 +3006,22 @@ Avoid fiction and avoid specific unverifiable claims.
     }
 
     // Point to backend cache endpoint (preferred). If NEWS_API_URL is set, use that as an override.
+    // IMPORTANT: Never fallback to localhost in production - it causes UI freezes.
     const backendBase = (BACKEND_BASE_URL || '').replace(/\/$/, '');
     const baseTargetUrl =
       NEWS_API_URL && NEWS_API_URL.trim().length > 0
         ? NEWS_API_URL.trim()
-        : `${backendBase || 'http://localhost:4000'}/api/news`;
+        : backendBase
+          ? `${backendBase}/api/news`
+          : ''; // Empty string will skip fetch if no valid URL
+
+    // Skip fetch if no valid URL configured (prevents localhost connection attempts in production)
+    if (!baseTargetUrl) {
+      setNewsLoading(false);
+      if (__DEV__) console.warn('[news] No valid news URL configured, skipping fetch');
+      return;
+    }
+
 	    // Let the server handle caching - it has its own 24-hour database cache.
 	    // Only force refresh if user explicitly requests it (e.g., pull-to-refresh).
 	    // This avoids slow full refreshes on every app restart when local AsyncStorage is empty.
@@ -3034,9 +3045,9 @@ Avoid fiction and avoid specific unverifiable claims.
 	      setNewsLoading(true);
 	      setNewsStatus('Loading live news…');
       const controller = new AbortController();
-      // Allow more time for AI-expanded responses coming from the function.
-      // Increased to 60s since function may need to fetch external news + AI expand
-      const timer = setTimeout(() => controller.abort(), 60000);
+      // Reduced timeout to 20s to prevent UI freezing on slow networks
+      // If server is slow, we'll show cached content instead
+      const timer = setTimeout(() => controller.abort(), 20000);
       let res: Response | null = null;
 	      try {
 	        // Try POST first to force a fresh refresh on the Supabase function
@@ -3271,22 +3282,25 @@ Avoid fiction and avoid specific unverifiable claims.
     }
     newsFetchStarted.current = true;
     console.log('[news] Starting initial news fetch...');
-    (async () => {
+
+    // Use InteractionManager to defer heavy operations until after render
+    const task = InteractionManager.runAfterInteractions(async () => {
       // 1) Show any cached payload immediately so the UI is never empty
-	      try {
-	        const cached = await loadCachedNews();
-          console.log('[news] Local cache result:', cached ? `${cached.articles.length} articles` : 'null');
-	        if (cached) {
-	          setNewsOverrideList(cached.articles);
-	          setNewsList(cached.articles);
-	          setNewsStatus(cached.status || 'Live feed (cached)');
-	          scheduleNewsHookPrefetch(cached.articles);
-	        }
-	      } catch (e) {
-          console.log('[news] Cache load error:', e);
+      try {
+        const cached = await loadCachedNews();
+        console.log('[news] Local cache result:', cached ? `${cached.articles.length} articles` : 'null');
+        if (cached) {
+          setNewsOverrideList(cached.articles);
+          setNewsList(cached.articles);
+          setNewsStatus(cached.status || 'Live feed (cached)');
+          scheduleNewsHookPrefetch(cached.articles);
         }
+      } catch (e) {
+        console.log('[news] Cache load error:', e);
+      }
       // 2) Always ask the backend for the latest feed; if it has fresher
       //    data than the cache, it will be returned and replace the list.
+      // Use a shorter timeout for initial fetch to prevent long freezes
       try {
         console.log('[news] Fetching from API...');
         await refreshNewsFromApi();
@@ -3294,8 +3308,10 @@ Avoid fiction and avoid specific unverifiable claims.
       } catch (e) {
         console.log('[news] API fetch error:', e);
       }
-    })();
-	  }, [refreshNewsFromApi, scheduleNewsHookPrefetch]);
+    });
+
+    return () => task.cancel();
+  }, [refreshNewsFromApi, scheduleNewsHookPrefetch]);
 
   let missionSubtitle = 'A 5-question sprint to refresh your words.';
   let missionCta = 'Start Mission';
@@ -3324,14 +3340,16 @@ Avoid fiction and avoid specific unverifiable claims.
     })();
   }, []);
 
-  // Load today’s mission summary for the home card without blocking the screen
+  // Load today's mission summary for the home card without blocking the screen
   useEffect(() => {
     let alive = true;
     const userId = user?.id || 'local-user';
     if (pathname && pathname !== '/') return;
     if (missionFetchKeyRef.current === userId) return;
     missionFetchKeyRef.current = userId;
-    (async () => {
+
+    // Use InteractionManager to defer mission loading until after initial render
+    const task = InteractionManager.runAfterInteractions(async () => {
       const dailyStoryWords = getDailyStoryWordsWithImages();
       if (alive) {
         setStoryWords(dailyStoryWords);
@@ -3366,9 +3384,11 @@ Avoid fiction and avoid specific unverifiable claims.
       } finally {
         if (alive) setMissionLoading(false);
       }
-    })();
+    });
+
     return () => {
       alive = false;
+      task.cancel();
     };
   }, [user?.id, pathname]);
 
@@ -4150,34 +4170,9 @@ EXAMPLE: [sentence in ${langName}]`
     }
   };
 
-  // Show vocab preview before opening article
+  // Open article directly (vocab preview removed)
   const openNewsModal = async (article: NewsItem) => {
-    const vocabWords = article.vocab?.slice(0, 5) || [];
-    if (vocabWords.length >= 3) {
-      // Show preview immediately, then enrich with translations
-      setVocabPreviewArticle(article);
-      setVocabPreviewIndex(0);
-      setVocabPreviewFlipped(false);
-      vocabCardAnim.setValue(0);
-      setVocabPreviewVisible(true);
-
-      // Enrich vocab with translations, examples, and synonyms in background
-      const targetLang = primaryLang && primaryLang !== 'en' ? primaryLang : '';
-      if (targetLang) {
-        setVocabPreviewLoading(true);
-        try {
-          const enrichedVocab = await enrichVocabForPreview(vocabWords, targetLang);
-          setVocabPreviewArticle(prev => prev ? { ...prev, vocab: [...enrichedVocab, ...(prev.vocab?.slice(5) || [])] } : prev);
-        } catch {
-          // Use original vocab if enrichment fails
-        } finally {
-          setVocabPreviewLoading(false);
-        }
-      }
-    } else {
-      // Open article directly if not enough vocab
-      openNewsModalDirect(article);
-    }
+    openNewsModalDirect(article);
   };
 
   const vocabPreviewNext = () => {
@@ -6103,21 +6098,21 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     backgroundColor: '#1F1F1F',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.15)',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
     shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    shadowOffset: { width: 2, height: 3 },
+    elevation: 5,
   },
   storyWordsCardLight: {
     backgroundColor: '#FFFFFF',
-    borderColor: 'rgba(78,217,203,0.3)',
+    borderColor: '#1A1A1A',
     shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 0,
+    shadowOffset: { width: 2, height: 3 },
     elevation: 4,
   },
   storyViewedLabel: {
@@ -6583,9 +6578,16 @@ const styles = StyleSheet.create({
   },
   storyWordsCta: {
     backgroundColor: '#F25E86',
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 32,
-    borderRadius: 12,
+    borderRadius: 20,
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOpacity: 0.5,
+    shadowRadius: 0,
+    shadowOffset: { width: 2, height: 3 },
+    elevation: 5,
   },
   storyWordsCtaText: {
     color: '#FFFFFF',
@@ -6670,18 +6672,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 16,
     backgroundColor: '#1F1F1F',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.15)',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
     shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    shadowOffset: { width: 2, height: 3 },
+    elevation: 5,
   },
   synonymMatchCardLight: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.3)',
+    borderColor: '#1A1A1A',
+    shadowOpacity: 0.15,
   },
   synonymMatchHeader: {
     marginBottom: 16,

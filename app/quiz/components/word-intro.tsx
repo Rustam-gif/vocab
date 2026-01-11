@@ -46,7 +46,7 @@ const ACCENT_ORANGE = '#F8B070';
 const ACCENT_TEAL = '#4ED9CB';
 const ACCENT_PINK = '#F25E86';
 const SUCCESS_GREEN = '#437F76';
-const DARK_BG = '#0F0F0F';
+const DARK_BG = '#1E1E1E';
 const CARD_BG = '#1A1A1A';
 const CARD_BORDER = 'rgba(78, 217, 203, 0.15)';
 
@@ -58,13 +58,19 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 // Use local haptic feedback shim (no-op since native module not available)
 import ReactNativeHapticFeedback from '../../../lib/haptics';
 
-// Safe haptic feedback helper
-const triggerCelebrationHaptic = (type: 'pop' | 'success' | 'soft' = 'pop') => {
+// Safe haptic feedback helper - with intensity levels
+const triggerCelebrationHaptic = (type: 'pop' | 'medium' | 'heavy' | 'success' | 'soft' = 'pop') => {
   if (Platform.OS !== 'ios') return;
   const options = { enableVibrateFallback: false, ignoreAndroidSystemSettings: false };
   switch (type) {
     case 'pop':
       ReactNativeHapticFeedback.trigger('impactLight', options);
+      break;
+    case 'medium':
+      ReactNativeHapticFeedback.trigger('impactMedium', options);
+      break;
+    case 'heavy':
+      ReactNativeHapticFeedback.trigger('impactHeavy', options);
       break;
     case 'success':
       ReactNativeHapticFeedback.trigger('notificationSuccess', options);
@@ -106,28 +112,56 @@ function ResultScreen({
       }),
     ]).start();
 
-    // Celebratory haptic pattern - like fireworks! Starts immediately
-    // Pattern: quick pops building up, then a big finale
+    // Celebratory haptic pattern - extended fireworks celebration!
+    // 3-4x longer and more intense with medium/heavy impacts
     const hapticPattern = [
-      // Initial burst - rocket launch!
-      { delay: 0, type: 'pop' as const },
-      { delay: 100, type: 'soft' as const },
-      { delay: 200, type: 'pop' as const },
-      // Building excitement
-      { delay: 400, type: 'soft' as const },
-      { delay: 500, type: 'pop' as const },
-      { delay: 600, type: 'soft' as const },
-      { delay: 700, type: 'pop' as const },
-      // Fireworks crescendo
-      { delay: 900, type: 'pop' as const },
-      { delay: 1000, type: 'soft' as const },
-      { delay: 1100, type: 'pop' as const },
-      { delay: 1200, type: 'pop' as const },
-      { delay: 1300, type: 'soft' as const },
-      // Grand finale!
-      { delay: 1500, type: 'pop' as const },
-      { delay: 1600, type: 'pop' as const },
-      { delay: 1700, type: 'success' as const },
+      // Phase 1: Rocket ignition (0-600ms)
+      { delay: 0, type: 'medium' as const },
+      { delay: 120, type: 'pop' as const },
+      { delay: 240, type: 'medium' as const },
+      { delay: 360, type: 'pop' as const },
+      { delay: 480, type: 'medium' as const },
+      { delay: 600, type: 'heavy' as const },
+
+      // Phase 2: Liftoff rumble (800-1600ms)
+      { delay: 800, type: 'medium' as const },
+      { delay: 950, type: 'pop' as const },
+      { delay: 1100, type: 'medium' as const },
+      { delay: 1250, type: 'pop' as const },
+      { delay: 1400, type: 'medium' as const },
+      { delay: 1550, type: 'heavy' as const },
+
+      // Phase 3: Ascending excitement (1800-2800ms)
+      { delay: 1800, type: 'pop' as const },
+      { delay: 1950, type: 'medium' as const },
+      { delay: 2100, type: 'pop' as const },
+      { delay: 2250, type: 'medium' as const },
+      { delay: 2400, type: 'pop' as const },
+      { delay: 2550, type: 'medium' as const },
+      { delay: 2700, type: 'heavy' as const },
+
+      // Phase 4: Fireworks burst (3000-4200ms)
+      { delay: 3000, type: 'medium' as const },
+      { delay: 3100, type: 'pop' as const },
+      { delay: 3200, type: 'medium' as const },
+      { delay: 3300, type: 'pop' as const },
+      { delay: 3400, type: 'medium' as const },
+      { delay: 3500, type: 'heavy' as const },
+      { delay: 3650, type: 'pop' as const },
+      { delay: 3800, type: 'medium' as const },
+      { delay: 3950, type: 'pop' as const },
+      { delay: 4100, type: 'heavy' as const },
+
+      // Phase 5: Grand finale crescendo (4400-5500ms)
+      { delay: 4400, type: 'medium' as const },
+      { delay: 4500, type: 'medium' as const },
+      { delay: 4600, type: 'heavy' as const },
+      { delay: 4750, type: 'medium' as const },
+      { delay: 4900, type: 'heavy' as const },
+      { delay: 5050, type: 'medium' as const },
+      { delay: 5200, type: 'heavy' as const },
+      { delay: 5350, type: 'heavy' as const },
+      { delay: 5500, type: 'success' as const },
     ];
 
     const timeouts = hapticPattern.map(({ delay, type }) =>
@@ -141,23 +175,8 @@ function ResultScreen({
     if (hasTransitioned.current) return;
     hasTransitioned.current = true;
 
-    // Wait a moment then zoom in and fade out
-    setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.timing(exitScaleAnim, {
-          toValue: 1.5,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        onComplete();
-      });
-    }, 600);
+    // Call onComplete immediately - no delay
+    onComplete();
   };
 
   return (
@@ -185,10 +204,10 @@ function ResultScreen({
           />
         </View>
         <Text style={[styles.resultTitle, isLight && { color: '#111827' }]}>
-          You're Ready!
+          Are You Ready?
         </Text>
         <Text style={[styles.resultSubtitle, isLight && { color: '#6B7280' }]}>
-          You've learned {wordsCount} new words.{'\n'}Let's put your knowledge to the test!
+          {wordsCount} new words mastered!{'\n'}Time to show what you've got!
         </Text>
       </View>
     </Animated.View>
@@ -388,15 +407,15 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
     return (
       <View key={word.word + idx} style={styles.cardContainer}>
         <Animated.View style={[styles.card, { transform: [{ scale }], opacity }]}>
-          {/* Card gradient background */}
-          <LinearGradient
-            colors={isLight ? ['#FFFFFF', '#F8F9FA'] : ['#1F2128', '#16171C']}
-            style={styles.cardGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-          >
-            {/* Decorative glow */}
-            <View style={styles.glowAccent} />
+          {/* Card border wrapper for 3D effect */}
+          <View style={styles.cardBorderWrapper}>
+            {/* Card gradient background */}
+            <LinearGradient
+              colors={isLight ? ['#FFFFFF', '#F8F9FA'] : ['#1F2128', '#16171C']}
+              style={styles.cardGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            >
 
             {/* Header with word */}
             <View style={styles.cardHeader}>
@@ -412,33 +431,30 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
                 <Text style={styles.phoneticText}>{word.phonetic}</Text>
               </View>
 
-              {/* Action buttons row */}
-              <View style={styles.headerActions}>
-                <TouchableOpacity
-                  style={[styles.iconButton, speakingWord === word.word && styles.iconButtonActive]}
-                  onPress={() => speakWord(word)}
-                >
-                  <Volume2 size={20} color={speakingWord === word.word ? '#fff' : ACCENT_TEAL} />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.iconButton, isSaved && styles.iconButtonSaved]}
-                  onPress={() => handleSaveWord(word.word)}
-                  disabled={savingWords.has(word.word) || isSaved}
-                >
-                  {isSaved ? (
-                    <Check size={20} color="#fff" />
-                  ) : (
-                    <Bookmark size={20} color={ACCENT_PINK} />
-                  )}
-                </TouchableOpacity>
-              </View>
+              {/* Speaker button */}
+              <TouchableOpacity
+                style={[styles.iconButton, speakingWord === word.word && styles.iconButtonActive]}
+                onPress={() => speakWord(word)}
+              >
+                <Volume2 size={16} color={speakingWord === word.word ? '#fff' : ACCENT_TEAL} />
+              </TouchableOpacity>
             </View>
 
-            {/* Divider with accent */}
+            {/* Save button - bottom right */}
+            <TouchableOpacity
+              style={[styles.saveButton, isSaved && styles.iconButtonSaved]}
+              onPress={() => handleSaveWord(word.word)}
+              disabled={savingWords.has(word.word) || isSaved}
+            >
+              {isSaved ? (
+                <Check size={16} color="#fff" />
+              ) : (
+                <Bookmark size={16} color={ACCENT_PINK} />
+              )}
+            </TouchableOpacity>
+
+            {/* Divider */}
             <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <View style={styles.dividerDot} />
               <View style={styles.dividerLine} />
             </View>
 
@@ -507,7 +523,8 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
                 </Text>
               </TouchableOpacity>
             )}
-          </LinearGradient>
+            </LinearGradient>
+          </View>
         </Animated.View>
       </View>
     );
@@ -584,7 +601,7 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
             activeOpacity={0.8}
           >
             <Text style={styles.nextButtonText}>Next</Text>
-            <ChevronRight size={24} color="#1A1A1A" />
+            <ChevronRight size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </View>
@@ -721,11 +738,20 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 12,
   },
+  cardBorderWrapper: {
+    borderRadius: 24,
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 5,
+  },
   cardGradient: {
     padding: 24,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: CARD_BORDER,
+    borderRadius: 22,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -754,7 +780,7 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: '700',
     color: '#fff',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
     letterSpacing: -0.5,
   },
   wordTextLight: {
@@ -765,16 +791,12 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 4,
     fontStyle: 'italic',
-    fontFamily: 'Ubuntu-Regular',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 12,
+    fontFamily: 'Feather-Bold',
   },
   iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(78, 217, 203, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -788,6 +810,19 @@ const styles = StyleSheet.create({
   iconButtonSaved: {
     backgroundColor: SUCCESS_GREEN,
     borderColor: SUCCESS_GREEN,
+  },
+  saveButton: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(242, 94, 134, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(242, 94, 134, 0.2)',
   },
 
   // Divider
@@ -823,13 +858,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: ACCENT_ORANGE,
     letterSpacing: 1,
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
   definitionText: {
     fontSize: 17,
     color: '#E5E7EB',
     lineHeight: 26,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   definitionTextLight: {
     color: '#374151',
@@ -839,7 +874,7 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     lineHeight: 24,
     fontStyle: 'italic',
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Feather-Bold',
   },
   exampleTextLight: {
     color: '#6B7280',
@@ -857,18 +892,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   synonymChip: {
-    backgroundColor: 'rgba(78, 217, 203, 0.12)',
+    backgroundColor: 'rgba(242, 94, 134, 0.12)',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(78, 217, 203, 0.2)',
+    borderColor: 'rgba(242, 94, 134, 0.25)',
   },
   synonymText: {
     fontSize: 13,
-    color: ACCENT_TEAL,
+    color: '#F25E86',
     fontWeight: '500',
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Feather-Bold',
   },
 
   // Translate button
@@ -901,7 +936,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 16,
+    marginTop: 32,
     marginBottom: 16,
   },
   dot: {
@@ -916,10 +951,11 @@ const styles = StyleSheet.create({
   },
   navButtonContainer: {
     alignItems: 'center',
-    paddingBottom: 20,
+    paddingBottom: 70,
+    marginTop: -20,
   },
   nextButtonFull: {
-    backgroundColor: ACCENT_TEAL,
+    backgroundColor: ACCENT_PINK,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -927,16 +963,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 48,
     borderRadius: 28,
     gap: 6,
-    shadowColor: ACCENT_TEAL,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.5,
+    shadowRadius: 0,
+    elevation: 5,
   },
   nextButtonText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: '#FFFFFF',
     fontFamily: 'Ubuntu-Bold',
     letterSpacing: 0.3,
   },
@@ -1014,6 +1052,7 @@ const styles = StyleSheet.create({
   resultContainer: {
     justifyContent: 'center',
     alignItems: 'center',
+    paddingTop: 60,
   },
   resultContent: {
     alignItems: 'center',
@@ -1037,11 +1076,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   resultSubtitle: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#9CA3AF',
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 26,
     marginBottom: 40,
-    fontFamily: 'Ubuntu-Regular',
+    fontFamily: 'Ubuntu-Medium',
   },
 });

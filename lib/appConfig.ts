@@ -10,7 +10,8 @@ export const AI_PROXY_URL: string = 'https://auirkjgyattnvqaygmfo.supabase.co/fu
 // Backend base URL for app-specific endpoints (e.g., account deletion).
 // For local development, this should point to your Node server (server/index.mjs).
 // On device, replace with your deployed API URL.
-export const BACKEND_BASE_URL: string = 'http://localhost:4000';
+// IMPORTANT: Never use localhost in production - it causes UI freezes due to connection retries.
+export const BACKEND_BASE_URL: string = __DEV__ ? 'http://localhost:4000' : '';
 
 // When false, analytics/progress use local-only mode and do not attempt
 // to read from Supabase on screen load (they still queue writes to sync later).
