@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
+  InteractionManager,
 } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +22,8 @@ import { getTheme } from '../lib/theme';
 import { Word } from '../types';
 import { aiService } from '../services/AIService';
 import { useFocusEffect } from '../lib/reactNavigation';
+import { useAppReady } from '../lib/AppReadyContext';
+import { useCanMountTextInput } from '../lib/TextInputGate';
 
 export default function VaultScreen() {
   const router = useRouter();
@@ -29,6 +32,8 @@ export default function VaultScreen() {
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
+  const { isAppReady } = useAppReady();
+  const canMountTextInput = useCanMountTextInput();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
@@ -264,19 +269,22 @@ export default function VaultScreen() {
 
       <View style={[styles.searchContainer, isLight && styles.surfaceCard]}>
         <Search size={20} color={isLight ? '#0F766E' : '#4ED9CB'} style={styles.searchIcon} />
-        <TextInput
-          style={[styles.searchInput, isLight && { color: '#111827' }]}
-          placeholder="Search words..."
-          placeholderTextColor={isLight ? '#6B7280' : '#9CA3AF'}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          autoCorrect
-          spellCheck
-          autoCapitalize="none"
-          autoComplete="off"
-          keyboardAppearance={isLight ? 'light' : 'dark'}
-          
-        />
+        {canMountTextInput ? (
+          <TextInput
+            style={[styles.searchInput, isLight && { color: '#111827' }]}
+            placeholder="Search words..."
+            placeholderTextColor={isLight ? '#6B7280' : '#9CA3AF'}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCorrect
+            spellCheck
+            autoCapitalize="none"
+            autoComplete="off"
+            keyboardAppearance={isLight ? 'light' : 'dark'}
+          />
+        ) : (
+          <Text style={[styles.searchInput, isLight && { color: '#6B7280' }, { color: '#9CA3AF' }]}>Search words...</Text>
+        )}
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -354,7 +362,7 @@ export default function VaultScreen() {
       </ScrollView>
 
       {/* Add Word Modal */}
-      {isAddModalOpen && (
+      {isAddModalOpen && canMountTextInput && (
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={80} style={{ width: '100%', alignItems: 'center' }}>
           <View style={[styles.modalContent, isLight && styles.surfaceCard]}>
@@ -365,13 +373,11 @@ export default function VaultScreen() {
               placeholderTextColor={isLight ? '#6B7280' : '#9CA3AF'}
               value={newWord}
               onChangeText={setNewWord}
-              autoFocus
               autoCorrect
               spellCheck
               autoCapitalize="none"
               autoComplete="off"
               keyboardAppearance={isLight ? 'light' : 'dark'}
-              
             />
             <View style={{ marginBottom: 16 }}>
               <Text style={[styles.modalSectionLabel, isLight && { color: '#6B7280' }]}>Save to</Text>
@@ -450,7 +456,7 @@ export default function VaultScreen() {
       )}
 
       {/* Create Folder Modal */}
-      {showFolderCreate && (
+      {showFolderCreate && canMountTextInput && (
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={80} style={{ width: '100%', alignItems: 'center' }}>
           <View style={[styles.modalContent, isLight && styles.surfaceCard]}>
@@ -461,7 +467,6 @@ export default function VaultScreen() {
               placeholderTextColor={isLight ? '#6B7280' : '#9CA3AF'}
               value={newFolderTitle}
               onChangeText={setNewFolderTitle}
-              autoFocus
               autoCorrect
               spellCheck
               autoCapitalize="none"
@@ -512,7 +517,7 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 16,
     fontSize: 16,
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Medium',
   },
   header: {
     flexDirection: 'row',
@@ -520,36 +525,42 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    // Removed bottom divider line
   },
   headerLight: {
-    // no divider in light mode either
   },
   meaningCard: {
     backgroundColor: '#2A2A2A',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 16,
+    padding: 14,
     marginTop: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(78,217,203,0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
   },
   meaningCardLight: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.3)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
   },
-  meaningCardActive: { borderColor: '#F25E86', backgroundColor: 'rgba(242,94,134,0.15)' },
-  meaningDef: { color: '#E5E7EB', fontWeight: '700', fontFamily: 'Feather-Bold' },
-  meaningDefLight: { color: '#111827' },
-  meaningExample: { color: '#9CA3AF', marginTop: 4, fontStyle: 'italic', fontFamily: 'Feather-Bold' },
+  meaningCardActive: { borderColor: '#4ED9CB', backgroundColor: 'rgba(78, 217, 203, 0.1)' },
+  meaningDef: { color: '#FFFFFF', fontWeight: '700', fontFamily: 'Ubuntu-Bold' },
+  meaningDefLight: { color: '#1A1A1A' },
+  meaningExample: { color: '#9CA3AF', marginTop: 4, fontStyle: 'italic', fontFamily: 'Ubuntu-Medium' },
   meaningExampleLight: { color: '#6B7280' },
   title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
     fontFamily: 'Feather-Bold',
   },
-  titleLight: { color: '#111827' },
+  titleLight: { color: '#1A1A1A' },
   addButtonIcon: {
     padding: 8,
   },
@@ -558,26 +569,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: 20,
     marginVertical: 16,
-    backgroundColor: '#1F1F1F',
-    borderRadius: 12,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 16,
     paddingHorizontal: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.15)',
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
   },
   surfaceCard: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.3)',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
   },
   // Guide styles
   guideCard: {
@@ -586,41 +595,51 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 8,
     marginBottom: 6,
-    backgroundColor: '#1F1F1F',
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.15)',
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
   },
   guideCardLight: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.3)',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
   },
-  guideTitle: { color: '#E5E7EB', fontWeight: '800', fontFamily: 'Feather-Bold' },
-  guideText: { color: '#9CA3AF', marginTop: 2, fontSize: 12, fontFamily: 'Feather-Bold' },
-  guideBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: '#F25E86' },
+  guideTitle: { color: '#FFFFFF', fontWeight: '700', fontFamily: 'Ubuntu-Bold' },
+  guideText: { color: '#9CA3AF', marginTop: 2, fontSize: 12, fontFamily: 'Ubuntu-Medium' },
+  guideBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: '#F25E86',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 5,
+  },
   guideBtnLight: { backgroundColor: '#F25E86' },
-  guideBtnText: { color: '#FFFFFF', fontWeight: '800', fontFamily: 'Feather-Bold' },
+  guideBtnText: { color: '#FFFFFF', fontWeight: '700', fontFamily: 'Ubuntu-Bold' },
   searchIcon: {
     marginRight: 12,
   },
   searchInput: {
     flex: 1,
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 16,
     paddingVertical: 12,
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Medium',
   },
   content: {
     flex: 1,
@@ -634,33 +653,32 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: '700',
+    color: '#FFFFFF',
     marginTop: 16,
     marginBottom: 8,
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Bold',
   },
   emptySubtitle: {
     fontSize: 16,
     color: '#9CA3AF',
     textAlign: 'center',
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Medium',
   },
   wordsList: {
     paddingBottom: 20,
   },
   wordCard: {
-    backgroundColor: '#1F1F1F',
-    borderRadius: 12,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.15)',
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
   },
   wordHeader: {
     flexDirection: 'row',
@@ -670,10 +688,10 @@ const styles = StyleSheet.create({
   },
   wordText: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontWeight: '700',
+    color: '#FFFFFF',
     flex: 1,
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Bold',
   },
   scoreContainer: {
     flexDirection: 'row',
@@ -681,23 +699,23 @@ const styles = StyleSheet.create({
   },
   scoreText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     marginLeft: 4,
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Bold',
   },
   definitionText: {
     fontSize: 16,
     color: '#E5E7EB',
     marginBottom: 8,
     lineHeight: 22,
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Medium',
   },
   exampleText: {
     fontSize: 14,
     color: '#9CA3AF',
     fontStyle: 'italic',
     marginBottom: 12,
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Medium',
   },
   wordFooter: {
     flexDirection: 'row',
@@ -707,16 +725,16 @@ const styles = StyleSheet.create({
   moveButton: {
     marginTop: 10,
     alignSelf: 'flex-start',
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#2A2D2D',
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 8,
   },
   moveButtonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Bold',
   },
   folderChip: {
     flexDirection: 'row',
@@ -727,34 +745,42 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 16,
     marginRight: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(78,217,203,0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
   },
   folderChipLight: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.3)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
   },
   folderChipStatic: {
-    backgroundColor: '#1F1F1F',
+    backgroundColor: '#2A2D2D',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
     marginRight: 8,
   },
   folderChipActive: {
-    borderWidth: 1,
-    borderColor: '#F25E86',
-    backgroundColor: 'rgba(242,94,134,0.15)',
+    borderWidth: 2,
+    borderColor: '#4ED9CB',
+    backgroundColor: 'rgba(78, 217, 203, 0.15)',
   },
   folderChipText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Bold',
   },
   folderChipTextLight: {
-    color: '#111827',
+    color: '#1A1A1A',
   },
   practiceInfo: {
     flex: 1,
@@ -762,7 +788,7 @@ const styles = StyleSheet.create({
   practiceText: {
     fontSize: 12,
     color: '#9CA3AF',
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Medium',
   },
   dateInfo: {
     flexDirection: 'row',
@@ -772,7 +798,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     marginLeft: 4,
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Medium',
   },
   modalOverlay: {
     position: 'absolute',
@@ -785,43 +811,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#1F1F1F',
-    borderRadius: 16,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 18,
     padding: 24,
     width: '90%',
     maxWidth: 400,
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.15)',
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FFFFFF',
     marginBottom: 20,
     textAlign: 'center',
     fontFamily: 'Feather-Bold',
   },
   modalInput: {
-    backgroundColor: '#2A2A2A',
-    borderRadius: 12,
+    backgroundColor: '#1E1E1E',
+    borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    color: '#fff',
+    paddingVertical: 14,
+    color: '#FFFFFF',
     fontSize: 16,
     marginBottom: 20,
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Medium',
+    borderWidth: 2,
+    borderColor: 'rgba(78, 217, 203, 0.25)',
   },
   modalSectionLabel: {
     color: '#9CA3AF',
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.3,
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Bold',
   },
   modalButtons: {
     flexDirection: 'row',
@@ -829,48 +856,59 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: '#2A2A2A',
-    borderWidth: 1,
-    borderColor: 'rgba(78,217,203,0.2)',
+    backgroundColor: '#1E1E1E',
+    borderWidth: 2,
+    borderColor: 'rgba(78, 217, 203, 0.35)',
   },
   cancelButtonLight: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.3)',
+    borderWidth: 2,
+    borderColor: 'rgba(78, 217, 203, 0.4)',
   },
   cancelButtonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
-    fontFamily: 'Feather-Bold',
+    fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
   },
   cancelButtonTextLight: {
     color: '#374151',
   },
   addButton: {
     backgroundColor: '#F25E86',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 5,
   },
   addButtonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
-    fontFamily: 'Feather-Bold',
+    fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
   },
   newFolderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#1F1F1F',
-    borderRadius: 12,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 16,
     padding: 14,
     marginBottom: 8,
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
   },
   folderIcon: {
     width: 40,
@@ -881,36 +919,35 @@ const styles = StyleSheet.create({
     height: 36,
   },
   newFolderText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 18,
-    fontWeight: '600',
-    fontFamily: 'Feather-Bold',
+    fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
   },
   folderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1F1F1F',
-    borderRadius: 12,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 16,
     padding: 14,
-    marginBottom: 8,
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.15)',
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    marginBottom: 10,
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
   },
   folderTitle: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 18,
-    fontWeight: '600',
-    fontFamily: 'Feather-Bold',
+    fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
   },
   folderSubtitle: {
     color: '#9CA3AF',
     fontSize: 13,
     marginTop: 2,
-    fontFamily: 'Feather-Bold',
+    fontFamily: 'Ubuntu-Medium',
   },
 });

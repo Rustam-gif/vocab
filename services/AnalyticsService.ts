@@ -68,35 +68,26 @@ class AnalyticsService {
     } catch (e) {
       console.warn('Analytics: failed to write local cache', e);
     }
-    if (user && REMOTE_SYNC) {
-      try {
-        await supabase.auth.updateUser({ data: { analytics: this.results } });
-      } catch (e) {
-        // Ignore; keep local copy
-        console.warn('Analytics: failed to sync to remote, kept local');
-      }
-    }
+    // NOTE: Removed remote sync to user_metadata - it bloats the JWT token
+    // Analytics are stored locally only. Use a separate table for server-side analytics.
     this.inited = true;
     this.initInFlight = false;
   }
 
   private async saveResults(force = false) {
     try {
-      if (!force) {
-        // Do not overwrite non-empty local history with empty results by accident
+      // Optimization: Skip expensive read if we have results in memory (most common case)
+      // Only check storage when results array is empty to prevent accidental data loss
+      if (!force && this.results.length === 0) {
         const existingRaw = await AsyncStorage.getItem(ANALYTICS_KEY);
-        const existing: ExerciseResult[] = existingRaw ? this.normalize(JSON.parse(existingRaw)) : [];
-        if (existing.length > 0 && this.results.length === 0) {
+        if (existingRaw) {
+          // Don't overwrite non-empty local history with empty results
           console.warn('Analytics: skipped writing empty history over existing data');
           return;
         }
       }
       await AsyncStorage.setItem(ANALYTICS_KEY, JSON.stringify(this.results));
-      // Also persist to Supabase per-account storage when logged in
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.auth.updateUser({ data: { analytics: this.results } });
-      }
+      // NOTE: Analytics stored locally only - not in user_metadata (bloats JWT token)
     } catch (error) {
       // Network can be unavailable (simulators/offline). Log as warn to avoid dev overlay.
       console.warn('Analytics: save skipped (offline):', error);

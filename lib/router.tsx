@@ -2,11 +2,19 @@ import React, { useEffect } from 'react';
 import { useAppStore } from './store';
 import { getTheme } from './theme';
 import PreloadService from '../services/PreloadService';
-import { DeviceEventEmitter } from 'react-native';
+import { DeviceEventEmitter, Keyboard, Platform } from 'react-native';
 import LimitModal from './LimitModal';
 import { supabase } from './supabase';
 import { User } from 'lucide-react-native';
 import { engagementTrackingService } from '../services/EngagementTrackingService';
+
+// CRITICAL: Dismiss keyboard before route changes to prevent iOS UIEmojiSearchOperations deadlock
+// This ensures any active keyboard session is properly released before components unmount
+const dismissKeyboardBeforeNavigation = () => {
+  if (Platform.OS === 'ios') {
+    Keyboard.dismiss();
+  }
+};
 
 // Helper to map Supabase user to app user format
 const mapSupabaseUser = (user: any, progress?: any) => {
@@ -114,9 +122,17 @@ export function useRouter(): Router {
   const { stack, setStack } = ctx;
   return React.useMemo(
     () => ({
-      push: (p: string | Route) => setStack(s => [...s, normalize(p)]),
-      replace: (p: string | Route) => setStack(s => [...s.slice(0, -1), normalize(p)]),
-      back: () =>
+      push: (p: string | Route) => {
+        // CRITICAL: Dismiss keyboard before navigation to prevent iOS UIEmojiSearchOperations deadlock
+        dismissKeyboardBeforeNavigation();
+        setStack(s => [...s, normalize(p)]);
+      },
+      replace: (p: string | Route) => {
+        dismissKeyboardBeforeNavigation();
+        setStack(s => [...s.slice(0, -1), normalize(p)]);
+      },
+      back: () => {
+        dismissKeyboardBeforeNavigation();
         setStack(s => {
           if (s.length <= 1) return s;
           const prev = s[s.length - 2];
@@ -128,7 +144,8 @@ export function useRouter(): Router {
           }
           // Normal back: pop one route
           return s.slice(0, -1);
-        }),
+        });
+      },
     }),
     [setStack]
   );
@@ -588,6 +605,9 @@ export function RouteRenderer() {
 
   // Tab switching function that preserves state
   const switchToTab = React.useCallback((tabKey: string, defaultRoute: Route) => {
+    // CRITICAL: Dismiss keyboard before tab switch to prevent iOS UIEmojiSearchOperations deadlock
+    dismissKeyboardBeforeNavigation();
+
     const currentTabKey = currentTabRef.current;
     const currentStack = stackRef.current;
 

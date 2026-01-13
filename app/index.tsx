@@ -4,7 +4,7 @@ import { InteractionManager } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop, Pattern, Circle } from 'react-native-svg';
 import { LinearGradient } from '../lib/LinearGradient';
-import { Plus, Camera, Type, Flame, Clock, MessageSquare, XCircle, Search, Users, ShieldCheck, BookOpenCheck, Lightbulb, Globe, HeartPulse, Sparkles, Check, X } from 'lucide-react-native';
+import { Plus, Camera, Type, Flame, Clock, MessageSquare, XCircle, Search, Users, ShieldCheck, BookOpenCheck, Lightbulb, Globe, HeartPulse, Sparkles, Check, X, Lock, Crown } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
@@ -23,6 +23,7 @@ import SynonymMatch from './components/SynonymMatch';
 import { SYNONYM_PREDEFINED } from './quiz/data/synonyms-answers';
 import VaultService from '../services/VaultService';
 import { aiProxyService } from '../services/AiProxyService';
+import { SubscriptionService } from '../services/SubscriptionService';
 import { getCached, setCached } from '../lib/aiCache';
 import { supabase, SUPABASE_ANON_KEY } from '../lib/supabase';
 import type { Word as MissionWord } from '../core/dailyMissionTypes';
@@ -1716,6 +1717,23 @@ export default function HomeScreen(props?: { preview?: boolean }) {
 	  const [synonymMatchWords, setSynonymMatchWords] = useState<{ word: string; synonym: string }[]>([]);
 	  const [synonymMatchLoading, setSynonymMatchLoading] = useState(false);
 	  const synonymMatchLoadedFromVault = useRef(false);
+
+  // Premium status for gating daily articles
+  const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [showArticlePaywall, setShowArticlePaywall] = useState<boolean>(false);
+
+  // Check premium status on mount
+  useEffect(() => {
+    const checkPremium = async () => {
+      try {
+        const status = await SubscriptionService.getStatus();
+        setIsPremium(status?.active ?? false);
+      } catch {
+        setIsPremium(false);
+      }
+    };
+    checkPremium();
+  }, []);
 
   const markStoryWordsDoneForToday = useCallback(async () => {
     try {
@@ -4592,11 +4610,12 @@ EXAMPLE: [sentence in ${langName}]`
                   {carouselNews.slice(1, 3).map((item, idx) => {
                     const palette = getCardColors(item.tag, item.title, idx + 1);
                     const accentColor = theme === 'light' ? palette.light.inner[0] : palette.dark.inner[0];
+                    const isLocked = !isPremium; // Lock all except first article for free users
                     return (
                       <TouchableOpacity
                         key={`dual-${idx}`}
                         activeOpacity={0.9}
-                        onPress={() => openNewsModal(item)}
+                        onPress={() => isLocked ? setShowArticlePaywall(true) : openNewsModal(item)}
                         style={[styles.magazineDualCardWrap, {
                           shadowColor: '#000',
                           shadowOpacity: 0.08,
@@ -4618,6 +4637,15 @@ EXAMPLE: [sentence in ${langName}]`
                               source={{ uri: item.image || fallbackNewsImage }}
                               style={{ width: '100%', height: 110, borderRadius: 10 }}
                             />
+                            {/* Premium lock overlay */}
+                            {isLocked && (
+                              <View style={styles.articleLockOverlay}>
+                                <View style={styles.articleLockBadge}>
+                                  <Crown size={16} color="#FFD700" strokeWidth={2.5} />
+                                  <Text style={styles.articleLockText}>PRO</Text>
+                                </View>
+                              </View>
+                            )}
                           </View>
                           <View style={styles.magazineDualContent}>
                             <View style={[styles.magazineSmallTag, { backgroundColor: getTagColor(item.tag).bg }]}>
@@ -4631,6 +4659,7 @@ EXAMPLE: [sentence in ${langName}]`
                                 { color: theme === 'light' ? '#111827' : '#F3F4F6' },
                                 newsFontScale === 2 && { fontSize: 15 },
                                 newsFontScale === 0 && { fontSize: 12 },
+                                isLocked && { opacity: 0.6 },
                               ]}
                               numberOfLines={2}
                             >
@@ -4655,11 +4684,12 @@ EXAMPLE: [sentence in ${langName}]`
                   {carouselNews.slice(3, 8).map((item, idx) => {
                     const palette = getCardColors(item.tag, item.title, idx + 3);
                     const accentColor = theme === 'light' ? palette.light.inner[0] : palette.dark.inner[0];
+                    const isLocked = !isPremium; // Lock all except first article for free users
                     return (
                       <TouchableOpacity
                         key={`list-${idx}`}
                         activeOpacity={0.9}
-                        onPress={() => openNewsModal(item)}
+                        onPress={() => isLocked ? setShowArticlePaywall(true) : openNewsModal(item)}
                         style={{
                           marginBottom: 10,
                           shadowColor: '#000',
@@ -4688,6 +4718,7 @@ EXAMPLE: [sentence in ${langName}]`
                                 { color: theme === 'light' ? '#111827' : '#F3F4F6' },
                                 newsFontScale === 2 && { fontSize: 16 },
                                 newsFontScale === 0 && { fontSize: 13 },
+                                isLocked && { opacity: 0.6 },
                               ]}
                               numberOfLines={2}
                             >
@@ -4703,11 +4734,21 @@ EXAMPLE: [sentence in ${langName}]`
                               </View>
                             )}
                           </View>
-                          {/* Image on the right */}
-                          <Image
-                            source={{ uri: item.image || fallbackNewsImage }}
-                            style={styles.magazineListImage}
-                          />
+                          {/* Image on the right with lock overlay */}
+                          <View style={{ position: 'relative' }}>
+                            <Image
+                              source={{ uri: item.image || fallbackNewsImage }}
+                              style={styles.magazineListImage}
+                            />
+                            {isLocked && (
+                              <View style={styles.articleListLockOverlay}>
+                                <View style={styles.articleLockBadge}>
+                                  <Crown size={14} color="#FFD700" strokeWidth={2.5} />
+                                  <Text style={styles.articleLockText}>PRO</Text>
+                                </View>
+                              </View>
+                            )}
+                          </View>
                         </View>
                       </TouchableOpacity>
                     );
@@ -6022,6 +6063,81 @@ EXAMPLE: [sentence in ${langName}]`
         primaryText="Rate now"
         secondaryText="Not now"
       />
+
+      {/* Premium Articles Paywall Modal */}
+      <Modal
+        visible={showArticlePaywall}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowArticlePaywall(false)}
+      >
+        <View style={styles.articlePaywallOverlay}>
+          <View style={[styles.articlePaywallCard, theme === 'light' && styles.articlePaywallCardLight]}>
+            {/* Close button */}
+            <TouchableOpacity
+              style={styles.articlePaywallClose}
+              onPress={() => setShowArticlePaywall(false)}
+            >
+              <Text style={styles.articlePaywallCloseText}>✕</Text>
+            </TouchableOpacity>
+
+            {/* Crown icon */}
+            <View style={styles.articlePaywallCrownContainer}>
+              <Crown size={48} color="#FFD700" strokeWidth={2} />
+            </View>
+
+            {/* Title */}
+            <Text style={[styles.articlePaywallTitle, theme === 'light' && styles.articlePaywallTitleLight]}>
+              Unlock All Articles
+            </Text>
+
+            {/* Subtitle */}
+            <Text style={[styles.articlePaywallSubtitle, theme === 'light' && styles.articlePaywallSubtitleLight]}>
+              Get unlimited access to all daily articles and expand your vocabulary with Vocadoo Premium
+            </Text>
+
+            {/* Features list */}
+            <View style={styles.articlePaywallFeatures}>
+              <View style={styles.articlePaywallFeatureRow}>
+                <Check size={18} color="#4ED9CB" />
+                <Text style={[styles.articlePaywallFeatureText, theme === 'light' && styles.articlePaywallFeatureTextLight]}>
+                  Unlimited daily articles
+                </Text>
+              </View>
+              <View style={styles.articlePaywallFeatureRow}>
+                <Check size={18} color="#4ED9CB" />
+                <Text style={[styles.articlePaywallFeatureText, theme === 'light' && styles.articlePaywallFeatureTextLight]}>
+                  All vocabulary lessons
+                </Text>
+              </View>
+              <View style={styles.articlePaywallFeatureRow}>
+                <Check size={18} color="#4ED9CB" />
+                <Text style={[styles.articlePaywallFeatureText, theme === 'light' && styles.articlePaywallFeatureTextLight]}>
+                  AI-powered stories
+                </Text>
+              </View>
+            </View>
+
+            {/* CTA Button */}
+            <TouchableOpacity
+              style={styles.articlePaywallCta}
+              onPress={() => {
+                setShowArticlePaywall(false);
+                router.push('/profile?paywall=1');
+              }}
+            >
+              <Text style={styles.articlePaywallCtaText}>Upgrade to Premium</Text>
+            </TouchableOpacity>
+
+            {/* Maybe later */}
+            <TouchableOpacity onPress={() => setShowArticlePaywall(false)}>
+              <Text style={[styles.articlePaywallMaybeLater, theme === 'light' && styles.articlePaywallMaybeLaterLight]}>
+                Maybe later
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -6097,23 +6213,22 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     padding: 16,
     borderRadius: 16,
-    backgroundColor: '#1F1F1F',
-    borderWidth: 3,
-    borderColor: '#1A1A1A',
-    shadowColor: '#000',
-    shadowOpacity: 0.4,
-    shadowRadius: 0,
-    shadowOffset: { width: 2, height: 3 },
-    elevation: 5,
+    backgroundColor: '#2A2A2A',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
   },
   storyWordsCardLight: {
     backgroundColor: '#FFFFFF',
-    borderColor: '#1A1A1A',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 0,
-    shadowOffset: { width: 2, height: 3 },
-    elevation: 4,
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
   },
   storyViewedLabel: {
     fontSize: 12,
@@ -6127,26 +6242,25 @@ const styles = StyleSheet.create({
     minWidth: 80,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: '#111827',
-    borderWidth: 1,
-    borderColor: '#374151',
+    borderRadius: 16,
+    backgroundColor: '#2A2A2A',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 5,
   },
   storyBubbleLight: {
-    backgroundColor: '#F3E8FF',
-    borderColor: '#DDD6FE',
-    shadowColor: '#4B5563',
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
   },
   storyBubbleText: {
     color: '#F9FAFB',
@@ -6162,16 +6276,23 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: '#111827',
+    borderRadius: 16,
+    backgroundColor: '#2A2A2A',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
   },
   storyDetailCardLight: {
     backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 9,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
   },
   storyDetailWord: {
     fontSize: 17,
@@ -6578,16 +6699,15 @@ const styles = StyleSheet.create({
   },
   storyWordsCta: {
     backgroundColor: '#F25E86',
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 32,
-    borderRadius: 20,
-    borderWidth: 3,
-    borderColor: '#1A1A1A',
-    shadowColor: '#000',
-    shadowOpacity: 0.5,
-    shadowRadius: 0,
-    shadowOffset: { width: 2, height: 3 },
-    elevation: 5,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(242,94,134,0.3)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(242,94,134,0.5)',
+    borderRightColor: 'rgba(242,94,134,0.4)',
   },
   storyWordsCtaText: {
     color: '#FFFFFF',
@@ -7619,5 +7739,167 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'Ubuntu-Bold',
   },
-
+  // Article Premium Lock Overlay Styles
+  articleLockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  articleListLockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  articleLockBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(30,30,30,0.9)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFD700',
+  },
+  articleLockText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFD700',
+    fontFamily: 'Feather-Bold',
+    letterSpacing: 0.5,
+  },
+  // Article Paywall Modal Styles
+  articlePaywallOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  articlePaywallCard: {
+    backgroundColor: '#1E1E1E',
+    borderRadius: 24,
+    padding: 28,
+    width: '100%',
+    maxWidth: 340,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,215,0,0.2)',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  articlePaywallCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(255,215,0,0.3)',
+  },
+  articlePaywallClose: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  articlePaywallCloseText: {
+    color: '#9CA3AF',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  articlePaywallCrownContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,215,0,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(255,215,0,0.3)',
+  },
+  articlePaywallTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    fontFamily: 'Feather-Bold',
+    textAlign: 'center',
+  },
+  articlePaywallTitleLight: {
+    color: '#111827',
+  },
+  articlePaywallSubtitle: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+    fontFamily: 'Feather-Bold',
+  },
+  articlePaywallSubtitleLight: {
+    color: '#6B7280',
+  },
+  articlePaywallFeatures: {
+    width: '100%',
+    marginBottom: 24,
+  },
+  articlePaywallFeatureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
+  },
+  articlePaywallFeatureText: {
+    fontSize: 14,
+    color: '#E5E7EB',
+    fontFamily: 'Feather-Bold',
+  },
+  articlePaywallFeatureTextLight: {
+    color: '#374151',
+  },
+  articlePaywallCta: {
+    width: '100%',
+    backgroundColor: '#FFD700',
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#B8860B',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+  },
+  articlePaywallCtaText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#5D4E0A',
+    fontFamily: 'Feather-Bold',
+  },
+  articlePaywallMaybeLater: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontFamily: 'Feather-Bold',
+    marginTop: 4,
+  },
+  articlePaywallMaybeLaterLight: {
+    color: '#9CA3AF',
+  },
 });

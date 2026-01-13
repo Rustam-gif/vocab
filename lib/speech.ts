@@ -54,8 +54,12 @@ export async function speak(text: string, options: SpeakOptions = {}) {
         // Use local shim to avoid react-native-sound static getDirectories crash
         const Sound = require('./rnsound').default || require('./rnsound');
         if (RNFS?.CachesDirectoryPath && Sound) {
-          // Avoid calling setCategory (RN 0.81 strict arg checks on NSNumber cause redbox
-          // in react-native-sound when nullability isn't annotated). iOS plays fine without it.
+          // Enable playback even when silent switch is on
+          try {
+            if (typeof Sound.enableInSilenceMode === 'function') {
+              Sound.enableInSilenceMode(true);
+            }
+          } catch {}
           console.log('[speech] Starting TTS synthesis for:', text);
           const { data } = await ttsService.synthesizeToArrayBuffer(text, { voice, rate, format: 'mp3' });
           console.log('[speech] TTS synthesis complete, data size:', data.byteLength);
@@ -224,6 +228,20 @@ async function tryNativeTTS(text: string, options: SpeakOptions): Promise<boolea
     if (!TTS || typeof TTS.speak !== 'function') {
       console.log('[speech] react-native-tts not available');
       return false;
+    }
+
+    // Initialize TTS settings on iOS
+    try {
+      // Ignore silent switch so TTS plays even in silent mode
+      if (typeof TTS.setIgnoreSilentSwitch === 'function') {
+        await TTS.setIgnoreSilentSwitch('ignore');
+      }
+      // Set default engine for iOS
+      if (typeof TTS.setDefaultVoice === 'function') {
+        // Use default system voice
+      }
+    } catch (initErr) {
+      console.warn('[speech] TTS init warning:', initErr);
     }
 
     try { await TTS.stop(); } catch {}

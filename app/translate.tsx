@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Platform, KeyboardAvoidingView, DeviceEventEmitter } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Platform, KeyboardAvoidingView, DeviceEventEmitter, InteractionManager } from 'react-native';
 // Removed keyboard accessory to let iOS render native keyboard edge
 import { useRouter } from 'expo-router';
 import { useAppStore } from '../lib/store';
@@ -11,6 +11,8 @@ import { LANGUAGES_WITH_FLAGS } from '../lib/languages';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import UsageLimitsService from '../services/UsageLimitsService';
 import LimitModal from '../lib/LimitModal';
+import { useAppReady } from '../lib/AppReadyContext';
+import { useCanMountTextInput } from '../lib/TextInputGate';
 
 type HistoryItem = { id?: string; word: string; lang: string; translation: string; saved: boolean; when: number };
 const HISTORY_KEY = '@engniter.translate.history.v1';
@@ -21,6 +23,8 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
+  const { isAppReady, whenReady } = useAppReady();
+  const canMountTextInput = useCanMountTextInput();
 
   const addWord = useAppStore(s => s.addWord);
   const getFolders = useAppStore(s => s.getFolders);
@@ -88,13 +92,9 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
     })();
   }, []);
 
-  // Focus language search when modal opens
+  // Focus language search when modal opens (safely)
   useEffect(() => {
-    if (isPreview) return;
-    if (showLangModal) {
-      const id = setTimeout(() => langSearchRef.current?.focus(), 80);
-      return () => clearTimeout(id);
-    }
+    // NO automatic focus - user must tap to focus (iOS keyboard safety)
   }, [showLangModal]);
 
 
@@ -184,18 +184,24 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
         {/* Input area */}
         <View style={[styles.card, isLight && styles.cardLight]}>
           <View style={styles.row}>
-            <TextInput
-              style={[styles.input, isLight && styles.inputLight]}
-              placeholder={reverse ? `Type a word in ${langs.find(l => l.code === lang)?.name || lang.toUpperCase()}…` : 'Type a word in English…'}
-              placeholderTextColor={isLight ? '#9CA3AF' : '#667'}
-              value={word}
-              onChangeText={setWord}
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              keyboardAppearance={isLight ? 'light' : 'dark'}
-              editable={!isPreview}
-            />
+            {canMountTextInput ? (
+              <TextInput
+                style={[styles.input, isLight && styles.inputLight]}
+                placeholder={reverse ? `Type a word in ${langs.find(l => l.code === lang)?.name || lang.toUpperCase()}…` : 'Type a word in English…'}
+                placeholderTextColor={isLight ? '#9CA3AF' : '#667'}
+                value={word}
+                onChangeText={setWord}
+                autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
+                keyboardAppearance={isLight ? 'light' : 'dark'}
+                editable={!isPreview}
+              />
+            ) : (
+              <Text style={[styles.input, isLight && styles.inputLight, { color: isLight ? '#9CA3AF' : '#667' }]}>
+                {reverse ? `Type a word in ${langs.find(l => l.code === lang)?.name || lang.toUpperCase()}…` : 'Type a word in English…'}
+              </Text>
+            )}
           </View>
           <View style={[styles.row, { marginTop: 8, justifyContent: 'space-between' }]}>
             <View style={[styles.row, { gap: 8 }]}>
@@ -397,7 +403,7 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
       />
 
       {/* Language picker modal */}
-      {showLangModal && (
+      {showLangModal && canMountTextInput && (
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%', alignItems: 'center' }}>
           <View style={[styles.langModalCard, isLight && styles.langModalCardLight]}>
@@ -410,7 +416,7 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
                 value={langSearch}
                 onChangeText={setLangSearch}
                 style={[styles.langSearchInput, isLight && { color: '#111827' }]}
-                autoFocus
+                autoFocus={false}
                 returnKeyType="done"
                 autoCorrect={false}
                 spellCheck={false}

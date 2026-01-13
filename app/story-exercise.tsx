@@ -18,6 +18,7 @@ import { useCallback } from 'react';
 import { ArrowLeft, Edit, Sparkles, Layers, ChevronRight, Lock } from 'lucide-react-native';
 import { generateStory, StoryLevel } from '../services/StoryGenerator';
 import { SubscriptionService } from '../services/SubscriptionService';
+import { soundService } from '../services/SoundService';
 
 const COLORS = {
   background: '#1E1E1E',
@@ -80,6 +81,7 @@ export default function StoryExerciseScreen() {
       const result = await generateStory({ words: sanitized, level, genre, tone });
       setRawStory(result.rawStory);
     setStoryWithBlanks(result.storyWithBlanks);
+    soundService.playStoryGenerated();
     setIsModalOpen(false);
   } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';

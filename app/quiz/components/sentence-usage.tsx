@@ -14,6 +14,7 @@ import {
 import { useAppStore } from '../../../lib/store';
 import { getTheme } from '../../../lib/theme';
 import { analyticsService } from '../../../services/AnalyticsService';
+import { soundService } from '../../../services/SoundService';
 import { levels } from '../data/levels';
 import AnimatedNextButton from './AnimatedNextButton';
 import { Volume2 } from 'lucide-react-native';
@@ -1623,12 +1624,14 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
     if (chosen.isCorrect) {
       setCorrectCount(prev => prev + 1);
       AccessibilityInfo.announceForAccessibility('Correct');
+      soundService.playCorrectAnswer();
     } else {
       const correctSentence = options.find(o => o.isCorrect)?.text ?? '';
       AccessibilityInfo.announceForAccessibility(`Incorrect. Correct sentence is ${correctSentence}`);
       // Lose a heart on wrong answer
       onHeartLost();
       triggerHeartLostAnimation();
+      soundService.playIncorrectAnswer();
     }
 
     setRevealed(true);
@@ -1798,6 +1801,8 @@ const styles = StyleSheet.create({
     paddingLeft: 56,
     paddingRight: 24,
     height: 24,
+    overflow: 'visible',
+    zIndex: 10,
   },
   progressBarPill: {
     flex: 1,
@@ -1816,6 +1821,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    overflow: 'visible',
+    zIndex: 100,
   },
   heartEmoji: {
     fontSize: 18,

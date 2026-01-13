@@ -7,11 +7,11 @@ import {
   ScrollView,
   Alert,
   Image,
-  TextInput,
   Modal,
   ActivityIndicator,
   Linking,
   InteractionManager,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -31,6 +31,8 @@ import {
   CheckCircle2,
   ChevronRight,
   Settings as SettingsIcon,
+  Volume2,
+  VolumeX,
 } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 import { supabase, localSignOutHard } from '../lib/supabase';
@@ -39,9 +41,13 @@ import { SubscriptionService, SubscriptionProduct } from '../services/Subscripti
 import NotificationService from '../services/NotificationService';
 import { analyticsService } from '../services/AnalyticsService';
 import { ProgressService } from '../services/ProgressService';
+import { soundService } from '../services/SoundService';
 import { useAppStore } from '../lib/store';
 import { LANGUAGES_WITH_FLAGS } from '../lib/languages';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import SafeTextInput from '../lib/SafeTextInput';
+import { useCanMountTextInput } from '../lib/TextInputGate';
+import { SafeTextInputRef } from '../lib/SafeTextInput';
 
 // Avatar images (static requires so Metro bundles them). Filenames without spaces to avoid any URL encoding quirks.
 const AVATAR_OPTIONS = [
@@ -121,6 +127,8 @@ export default function ProfileScreen() {
   const [notifyEnabled, setNotifyEnabled] = useState<boolean>(false);
   const [notifyFreq, setNotifyFreq] = useState<1 | 3 | 5>(1);
   const [notifyBusy, setNotifyBusy] = useState(false);
+  // Sound effects setting
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   // Language picker state
   const [showLangModal, setShowLangModal] = useState(false);
   const [langSearch, setLangSearch] = useState('');
@@ -129,6 +137,26 @@ export default function ProfileScreen() {
   const filteredLangs = useMemo(() => langs.filter(l => (l.name + l.code).toLowerCase().includes(langSearch.toLowerCase())), [langs, langSearch]);
   const isPromo70 = (params as any)?.offer === '70';
   const redirectTo = typeof (params as any)?.redirect === 'string' ? String((params as any).redirect) : null;
+  const canMountTextInput = useCanMountTextInput();
+  const [authInputsReady, setAuthInputsReady] = useState(false);
+  const emailInputRef = useRef<SafeTextInputRef | null>(null);
+  const passwordInputRef = useRef<SafeTextInputRef | null>(null);
+  const confirmInputRef = useRef<SafeTextInputRef | null>(null);
+
+  // Clear any stale keyboard session before showing auth inputs
+  useEffect(() => {
+    if (!showEmailAuth) {
+      setAuthInputsReady(false);
+      return;
+    }
+    const t = setTimeout(() => {
+      try { Keyboard.dismiss(); } catch {}
+      setAuthInputsReady(true);
+    }, 150);
+    return () => clearTimeout(t);
+  }, [showEmailAuth]);
+
+  const canRenderAuthInputs = canMountTextInput && authInputsReady;
 
   // Ensure local avatar images are warmed up to avoid any flicker/blank
   useEffect(() => {
@@ -163,6 +191,21 @@ export default function ProfileScreen() {
   useEffect(() => {
     NotificationService.getSettings().then(s => { setNotifyEnabled(!!s.enabled); setNotifyFreq(s.freq as any); }).catch(() => {});
   }, []);
+
+  // Load sound effects setting
+  useEffect(() => {
+    AsyncStorage.getItem('@engniter.soundEnabled').then(val => {
+      setSoundEnabled(val !== '0'); // Default to true if not set
+    }).catch(() => {});
+  }, []);
+
+  // Toggle sound effects
+  const toggleSoundEffects = async () => {
+    const newValue = !soundEnabled;
+    setSoundEnabled(newValue);
+    soundService.setSoundEnabled(newValue);
+    await AsyncStorage.setItem('@engniter.soundEnabled', newValue ? '1' : '0');
+  };
 
   // Refresh subscription status whenever the screen regains focus (e.g., after sign-in/purchase)
   useFocusEffect(
@@ -522,6 +565,7 @@ export default function ProfileScreen() {
             </Text>
 
             {showEmailAuth ? (
+              canRenderAuthInputs ? (
               <View style={styles.emailAuthForm}>
                 {isSignUp && (
                   <>
@@ -566,7 +610,7 @@ export default function ProfileScreen() {
 
                     <View style={[styles.inputContainer, isLight && styles.inputContainerLight]}>
                       <UserIcon size={20} color="#4ED9CB" style={styles.inputIcon} />
-                      <TextInput
+                      <SafeTextInput
                         style={[styles.input, isLight && styles.inputLight]}
                         placeholder="Full Name"
                         placeholderTextColor={isLight ? '#9CA3AF' : '#666'}
@@ -581,58 +625,66 @@ export default function ProfileScreen() {
                   </>
                 )}
 
-                <View style={[styles.inputContainer, isLight && styles.inputContainerLight]}>
-                  <Mail size={20} color="#4ED9CB" style={styles.inputIcon} />
-                  <TextInput
-                    style={[styles.input, isLight && styles.inputLight]}
-                    placeholder="Email"
-                    placeholderTextColor={isLight ? '#9CA3AF' : '#666'}
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    spellCheck={false}
-                    autoComplete="off"
-                    keyboardAppearance={isLight ? 'light' : 'dark'}
-                  />
-                </View>
+                    <View style={[styles.inputContainer, isLight && styles.inputContainerLight]}>
+                      <Mail size={20} color="#4ED9CB" style={styles.inputIcon} />
+                      <SafeTextInput
+                        ref={emailInputRef}
+                        style={[styles.input, isLight && styles.inputLight]}
+                        placeholder="Email"
+                        placeholderTextColor={isLight ? '#9CA3AF' : '#666'}
+                        value={email}
+                        onChangeText={setEmail}
+                        keyboardType="ascii-capable"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        spellCheck={false}
+                        autoComplete="off"
+                        textContentType="none"
+                        keyboardAppearance={isLight ? 'light' : 'dark'}
+                      />
+                    </View>
 
-                <View style={[styles.inputContainer, isLight && styles.inputContainerLight]}>
-                  <Text style={styles.inputIcon}>🔒</Text>
-                  <TextInput
-                    style={[styles.input, isLight && styles.inputLight]}
-                    placeholder="Password"
-                    placeholderTextColor={isLight ? '#9CA3AF' : '#666'}
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    spellCheck={false}
-                    autoComplete="off"
-                    keyboardAppearance={isLight ? 'light' : 'dark'}
-                  />
-                </View>
+                    <View style={[styles.inputContainer, isLight && styles.inputContainerLight]}>
+                      <Text style={styles.inputIcon}>🔒</Text>
+                      <SafeTextInput
+                        ref={passwordInputRef}
+                        style={[styles.input, isLight && styles.inputLight]}
+                        placeholder="Password"
+                        placeholderTextColor={isLight ? '#9CA3AF' : '#666'}
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        spellCheck={false}
+                        autoComplete="off"
+                        keyboardType="ascii-capable"
+                        textContentType="none"
+                        keyboardAppearance={isLight ? 'light' : 'dark'}
+                      />
+                    </View>
 
-                {isSignUp && (
+                    {isSignUp && (
                   <View style={[styles.inputContainer, isLight && styles.inputContainerLight]}>
                     <Text style={styles.inputIcon}>🔒</Text>
-                    <TextInput
-                      style={[styles.input, isLight && styles.inputLight]}
-                      placeholder="Confirm Password"
-                      placeholderTextColor={isLight ? '#9CA3AF' : '#666'}
-                      value={confirmPassword}
-                      onChangeText={setConfirmPassword}
-                      secureTextEntry
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      spellCheck={false}
-                      autoComplete="off"
-                      keyboardAppearance={isLight ? 'light' : 'dark'}
-                    />
-                  </View>
-                )}
+                        <SafeTextInput
+                          ref={confirmInputRef}
+                          style={[styles.input, isLight && styles.inputLight]}
+                          placeholder="Confirm Password"
+                          placeholderTextColor={isLight ? '#9CA3AF' : '#666'}
+                          value={confirmPassword}
+                          onChangeText={setConfirmPassword}
+                          secureTextEntry
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          spellCheck={false}
+                          autoComplete="off"
+                          keyboardType="ascii-capable"
+                          textContentType="none"
+                          keyboardAppearance={isLight ? 'light' : 'dark'}
+                        />
+                      </View>
+                    )}
 
                 <TouchableOpacity
                   style={styles.signInButton}
@@ -666,6 +718,13 @@ export default function ProfileScreen() {
                   <Text style={styles.backText}>← Back to other options</Text>
                 </TouchableOpacity>
               </View>
+            ) : (
+              <View style={styles.emailAuthForm}>
+                <Text style={[styles.signInSubtitle, isLight && styles.signInSubtitleLight]}>
+                  Preparing keyboard… tap again in a moment.
+                </Text>
+              </View>
+            )
             ) : (
               <View style={styles.signInButtons}>
                 <TouchableOpacity
@@ -966,7 +1025,41 @@ export default function ProfileScreen() {
 
         {/* Practice reminders live in Settings */}
 
-        
+        {/* Sound Effects Toggle */}
+        <View style={[styles.soundToggleCard, isLight && styles.soundToggleCardLight]}>
+          <View style={styles.soundToggleRow}>
+            <View style={styles.soundToggleIconWrap}>
+              {soundEnabled ? (
+                <Volume2 size={22} color={isLight ? '#0F766E' : '#4ED9CB'} />
+              ) : (
+                <VolumeX size={22} color="#9CA3AF" />
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.soundToggleTitle, isLight && styles.soundToggleTitleLight]}>
+                Sound Effects
+              </Text>
+              <Text style={[styles.soundToggleSubtitle, isLight && styles.soundToggleSubtitleLight]}>
+                {soundEnabled ? 'Sounds are enabled' : 'Sounds are muted'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={toggleSoundEffects}
+              activeOpacity={0.8}
+              style={[
+                styles.soundToggleSwitch,
+                soundEnabled && styles.soundToggleSwitchActive,
+                isLight && styles.soundToggleSwitchLight,
+                soundEnabled && isLight && styles.soundToggleSwitchActiveLight,
+              ]}
+            >
+              <View style={[
+                styles.soundToggleKnob,
+                soundEnabled && styles.soundToggleKnobActive,
+              ]} />
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {/* Removed duplicate subscription card in signed-in view; use banner + modal paywall */}
 
@@ -1210,8 +1303,12 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: 'center',
     marginBottom: 24,
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1220,8 +1317,12 @@ const styles = StyleSheet.create({
   },
   profileCardLight: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.3)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -1281,8 +1382,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1291,8 +1396,12 @@ const styles = StyleSheet.create({
   },
   statCardLight: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.3)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -1322,8 +1431,12 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: '#1F1F1F',
     padding: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1332,8 +1445,12 @@ const styles = StyleSheet.create({
   },
   streakCardLight: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.3)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -1365,8 +1482,12 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 16,
     marginBottom: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1375,8 +1496,12 @@ const styles = StyleSheet.create({
   },
   infoCardLight: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.3)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -1392,8 +1517,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     width: '100%',
     backgroundColor: '#1A2021',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.22)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1402,7 +1531,12 @@ const styles = StyleSheet.create({
   },
   moreInfoCardLight: {
     backgroundColor: '#F4FFFD',
-    borderColor: 'rgba(78,217,203,0.4)',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -1773,5 +1907,98 @@ const styles = StyleSheet.create({
     height: 24,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+
+  // Sound toggle styles
+  soundToggleCard: {
+    backgroundColor: '#1F1F1F',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  soundToggleCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  soundToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  soundToggleIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(78,217,203,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  soundToggleTitle: {
+    color: '#E5E7EB',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  soundToggleTitleLight: {
+    color: '#111827',
+  },
+  soundToggleSubtitle: {
+    color: '#9CA3AF',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  soundToggleSubtitleLight: {
+    color: '#6B7280',
+  },
+  soundToggleSwitch: {
+    width: 52,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#374151',
+    padding: 3,
+    justifyContent: 'center',
+  },
+  soundToggleSwitchActive: {
+    backgroundColor: '#4ED9CB',
+  },
+  soundToggleSwitchLight: {
+    backgroundColor: '#D1D5DB',
+  },
+  soundToggleSwitchActiveLight: {
+    backgroundColor: '#0F766E',
+  },
+  soundToggleKnob: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  soundToggleKnobActive: {
+    alignSelf: 'flex-end',
   },
 });

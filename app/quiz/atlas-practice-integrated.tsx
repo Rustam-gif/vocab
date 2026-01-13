@@ -23,6 +23,7 @@ import { getTheme } from '../../lib/theme';
 import { analyticsService } from '../../services/AnalyticsService';
 import { SetProgressService } from '../../services/SetProgressService';
 import { engagementTrackingService } from '../../services/EngagementTrackingService';
+import { soundService } from '../../services/SoundService';
 
 const ACCENT = '#F8B070';
 
@@ -176,6 +177,9 @@ export default function AtlasPracticeIntegrated() {
   };
 
   const navigateToResults = (finalCorrect: number, finalQuestions: number) => {
+    // Play set completion sound
+    soundService.playSetCompletion();
+
     // Persist completion + score for the set so Learn shows "Review" with score
     // Convert hearts to points (each heart = 20 points)
     const points = hearts * 20;
@@ -394,24 +398,24 @@ export default function AtlasPracticeIntegrated() {
     const phase = phases[currentPhase];
     if (!phase) return null;
 
-    const introData: Record<string, { icon: string; title: string; description: string }> = {
+    const introData: Record<string, { lottieSource: any; title: string; description: string }> = {
       mcq: {
-        icon: '🎯',
+        lottieSource: require('./../../assets/lottie/learn/intro.lottie'),
         title: 'Multiple Choice',
         description: 'Pick the correct definition for each word',
       },
       synonym: {
-        icon: '🔗',
+        lottieSource: require('./../../assets/lottie/learn/Monkey.lottie'),
         title: 'Synonyms',
         description: 'Match each word with its synonym',
       },
       usage: {
-        icon: '✍️',
+        lottieSource: require('./../../assets/lottie/learn/Chameleon.lottie'),
         title: 'Natural Usage',
         description: 'Complete sentences using the right word',
       },
       letters: {
-        icon: '🔤',
+        lottieSource: require('./../../assets/lottie/learn/Cat_playing.lottie'),
         title: 'Spelling',
         description: 'Type the missing letters to spell each word',
       },
@@ -466,7 +470,7 @@ export default function AtlasPracticeIntegrated() {
 
 // Animated Exercise Intro Screen
 type ExerciseIntroScreenProps = {
-  introContent: { icon: string; title: string; description: string } | null;
+  introContent: { lottieSource: any; title: string; description: string } | null;
   hearts: number;
   phaseIndex: number;
   totalPhases: number;
@@ -509,6 +513,9 @@ function ExerciseIntroScreen({ introContent, hearts, phaseIndex, totalPhases, is
   };
 
   useEffect(() => {
+    // Play exercise intro sound
+    soundService.playExerciseIntro();
+
     // Reset animations
     containerScale.setValue(0.8);
     containerOpacity.setValue(0);
@@ -629,17 +636,22 @@ function ExerciseIntroScreen({ introContent, hearts, phaseIndex, totalPhases, is
         </View>
       </Animated.View>
 
-      {/* Icon */}
-      <Animated.Text
+      {/* Lottie Animation */}
+      <Animated.View
         style={[
-          styles.exerciseIntroIcon,
+          styles.exerciseIntroLottieWrap,
           {
             transform: [{ scale: iconScale }],
           },
         ]}
       >
-        {introContent.icon}
-      </Animated.Text>
+        <LottieView
+          source={introContent.lottieSource}
+          autoPlay
+          loop
+          style={styles.exerciseIntroLottie}
+        />
+      </Animated.View>
 
       {/* Title */}
       <Animated.Text
@@ -893,9 +905,16 @@ const styles = StyleSheet.create({
   exerciseIntroHeart: {
     fontSize: 18,
   },
-  exerciseIntroIcon: {
-    fontSize: 72,
+  exerciseIntroLottieWrap: {
+    width: 160,
+    height: 160,
     marginBottom: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exerciseIntroLottie: {
+    width: 160,
+    height: 160,
   },
   exerciseIntroTitle: {
     fontSize: 32,

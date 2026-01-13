@@ -58,6 +58,8 @@ const WEAK_WORD_THRESHOLD = 10;
 class VaultService {
   private words: Word[] = [];
   private folders: { id: string; title: string; createdAt: string }[] = [];
+  private saveTimeout: ReturnType<typeof setTimeout> | null = null;
+  private savePromise: Promise<void> | null = null;
 
   // Default folders
   static readonly DEFAULT_FOLDER_SETS_ID = 'folder-sets-default';
@@ -131,12 +133,32 @@ class VaultService {
   }
 
   private async saveWords() {
-    try {
-      const payload = { words: this.words, folders: this.folders };
-      await AsyncStorage.setItem(VAULT_KEY, JSON.stringify(payload));
-    } catch (error) {
-      console.error('Failed to save words:', error);
+    // Debounce rapid saves to prevent blocking UI during rapid answer submissions
+    // If a save is already scheduled, skip - data will be saved soon
+    if (this.saveTimeout) {
+      return;
     }
+    // If a save is in progress, schedule another after it completes
+    if (this.savePromise) {
+      this.saveTimeout = setTimeout(() => {
+        this.saveTimeout = null;
+        this.saveWords().catch(() => {});
+      }, 100);
+      return;
+    }
+
+    this.savePromise = (async () => {
+      try {
+        const payload = { words: this.words, folders: this.folders };
+        await AsyncStorage.setItem(VAULT_KEY, JSON.stringify(payload));
+      } catch (error) {
+        console.error('Failed to save words:', error);
+      } finally {
+        this.savePromise = null;
+      }
+    })();
+
+    await this.savePromise;
   }
 
   private ensureDefaultFolders(): boolean {

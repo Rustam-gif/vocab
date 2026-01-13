@@ -47,14 +47,14 @@ import './lib/polyfills';
     }
   }) as any;
 })();
-import { AppRegistry, Text, TextInput } from 'react-native';
+import { AppRegistry, Text } from 'react-native';
 
 // Global default font faces using local assets/fonts (linked via react-native.config.js)
 Text.defaultProps = Text.defaultProps || {};
 Text.defaultProps.style = [Text.defaultProps.style, { fontFamily: 'Ubuntu-Regular' }];
 
-TextInput.defaultProps = TextInput.defaultProps || {};
-TextInput.defaultProps.style = [TextInput.defaultProps.style, { fontFamily: 'Ubuntu-Regular' }];
+// NOTE: Do NOT mutate TextInput.defaultProps globally - it corrupts iOS keyboard sessions
+// TextInput font/styles must be set per-component
 
 import App from './App';
 

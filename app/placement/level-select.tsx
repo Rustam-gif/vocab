@@ -22,27 +22,9 @@ type LevelOption = {
 };
 
 const levelOptions: LevelOption[] = [
-  {
-    id: 'beginner',
-    title: 'Beginner',
-    cefr: 'A1-A2',
-    description: 'Just starting to learn English',
-    emoji: '🌱',
-  },
-  {
-    id: 'intermediate',
-    title: 'Intermediate',
-    cefr: 'B1-B2',
-    description: 'Can hold everyday conversations',
-    emoji: '📚',
-  },
-  {
-    id: 'advanced',
-    title: 'Advanced',
-    cefr: 'C1+',
-    description: 'Fluent in most situations',
-    emoji: '🎯',
-  },
+  { id: 'beginner', title: 'Beginner', cefr: 'A1-A2', description: 'Just starting to learn English', emoji: '🌱' },
+  { id: 'intermediate', title: 'Intermediate', cefr: 'B1-B2', description: 'Can hold everyday conversations', emoji: '📚' },
+  { id: 'advanced', title: 'Advanced', cefr: 'C1+', description: 'Fluent in most situations', emoji: '🎯' },
 ];
 
 export default function PlacementLevelSelect() {
@@ -60,22 +42,11 @@ export default function PlacementLevelSelect() {
   }, []);
 
   useEffect(() => {
-    // Entry animations
     Animated.parallel([
-      Animated.timing(fadeIn, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideUp, {
-        toValue: 0,
-        duration: 500,
-        easing: Easing.out(Easing.back(1.2)),
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.timing(slideUp, { toValue: 0, duration: 500, easing: Easing.out(Easing.back(1.2)), useNativeDriver: true }),
     ]).start();
 
-    // Staggered card animations
     cardAnims.forEach((anim, index) => {
       Animated.timing(anim, {
         toValue: 1,
@@ -85,91 +56,44 @@ export default function PlacementLevelSelect() {
         useNativeDriver: true,
       }).start();
     });
-  }, []);
+  }, [cardAnims, fadeIn, slideUp]);
 
   const handleSelectLevel = (level: 'beginner' | 'intermediate' | 'advanced') => {
-    router.push({
-      pathname: '/placement/word-test',
-      params: { selectedLevel: level },
-    });
+    router.push({ pathname: '/placement/word-test', params: { selectedLevel: level } });
   };
 
   return (
     <View style={[styles.container, isLight && styles.containerLight]}>
       <SafeAreaView style={styles.safe}>
-        {/* Header */}
-        <Animated.View
-          style={[
-            styles.header,
-            { opacity: fadeIn, transform: [{ translateY: slideUp }] },
-          ]}
-        >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backBtn}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
+        <Animated.View style={[styles.header, { opacity: fadeIn, transform: [{ translateY: slideUp }] }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <ChevronLeft size={24} color={isLight ? '#111827' : '#E5E7EB'} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, isLight && styles.headerTitleLight]}>
-            What's your level?
-          </Text>
+          <Text style={[styles.headerTitle, isLight && styles.headerTitleLight]}>What's your level?</Text>
           <View style={{ width: 24 }} />
         </Animated.View>
 
-        {/* Subtitle */}
-        <Animated.Text
-          style={[
-            styles.subtitle,
-            isLight && styles.subtitleLight,
-            { opacity: fadeIn, transform: [{ translateY: slideUp }] },
-          ]}
-        >
+        <Animated.Text style={[styles.subtitle, isLight && styles.subtitleLight, { opacity: fadeIn, transform: [{ translateY: slideUp }] }]}>
           Choose the level that best describes you. We'll verify with a quick word check.
         </Animated.Text>
 
-        {/* Level Cards */}
         <View style={styles.cardsContainer}>
           {levelOptions.map((level, index) => {
-            const scale = cardAnims[index].interpolate({
-              inputRange: [0, 1],
-              outputRange: [0.8, 1],
-            });
-
+            const scale = cardAnims[index].interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] });
             return (
-              <Animated.View
-                key={level.id}
-                style={{
-                  opacity: cardAnims[index],
-                  transform: [{ scale }],
-                }}
-              >
-                <TouchableOpacity
-                  onPress={() => handleSelectLevel(level.id)}
-                  activeOpacity={0.85}
-                  style={[styles.card, isLight && styles.cardLight]}
-                >
+              <Animated.View key={level.id} style={{ opacity: cardAnims[index], transform: [{ scale }] }}>
+                <TouchableOpacity onPress={() => handleSelectLevel(level.id)} activeOpacity={0.85} style={[styles.card, isLight && styles.cardLight]}>
                   <Text style={styles.emoji}>{level.emoji}</Text>
                   <View style={styles.cardContent}>
                     <View style={styles.cardHeader}>
-                      <Text style={[styles.cardTitle, isLight && styles.cardTitleLight]}>
-                        {level.title}
-                      </Text>
+                      <Text style={[styles.cardTitle, isLight && styles.cardTitleLight]}>{level.title}</Text>
                       <View style={[styles.cefrBadge, isLight && styles.cefrBadgeLight]}>
-                        <Text style={[styles.cefrText, isLight && styles.cefrTextLight]}>
-                          {level.cefr}
-                        </Text>
+                        <Text style={[styles.cefrText, isLight && styles.cefrTextLight]}>{level.cefr}</Text>
                       </View>
                     </View>
-                    <Text style={[styles.cardDesc, isLight && styles.cardDescLight]}>
-                      {level.description}
-                    </Text>
+                    <Text style={[styles.cardDesc, isLight && styles.cardDescLight]}>{level.description}</Text>
                   </View>
-                  <ChevronLeft
-                    size={20}
-                    color={isLight ? '#9CA3AF' : '#6B7280'}
-                    style={{ transform: [{ rotate: '180deg' }] }}
-                  />
+                  <ChevronLeft size={20} color={isLight ? '#9CA3AF' : '#6B7280'} style={{ transform: [{ rotate: '180deg' }] }} />
                 </TouchableOpacity>
               </Animated.View>
             );
@@ -181,114 +105,27 @@ export default function PlacementLevelSelect() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1E1E1E',
-  },
-  containerLight: {
-    backgroundColor: '#F8F8F8',
-  },
-  safe: {
-    flex: 1,
-    padding: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  backBtn: {
-    padding: 4,
-  },
-  headerTitle: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '700',
-    fontFamily: 'Feather-Bold',
-  },
-  headerTitleLight: {
-    color: '#1A1A1A',
-  },
-  subtitle: {
-    color: '#9CA3AF',
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: 'center',
-    marginBottom: 32,
-    paddingHorizontal: 10,
-    fontFamily: 'Ubuntu-Medium',
-  },
-  subtitleLight: {
-    color: '#6B7280',
-  },
-  cardsContainer: {
-    gap: 16,
-  },
-  card: {
-    backgroundColor: '#2A2D2D',
-    borderRadius: 16,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(78, 217, 203, 0.35)',
-  },
-  cardLight: {
-    backgroundColor: '#FFFFFF',
-    borderColor: 'rgba(78, 217, 203, 0.4)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  emoji: {
-    fontSize: 36,
-    marginRight: 14,
-  },
-  cardContent: {
-    flex: 1,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 4,
-  },
-  cardTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-    fontFamily: 'Ubuntu-Bold',
-  },
-  cardTitleLight: {
-    color: '#1A1A1A',
-  },
-  cefrBadge: {
-    backgroundColor: '#4ED9CB',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  cefrBadgeLight: {
-    backgroundColor: '#4ED9CB',
-  },
-  cefrText: {
-    color: '#1A1A1A',
-    fontSize: 12,
-    fontWeight: '700',
-    fontFamily: 'Ubuntu-Bold',
-  },
-  cefrTextLight: {
-    color: '#1A1A1A',
-  },
-  cardDesc: {
-    color: '#9CA3AF',
-    fontSize: 14,
-    fontFamily: 'Ubuntu-Medium',
-  },
-  cardDescLight: {
-    color: '#6B7280',
-  },
+  container: { flex: 1, backgroundColor: '#1E1E1E' },
+  containerLight: { backgroundColor: '#F8F8F8' },
+  safe: { flex: 1, padding: 20 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: '#E5E7EB', fontFamily: 'Ubuntu-Bold' },
+  headerTitleLight: { color: '#111827' },
+  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  subtitle: { fontSize: 14, color: '#9CA3AF', marginBottom: 16, fontFamily: 'Ubuntu-Regular' },
+  subtitleLight: { color: '#4B5563' },
+  cardsContainer: { gap: 12, marginTop: 12 },
+  card: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 14, backgroundColor: '#2A2D2D', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  cardLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  emoji: { fontSize: 28, marginRight: 12 },
+  cardContent: { flex: 1, gap: 4 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  cardTitle: { fontSize: 18, fontWeight: '800', color: '#E5E7EB', fontFamily: 'Ubuntu-Bold' },
+  cardTitleLight: { color: '#111827' },
+  cefrBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  cefrBadgeLight: { backgroundColor: '#F3F4F6', borderColor: '#E5E7EB' },
+  cefrText: { fontSize: 12, fontWeight: '700', color: '#E5E7EB', fontFamily: 'Ubuntu-Bold' },
+  cefrTextLight: { color: '#111827' },
+  cardDesc: { fontSize: 13, color: '#9CA3AF', fontFamily: 'Ubuntu-Regular' },
+  cardDescLight: { color: '#4B5563' },
 });

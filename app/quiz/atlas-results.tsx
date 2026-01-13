@@ -1,7 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { BookOpen } from 'lucide-react-native';
 import { ProgressService } from '../../services/ProgressService';
 import { useAppStore } from '../../lib/store';
 import { levels } from './data/levels';
@@ -158,47 +157,6 @@ export default function AtlasResults() {
     }
   };
 
-  const resolveWordsForSet = useCallback(() => {
-    if (!levelId || !setId) return [] as any[];
-    const level = levels.find(l => l.id === levelId);
-    if (!level) return [] as any[];
-    const set = level.sets.find(s => String(s.id) === String(setId));
-    if (set?.words?.length) return set.words;
-
-    if (!/^quiz-\d+$/.test(String(setId))) return [] as any[];
-    const baseSets = level.sets.filter(s => {
-      const n = Number(s.id);
-      const dropFirstTen = level.id === 'upper-intermediate' ? (isNaN(n) || n > 10) : true;
-      return dropFirstTen && (s as any).type !== 'quiz';
-    });
-    const groupIndex = Math.max(1, parseInt(String(setId).split('-')[1], 10));
-    const start = (groupIndex - 1) * 4;
-    const group = baseSets.slice(start, start + 4);
-    const words: any[] = [];
-    group.forEach(g => {
-      words.push(...(g.words || []).slice(0, 5));
-    });
-    return words;
-  }, [levelId, setId]);
-
-  const handleCreateStory = () => {
-    const words = resolveWordsForSet();
-    if (!words.length) return;
-
-    const wordsToUse = Array.from(
-      new Set(
-        words
-          .map(w => (typeof w.word === 'string' ? w.word.trim() : ''))
-          .filter(Boolean)
-      )
-    );
-
-    router.push({
-      pathname: '/story/StoryExercise',
-      params: { words: wordsToUse.join(','), from: 'results' }
-    });
-  };
-
   const getSuccessMessage = () => {
     if (heartsRemaining === TOTAL_HEARTS) return 'Perfect!';
     if (heartsRemaining >= 4) return 'Excellent!';
@@ -209,16 +167,23 @@ export default function AtlasResults() {
   };
 
   const renderHearts = () => {
-    const hearts = [];
-    for (let i = 0; i < TOTAL_HEARTS; i++) {
-      const isActive = i < heartsRemaining;
-      hearts.push(
-        <Text key={i} style={[styles.heartEmoji, !isActive && styles.heartLost]}>
-          {isActive ? '❤️' : '🩶'}
-        </Text>
+    // Calculate number of animations to show based on hearts remaining
+    // 5 hearts (full) = 3 animations, 3-4 hearts = 2 animations, 1-2 hearts = 1 animation
+    const animationCount = heartsRemaining >= 5 ? 3 : heartsRemaining >= 3 ? 2 : 1;
+
+    const animations = [];
+    for (let i = 0; i < animationCount; i++) {
+      animations.push(
+        <LottieView
+          key={i}
+          source={require('../../assets/lottie/learn/heart_away.lottie')}
+          autoPlay
+          loop={false}
+          style={{ width: 64, height: 64 }}
+        />
       );
     }
-    return hearts;
+    return animations;
   };
 
   // Background gradient colors
@@ -248,7 +213,7 @@ export default function AtlasResults() {
             <LottieView
               source={require('../../assets/lottie/learn/finish.lottie')}
               autoPlay
-              loop
+              loop={false}
               style={{ width: 150, height: 150 }}
             />
           </View>
@@ -277,16 +242,6 @@ export default function AtlasResults() {
               activeOpacity={0.8}
             >
               <Text style={styles.continueButtonText}>CONTINUE</Text>
-            </TouchableOpacity>
-
-            {/* Create Story button */}
-            <TouchableOpacity
-              style={styles.storyButton}
-              onPress={handleCreateStory}
-              activeOpacity={0.8}
-            >
-              <BookOpen size={18} color="#FFFFFF" />
-              <Text style={styles.storyButtonText}>CREATE STORY</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -362,12 +317,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 12,
   },
-  heartEmoji: {
-    fontSize: 28,
-  },
-  heartLost: {
-    opacity: 0.35,
-  },
   heartsLabel: {
     fontSize: 14,
     fontWeight: '600',
@@ -407,32 +356,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: 1.5,
-    fontFamily: 'Ubuntu-Bold',
-  },
-
-  // Story button
-  storyButton: {
-    flexDirection: 'row',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 22,
-    backgroundColor: '#4ED9CB',
-    borderWidth: 3,
-    borderColor: '#1A1A1A',
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 0,
-    elevation: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  storyButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 1,
     fontFamily: 'Ubuntu-Bold',
   },
 });

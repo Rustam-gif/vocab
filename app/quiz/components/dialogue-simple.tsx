@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import AnimatedNextButton from './AnimatedNextButton';
+import { soundService } from '../../../services/SoundService';
 
 interface DialogueProps {
   setId: string;
@@ -57,10 +58,13 @@ export default function DialogueSimple({ onPhaseComplete, sharedScore, onScoreSh
     setIsAnswered(true);
     
     const isCorrect = currentDialogue.options[answerIndex].isCorrect;
-    
+
     let newScore = sharedScore;
-    if (!isCorrect) {
+    if (isCorrect) {
+      soundService.playCorrectAnswer();
+    } else {
       newScore = Math.max(0, sharedScore - 1);
+      soundService.playIncorrectAnswer();
     }
     onScoreShare(newScore);
   };

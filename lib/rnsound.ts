@@ -1,7 +1,11 @@
 import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
 
 const RNSound = NativeModules.RNSound || {};
-const eventEmitter = new NativeEventEmitter(NativeModules.RNSound);
+// Only create event emitter if native module exists to avoid simulator crash
+const eventEmitter = NativeModules.RNSound ? new NativeEventEmitter(NativeModules.RNSound) : null;
+
+// Get the main bundle path for iOS
+const MainBundlePath = RNSound.MainBundlePath || '';
 
 let nextKey = 1;
 
@@ -13,12 +17,26 @@ class Sound {
   private _loaded = false;
   private _onPlaySub: any = null;
 
-  constructor(filename: string, _basePath?: string | OnError, onError?: OnError) {
-    if (typeof _basePath === 'function') {
-      onError = _basePath;
+  constructor(filename: string, basePath?: string | OnError, onError?: OnError) {
+    if (typeof basePath === 'function') {
+      onError = basePath;
+      basePath = undefined;
     }
-    this._filename = filename;
+
+    // For iOS, prepend main bundle path if no basePath provided
+    let fullPath = filename;
+    if (Platform.OS === 'ios') {
+      if (basePath) {
+        fullPath = `${basePath}/${filename}`;
+      } else if (MainBundlePath) {
+        fullPath = `${MainBundlePath}/${filename}`;
+      }
+    }
+
+    this._filename = fullPath;
     this._key = nextKey++;
+
+    console.log(`[Sound] Loading: ${fullPath}`);
 
     const opts: any = { speed: 1, loadSync: false };
     try {
@@ -29,14 +47,20 @@ class Sound {
         (error: string | null, props?: { duration?: number; numberOfChannels?: number }) => {
           if (!error) {
             this._loaded = true;
-            this._onPlaySub = eventEmitter.addListener('onPlayChange', ({ isPlaying, playerKey }: any) => {
-              // no-op; kept for compatibility
-            });
+            console.log(`[Sound] Loaded successfully: ${filename}`);
+            if (eventEmitter) {
+              this._onPlaySub = eventEmitter.addListener('onPlayChange', ({ isPlaying, playerKey }: any) => {
+                // no-op; kept for compatibility
+              });
+            }
+          } else {
+            console.warn(`[Sound] Load error for ${filename}:`, error);
           }
           onError?.(error, props);
         }
       );
     } catch (e: any) {
+      console.warn(`[Sound] Exception loading ${filename}:`, e);
       onError?.(e?.message || String(e));
     }
   }
@@ -70,12 +94,13 @@ class Sound {
     return this;
   }
 
-  static setCategory(value: string, mixWithOthers = false) {
-    try { RNSound.setCategory(value, mixWithOthers); } catch {}
+  static setCategory(_value: string, _mixWithOthers = false) {
+    // Disabled due to native nullability crash on newer RN versions
+    // Sounds will still play, just won't override silent mode
   }
 
-  static enableInSilenceMode(enabled: boolean) {
-    try { RNSound.enableInSilenceMode(enabled); } catch {}
+  static enableInSilenceMode(_enabled: boolean) {
+    // Disabled due to native nullability crash on newer RN versions
   }
 }
 

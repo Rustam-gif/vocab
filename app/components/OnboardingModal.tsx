@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, NativeScrollEvent, NativeSyntheticEvent, Animated, ScrollView, Image, TextInput, Linking, DeviceEventEmitter } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, NativeScrollEvent, NativeSyntheticEvent, Animated, ScrollView, Image, Linking, DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LottieView from 'lottie-react-native';
 import { Check } from 'lucide-react-native';
@@ -8,6 +8,8 @@ import { useAppStore } from '../../lib/store';
 import { LANGUAGES_WITH_FLAGS } from '../../lib/languages';
 import { useRouter } from 'expo-router';
 import SubscriptionService from '../../services/SubscriptionService';
+import { useCanMountTextInput } from '../../lib/TextInputGate';
+import SafeTextInput from '../../lib/SafeTextInput';
 
 type Props = {
   visible: boolean;
@@ -21,6 +23,7 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
   const isLight = theme === 'light';
   const setTheme = useAppStore(s => s.setTheme);
   const router = useRouter();
+  const canMountTextInput = useCanMountTextInput();
   const PRACTICE_KEY = '@engniter.practice.minutes';
   const pages = useMemo(() => [
     {
@@ -348,17 +351,26 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
                       ) : null}
                       <View style={{ width: Math.min(360, width * 0.85) }}>
                         <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, marginBottom: 10 }, isLight ? { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB' } : { backgroundColor: '#2A2D2D', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }]}>
-                          <TextInput
-                            placeholder="Search language (e.g., Spanish, es)"
-                            placeholderTextColor={isLight ? '#9CA3AF' : '#6B7280'}
-                            value={langSearch}
-                            onChangeText={setLangSearch}
-                            style={[{ flex: 1, paddingVertical: 4, height: 36, fontSize: 14, fontFamily: 'Feather-Bold' }, isLight ? { color: '#111827' } : { color: '#FFFFFF' }]}
-                            autoCapitalize="none"
-                            autoCorrect={false}
-                            spellCheck={false}
-                            autoComplete="off"
-                          />
+                          {/* CRITICAL: Only mount TextInput when gate allows AND user is near this page
+                              This prevents iOS keyboard session from being created on fresh install */}
+                          {canMountTextInput && index >= 5 ? (
+                            <SafeTextInput
+                              placeholder="Search language (e.g., Spanish, es)"
+                              placeholderTextColor={isLight ? '#9CA3AF' : '#6B7280'}
+                              value={langSearch}
+                              onChangeText={setLangSearch}
+                              style={[{ flex: 1, paddingVertical: 4, height: 36, fontSize: 14, fontFamily: 'Feather-Bold' }, isLight ? { color: '#111827' } : { color: '#FFFFFF' }]}
+                              autoCapitalize="none"
+                              autoCorrect={false}
+                              spellCheck={false}
+                              autoComplete="off"
+                              keyboardAppearance={isLight ? 'light' : 'dark'}
+                            />
+                          ) : (
+                            <Text style={[{ flex: 1, paddingVertical: 4, height: 36, fontSize: 14, fontFamily: 'Feather-Bold' }, isLight ? { color: '#9CA3AF' } : { color: '#6B7280' }]}>
+                              Search language (e.g., Spanish, es)
+                            </Text>
+                          )}
                         </View>
                         <ScrollView style={{ maxHeight: 180 }} showsVerticalScrollIndicator={false}>
                           {filteredLangs.map(l => {

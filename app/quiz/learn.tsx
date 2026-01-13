@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Image, Animated, Easing, InteractionManager, Dimensions, DeviceEventEmitter, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Image, Animated, Easing, InteractionManager, Dimensions, DeviceEventEmitter, Platform, Modal } from 'react-native';
 
 // Use local haptic feedback shim (no-op since native module not available)
 import ReactNativeHapticFeedback from '../../lib/haptics';
@@ -13,12 +13,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { ProgressService } from '../../services/ProgressService';
 import { SetProgressService } from '../../services/SetProgressService';
+import { SubscriptionService } from '../../services/SubscriptionService';
 import { useAppStore } from '../../lib/store';
 import { getTheme } from '../../lib/theme';
 import TopStatusPanel from '../components/TopStatusPanel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LimitModal from '../../lib/LimitModal';
-import { Lock, Check, Star, CheckCircle, Flag, Trophy } from 'lucide-react-native';
+import { Lock, Check, Star, CheckCircle, Flag, Trophy, Crown } from 'lucide-react-native';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { LinearGradient } from '../../lib/LinearGradient';
 
@@ -67,10 +68,34 @@ export default function LearnScreen() {
   const isScrollingRef = useRef(false);
   const scrollEndTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // Premium status for gating content
+  const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [showPaywall, setShowPaywall] = useState<boolean>(false);
+
   // Ensure nav bar is visible when this screen is shown
   useEffect(() => {
     DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
   }, []);
+
+  // Check premium status on mount
+  const checkPremiumStatus = useCallback(async () => {
+    try {
+      const status = await SubscriptionService.getStatus();
+      setIsPremium(status?.active ?? false);
+    } catch {
+      setIsPremium(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkPremiumStatus();
+  }, [checkPremiumStatus]);
+
+  useFocusEffect(
+    useCallback(() => {
+      checkPremiumStatus();
+    }, [checkPremiumStatus])
+  );
 
   // Breathing animation for current level outer ring
   // Using longer duration to reduce CPU usage
@@ -283,26 +308,31 @@ export default function LearnScreen() {
         };
 
         if (UNLOCK_ALL_SETS) {
-          return { ...baseSet, locked: false } as any;
+          return { ...baseSet, locked: false, premiumLocked: false } as any;
+        }
+
+        // For free users: only the first set is available
+        if (!isPremium && index > 0) {
+          return { ...baseSet, locked: true, premiumLocked: true };
         }
 
         // First set is always unlocked
         if (index === 0) {
-          return baseSet;
+          return { ...baseSet, premiumLocked: false };
         }
 
         // After a completed quiz, only unlock the FIRST set after it (not all sets until next quiz)
         // The rest should unlock one-by-one as each set is completed
         if (lastCompletedQuizIdx >= 0 && index === lastCompletedQuizIdx + 1) {
           // This is the first set after the last completed quiz - unlock it
-          return { ...baseSet, locked: false };
+          return { ...baseSet, locked: false, premiumLocked: false };
         }
 
         // Default: check if previous set is completed
         const prevSet = withQuizzes[index - 1];
         const prevFlags = SetProgressService.getSetFlags(activeLevelId, prevSet.id);
         const prevCompleted = typeof prevFlags.completed === 'boolean' ? prevFlags.completed : !!prevSet.completed;
-        return { ...baseSet, locked: !prevCompleted };
+        return { ...baseSet, locked: !prevCompleted, premiumLocked: false };
       });
 
       const levelWithProgress = { ...level, sets: setsWithProgress };
@@ -335,7 +365,7 @@ export default function LearnScreen() {
         }, 100);
       }
     }
-  }, [activeLevelId]);
+  }, [activeLevelId, isPremium]);
 
   useEffect(() => { refreshLevel(); }, [refreshLevel]);
 
@@ -406,27 +436,38 @@ export default function LearnScreen() {
     return isPreviousLevelCompleted();
   }, [activeLevelId, isPreviousLevelCompleted]);
 
-  const handleSetPress = (set: VocabSet & { locked?: boolean }, allSets?: VocabSet[]) => {
+  const handleSetPress = (set: VocabSet & { locked?: boolean; premiumLocked?: boolean }, allSets?: VocabSet[]) => {
     if (!activeLevelId) {
       router.push('/quiz/level-select');
+      return;
+    }
+
+    // Premium-locked sets show paywall
+    if ((set as any).premiumLocked) {
+      setShowPaywall(true);
       return;
     }
 
     const isQuizSet = (set as any).type === 'quiz';
 
     // Allow locked quiz nodes to be pressed (Skip ahead feature)
-    // But only if the previous level has been completed
+    // But only if the previous level has been completed AND user is premium
     if (set.locked && !isQuizSet) {
       return;
     }
 
-    // For locked quiz sets, check if this specific quiz can skip ahead
-    if (set.locked && isQuizSet && allSets && !canQuizSkipAhead(set, allSets)) {
+    // For locked quiz sets, check if this specific quiz can skip ahead (premium only)
+    if (set.locked && isQuizSet && allSets && (!isPremium || !canQuizSkipAhead(set, allSets))) {
+      if (!isPremium) {
+        setShowPaywall(true);
+        return;
+      }
       return;
     }
 
     if (!isSignedIn) {
-      setShowSignupModal(true);
+      // Send users to Profile to sign in; avoid blocking overlays that steal touches
+      router.push('/profile?redirect=/quiz/learn');
       return;
     }
 
@@ -611,16 +652,17 @@ export default function LearnScreen() {
     );
   }
 
-  const renderNode = (set: VocabSet & { locked?: boolean }, index: number, isCurrentLevel: boolean, allSets: VocabSet[]) => {
+  const renderNode = (set: VocabSet & { locked?: boolean; premiumLocked?: boolean }, index: number, isCurrentLevel: boolean, allSets: VocabSet[]) => {
     const position = getNodePosition(index);
     const offsetX = getNodeOffset(position);
     const isLocked = set.locked;
+    const isPremiumLocked = (set as any).premiumLocked === true;
     const isCompleted = set.completed;
     const isQuiz = (set as any).type === 'quiz';
     // Only the first uncompleted, unlocked node in the CURRENT level is "current"
     const isCurrent = isCurrentLevel && index === currentSetIndex;
-    // Check if this specific quiz can skip ahead (only first incomplete quiz)
-    const quizCanSkipAhead = isQuiz && isLocked && canQuizSkipAhead(set, allSets);
+    // Check if this specific quiz can skip ahead (only first incomplete quiz) - premium only
+    const quizCanSkipAhead = isPremium && isQuiz && isLocked && canQuizSkipAhead(set, allSets);
 
     const anim = nodeAnims.current[index] || new Animated.Value(1);
     const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
@@ -658,22 +700,24 @@ export default function LearnScreen() {
           return (
             <View style={[
               styles.coinEdge,
+              // Premium locked nodes show golden edge
+              isPremiumLocked && { backgroundColor: '#B8860B' },
               // Available nodes show teal edge
-              !isLocked && !isCompleted && !isCurrent && styles.coinEdgeCompleted,
+              !isPremiumLocked && !isLocked && !isCompleted && !isCurrent && styles.coinEdgeCompleted,
               // Current node shows orange edge
-              isCurrent && styles.coinEdgeActive,
+              !isPremiumLocked && isCurrent && styles.coinEdgeActive,
               // Completed nodes show teal edge
-              isCompleted && styles.coinEdgeCompleted,
+              !isPremiumLocked && isCompleted && styles.coinEdgeCompleted,
               // Locked nodes show gray edge
-              isLocked && !isQuiz && styles.coinEdgeLocked,
-              isLocked && !isQuiz && !isLight && { backgroundColor: '#3A3A3A' },
+              !isPremiumLocked && isLocked && !isQuiz && styles.coinEdgeLocked,
+              !isPremiumLocked && isLocked && !isQuiz && !isLight && { backgroundColor: '#3A3A3A' },
               // Quiz nodes that can't skip ahead show gray
-              isQuizDisabled && styles.coinEdgeLocked,
-              isQuizDisabled && !isLight && { backgroundColor: '#3A3A3A', opacity: 0.6 },
+              !isPremiumLocked && isQuizDisabled && styles.coinEdgeLocked,
+              !isPremiumLocked && isQuizDisabled && !isLight && { backgroundColor: '#3A3A3A', opacity: 0.6 },
               // Quiz nodes get purple/pink color (only if not disabled)
-              isQuiz && !isCompleted && !isLocked && { backgroundColor: '#9333EA' },
-              isQuiz && isCompleted && { backgroundColor: '#C94A6A' },
-              quizCanSkipAhead && { backgroundColor: '#6B21A8' },
+              !isPremiumLocked && isQuiz && !isCompleted && !isLocked && { backgroundColor: '#9333EA' },
+              !isPremiumLocked && isQuiz && isCompleted && { backgroundColor: '#C94A6A' },
+              !isPremiumLocked && quizCanSkipAhead && { backgroundColor: '#6B21A8' },
             ]} />
           );
         })()}
@@ -716,38 +760,51 @@ export default function LearnScreen() {
           return (
             <TouchableOpacity
               onPress={() => handleSetPress(set, allSets)}
-              disabled={isLocked && (!isQuiz || !quizCanSkipAhead)}
+              disabled={!isPremiumLocked && isLocked && (!isQuiz || !quizCanSkipAhead)}
               activeOpacity={0.9}
               style={[
                 styles.coinFace,
+                // Premium locked nodes show golden face
+                isPremiumLocked && { backgroundColor: '#DAA520', borderColor: 'rgba(255,215,0,0.4)' },
                 // Available nodes (not locked, not completed) show as teal
-                !isLocked && !isCompleted && !isCurrent && styles.coinFaceCompleted,
+                !isPremiumLocked && !isLocked && !isCompleted && !isCurrent && styles.coinFaceCompleted,
                 // Current node shows as orange
-                isCurrent && styles.coinFaceActive,
+                !isPremiumLocked && isCurrent && styles.coinFaceActive,
                 // Completed nodes show as teal
-                isCompleted && styles.coinFaceCompleted,
+                !isPremiumLocked && isCompleted && styles.coinFaceCompleted,
                 // Locked nodes show as gray
-                isLocked && !isQuiz && styles.coinFaceLocked,
-                isLocked && !isQuiz && !isLight && { backgroundColor: '#4A4A4A', borderColor: 'rgba(255,255,255,0.1)' },
+                !isPremiumLocked && isLocked && !isQuiz && styles.coinFaceLocked,
+                !isPremiumLocked && isLocked && !isQuiz && !isLight && { backgroundColor: '#4A4A4A', borderColor: 'rgba(255,255,255,0.1)' },
                 // Quiz nodes that can't skip ahead show gray
-                isQuizDisabled && styles.coinFaceLocked,
-                isQuizDisabled && !isLight && { backgroundColor: '#4A4A4A', borderColor: 'rgba(255,255,255,0.1)', opacity: 0.6 },
+                !isPremiumLocked && isQuizDisabled && styles.coinFaceLocked,
+                !isPremiumLocked && isQuizDisabled && !isLight && { backgroundColor: '#4A4A4A', borderColor: 'rgba(255,255,255,0.1)', opacity: 0.6 },
                 // Quiz nodes get purple/pink color (only if not disabled)
-                isQuiz && !isCompleted && !isLocked && { backgroundColor: '#A855F7', borderColor: 'rgba(255,255,255,0.4)' },
-                isQuiz && isCompleted && { backgroundColor: '#F25E86' },
-                quizCanSkipAhead && { backgroundColor: '#7C3AED', borderColor: 'rgba(255,255,255,0.2)' },
+                !isPremiumLocked && isQuiz && !isCompleted && !isLocked && { backgroundColor: '#A855F7', borderColor: 'rgba(255,255,255,0.4)' },
+                !isPremiumLocked && isQuiz && isCompleted && { backgroundColor: '#F25E86' },
+                !isPremiumLocked && quizCanSkipAhead && { backgroundColor: '#7C3AED', borderColor: 'rgba(255,255,255,0.2)' },
               ]}
             >
               {/* Glossy reflection highlight */}
               <View style={styles.coinReflection} pointerEvents="none" />
-              <Image
-                source={getIconSource(set.title, (set as any).type)}
-                style={[styles.coinIcon, (isLocked || isQuizDisabled) && styles.coinIconLocked]}
-                resizeMode="contain"
-              />
+              {isPremiumLocked ? (
+                <Crown size={28} color="#FFFFFF" strokeWidth={2.5} />
+              ) : (
+                <Image
+                  source={getIconSource(set.title, (set as any).type)}
+                  style={[styles.coinIcon, (isLocked || isQuizDisabled) && styles.coinIconLocked]}
+                  resizeMode="contain"
+                />
+              )}
             </TouchableOpacity>
           );
         })()}
+
+        {/* Premium badge for locked sets */}
+        {isPremiumLocked && (
+          <View style={styles.premiumBadge}>
+            <Text style={styles.premiumBadgeText}>PRO</Text>
+          </View>
+        )}
 
       </Animated.View>
     );
@@ -761,8 +818,8 @@ export default function LearnScreen() {
     const lineColor = cached.isCompleted ? (isLight ? '#C4C4C4' : '#5A5A5A') : (isLight ? '#E5E7EB' : '#3A3A3A');
 
     return (
-      <View key={`connector-${index}`} style={styles.connectorWrapper}>
-        <Svg height={cached.height} width={SCREEN_WIDTH}>
+      <View key={`connector-${index}`} style={styles.connectorWrapper} pointerEvents="none">
+        <Svg height={cached.height} width={SCREEN_WIDTH} pointerEvents="none">
           <Path
             d={cached.pathD}
             stroke={lineColor}
@@ -918,7 +975,7 @@ export default function LearnScreen() {
     };
 
     return (
-      <View style={styles.stageGateContainer} onLayout={onStageGateLayout}>
+      <View style={styles.stageGateContainer} onLayout={onStageGateLayout} pointerEvents="box-none">
         {/* Decorative line left */}
         <View style={[styles.stageGateLine, !isUnlocked && styles.stageGateLineLocked]} />
 
@@ -1069,8 +1126,10 @@ export default function LearnScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
-          scrollEventThrottle={100}
-          removeClippedSubviews={Platform.OS === 'ios'}
+          // More frequent events keep haptics in sync without throttling the native scroll thread
+          scrollEventThrottle={16}
+          // Avoid clipping because absolute-positioned Lottie/SVG nodes flicker and can jank scroll on iOS
+          removeClippedSubviews={false}
         >
           {/* Path for current level only */}
           <View style={styles.pathContainer}>
@@ -1107,18 +1166,88 @@ export default function LearnScreen() {
         <Text style={{ color: '#fff', fontWeight: '600' }}>Test: Complete Set</Text>
       </TouchableOpacity>
 
-      <LimitModal
-        visible={showSignupModal}
-        title="Sign up required"
-        message="Create an account to use Learn and keep your progress synced."
-        onClose={() => setShowSignupModal(false)}
-        onSubscribe={() => {
-          setShowSignupModal(false);
-          router.push('/profile');
-        }}
-        primaryText="Sign up"
-        secondaryText="Not now"
-      />
+      {/* Signup modal disabled to avoid invisible overlays blocking touches */}
+
+      {/* Premium Paywall Modal */}
+      <Modal
+        visible={showPaywall}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPaywall(false)}
+      >
+        <View style={styles.paywallOverlay}>
+          <View style={[styles.paywallCard, isLight && styles.paywallCardLight]}>
+            {/* Close button */}
+            <TouchableOpacity
+              style={styles.paywallClose}
+              onPress={() => setShowPaywall(false)}
+            >
+              <Text style={styles.paywallCloseText}>✕</Text>
+            </TouchableOpacity>
+
+            {/* Crown icon */}
+            <View style={styles.paywallCrownContainer}>
+              <Crown size={48} color="#FFD700" strokeWidth={2} />
+            </View>
+
+            {/* Title */}
+            <Text style={[styles.paywallTitle, isLight && styles.paywallTitleLight]}>
+              Unlock All Lessons
+            </Text>
+
+            {/* Subtitle */}
+            <Text style={[styles.paywallSubtitle, isLight && styles.paywallSubtitleLight]}>
+              Get unlimited access to all vocabulary sets and learning features with Vocadoo Premium
+            </Text>
+
+            {/* Features list */}
+            <View style={styles.paywallFeatures}>
+              <View style={styles.paywallFeatureRow}>
+                <Check size={18} color="#4ED9CB" />
+                <Text style={[styles.paywallFeatureText, isLight && styles.paywallFeatureTextLight]}>
+                  All vocabulary lessons unlocked
+                </Text>
+              </View>
+              <View style={styles.paywallFeatureRow}>
+                <Check size={18} color="#4ED9CB" />
+                <Text style={[styles.paywallFeatureText, isLight && styles.paywallFeatureTextLight]}>
+                  Skip ahead to any quiz
+                </Text>
+              </View>
+              <View style={styles.paywallFeatureRow}>
+                <Check size={18} color="#4ED9CB" />
+                <Text style={[styles.paywallFeatureText, isLight && styles.paywallFeatureTextLight]}>
+                  All daily articles
+                </Text>
+              </View>
+              <View style={styles.paywallFeatureRow}>
+                <Check size={18} color="#4ED9CB" />
+                <Text style={[styles.paywallFeatureText, isLight && styles.paywallFeatureTextLight]}>
+                  AI-powered stories
+                </Text>
+              </View>
+            </View>
+
+            {/* CTA Button */}
+            <TouchableOpacity
+              style={styles.paywallCta}
+              onPress={() => {
+                setShowPaywall(false);
+                router.push('/profile?paywall=1');
+              }}
+            >
+              <Text style={styles.paywallCtaText}>Upgrade to Premium</Text>
+            </TouchableOpacity>
+
+            {/* Maybe later */}
+            <TouchableOpacity onPress={() => setShowPaywall(false)}>
+              <Text style={[styles.paywallMaybeLater, isLight && styles.paywallMaybeLaterLight]}>
+                Maybe later
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1297,6 +1426,29 @@ const styles = StyleSheet.create({
     opacity: 1,
     tintColor: '#888888',
     shadowOpacity: 0,
+  },
+  premiumBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#B8860B',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
+  },
+  premiumBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#5D4E0A',
+    fontFamily: 'Feather-Bold',
+    letterSpacing: 0.5,
   },
   completedBadge: {
     position: 'absolute',
@@ -1686,5 +1838,129 @@ const styles = StyleSheet.create({
     position: 'absolute',
     alignItems: 'center',
     zIndex: 5,
+    pointerEvents: 'none',
+  },
+  // Paywall Modal Styles
+  paywallOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  paywallCard: {
+    backgroundColor: '#1E1E1E',
+    borderRadius: 24,
+    padding: 28,
+    width: '100%',
+    maxWidth: 340,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,215,0,0.2)',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  paywallCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(255,215,0,0.3)',
+  },
+  paywallClose: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  paywallCloseText: {
+    color: '#9CA3AF',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  paywallCrownContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,215,0,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(255,215,0,0.3)',
+  },
+  paywallTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    fontFamily: 'Feather-Bold',
+    textAlign: 'center',
+  },
+  paywallTitleLight: {
+    color: '#111827',
+  },
+  paywallSubtitle: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+    fontFamily: 'Feather-Bold',
+  },
+  paywallSubtitleLight: {
+    color: '#6B7280',
+  },
+  paywallFeatures: {
+    width: '100%',
+    marginBottom: 24,
+  },
+  paywallFeatureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
+  },
+  paywallFeatureText: {
+    fontSize: 14,
+    color: '#E5E7EB',
+    fontFamily: 'Feather-Bold',
+  },
+  paywallFeatureTextLight: {
+    color: '#374151',
+  },
+  paywallCta: {
+    width: '100%',
+    backgroundColor: '#FFD700',
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#B8860B',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+  },
+  paywallCtaText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#5D4E0A',
+    fontFamily: 'Feather-Bold',
+  },
+  paywallMaybeLater: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontFamily: 'Feather-Bold',
+    marginTop: 4,
+  },
+  paywallMaybeLaterLight: {
+    color: '#9CA3AF',
   },
 });

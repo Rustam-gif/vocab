@@ -3,33 +3,63 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { RouterProvider, RouteRenderer } from './lib/router';
 import LottieView from 'lottie-react-native';
-import { View, StyleSheet, Platform, TextInput, AppState, AppStateStatus } from 'react-native';
+import { View, StyleSheet, Platform, TextInput, AppState, AppStateStatus, InteractionManager, Keyboard } from 'react-native';
 import { useAppStore } from './lib/store';
 import { getTheme, ThemeName } from './lib/theme';
 import { Launch } from './lib/launch';
 import NotificationService from './services/NotificationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { engagementTrackingService } from './services/EngagementTrackingService';
+import { AppReadyProvider } from './lib/AppReadyContext';
+import { TextInputGateProvider } from './lib/TextInputGate';
+import { soundService } from './services/SoundService';
+
+// CRITICAL: Workaround for iOS UIEmojiSearchOperations deadlock
+// iOS's keyboard session can become corrupted if a TextInput is destroyed during keyboard transition.
+// This can cause the UI thread to deadlock while JS remains alive.
+// We defensively dismiss the keyboard when the app becomes active to clear any stale sessions.
+if (Platform.OS === 'ios') {
+  let lastActiveTime = 0;
+  AppState.addEventListener('change', (state) => {
+    if (state === 'active') {
+      const now = Date.now();
+      // If returning from background after more than 100ms, dismiss keyboard to clear stale sessions
+      if (now - lastActiveTime > 100) {
+        Keyboard.dismiss();
+      }
+      lastActiveTime = now;
+    }
+  });
+}
 
 console.log('=== APP.TSX MODULE LOADED ===');
 
-// Set default keyboard appearance based on theme (will be updated when theme changes)
-if (TextInput.defaultProps == null) {
-  TextInput.defaultProps = {};
-}
-// Set initial default to dark (most common)
-TextInput.defaultProps.keyboardAppearance = 'dark';
+// NOTE: Do NOT mutate TextInput.defaultProps globally.
+// This corrupts iOS RTIInputSystemClient keyboard sessions, causing UI thread deadlock.
+// Apply keyboardAppearance per-component instead.
 
 export default function App() {
   const themeName = useAppStore(s => s.theme);
-
-  // Update keyboard appearance when theme changes
-  useEffect(() => {
-    if (TextInput.defaultProps) {
-      TextInput.defaultProps.keyboardAppearance = themeName === 'dark' ? 'dark' : 'light';
-    }
-  }, [themeName]);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+
+  // Extra safety: dismiss any phantom keyboard session a few seconds after launch
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    const timer = setTimeout(() => {
+      try {
+        Keyboard.dismiss();
+        console.log('=== SAFETY DISMISS AFTER LAUNCH ===');
+      } catch {}
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Initialize sound service
+  useEffect(() => {
+    soundService.initialize().catch((e) => {
+      console.warn('[App] Failed to initialize sounds:', e);
+    });
+  }, []);
 
   // Load persisted settings on startup BEFORE rendering
   useEffect(() => {
@@ -151,10 +181,12 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <RouterProvider>
-          <RouteRenderer />
-          {/* No custom keyboard accessory; use native keyboard UI */}
-          {showLaunch && (
+        <TextInputGateProvider>
+          <AppReadyProvider>
+            <RouterProvider>
+              <RouteRenderer />
+            {/* No custom keyboard accessory; use native keyboard UI */}
+            {showLaunch && (
             <View
               style={[styles.launchOverlay, themeName === 'light' && { backgroundColor: colors.background }]}
               pointerEvents="none"
@@ -184,7 +216,9 @@ export default function App() {
               />
             </View>
           )}
-        </RouterProvider>
+            </RouterProvider>
+          </AppReadyProvider>
+        </TextInputGateProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

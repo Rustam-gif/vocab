@@ -46,24 +46,39 @@ export class TTSService {
     // Prefer Supabase proxy when configured
     const proxyUrl = AI_PROXY_URL && AI_PROXY_URL.trim();
     if (proxyUrl) {
-      const res = await fetch(proxyUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          kind: 'tts',
-          voice,
-          format,
-          rate: speed,
-          input: text,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.audio) {
-        throw new Error(`TTS proxy failed (${res.status}): ${data?.error || 'no audio'}`);
+      // Add 15s timeout to prevent UI freeze on slow networks
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      try {
+        const res = await fetch(proxyUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'tts',
+            voice,
+            format,
+            rate: speed,
+            input: text,
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.audio) {
+          throw new Error(`TTS proxy failed (${res.status}): ${data?.error || 'no audio'}`);
+        }
+        const buf = base64ToArrayBuffer(String(data.audio));
+        const ct = data.contentType || `audio/${format}`;
+        return { data: buf, contentType: ct };
+      } catch (e: any) {
+        clearTimeout(timeoutId);
+        if (e?.name === 'AbortError') {
+          throw new Error('TTS request timed out');
+        }
+        throw e;
       }
-      const buf = base64ToArrayBuffer(String(data.audio));
-      const ct = data.contentType || `audio/${format}`;
-      return { data: buf, contentType: ct };
     }
 
     // Direct OpenAI fallback (requires client-side key)
@@ -80,23 +95,37 @@ export class TTSService {
       speed,
     } as const;
 
-    const res = await fetch(TTS_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
+    // Add 15s timeout to prevent UI freeze on slow networks
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new Error(`TTS request failed (${(res as any).status || 0}): ${errText}`);
+    try {
+      const res = await fetch(TTS_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(`TTS request failed (${(res as any).status || 0}): ${errText}`);
+      }
+
+      const buf = await res.arrayBuffer();
+      const ct = res.headers.get('Content-Type') || `audio/${format}`;
+      return { data: buf, contentType: ct };
+    } catch (e: any) {
+      clearTimeout(timeoutId);
+      if (e?.name === 'AbortError') {
+        throw new Error('TTS request timed out');
+      }
+      throw e;
     }
-
-    const buf = await res.arrayBuffer();
-    const ct = res.headers.get('Content-Type') || `audio/${format}`;
-    return { data: buf, contentType: ct };
   }
 }
 

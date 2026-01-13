@@ -9,8 +9,8 @@ import {
   Platform,
   UIManager,
   AccessibilityInfo,
-  InteractionManager,
   Animated,
+  Keyboard,
 } from 'react-native';
 import { getTheme } from '../../../lib/theme';
 import { Easing } from 'react-native';
@@ -18,6 +18,8 @@ import * as Haptics from '../../../lib/haptics';
 import type { TextInput as TextInputRef } from 'react-native';
 import AnimatedNextButton from './AnimatedNextButton';
 import LottieView from 'lottie-react-native';
+import { useCanMountTextInput } from '../../../lib/TextInputGate';
+import { soundService } from '../../../services/SoundService';
 
 export type MissingLettersResult = {
   isCorrect: boolean;
@@ -106,6 +108,7 @@ function pickHintPositions(letterIndices: number[]): number[] {
 export default function MissingLetters({ word, ipa, clue, onResult, onNext, theme = 'dark', wordIndex, totalWords, hearts, showUfoAnimation }: MissingLettersProps) {
   const displayWord = useMemo(() => word, [word]);
   const lettersOnly = useMemo(() => normalize(word), [word]);
+  const canMountTextInput = useCanMountTextInput();
 
   const initialSlots: Slot[] = useMemo(() => {
     const arr: Slot[] = [];
@@ -139,29 +142,37 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
   const [completed, setCompleted] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
   const inputRefs = useRef<Array<TextInputRef | null>>([]);
-  const pendingFocusRef = useRef<number | null>(null);
   const evaluationTimeout = useRef<NodeJS.Timeout | null>(null);
   const heartLostAnim = useRef(new Animated.Value(1)).current;
   const slotAnims = useRef<Animated.Value[]>([]);
 
   useEffect(() => {
+    // CRITICAL: Dismiss keyboard on exercise/word switch to release any active session
+    // This prevents iOS UI thread deadlock from orphaned keyboard sessions
+    Keyboard.dismiss();
+
+    // Reset state for new word
     setSlots(initialSlots);
     setMistakes(0);
     setCompleted(false);
     setFocused(null);
     setEvaluating(false);
-    const firstEditable = initialSlots.findIndex(slot => slot.isLetter && !slot.isHint && slot.value.trim().length === 0);
-    pendingFocusRef.current = firstEditable >= 0 ? firstEditable : null;
+
     if (evaluationTimeout.current) {
       clearTimeout(evaluationTimeout.current);
       evaluationTimeout.current = null;
     }
+
+    // NO automatic focus - user must tap to focus (iOS keyboard safety)
   }, [initialSlots]);
 
   useEffect(() => () => {
     if (evaluationTimeout.current) {
       clearTimeout(evaluationTimeout.current);
     }
+    // CRITICAL: Dismiss keyboard on unmount to release any active session
+    // This prevents dangling sessions that deadlock the UI thread
+    Keyboard.dismiss();
   }, []);
 
   // Bubble-in animation for the letter slots on each word
@@ -188,7 +199,6 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
   const handleChange = useCallback((arrayIndex: number, text: string) => {
     const nextValue = text.slice(-1).toUpperCase();
     setSlots(prev => {
-      let targetFocus: number | null = null;
       const updated = prev.map((slot, idx) => {
         if (idx !== arrayIndex) {
           return slot;
@@ -199,7 +209,10 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
         return newSlot;
       });
 
+      // Focus next empty slot - this is safe because it's user-initiated (typing)
+      // Keyboard is already visible and stable, no session transition
       if (nextValue && !updated[arrayIndex].isHint) {
+        let targetFocus: number | null = null;
         for (let j = arrayIndex + 1; j < updated.length; j += 1) {
           const candidate = updated[j];
           if (candidate.isLetter && !candidate.isHint && candidate.value.trim().length === 0) {
@@ -216,24 +229,19 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
             }
           }
         }
+        // Direct focus is safe here - keyboard already up from user typing
+        if (targetFocus !== null) {
+          const ref = inputRefs.current[targetFocus];
+          ref?.focus();
+        }
       }
 
-      pendingFocusRef.current = targetFocus;
       return updated;
     });
   }, []);
 
-  useEffect(() => {
-    const target = pendingFocusRef.current;
-    if (target != null) {
-      pendingFocusRef.current = null;
-      const ref = inputRefs.current[target];
-      if (ref) {
-        ref.focus();
-      }
-      setFocused(target);
-    }
-  }, [slots]);
+  // REMOVED: Automatic focus in useEffect causes iOS UI thread deadlock.
+  // User must tap to focus. This is the safest pattern for iOS keyboard sessions.
 
   const evaluateSlots = useCallback(() => {
     if (evaluating || completed) {
@@ -257,12 +265,16 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
       return { ...slot, status: ok ? 'correct' : 'wrong' };
     });
 
+    // CRITICAL: Dismiss keyboard BEFORE LayoutAnimation to prevent UI thread conflict
+    Keyboard.dismiss();
+
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSlots(updated);
 
     if (wrong === 0) {
       setCompleted(true);
       setEvaluating(false);
+      soundService.playCorrectAnswer();
       onResult({ isCorrect: true, mistakes, usedReveal: false });
       return;
     }
@@ -287,6 +299,7 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
         setCompleted(true);
         setEvaluating(false);
         evaluationTimeout.current = null;
+        soundService.playIncorrectAnswer();
         onResult({ isCorrect: false, mistakes: nextMistakes, usedReveal: false });
       }, 1000);
       return nextMistakes;
@@ -364,7 +377,7 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
           const translateY = v.interpolate({ inputRange: [0, 1], outputRange: [10, 0] });
           return (
             <Animated.View
-              key={i}
+              key={`${wordIndex}-${i}`}
               accessible
               accessibilityRole="text"
               accessibilityLabel={`letter ${i + 1} of ${slots.length}`}
@@ -375,27 +388,34 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
                 (focused === i && s.status === 'idle' && !s.isHint && !completed) && themeStyles.slotFocused,
               ]}
             >
-              <TextInput
-                ref={ref => {
-                  inputRefs.current[i] = ref;
-                }}
-                value={(s.isHint ? s.char : s.value).toUpperCase()}
-                editable={!locked && !evaluating && !completed}
-                selectTextOnFocus
-                onFocus={() => setFocused(i)}
-                onChangeText={(t) => handleChange(i, t)}
-                maxLength={1}
-                style={themeStyles.input}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                spellCheck={false}
-                autoComplete="off"
-                keyboardType="default"
-                keyboardAppearance={theme === 'dark' ? 'dark' : 'light'}
-                textContentType="none"
-                placeholder={s.isHint ? undefined : ''}
-                placeholderTextColor={pal.sub}
-              />
+              {canMountTextInput ? (
+                <TextInput
+                  ref={ref => {
+                    inputRefs.current[i] = ref;
+                  }}
+                  value={(s.isHint ? s.char : s.value).toUpperCase()}
+                  editable={!locked && !evaluating && !completed}
+                  selectTextOnFocus
+                  onFocus={() => setFocused(i)}
+                  onChangeText={(t) => handleChange(i, t)}
+                  maxLength={1}
+                  style={themeStyles.input}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  autoComplete="off"
+                  keyboardType="ascii-capable"
+                  keyboardAppearance={theme === 'dark' ? 'dark' : 'light'}
+                  textContentType="none"
+                  placeholder={s.isHint ? undefined : ''}
+                  placeholderTextColor={pal.sub}
+                  contextMenuHidden
+                  dataDetectorTypes="none"
+                  inputAccessoryViewID={undefined}
+                />
+              ) : (
+                <Text style={themeStyles.input}>{(s.isHint ? s.char : s.value).toUpperCase()}</Text>
+              )}
             </Animated.View>
           );
         })}
@@ -424,6 +444,8 @@ const darkStyles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
+    overflow: 'visible',
+    zIndex: 10,
   },
   progressText: {
     fontSize: 14,
@@ -439,9 +461,13 @@ const darkStyles = StyleSheet.create({
   heartsContainer: {
     flexDirection: 'row',
     gap: 2,
+    overflow: 'visible',
+    zIndex: 100,
   },
   heartIcon: {
     fontSize: 18,
+    fontWeight: '700',
+    color: '#EF4444',
   },
   deductionText: {
     position: 'absolute',
@@ -557,6 +583,8 @@ const lightStyles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
+    overflow: 'visible',
+    zIndex: 10,
   },
   progressText: {
     fontSize: 14,
@@ -572,9 +600,13 @@ const lightStyles = StyleSheet.create({
   heartsContainer: {
     flexDirection: 'row',
     gap: 2,
+    overflow: 'visible',
+    zIndex: 100,
   },
   heartIcon: {
     fontSize: 18,
+    fontWeight: '700',
+    color: '#EF4444',
   },
   deductionText: {
     position: 'absolute',

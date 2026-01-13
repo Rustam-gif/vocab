@@ -3,7 +3,7 @@ console.log('!!! _LAYOUT.TSX MODULE LOADED !!!');
 import React, { useEffect, useRef, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Text, TextInput, View, StyleSheet, InteractionManager, AppState, AppStateStatus } from 'react-native';
+import { Text, View, StyleSheet, InteractionManager, AppState, AppStateStatus } from 'react-native';
 // Fonts are bundled locally from assets/fonts and linked via react-native.config.js
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
@@ -30,18 +30,12 @@ export default function RootLayout() {
   const path = usePathname();
   const firstPathRef = useRef<string | null>(null);
 
-  // Apply a global font family across the app after fonts load
+  // Apply a global font family for Text only
+  // NOTE: Do NOT mutate TextInput.defaultProps - it corrupts iOS keyboard sessions
   useEffect(() => {
     Text.defaultProps = Text.defaultProps || {};
     Text.defaultProps.style = [Text.defaultProps.style, { fontFamily: 'Ubuntu-Regular' }];
-
-    TextInput.defaultProps = TextInput.defaultProps || {};
-    TextInput.defaultProps.style = [TextInput.defaultProps.style, { fontFamily: 'Ubuntu-Regular' }];
-    // Disable predictive text and auto-correction globally unless explicitly overridden
-    if (TextInput.defaultProps.autoCorrect === undefined) TextInput.defaultProps.autoCorrect = false as any;
-    if (TextInput.defaultProps.spellCheck === undefined) TextInput.defaultProps.spellCheck = false as any;
-    if (TextInput.defaultProps.autoCapitalize === undefined) TextInput.defaultProps.autoCapitalize = 'none' as any;
-    if (TextInput.defaultProps.autoComplete === undefined) TextInput.defaultProps.autoComplete = 'off' as any;
+    // TextInput props must be set per-component, not globally
   }, []);
 
   // Initialize services (vault, analytics, progress) once on app start

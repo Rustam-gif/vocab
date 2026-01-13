@@ -11,6 +11,7 @@ import {
 import { Vibration } from 'react-native';
 import { SENTENCE_BEST_ITEMS } from '../data/sentence-best';
 import AnimatedNextButton from './AnimatedNextButton';
+import { soundService } from '../../../services/SoundService';
 
 interface SentenceBestProps {
   setId: string;
@@ -65,6 +66,7 @@ export default function SentenceBestComponent({ onPhaseComplete }: SentenceBestP
     if (isCorrect) {
       setScore(prev => prev + 1);
       AccessibilityInfo.announceForAccessibility('Correct');
+      soundService.playCorrectAnswer();
     } else {
       setScore(prev => {
         const updated = Math.max(0, prev - 4);
@@ -73,6 +75,7 @@ export default function SentenceBestComponent({ onPhaseComplete }: SentenceBestP
         );
         return updated;
       });
+      soundService.playIncorrectAnswer();
     }
 
     setRevealed(true);

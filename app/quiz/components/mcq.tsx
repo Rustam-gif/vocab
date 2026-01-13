@@ -16,6 +16,7 @@ import { useAppStore } from '../../../lib/store';
 import { getTheme } from '../../../lib/theme';
 import { levels } from '../data/levels';
 import { analyticsService } from '../../../services/AnalyticsService';
+import { soundService } from '../../../services/SoundService';
 import AnimatedNextButton from './AnimatedNextButton';
 
 interface MCQProps {
@@ -2287,7 +2288,6 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, hearts, 
       );
       Animated.stagger(40, anims).start();
     }
-    setDisplayScore(sharedScore);
     setPhaseCorrect(0);
     questionStartRef.current = Date.now();
   };
@@ -2808,6 +2808,13 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
     setIsCorrect(correct);
     setShowFeedback(true);
 
+    // Play sound based on answer
+    if (correct) {
+      soundService.playCorrectAnswer();
+    } else {
+      soundService.playIncorrectAnswer();
+    }
+
     // Track analytics for this question
     try {
       const timeSpent = Math.max(0, Math.round((Date.now() - questionStartRef.current) / 1000));
@@ -3080,6 +3087,8 @@ const styles = StyleSheet.create({
     paddingLeft: 56,
     paddingRight: 24,
     height: 24,
+    overflow: 'visible',
+    zIndex: 10,
   },
   progressBarPill: {
     flex: 1,
@@ -3098,6 +3107,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    overflow: 'visible',
+    zIndex: 100,
   },
   heartEmoji: {
     fontSize: 18,

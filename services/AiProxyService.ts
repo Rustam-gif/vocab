@@ -46,37 +46,58 @@ class AiProxyService {
       messages: request.messages,
     };
 
-    const res = await fetch(this.baseUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify(body),
-      signal: init?.signal,
-    });
+    // Use provided signal or create a default 30s timeout to prevent UI freeze
+    let controller: AbortController | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let signal = init?.signal;
 
-    if (!res.ok) {
-      let detail = '';
-      try {
-        const data = await res.json();
-        detail =
-          typeof data?.error === 'string'
-            ? data.error
-            : JSON.stringify(data?.error || data);
-      } catch {
-        detail = res.statusText;
-      }
-      throw new Error(detail || 'AI proxy request failed');
+    if (!signal) {
+      controller = new AbortController();
+      signal = controller.signal;
+      timeoutId = setTimeout(() => controller!.abort(), 30000);
     }
 
-    const data = (await res.json()) as ProxyResponse;
-    return {
-      content: data?.content || '',
-      id: data?.id,
-      usage: data?.usage,
-    };
+    try {
+      const res = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify(body),
+        signal,
+      });
+
+      if (timeoutId) clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        let detail = '';
+        try {
+          const data = await res.json();
+          detail =
+            typeof data?.error === 'string'
+              ? data.error
+              : JSON.stringify(data?.error || data);
+        } catch {
+          detail = res.statusText;
+        }
+        throw new Error(detail || 'AI proxy request failed');
+      }
+
+      const data = (await res.json()) as ProxyResponse;
+      return {
+        content: data?.content || '',
+        id: data?.id,
+        usage: data?.usage,
+      };
+    } catch (e: any) {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (e?.name === 'AbortError' && controller) {
+        throw new Error('AI request timed out after 30s');
+      }
+      throw e;
+    }
   }
 }
 
