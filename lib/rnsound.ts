@@ -94,13 +94,24 @@ class Sound {
     return this;
   }
 
-  static setCategory(_value: string, _mixWithOthers = false) {
-    // Disabled due to native nullability crash on newer RN versions
-    // Sounds will still play, just won't override silent mode
+  static setCategory(value: string, mixWithOthers = false) {
+    if (Platform.OS === 'ios') {
+      try {
+        RNSound.setCategory?.(value, mixWithOthers);
+      } catch (e) {
+        console.warn('[Sound] setCategory error:', e);
+      }
+    }
   }
 
-  static enableInSilenceMode(_enabled: boolean) {
-    // Disabled due to native nullability crash on newer RN versions
+  static enableInSilenceMode(enabled: boolean) {
+    if (Platform.OS === 'ios') {
+      try {
+        RNSound.enableInSilenceMode?.(enabled);
+      } catch (e) {
+        console.warn('[Sound] enableInSilenceMode error:', e);
+      }
+    }
   }
 }
 

@@ -12,6 +12,7 @@ import {
   Platform,
   Animated,
   InteractionManager,
+  Image,
 } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -328,11 +329,8 @@ export default function VaultScreen() {
                   }}
                 >
                   <TouchableOpacity style={[styles.folderRow, isLight && styles.surfaceCard]} onPress={() => router.push({ pathname: '/vault-folder', params: { id: f.id, title: f.title } })}>
-                    <LottieView
-                      source={require('../assets/foldericons/foldericon.json')}
-                      autoPlay
-                      loop={false}
-                      __stableKey="folder-icon:folder"
+                    <Image
+                      source={require('../assets/foldericons/folder_icon.png')}
                       style={styles.folderIcon}
                     />
                     <View style={{ flex: 1, marginLeft: 12 }}>
@@ -434,6 +432,10 @@ export default function VaultScreen() {
                 onPress={() => {
                   setIsAddModalOpen(false);
                   setNewWord('');
+                  // Clear URL param so modal doesn't reopen on next visit
+                  if (params?.add === '1') {
+                    router.replace('/vault');
+                  }
                 }}
               >
                 <Text style={[styles.cancelButtonText, isLight && styles.cancelButtonTextLight]}>Cancel</Text>
@@ -476,7 +478,14 @@ export default function VaultScreen() {
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => { setShowFolderCreate(false); setNewFolderTitle(''); }}
+                onPress={() => {
+                  setShowFolderCreate(false);
+                  setNewFolderTitle('');
+                  // Clear URL param so modal doesn't reopen on next visit
+                  if (params?.create === '1') {
+                    router.replace('/vault');
+                  }
+                }}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>

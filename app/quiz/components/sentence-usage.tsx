@@ -9,7 +9,6 @@ import {
   AccessibilityInfo,
   ViewStyle,
   TextStyle,
-  ScrollView,
 } from 'react-native';
 import { useAppStore } from '../../../lib/store';
 import { getTheme } from '../../../lib/theme';
@@ -34,6 +33,7 @@ interface SentenceUsageProps {
   wordRange?: { start: number; end: number };
   wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
   showUfoAnimation?: boolean;
+  ufoAnimationKey?: number;
 }
 
 interface UsageSentence {
@@ -1281,11 +1281,19 @@ interface OptionRow {
   key: string;
 }
 
-export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride, showUfoAnimation }: SentenceUsageProps) {
+export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride, showUfoAnimation, ufoAnimationKey = 0 }: SentenceUsageProps) {
   const recordResult = useAppStore(s => s.recordExerciseResult);
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
+
+  // Stabilize wordsOverride to prevent unnecessary re-renders
+  const wordsOverrideRef = useRef(wordsOverride);
+  useEffect(() => {
+    wordsOverrideRef.current = wordsOverride;
+  }, [wordsOverride && wordsOverride.length]);
+  const stableWordsOverride = wordsOverrideRef.current;
+
   // Decide mode: default sentence selection; for new Intermediate Set 1 use word-choice
   const wordChoiceMode = useMemo(() => {
     const lvl = levels.find(l => l.id === levelId);
@@ -1301,8 +1309,8 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
   const itemsData = useMemo(() => {
     // Use words override if provided (dynamic quiz). We still build the same
     // items structure as normal so the component logic remains consistent.
-    if (wordsOverride && wordsOverride.length) {
-      let words = wordsOverride;
+    if (stableWordsOverride && stableWordsOverride.length) {
+      let words = stableWordsOverride;
       if (wordRange) {
         words = words.slice(wordRange.start, wordRange.end);
       }
@@ -1564,7 +1572,8 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
         mode: 'sentence',
       } as UsageItem;
     });
-  }, [setId, levelId, wordRange, wordChoiceMode]);
+  // Use primitive values for wordRange and stable ref for wordsOverride to avoid re-computation
+  }, [setId, levelId, wordRange?.start, wordRange?.end, wordChoiceMode, stableWordsOverride]);
 
   const [index, setIndex] = useState(0);
   const [options, setOptions] = useState<OptionRow[]>([]);
@@ -1663,12 +1672,7 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
 
   return (
     <Animated.View style={[styles.container, isLight && { backgroundColor: colors.background }, { opacity: mountFadeAnim }]}>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 120 }}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
+      <View style={{ flex: 1 }}>
         <View style={styles.topHeaderRow}>
           <View style={[styles.progressBarPill, isLight && { backgroundColor: '#E5E7EB' }]}>
             <View style={[styles.progressFillPill, { width: `${progress * 100}%` }]} />
@@ -1685,6 +1689,7 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
               />
               {showUfoAnimation && (
                 <LottieView
+                  key={`ufo-${ufoAnimationKey}`}
                   source={require('../../../assets/lottie/learn/Ufo_animation.lottie')}
                   autoPlay
                   loop={false}
@@ -1693,8 +1698,8 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
                     width: 100,
                     height: 100,
                     position: 'absolute',
-                    top: -30,
-                    left: -2,
+                    top: -20,
+                    left: 0,
                   }}
                 />
               )}
@@ -1703,7 +1708,7 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
           </Animated.View>
         </View>
 
-        <View style={{ height: 24 }} />
+        <View style={{ height: 8 }} />
         <Text style={[styles.headerText, isLight && { color: '#111827' }]}>Natural Usage</Text>
         <Text style={[styles.subHeaderText, isLight && { color: '#6B7280' }]}>
           {item.mode === 'word' ? 'Select the word that correctly completes the sentence.' : 'Pick the sentence that uses the word correctly.'}
@@ -1765,7 +1770,7 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
             );
           })}
         </View>
-      </ScrollView>
+      </View>
 
       <View style={styles.footer}>
         <AnimatedNextButton
@@ -1781,9 +1786,9 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: 'transparent',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 0,
   },
   progressContainer: {
     flexDirection: 'row',
@@ -1795,12 +1800,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    marginTop: -4,
-    marginBottom: 12,
+    marginTop: 0,
+    marginBottom: 8,
     gap: 12,
-    paddingLeft: 56,
+    paddingLeft: 36,
     paddingRight: 24,
-    height: 24,
+    minHeight: 48,
     overflow: 'visible',
     zIndex: 10,
   },
@@ -1892,8 +1897,8 @@ const styles = StyleSheet.create({
   },
   wordHeader: {
     alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 24,
+    marginTop: 12,
+    marginBottom: 12,
   },
   speakButtonCorner: {
     position: 'absolute',
@@ -1908,7 +1913,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(13, 59, 74, 0.1)',
   },
   wordText: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
     color: '#fff',
     fontFamily: 'Feather-Bold',
@@ -1920,14 +1925,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Feather-Bold',
   },
   optionsWrapper: {
-    gap: 12,
+    gap: 10,
     flexGrow: 1,
   },
   optionCard: {
     backgroundColor: '#2A2A2A',
     borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     borderWidth: 2,
     borderColor: 'rgba(78,217,203,0.06)',
     borderBottomWidth: 4,
@@ -1955,8 +1960,8 @@ const styles = StyleSheet.create({
   },
   optionText: {
     color: '#fff',
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 15,
+    lineHeight: 20,
     fontFamily: 'Feather-Bold',
   },
   cardCorrect: {
@@ -2013,7 +2018,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Feather-Bold',
   },
   footer: {
-    marginTop: 12,
+    marginTop: 24,
     alignItems: 'center',
     paddingBottom: 50,
   },

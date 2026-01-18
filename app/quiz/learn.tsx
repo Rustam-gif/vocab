@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Image, Animated, Easing, InteractionManager, Dimensions, DeviceEventEmitter, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Image, ImageBackground, Animated, Easing, InteractionManager, Dimensions, DeviceEventEmitter, Platform } from 'react-native';
 
 // Use local haptic feedback shim (no-op since native module not available)
 import ReactNativeHapticFeedback from '../../lib/haptics';
@@ -19,7 +19,7 @@ import { getTheme } from '../../lib/theme';
 import TopStatusPanel from '../components/TopStatusPanel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LimitModal from '../../lib/LimitModal';
-import { Lock, Check, Star, CheckCircle, Flag, Trophy, Crown } from 'lucide-react-native';
+import { Lock, Check, Star, CheckCircle, Flag, Trophy, Crown, RefreshCw } from 'lucide-react-native';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { LinearGradient } from '../../lib/LinearGradient';
 
@@ -57,6 +57,7 @@ export default function LearnScreen() {
   const [activeLevelId, setActiveLevelId] = useState<string | null>(levelId ?? null);
   const [highestLevel, setHighestLevel] = useState<string | null>(null);
   const [placementLevel, setPlacementLevel] = useState<string | null>(null);
+  const [showSignupPrompt, setShowSignupPrompt] = useState(false);
   const nodeAnims = useRef<Animated.Value[]>([]);
   const levelNodeAnims = useRef<Animated.Value[]>([]);
   const levelPulseAnim = useRef(new Animated.Value(1)).current;
@@ -68,22 +69,29 @@ export default function LearnScreen() {
   const isScrollingRef = useRef(false);
   const scrollEndTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // Path animation values for newly completed connectors
+  const pathAnimValues = useRef<{ [key: number]: Animated.Value }>({});
+  const prevCompletedPaths = useRef<Set<number>>(new Set());
+  const [animatingPaths, setAnimatingPaths] = useState<Set<number>>(new Set());
+
   // Premium status for gating content
   const [isPremium, setIsPremium] = useState<boolean>(false);
-  const [showPaywall, setShowPaywall] = useState<boolean>(false);
 
   // Ensure nav bar is visible when this screen is shown
   useEffect(() => {
     DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
   }, []);
 
-  // Check premium status on mount
-  const checkPremiumStatus = useCallback(async () => {
+  // Check premium status on mount - returns the status so callers can use it
+  const checkPremiumStatus = useCallback(async (): Promise<boolean> => {
     try {
       const status = await SubscriptionService.getStatus();
-      setIsPremium(status?.active ?? false);
+      const isActive = status?.active ?? false;
+      setIsPremium(isActive);
+      return isActive;
     } catch {
       setIsPremium(false);
+      return false;
     }
   }, []);
 
@@ -91,11 +99,13 @@ export default function LearnScreen() {
     checkPremiumStatus();
   }, [checkPremiumStatus]);
 
+  // Re-check premium status on focus
   useFocusEffect(
     useCallback(() => {
       checkPremiumStatus();
     }, [checkPremiumStatus])
   );
+
 
   // Breathing animation for current level outer ring
   // Using longer duration to reduce CPU usage
@@ -367,14 +377,13 @@ export default function LearnScreen() {
     }
   }, [activeLevelId, isPremium]);
 
+  // refreshLevel is called automatically when isPremium or activeLevelId changes
   useEffect(() => { refreshLevel(); }, [refreshLevel]);
 
+  // Also refresh progress data when screen gains focus (e.g., after returning from quiz results)
   useFocusEffect(
     useCallback(() => {
-      const task = InteractionManager.runAfterInteractions(() => {
-        refreshLevel();
-      });
-      return () => task.cancel?.();
+      refreshLevel();
     }, [refreshLevel])
   );
 
@@ -408,7 +417,7 @@ export default function LearnScreen() {
   }, [activeLevelId]);
 
   // Check if skip ahead is available for a specific quiz
-  // Only the FIRST incomplete quiz can show skip ahead
+  // Premium users can skip ahead to the first incomplete quiz in the current level
   const canQuizSkipAhead = useCallback((quizSet: VocabSet, allSets: VocabSet[]) => {
     if (!activeLevelId) return false;
 
@@ -418,23 +427,24 @@ export default function LearnScreen() {
 
     if (quizIndex < 0) return false;
 
-    // For the first quiz in a level, check if previous level is completed
-    if (quizIndex === 0) {
-      return isPreviousLevelCompleted();
-    }
+    // Check if this quiz is already completed
+    const thisQuizFlags = SetProgressService.getSetFlags(activeLevelId, quizSet.id);
+    if (thisQuizFlags.completed) return false; // Already completed, no need to skip
 
-    // For subsequent quizzes, check if ALL previous quizzes are completed
-    for (let i = 0; i < quizIndex; i++) {
-      const prevQuiz = quizzes[i];
-      const flags = SetProgressService.getSetFlags(activeLevelId, prevQuiz.id);
+    // For premium users, allow skip ahead to the FIRST incomplete quiz
+    // Find the first incomplete quiz
+    let firstIncompleteQuizIndex = -1;
+    for (let i = 0; i < quizzes.length; i++) {
+      const flags = SetProgressService.getSetFlags(activeLevelId, quizzes[i].id);
       if (!flags.completed) {
-        return false; // Previous quiz not completed, can't skip ahead
+        firstIncompleteQuizIndex = i;
+        break;
       }
     }
 
-    // All previous quizzes completed, check if previous level is also completed
-    return isPreviousLevelCompleted();
-  }, [activeLevelId, isPreviousLevelCompleted]);
+    // Only allow skip ahead to the first incomplete quiz
+    return quizIndex === firstIncompleteQuizIndex;
+  }, [activeLevelId]);
 
   const handleSetPress = (set: VocabSet & { locked?: boolean; premiumLocked?: boolean }, allSets?: VocabSet[]) => {
     if (!activeLevelId) {
@@ -444,7 +454,7 @@ export default function LearnScreen() {
 
     // Premium-locked sets show paywall
     if ((set as any).premiumLocked) {
-      setShowPaywall(true);
+      router.push('/profile?paywall=1');
       return;
     }
 
@@ -459,15 +469,14 @@ export default function LearnScreen() {
     // For locked quiz sets, check if this specific quiz can skip ahead (premium only)
     if (set.locked && isQuizSet && allSets && (!isPremium || !canQuizSkipAhead(set, allSets))) {
       if (!isPremium) {
-        setShowPaywall(true);
+        router.push('/profile?paywall=1');
         return;
       }
       return;
     }
 
     if (!isSignedIn) {
-      // Send users to Profile to sign in; avoid blocking overlays that steal touches
-      router.push('/profile?redirect=/quiz/learn');
+      setShowSignupPrompt(true);
       return;
     }
 
@@ -635,6 +644,53 @@ export default function LearnScreen() {
     });
   }, [currentLevel?.sets?.length, currentLevel?.sets?.map(s => s.completed).join(',')]);
 
+  // Detect newly completed paths and trigger animation
+  useEffect(() => {
+    if (!connectorPaths || connectorPaths.length === 0) return;
+
+    const currentCompleted = new Set<number>();
+    connectorPaths.forEach((path, index) => {
+      if (path?.isCompleted) currentCompleted.add(index);
+    });
+
+    // Find newly completed paths
+    const newlyCompleted: number[] = [];
+    currentCompleted.forEach(index => {
+      if (!prevCompletedPaths.current.has(index)) {
+        newlyCompleted.push(index);
+      }
+    });
+
+    if (newlyCompleted.length > 0) {
+      // Create animated values for new paths
+      newlyCompleted.forEach(index => {
+        if (!pathAnimValues.current[index]) {
+          pathAnimValues.current[index] = new Animated.Value(0);
+        } else {
+          pathAnimValues.current[index].setValue(0);
+        }
+      });
+
+      // Start animations
+      setAnimatingPaths(new Set(newlyCompleted));
+      const animations = newlyCompleted.map(index =>
+        Animated.timing(pathAnimValues.current[index], {
+          toValue: 1,
+          duration: 800,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        })
+      );
+
+      Animated.parallel(animations).start(() => {
+        // Clear animating state after completion
+        setAnimatingPaths(new Set());
+      });
+    }
+
+    prevCompletedPaths.current = currentCompleted;
+  }, [connectorPaths]);
+
   if (!currentLevel) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -667,6 +723,8 @@ export default function LearnScreen() {
     const anim = nodeAnims.current[index] || new Animated.Value(1);
     const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
     const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+    const premiumFaceColor = '#6B8AF6'; // muted indigo to stand apart from current node
+    const premiumEdgeColor = '#344B9C';
 
     return (
       <Animated.View
@@ -694,14 +752,28 @@ export default function LearnScreen() {
           />
         )}
 
+        {/* Breathing ring for skip ahead quiz nodes - purple */}
+        {quizCanSkipAhead && !isCurrent && (
+          <Animated.View
+            style={[
+              styles.setBreathingRing,
+              {
+                backgroundColor: '#9333EA',
+                opacity: levelPulseOpacity,
+                transform: [{ scale: levelPulseAnim }],
+              },
+            ]}
+          />
+        )}
+
         {/* 3D coin edge (darker bottom) */}
         {(() => {
           const isQuizDisabled = isQuiz && isLocked && !quizCanSkipAhead;
           return (
             <View style={[
               styles.coinEdge,
-              // Premium locked nodes show golden edge
-              isPremiumLocked && { backgroundColor: '#B8860B' },
+              // Premium locked nodes use a cooler indigo edge
+              isPremiumLocked && { backgroundColor: premiumEdgeColor },
               // Available nodes show teal edge
               !isPremiumLocked && !isLocked && !isCompleted && !isCurrent && styles.coinEdgeCompleted,
               // Current node shows orange edge
@@ -764,8 +836,8 @@ export default function LearnScreen() {
               activeOpacity={0.9}
               style={[
                 styles.coinFace,
-                // Premium locked nodes show golden face
-                isPremiumLocked && { backgroundColor: '#DAA520', borderColor: 'rgba(255,215,0,0.4)' },
+                // Premium locked nodes use a cooler indigo tone
+                isPremiumLocked && { backgroundColor: premiumFaceColor, borderColor: 'rgba(255,255,255,0.35)' },
                 // Available nodes (not locked, not completed) show as teal
                 !isPremiumLocked && !isLocked && !isCompleted && !isCurrent && styles.coinFaceCompleted,
                 // Current node shows as orange
@@ -785,7 +857,7 @@ export default function LearnScreen() {
               ]}
             >
               {/* Glossy reflection highlight */}
-              <View style={styles.coinReflection} pointerEvents="none" />
+              <View style={[styles.coinReflection, isPremiumLocked && { backgroundColor: 'rgba(255,255,255,0.18)' }]} pointerEvents="none" />
               {isPremiumLocked ? (
                 <Crown size={28} color="#FFFFFF" strokeWidth={2.5} />
               ) : (
@@ -815,11 +887,34 @@ export default function LearnScreen() {
     const cached = connectorPaths[index];
     if (!cached) return null;
 
-    const lineColor = cached.isCompleted ? (isLight ? '#C4C4C4' : '#5A5A5A') : (isLight ? '#E5E7EB' : '#3A3A3A');
+    // Use teal color for completed connectors, gray for incomplete
+    const lineColor = cached.isCompleted
+      ? '#4ED9CB' // Teal for completed
+      : (isLight ? '#E5E7EB' : '#3A3A3A');
+    const glowColor = '#4ED9CB';
+    const isAnimating = animatingPaths.has(index);
+    const animValue = pathAnimValues.current[index];
+
+    // Animated glow opacity for newly completed paths
+    const animatedGlowOpacity = isAnimating && animValue
+      ? animValue.interpolate({
+          inputRange: [0, 0.5, 1],
+          outputRange: [0, 0.8, 0.3],
+        })
+      : 0.3;
+
+    // Animated scale for the glow effect
+    const animatedGlowScale = isAnimating && animValue
+      ? animValue.interpolate({
+          inputRange: [0, 0.5, 1],
+          outputRange: [0.5, 1.2, 1],
+        })
+      : 1;
 
     return (
       <View key={`connector-${index}`} style={styles.connectorWrapper} pointerEvents="none">
         <Svg height={cached.height} width={SCREEN_WIDTH} pointerEvents="none">
+          {/* Main path */}
           <Path
             d={cached.pathD}
             stroke={lineColor}
@@ -1032,6 +1127,17 @@ export default function LearnScreen() {
               <Text style={styles.levelBannerBadgeText}>{progress.completed}/{progress.total}</Text>
             </View>
           </View>
+          {/* Retake test button */}
+          <TouchableOpacity
+            style={[styles.retakeTestButton, isLight && styles.retakeTestButtonLight]}
+            onPress={() => router.push({ pathname: '/placement/word-test', params: { retake: 'true', selectedLevel: currentLevel.id } })}
+            activeOpacity={0.7}
+          >
+            <RefreshCw size={13} color="rgba(26,26,26,0.5)" />
+            <Text style={[styles.retakeTestText, isLight && styles.retakeTestTextLight]}>
+              Level feels wrong? Retake test
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Sets path */}
@@ -1053,12 +1159,12 @@ export default function LearnScreen() {
               {/* Stage gate after quiz */}
               {showStageGate && renderStageGate(currentStage - 1, !!stageUnlocked)}
 
-              {/* Show characters every 3 circles, alternating sides - animate only when area is reached */}
+              {/* Show one character per chapter section, alternating sides - well spaced */}
               {index === 2 && renderCharacter(index, 'monkey', 'right', !set.locked)}
-              {index === 5 && renderCharacter(index, 'giraffe', 'left', !set.locked)}
-              {index === 8 && renderCharacter(index, 'chameleon', 'right', !set.locked)}
-              {index === 11 && renderCharacter(index, 'fox', 'left', !set.locked)}
-              {index === 14 && renderCharacter(index, 'sloth', 'right', !set.locked)}
+              {index === 7 && renderCharacter(index, 'giraffe', 'left', !set.locked)}
+              {index === 12 && renderCharacter(index, 'chameleon', 'right', !set.locked)}
+              {index === 17 && renderCharacter(index, 'fox', 'left', !set.locked)}
+              {index === 22 && renderCharacter(index, 'sloth', 'right', !set.locked)}
               {renderNode(set as any, index, true, setsToRender)}
               {renderConnector(index, setsToRender.length)}
             </View>
@@ -1093,161 +1199,122 @@ export default function LearnScreen() {
   // Subtle gradient colors for depth - slightly more visible
   const gradientColors = isLight
     ? ['#FFFFFF', '#F5F5F5', '#EBEBEB']
-    : ['#2A2A2A', '#222222', '#1A1A1A'];
+    : ['transparent', 'transparent', 'transparent'];
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <LinearGradient
-        colors={gradientColors}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={{ flex: 1 }}
+    <View style={[styles.container, { backgroundColor: isLight ? colors.background : '#2A2D2E' }]}>
+      {/* Header bar */}
+      <View style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: insets.top + 50,
+        backgroundColor: isLight ? '#FFFFFF' : '#2A2D2E',
+        zIndex: 10,
+        borderBottomWidth: 2,
+        borderBottomColor: isLight ? '#E5E7EB' : '#1A1A1A',
+      }} />
+      <TopStatusPanel floating includeTopInset />
+
+      <ScrollView
+        ref={scrollViewRef}
+        style={{ flex: 1, paddingTop: contentTop }}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        removeClippedSubviews={false}
       >
-        {/* Background fill for notch/status bar area - inside gradient for proper stacking */}
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: insets.top + 50,
-          backgroundColor: isLight ? '#FFFFFF' : '#2A2A2A',
-          zIndex: 5,
-          borderBottomWidth: 2,
-          borderBottomColor: '#1A1A1A',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.3,
-          shadowRadius: 0,
-        }} />
-        <TopStatusPanel floating includeTopInset />
-        <ScrollView
-          ref={scrollViewRef}
-          style={{ flex: 1, paddingTop: contentTop }}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          onScroll={handleScroll}
-          // More frequent events keep haptics in sync without throttling the native scroll thread
-          scrollEventThrottle={16}
-          // Avoid clipping because absolute-positioned Lottie/SVG nodes flicker and can jank scroll on iOS
-          removeClippedSubviews={false}
+        {/* Path for current level only */}
+        <View style={styles.pathContainer}>
+          {buildCurrentLevelPath()}
+        </View>
+
+        <View style={{ height: 100 }} />
+      </ScrollView>
+
+      {/* DEV: Test complete set button */}
+      {__DEV__ && (
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            bottom: 100,
+            right: 20,
+            backgroundColor: '#F25E86',
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            borderRadius: 20,
+            zIndex: 100,
+          }}
+          onPress={async () => {
+            // Complete the first set of current level
+            const currentLevelData = levels.find(l => l.id === selectedLevel);
+            if (currentLevelData && currentLevelData.sets.length > 0) {
+              const firstSet = currentLevelData.sets[0];
+              await SetProgressService.markSetCompleted(firstSet.id, selectedLevel, 100);
+              // Refresh completed sets
+              const completed = await SetProgressService.getCompletedSetsForLevel(selectedLevel);
+              setCompletedSetIds(new Set(completed));
+              console.log('[TEST] Completed set:', firstSet.id);
+            }
+          }}
         >
-          {/* Path for current level only */}
-          <View style={styles.pathContainer}>
-            {buildCurrentLevelPath()}
-          </View>
+          <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 12 }}>Test Complete Set</Text>
+        </TouchableOpacity>
+      )}
 
-          <View style={{ height: 100 }} />
-        </ScrollView>
-
-      </LinearGradient>
-
-      {/* TEST BUTTON - Remove after testing */}
-      <TouchableOpacity
-        style={{
-          position: 'absolute',
-          bottom: 100,
-          right: 20,
-          backgroundColor: '#F8B070',
-          paddingHorizontal: 16,
-          paddingVertical: 10,
-          borderRadius: 20,
-        }}
-        onPress={async () => {
-          if (!currentLevel || !activeLevelId) return;
-          triggerHaptic('medium');
-          // Find first uncompleted set
-          const currentSet = currentLevel.sets.find(s => !s.completed && !s.locked);
-          if (currentSet) {
-            await SetProgressService.markCompleted(activeLevelId, currentSet.id, 100);
-            refreshLevel();
-          }
-        }}
-      >
-        <Text style={{ color: '#fff', fontWeight: '600' }}>Test: Complete Set</Text>
-      </TouchableOpacity>
-
-      {/* Signup modal disabled to avoid invisible overlays blocking touches */}
-
-      {/* Premium Paywall Modal */}
-      <Modal
-        visible={showPaywall}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowPaywall(false)}
-      >
-        <View style={styles.paywallOverlay}>
-          <View style={[styles.paywallCard, isLight && styles.paywallCardLight]}>
-            {/* Close button */}
-            <TouchableOpacity
-              style={styles.paywallClose}
-              onPress={() => setShowPaywall(false)}
-            >
-              <Text style={styles.paywallCloseText}>✕</Text>
-            </TouchableOpacity>
-
-            {/* Crown icon */}
-            <View style={styles.paywallCrownContainer}>
-              <Crown size={48} color="#FFD700" strokeWidth={2} />
+      {/* Signup prompt (inline overlay to avoid RN Modal) */}
+      {showSignupPrompt && (
+        <View style={styles.signupOverlay} pointerEvents="auto">
+          <TouchableOpacity style={styles.signupBackdrop} activeOpacity={1} onPress={() => setShowSignupPrompt(false)} />
+          <View style={[styles.signupCard, isLight && styles.signupCardLight]}>
+            {/* Icon */}
+            <View style={styles.signupIconWrap}>
+              <View style={[styles.signupIconCircle, isLight && styles.signupIconCircleLight]}>
+                <Lock size={28} color={isLight ? '#0F766E' : '#4ED9CB'} />
+              </View>
             </View>
 
-            {/* Title */}
-            <Text style={[styles.paywallTitle, isLight && styles.paywallTitleLight]}>
-              Unlock All Lessons
-            </Text>
-
-            {/* Subtitle */}
-            <Text style={[styles.paywallSubtitle, isLight && styles.paywallSubtitleLight]}>
-              Get unlimited access to all vocabulary sets and learning features with Vocadoo Premium
+            <Text style={[styles.signupTitle, isLight && styles.signupTitleLight]}>Create Your Account</Text>
+            <Text style={[styles.signupMessage, isLight && styles.signupMessageLight]}>
+              Sign up to unlock this lesson and sync your progress across all your devices.
             </Text>
 
             {/* Features list */}
-            <View style={styles.paywallFeatures}>
-              <View style={styles.paywallFeatureRow}>
-                <Check size={18} color="#4ED9CB" />
-                <Text style={[styles.paywallFeatureText, isLight && styles.paywallFeatureTextLight]}>
-                  All vocabulary lessons unlocked
-                </Text>
+            <View style={styles.signupFeatures}>
+              <View style={styles.signupFeatureRow}>
+                <Check size={16} color="#4ED9CB" />
+                <Text style={[styles.signupFeatureText, isLight && styles.signupFeatureTextLight]}>Back up your vocabulary</Text>
               </View>
-              <View style={styles.paywallFeatureRow}>
-                <Check size={18} color="#4ED9CB" />
-                <Text style={[styles.paywallFeatureText, isLight && styles.paywallFeatureTextLight]}>
-                  Skip ahead to any quiz
-                </Text>
+              <View style={styles.signupFeatureRow}>
+                <Check size={16} color="#4ED9CB" />
+                <Text style={[styles.signupFeatureText, isLight && styles.signupFeatureTextLight]}>Sync across devices</Text>
               </View>
-              <View style={styles.paywallFeatureRow}>
-                <Check size={18} color="#4ED9CB" />
-                <Text style={[styles.paywallFeatureText, isLight && styles.paywallFeatureTextLight]}>
-                  All daily articles
-                </Text>
-              </View>
-              <View style={styles.paywallFeatureRow}>
-                <Check size={18} color="#4ED9CB" />
-                <Text style={[styles.paywallFeatureText, isLight && styles.paywallFeatureTextLight]}>
-                  AI-powered stories
-                </Text>
+              <View style={styles.signupFeatureRow}>
+                <Check size={16} color="#4ED9CB" />
+                <Text style={[styles.signupFeatureText, isLight && styles.signupFeatureTextLight]}>Track your progress</Text>
               </View>
             </View>
 
-            {/* CTA Button */}
-            <TouchableOpacity
-              style={styles.paywallCta}
-              onPress={() => {
-                setShowPaywall(false);
-                router.push('/profile?paywall=1');
-              }}
-            >
-              <Text style={styles.paywallCtaText}>Upgrade to Premium</Text>
-            </TouchableOpacity>
-
-            {/* Maybe later */}
-            <TouchableOpacity onPress={() => setShowPaywall(false)}>
-              <Text style={[styles.paywallMaybeLater, isLight && styles.paywallMaybeLaterLight]}>
-                Maybe later
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.signupActions}>
+              <TouchableOpacity
+                style={styles.signupPrimary}
+                onPress={() => {
+                  setShowSignupPrompt(false);
+                  router.push('/profile?redirect=/quiz/learn');
+                }}
+              >
+                <Text style={styles.signupPrimaryText}>Sign Up Free</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.signupSecondary, isLight && styles.signupSecondaryLight]} onPress={() => setShowSignupPrompt(false)}>
+                <Text style={[styles.signupSecondaryText, isLight && styles.signupSecondaryTextLight]}>Maybe Later</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </Modal>
+      )}
+
     </View>
   );
 }
@@ -1255,7 +1322,7 @@ export default function LearnScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
+    // backgroundColor handled inline for dark mode Lottie transparency
   },
   scrollContent: {
     paddingBottom: 40,
@@ -1416,15 +1483,14 @@ const styles = StyleSheet.create({
   coinIcon: {
     width: 48,
     height: 48,
-    tintColor: '#FFFFFF',
+    borderRadius: 24,
     shadowColor: '#FFB366',
     shadowOffset: { width: 1, height: 1 },
     shadowOpacity: 0.8,
     shadowRadius: 2,
   },
   coinIconLocked: {
-    opacity: 1,
-    tintColor: '#888888',
+    opacity: 0.6,
     shadowOpacity: 0,
   },
   premiumBadge: {
@@ -1662,7 +1728,9 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   levelBannerLight: {
-    borderColor: '#1A1A1A',
+    borderColor: '#9A6B3D',
+    shadowOpacity: 0.2,
+    shadowColor: '#9A6B3D',
   },
   levelBannerEdge: {
     display: 'none',
@@ -1671,36 +1739,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8B070',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderRadius: 13,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderTopLeftRadius: 13,
+    borderTopRightRadius: 13,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
   levelBannerIconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
   levelBannerIcon: {
-    width: 30,
-    height: 30,
+    width: 24,
+    height: 24,
     tintColor: '#F8B070',
   },
   levelBannerInfo: {
     flex: 1,
   },
   levelBannerTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '700',
     color: '#1A1A1A',
-    marginBottom: 2,
+    marginBottom: 1,
     fontFamily: 'Feather-Bold',
   },
   levelBannerSubtitle: {
@@ -1720,6 +1791,29 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1A1A1A',
     fontFamily: 'Ubuntu-Bold',
+  },
+  retakeTestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 5,
+    backgroundColor: '#E89F60',
+    borderBottomLeftRadius: 13,
+    borderBottomRightRadius: 13,
+  },
+  retakeTestButtonLight: {
+    backgroundColor: '#E89F60',
+  },
+  retakeTestText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(26,26,26,0.6)',
+    fontFamily: 'Ubuntu-Medium',
+  },
+  retakeTestTextLight: {
+    color: 'rgba(26,26,26,0.7)',
   },
   nextLevelButton: {
     marginTop: 16,
@@ -1962,5 +2056,221 @@ const styles = StyleSheet.create({
   },
   paywallMaybeLaterLight: {
     color: '#9CA3AF',
+  },
+  paywallCtaDisabled: {
+    opacity: 0.6,
+  },
+  paywallPlans: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    marginBottom: 16,
+  },
+  paywallPlanCard: {
+    flex: 1,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.15)',
+    position: 'relative',
+  },
+  paywallPlanCardLight: {
+    backgroundColor: '#F3F4F6',
+    borderColor: 'rgba(78,217,203,0.25)',
+  },
+  paywallPlanCardSelected: {
+    borderColor: '#4ED9CB',
+    backgroundColor: 'rgba(78,217,203,0.1)',
+  },
+  paywallPlanBadge: {
+    position: 'absolute',
+    top: -10,
+    backgroundColor: '#F25E86',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  paywallPlanBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  paywallPlanTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#9CA3AF',
+    marginBottom: 4,
+  },
+  paywallPlanTitleLight: {
+    color: '#6B7280',
+  },
+  paywallPlanPrice: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#E5E7EB',
+  },
+  paywallPlanPriceLight: {
+    color: '#111827',
+  },
+  paywallPlanPeriod: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  paywallPlanPeriodLight: {
+    color: '#9CA3AF',
+  },
+  paywallPlanCheck: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#4ED9CB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  paywallSuccessContainer: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    gap: 12,
+  },
+  paywallSuccessText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#E5E7EB',
+  },
+  paywallSuccessTextLight: {
+    color: '#111827',
+  },
+  signupOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    zIndex: 100,
+  },
+  signupBackdrop: {
+    ...StyleSheet.absoluteFillObject as any,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  signupCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#1F1F1F',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.08)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.12)',
+    borderRightColor: 'rgba(78,217,203,0.1)',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
+  },
+  signupCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
+    shadowOpacity: 0.15,
+  },
+  signupIconWrap: {
+    marginBottom: 16,
+  },
+  signupIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(78,217,203,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+  },
+  signupIconCircleLight: {
+    backgroundColor: 'rgba(78,217,203,0.1)',
+    borderColor: 'rgba(78,217,203,0.3)',
+  },
+  signupTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#E5E7EB',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  signupTitleLight: {
+    color: '#111827',
+  },
+  signupMessage: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  signupMessageLight: {
+    color: '#6B7280',
+  },
+  signupFeatures: {
+    marginTop: 16,
+    marginBottom: 8,
+    width: '100%',
+    gap: 8,
+  },
+  signupFeatureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  signupFeatureText: {
+    fontSize: 14,
+    color: '#E5E7EB',
+    fontWeight: '500',
+  },
+  signupFeatureTextLight: {
+    color: '#374151',
+  },
+  signupActions: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    width: '100%',
+    gap: 10,
+    marginTop: 16,
+  },
+  signupPrimary: {
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#4ED9CB',
+    alignItems: 'center',
+  },
+  signupPrimaryText: {
+    color: '#0D3B4A',
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  signupSecondary: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  signupSecondaryLight: {},
+  signupSecondaryText: {
+    color: '#9CA3AF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  signupSecondaryTextLight: {
+    color: '#6B7280',
   },
 });

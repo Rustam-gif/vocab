@@ -8,35 +8,37 @@ import {
   Animated,
   PanResponder,
   Easing,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { DiagnosticWord, getShuffledWords, calculateLevel, mapToAppLevel } from './diagnostic-words';
 import { useAppStore } from '../../lib/store';
 import LottieView from 'lottie-react-native';
+import { X, CheckCircle2 } from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const CARD_W = Math.min(340, SCREEN_WIDTH - 40);
-const CARD_H = Math.min(400, Math.round(SCREEN_HEIGHT * 0.45));
-const SWIPE_THRESHOLD = 80;
+const CARD_W = Math.min(340, SCREEN_WIDTH - 48);
+const CARD_H = Math.min(420, Math.round(SCREEN_HEIGHT * 0.48));
+const SWIPE_THRESHOLD = 70;
 
-// Colors matching Learn section
-const ACCENT_ORANGE = '#FE9602';
+// Colors matching app theme
+const ACCENT_ORANGE = '#F8B070';
 const ACCENT_TEAL = '#4ED9CB';
-const ACCENT_GREEN = '#4ADE80';
-const ACCENT_RED = '#F87171';
+const ACCENT_PINK = '#F25E86';
 const BG_DARK = '#1E1E1E';
-const CARD_BORDER = 'rgba(78, 217, 203, 0.35)';
 
 export default function WordTest() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const selectedLevel = (params.selectedLevel as string) || 'beginner';
+  const isRetake = params.retake === 'true';
 
   // Keep hook count consistent
   const _theme = useAppStore(s => s.theme);
 
-  const [words] = useState<DiagnosticWord[]>(() => getShuffledWords());
+  // Use detailed test (36 words) for retake, quick test (18 words) for initial
+  const [words] = useState<DiagnosticWord[]>(() => getShuffledWords(isRetake));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [knownWords, setKnownWords] = useState<DiagnosticWord[]>([]);
   const [showCoach, setShowCoach] = useState(true);
@@ -60,7 +62,7 @@ export default function WordTest() {
   }, [showCoach]);
 
   const goToResult = useCallback((known: DiagnosticWord[]) => {
-    const determinedLevel = calculateLevel(known);
+    const determinedLevel = calculateLevel(known, words);
     const appLevel = mapToAppLevel(determinedLevel);
 
     router.replace({
@@ -71,9 +73,10 @@ export default function WordTest() {
         appLevel,
         knownCount: known.length.toString(),
         totalCount: words.length.toString(),
+        isRetake: isRetake ? 'true' : 'false',
       },
     });
-  }, [router, selectedLevel, words.length]);
+  }, [router, selectedLevel, words, isRetake]);
 
   const handleSwipeComplete = useCallback((direction: 'left' | 'right') => {
     const currentWord = words[currentIndex];
@@ -170,22 +173,46 @@ export default function WordTest() {
     extrapolate: 'clamp',
   });
 
+  const handleClose = useCallback(() => {
+    router.back();
+  }, [router]);
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Word Check</Text>
-          <Text style={styles.headerProgress}>{currentIndex + 1}/{words.length}</Text>
+          {isRetake ? (
+            <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
+              <X size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 40 }} />
+          )}
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>{isRetake ? 'Level Retest' : 'Word Check'}</Text>
+            <Text style={styles.headerSubtitle}>{currentIndex + 1} of {words.length}</Text>
+          </View>
+          <View style={{ width: 40 }} />
         </View>
 
         {/* Progress Bar */}
         <View style={styles.progressBarBg}>
-          <View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
+          <Animated.View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
         </View>
 
-        {/* Instructions */}
-        <Text style={styles.instructions}>Do you know this word?</Text>
+        {/* Swipe hints at top */}
+        <View style={styles.swipeHintsTop}>
+          <View style={styles.hintLeft}>
+            <X size={16} color={ACCENT_PINK} />
+            <Text style={[styles.hintText, { color: ACCENT_PINK }]}>Don't know</Text>
+          </View>
+          <Text style={styles.instructions}>Swipe the card</Text>
+          <View style={styles.hintRight}>
+            <Text style={[styles.hintText, { color: ACCENT_TEAL }]}>I know</Text>
+            <CheckCircle2 size={16} color={ACCENT_TEAL} />
+          </View>
+        </View>
 
         {/* Cards Stack */}
         <View style={styles.cardContainer}>
@@ -223,22 +250,31 @@ export default function WordTest() {
             {...panResponder.panHandlers}
           >
             <View style={styles.card}>
-              {/* Know label */}
-              <Animated.View style={[styles.swipeLabel, styles.knowLabel, { opacity: knowLabelOpacity }]}>
-                <Text style={styles.knowLabelText}>KNOW</Text>
+              {/* Know overlay */}
+              <Animated.View style={[styles.feedbackOverlay, styles.feedbackKnow, { opacity: knowLabelOpacity }]}>
+                <View style={[styles.feedbackBadge, styles.feedbackBadgeKnow]}>
+                  <CheckCircle2 size={28} color="#FFFFFF" />
+                  <Text style={styles.feedbackBadgeText}>I know!</Text>
+                </View>
               </Animated.View>
 
-              {/* Don't Know label */}
-              <Animated.View style={[styles.swipeLabel, styles.dontKnowLabel, { opacity: dontKnowLabelOpacity }]}>
-                <Text style={styles.dontKnowLabelText}>SKIP</Text>
+              {/* Don't Know overlay */}
+              <Animated.View style={[styles.feedbackOverlay, styles.feedbackDont, { opacity: dontKnowLabelOpacity }]}>
+                <View style={[styles.feedbackBadge, styles.feedbackBadgeDont]}>
+                  <X size={28} color="#FFFFFF" />
+                  <Text style={styles.feedbackBadgeText}>Learning</Text>
+                </View>
               </Animated.View>
 
-              <Text style={styles.word}>{currentWord?.word}</Text>
-              <Text style={styles.phonetic}>{currentWord?.phonetic}</Text>
+              <View style={styles.cardContent}>
+                <Text style={styles.cardLabel}>VOCABULARY</Text>
+                <Text style={styles.word}>{currentWord?.word}</Text>
+                <Text style={styles.phonetic}>{currentWord?.phonetic}</Text>
 
-              <View style={styles.divider} />
+                <View style={styles.divider} />
 
-              <Text style={styles.definition}>{currentWord?.definition}</Text>
+                <Text style={styles.definition}>{currentWord?.definition}</Text>
+              </View>
 
               {/* Coach overlay */}
               {showCoach && (
@@ -255,15 +291,16 @@ export default function WordTest() {
           </Animated.View>
         </View>
 
-        {/* Swipe hints */}
-        <View style={styles.hintsContainer}>
-          <View style={styles.hintLeft}>
-            <Text style={styles.hintArrowLeft}>←</Text>
-            <Text style={styles.hintTextLeft}>Skip</Text>
+        {/* Bottom stats */}
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{knownWords.length}</Text>
+            <Text style={styles.statLabel}>Known</Text>
           </View>
-          <View style={styles.hintRight}>
-            <Text style={styles.hintTextRight}>Know</Text>
-            <Text style={styles.hintArrowRight}>→</Text>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{currentIndex - knownWords.length}</Text>
+            <Text style={styles.statLabel}>Learning</Text>
           </View>
         </View>
       </SafeAreaView>
@@ -284,37 +321,73 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 12,
+  },
+  headerCenter: {
+    alignItems: 'center',
   },
   headerTitle: {
     color: '#F9FAFB',
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
-  headerProgress: {
+  headerSubtitle: {
     color: ACCENT_ORANGE,
-    fontSize: 17,
-    fontWeight: '700',
-    fontFamily: 'Ubuntu-Bold',
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Ubuntu-Medium',
+    marginTop: 2,
+  },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#2A2D2E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#1A1A1A',
   },
   progressBarBg: {
-    height: 5,
+    height: 6,
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 3,
-    marginBottom: 24,
+    marginBottom: 16,
+    overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
     backgroundColor: ACCENT_ORANGE,
     borderRadius: 3,
   },
+  swipeHintsTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    marginBottom: 16,
+  },
   instructions: {
-    color: '#9CA3AF',
-    fontSize: 16,
+    color: '#6B7280',
+    fontSize: 13,
     fontWeight: '500',
     textAlign: 'center',
-    marginBottom: 20,
+    fontFamily: 'Ubuntu-Medium',
+  },
+  hintLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  hintRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  hintText: {
+    fontSize: 13,
+    fontWeight: '600',
     fontFamily: 'Ubuntu-Medium',
   },
   cardContainer: {
@@ -330,78 +403,99 @@ const styles = StyleSheet.create({
   nextCard: {
     width: CARD_W,
     height: CARD_H,
-    borderRadius: 20,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#252829',
-    opacity: 0.5,
-    borderWidth: 2,
-    borderColor: 'rgba(78, 217, 203, 0.15)',
+    backgroundColor: '#232627',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
   },
   nextCardWord: {
-    color: '#4B5563',
-    fontSize: 28,
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 26,
     fontWeight: '700',
     fontFamily: 'Feather-Bold',
   },
   cardOuter: {
     width: CARD_W,
     height: CARD_H,
-    borderRadius: 20,
-    shadowColor: ACCENT_TEAL,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
+    borderRadius: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
     elevation: 10,
   },
   card: {
     width: CARD_W,
     height: CARD_H,
-    borderRadius: 20,
-    padding: 32,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#2A2D2E',
-    borderWidth: 2,
-    borderColor: CARD_BORDER,
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    overflow: 'hidden',
   },
-  swipeLabel: {
-    position: 'absolute',
-    top: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 2,
+  cardContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 28,
   },
-  knowLabel: {
-    right: 20,
-    borderColor: ACCENT_GREEN,
-    backgroundColor: 'rgba(74, 222, 128, 0.1)',
-    transform: [{ rotate: '10deg' }],
-  },
-  knowLabelText: {
-    color: ACCENT_GREEN,
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 1,
+  cardLabel: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2,
+    marginBottom: 16,
     fontFamily: 'Ubuntu-Bold',
   },
-  dontKnowLabel: {
-    left: 20,
-    borderColor: ACCENT_RED,
-    backgroundColor: 'rgba(248, 113, 113, 0.1)',
-    transform: [{ rotate: '-10deg' }],
+  feedbackOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
-  dontKnowLabelText: {
-    color: ACCENT_RED,
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 1,
+  feedbackKnow: {
+    backgroundColor: 'rgba(78, 217, 203, 0.3)',
+  },
+  feedbackDont: {
+    backgroundColor: 'rgba(242, 94, 134, 0.3)',
+  },
+  feedbackBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 50,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  feedbackBadgeKnow: {
+    backgroundColor: ACCENT_TEAL,
+  },
+  feedbackBadgeDont: {
+    backgroundColor: ACCENT_PINK,
+  },
+  feedbackBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
     fontFamily: 'Ubuntu-Bold',
   },
   word: {
-    color: '#F9FAFB',
-    fontSize: 36,
+    color: '#FFFFFF',
+    fontSize: 34,
     fontWeight: '700',
     marginBottom: 8,
     letterSpacing: -0.5,
@@ -410,74 +504,63 @@ const styles = StyleSheet.create({
   },
   phonetic: {
     color: '#6B7280',
-    fontSize: 16,
+    fontSize: 15,
     fontStyle: 'italic',
-    marginBottom: 28,
-    fontFamily: 'Feather-Bold',
+    marginBottom: 24,
+    fontFamily: 'Ubuntu-Medium',
   },
   divider: {
-    width: 50,
+    width: 60,
     height: 3,
     backgroundColor: ACCENT_ORANGE,
     borderRadius: 2,
-    marginBottom: 28,
+    marginBottom: 24,
   },
   definition: {
     color: '#9CA3AF',
-    fontSize: 17,
+    fontSize: 16,
     textAlign: 'center',
-    lineHeight: 26,
-    paddingHorizontal: 12,
-    fontFamily: 'Feather-Bold',
+    lineHeight: 24,
+    paddingHorizontal: 8,
+    fontFamily: 'Ubuntu-Medium',
   },
   coachWrap: {
     position: 'absolute',
-    bottom: 24,
+    bottom: 20,
     left: 0,
     right: 0,
     alignItems: 'center',
   },
   coachAnimation: {
-    width: 80,
-    height: 80,
+    width: 90,
+    height: 90,
   },
-  hintsContainer: {
+  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-    paddingTop: 12,
-  },
-  hintLeft: {
-    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    paddingVertical: 20,
+    gap: 32,
   },
-  hintRight: {
-    flexDirection: 'row',
+  statItem: {
     alignItems: 'center',
-    gap: 8,
   },
-  hintArrowLeft: {
-    color: ACCENT_RED,
+  statValue: {
+    color: '#FFFFFF',
     fontSize: 24,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
   },
-  hintArrowRight: {
-    color: ACCENT_GREEN,
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  hintTextLeft: {
+  statLabel: {
     color: '#6B7280',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '500',
     fontFamily: 'Ubuntu-Medium',
+    marginTop: 2,
   },
-  hintTextRight: {
-    color: '#6B7280',
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Ubuntu-Medium',
+  statDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
 });

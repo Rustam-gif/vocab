@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL, isTokenOversized } from '../lib/supabase';
+import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from '../lib/supabase';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -10,8 +10,11 @@ const USER_ID_KEY = '@engniter.engagement.userId';
 // Session timeout: 60 seconds
 const SESSION_TIMEOUT_MS = 60 * 1000;
 
-// Max local storage
-const MAX_LOCAL_EVENTS = 1000;
+// Max local storage (keep small to prevent lag)
+const MAX_LOCAL_EVENTS = 50;
+
+// Sync every N events while app is active (in addition to background sync)
+const SYNC_EVERY_N_EVENTS = 10;
 
 export interface EngagementEvent {
   event_id: string;
@@ -51,7 +54,8 @@ class EngagementTrackingService {
   private lastEventTime = 0;
   private events: EngagementEvent[] = [];
   private initialized = false;
-  private syncDisabled = false;
+  private isSyncing = false;
+  private eventsSinceLastSync = 0;
 
   /* ---------------- INIT ---------------- */
 
@@ -66,11 +70,7 @@ class EngagementTrackingService {
         this.userId = session.user.id;
         this.userEmail = session.user.email || null;
         await AsyncStorage.setItem(USER_ID_KEY, this.userId);
-
-        if (session.access_token && isTokenOversized(session.access_token)) {
-          console.warn('[Engagement] Oversized token → remote sync disabled');
-          this.syncDisabled = true;
-        }
+        // Note: sync uses anon key, not user token, so no need to disable based on token size
       } else if (storedUserId) {
         this.userId = storedUserId;
       } else {
@@ -126,6 +126,10 @@ class EngagementTrackingService {
 
     if (eventName === 'app_open') {
       this.startSession();
+      // Sync any pending events from previous session on app open
+      if (this.events.length > 0) {
+        this.syncToRemote();
+      }
     } else if (eventName !== 'app_background' && eventName !== 'app_close') {
       this.ensureSession();
     }
@@ -145,15 +149,22 @@ class EngagementTrackingService {
 
     this.events.push(event);
     this.events = this.events.slice(-MAX_LOCAL_EVENTS);
+    this.eventsSinceLastSync++;
 
-    await AsyncStorage.setItem(EVENTS_KEY, JSON.stringify(this.events));
+    // Don't await - save in background to prevent lag
+    AsyncStorage.setItem(EVENTS_KEY, JSON.stringify(this.events)).catch(() => {});
 
-    console.log('[Engagement] Event tracked:', eventName, screenName);
+    // Sync on background/close OR every N events while app is active
+    const shouldSync =
+      eventName === 'app_background' ||
+      eventName === 'app_close' ||
+      this.eventsSinceLastSync >= SYNC_EVERY_N_EVENTS;
 
-    // 🔥 ONLY sync when app leaves foreground
-    if (eventName === 'app_background' || eventName === 'app_close') {
-      await this.syncToRemote();
-      this.endSession();
+    if (shouldSync) {
+      this.syncToRemote();
+      if (eventName === 'app_background' || eventName === 'app_close') {
+        this.endSession();
+      }
     }
   }
 
@@ -164,11 +175,25 @@ class EngagementTrackingService {
   /* ---------------- SYNC ---------------- */
 
   private async syncToRemote(): Promise<void> {
-    if (this.syncDisabled || this.events.length === 0) return;
+    if (this.events.length === 0 || this.isSyncing) return;
+
+    this.isSyncing = true;
+
+    // Normalize events - ensure all have same keys for Supabase bulk insert
+    const eventsToSync = this.events.map(e => ({
+      event_id: e.event_id,
+      user_id: e.user_id,
+      user_email: e.user_email ?? null,
+      session_id: e.session_id,
+      event_name: e.event_name,
+      screen_name: e.screen_name ?? null,
+      timestamp: e.timestamp,
+      metadata: e.metadata ?? null,
+    }));
 
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10_000);
+      const timeout = setTimeout(() => controller.abort(), 8_000);
 
       const response = await fetch(`${SUPABASE_URL}/rest/v1/engagement_events`, {
         method: 'POST',
@@ -178,7 +203,7 @@ class EngagementTrackingService {
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
           Prefer: 'resolution=merge-duplicates',
         },
-        body: JSON.stringify(this.events),
+        body: JSON.stringify(eventsToSync),
         signal: controller.signal,
       });
 
@@ -190,13 +215,21 @@ class EngagementTrackingService {
         return;
       }
 
-      console.log('[Engagement] Synced', this.events.length, 'events');
+      // Clear synced events to prevent duplicates and reduce storage
+      this.events = [];
+      this.eventsSinceLastSync = 0;
+      AsyncStorage.setItem(EVENTS_KEY, '[]').catch(() => {});
+
+      console.log('[Engagement] Synced', eventsToSync.length, 'events (cleared local)');
     } catch (e: any) {
       if (e?.name === 'AbortError') {
         console.warn('[Engagement] Sync timed out');
       } else {
         console.warn('[Engagement] Sync error:', e);
       }
+      // Keep events on failure - will retry next time
+    } finally {
+      this.isSyncing = false;
     }
   }
 

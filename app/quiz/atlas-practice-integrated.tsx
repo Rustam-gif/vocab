@@ -8,6 +8,8 @@ import {
   Animated,
   Easing,
   StatusBar,
+  DeviceEventEmitter,
+  Modal,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { X } from 'lucide-react-native';
@@ -15,7 +17,7 @@ import LottieView from 'lottie-react-native';
 import WordIntroComponent from './components/word-intro';
 import MCQComponent from './components/mcq';
 import SynonymComponent from './components/synonym';
-import SentenceUsageComponent from './components/sentence-usage';
+import OddOneOutComponent from './components/odd-one-out';
 import MissingLetters from './components/missing-letters';
 import { levels } from './data/levels';
 import { useAppStore } from '../../lib/store';
@@ -86,30 +88,41 @@ export default function AtlasPracticeIntegrated() {
       ? [
           { id: 'mcq', name: 'MCQ', component: MCQComponent, completed: false },
           { id: 'synonym', name: 'Synonym', component: SynonymComponent, completed: false },
-          { id: 'usage', name: 'Usage', component: SentenceUsageComponent, completed: false },
+          { id: 'oddoneout', name: 'Odd One Out', component: OddOneOutComponent, completed: false },
           { id: 'letters', name: 'Letters', component: MissingLetters, completed: false },
         ]
       : [
           { id: 'intro', name: 'Intro', component: WordIntroComponent, completed: false },
           { id: 'mcq', name: 'MCQ', component: MCQComponent, completed: false },
           { id: 'synonym', name: 'Synonym', component: SynonymComponent, completed: false },
-          { id: 'usage', name: 'Usage', component: SentenceUsageComponent, completed: false },
+          { id: 'oddoneout', name: 'Odd One Out', component: OddOneOutComponent, completed: false },
           { id: 'letters', name: 'Letters', component: MissingLetters, completed: false },
         ]
   );
   const [hearts, setHearts] = useState(5);
   const [showUfoAnimation, setShowUfoAnimation] = useState(false);
+  const [ufoAnimationKey, setUfoAnimationKey] = useState(0);
+  const ufoTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [gameOver, setGameOver] = useState(false);
   const [totalCorrect, setTotalCorrect] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [mlIndex, setMlIndex] = useState(0);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
 
   // Handle losing a heart
   const handleHeartLost = () => {
+    // Clear any existing UFO animation timeout
+    if (ufoTimeoutRef.current) {
+      clearTimeout(ufoTimeoutRef.current);
+    }
+
+    // Increment key to force animation restart even if already showing
+    setUfoAnimationKey(prev => prev + 1);
     // Show UFO animation for 4 seconds
     setShowUfoAnimation(true);
-    setTimeout(() => {
+    ufoTimeoutRef.current = setTimeout(() => {
       setShowUfoAnimation(false);
+      ufoTimeoutRef.current = null;
     }, 4000);
 
     setHearts(prev => {
@@ -123,6 +136,11 @@ export default function AtlasPracticeIntegrated() {
 
   // Restart the exercise
   const handleRestart = () => {
+    // Clear UFO animation timeout
+    if (ufoTimeoutRef.current) {
+      clearTimeout(ufoTimeoutRef.current);
+      ufoTimeoutRef.current = null;
+    }
     setHearts(5);
     setShowUfoAnimation(false);
     setGameOver(false);
@@ -176,7 +194,7 @@ export default function AtlasPracticeIntegrated() {
     setShowingIntro(false);
   };
 
-  const navigateToResults = (finalCorrect: number, finalQuestions: number) => {
+  const navigateToResults = async (finalCorrect: number, finalQuestions: number) => {
     // Play set completion sound
     soundService.playSetCompletion();
 
@@ -185,7 +203,51 @@ export default function AtlasPracticeIntegrated() {
     const points = hearts * 20;
     try {
       if (levelId && setId) {
-        SetProgressService.markCompleted(String(levelId), String(setId), points);
+        await SetProgressService.markCompleted(String(levelId), String(setId), points);
+
+        // If this is a quiz (skip ahead), mark all previous sets as completed
+        if (isQuiz && level) {
+          // Rebuild the visible set list (same logic as Learn screen)
+          const baseSets = level.sets.filter(s => {
+            const n = Number(s.id);
+            const dropFirstTen = level.id === 'upper-intermediate' ? (isNaN(n) || n > 10) : true;
+            return dropFirstTen && (s as any).type !== 'quiz';
+          });
+
+          // Check if this is a dynamic quiz (quiz-N format)
+          const dynamicQuizMatch = String(setId).match(/^quiz-(\d+)$/);
+          if (dynamicQuizMatch) {
+            // For quiz-N, mark the N groups of 4 sets as completed (indices 0 to N*4-1)
+            const quizNumber = parseInt(dynamicQuizMatch[1], 10);
+            const endIndex = quizNumber * 4; // quiz-1 covers sets 0-3, quiz-2 covers 4-7, etc.
+            for (let i = 0; i < endIndex && i < baseSets.length; i++) {
+              const prevSet = baseSets[i];
+              if (prevSet) {
+                const prevProgress = SetProgressService.get(String(levelId), String(prevSet.id));
+                if (!prevProgress || prevProgress.status !== 'completed') {
+                  await SetProgressService.markCompleted(String(levelId), String(prevSet.id), 80);
+                }
+              }
+            }
+          } else {
+            // For static quiz, find its position and mark all previous non-quiz sets
+            const quizIndex = level.sets.findIndex(s => String(s.id) === String(setId));
+            if (quizIndex > 0) {
+              for (let i = 0; i < quizIndex; i++) {
+                const prevSet = level.sets[i];
+                if (prevSet && prevSet.type !== 'quiz') {
+                  const prevProgress = SetProgressService.get(String(levelId), String(prevSet.id));
+                  if (!prevProgress || prevProgress.status !== 'completed') {
+                    await SetProgressService.markCompleted(String(levelId), String(prevSet.id), 80);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Force immediate save to ensure data persists before navigation
+        await SetProgressService.flushSave();
       }
     } catch {}
 
@@ -218,6 +280,23 @@ export default function AtlasPracticeIntegrated() {
       setMlIndex(0);
     }
   }, [currentPhase, setId, levelId]);
+
+  // Cleanup UFO animation timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (ufoTimeoutRef.current) {
+        clearTimeout(ufoTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Hide nav bar when entering practice screen
+  useEffect(() => {
+    DeviceEventEmitter.emit('NAV_VISIBILITY', 'hide');
+    return () => {
+      DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
+    };
+  }, []);
 
   // Initialize progress/resume and mark in-progress while user is inside
   useEffect(() => {
@@ -259,26 +338,37 @@ export default function AtlasPracticeIntegrated() {
 
     const Component = phase.component as any;
 
+    // Get quiz words - either computed (dynamic quiz) or from static set
+    const quizWords = computedQuizWords || (isQuiz && set?.words ? set.words : null);
+
     // Determine word range for quiz mode
     // Distribute words evenly across 4 exercises
     let wordRange: { start: number; end: number } | undefined;
-    if (isQuiz && computedQuizWords && computedQuizWords.length > 0) {
-      const totalWords = computedQuizWords.length;
-      // Ensure at least 1 word per exercise, distribute evenly
-      const wordsPerExercise = Math.max(1, Math.ceil(totalWords / 4));
+    if (isQuiz && quizWords && quizWords.length > 0) {
+      const totalWords = quizWords.length;
+      // For quizzes, distribute words across 4 phases (5 words each for 20 total)
+      const wordsPerExercise = Math.max(1, Math.floor(totalWords / 4));
+      const remainder = totalWords % 4;
 
       if (phase.id === 'mcq') {
-        wordRange = { start: 0, end: Math.min(wordsPerExercise, totalWords) };
+        // First phase gets wordsPerExercise + 1 if there's remainder
+        const end = wordsPerExercise + (remainder > 0 ? 1 : 0);
+        wordRange = { start: 0, end: Math.min(end, totalWords) };
       } else if (phase.id === 'synonym') {
-        const start = Math.min(wordsPerExercise, totalWords - 1);
-        const end = Math.min(start + wordsPerExercise, totalWords);
-        wordRange = { start, end: end > start ? end : totalWords };
-      } else if (phase.id === 'usage') {
-        const start = Math.min(wordsPerExercise * 2, totalWords - 1);
-        const end = Math.min(start + wordsPerExercise, totalWords);
-        wordRange = { start, end: end > start ? end : totalWords };
+        const prevEnd = wordsPerExercise + (remainder > 0 ? 1 : 0);
+        const thisCount = wordsPerExercise + (remainder > 1 ? 1 : 0);
+        wordRange = { start: prevEnd, end: Math.min(prevEnd + thisCount, totalWords) };
+      } else if (phase.id === 'oddoneout') {
+        const phase1 = wordsPerExercise + (remainder > 0 ? 1 : 0);
+        const phase2 = wordsPerExercise + (remainder > 1 ? 1 : 0);
+        const start = phase1 + phase2;
+        const thisCount = wordsPerExercise + (remainder > 2 ? 1 : 0);
+        wordRange = { start, end: Math.min(start + thisCount, totalWords) };
       } else if (phase.id === 'letters') {
-        const start = Math.min(wordsPerExercise * 3, totalWords - 1);
+        const phase1 = wordsPerExercise + (remainder > 0 ? 1 : 0);
+        const phase2 = wordsPerExercise + (remainder > 1 ? 1 : 0);
+        const phase3 = wordsPerExercise + (remainder > 2 ? 1 : 0);
+        const start = phase1 + phase2 + phase3;
         wordRange = { start, end: totalWords };
       }
     }
@@ -327,6 +417,7 @@ export default function AtlasPracticeIntegrated() {
           totalWords={words.length}
           hearts={hearts}
           showUfoAnimation={showUfoAnimation}
+          ufoAnimationKey={ufoAnimationKey}
           onResult={({ mistakes, usedReveal }) => {
             const hasMistake = (mistakes || 0) > 0 || usedReveal;
             if (hasMistake) {
@@ -366,6 +457,7 @@ export default function AtlasPracticeIntegrated() {
         wordRange={wordRange}
         wordsOverride={computedQuizWords || undefined}
         showUfoAnimation={showUfoAnimation}
+        ufoAnimationKey={ufoAnimationKey}
       />
     );
   };
@@ -409,10 +501,10 @@ export default function AtlasPracticeIntegrated() {
         title: 'Synonyms',
         description: 'Match each word with its synonym',
       },
-      usage: {
+      oddoneout: {
         lottieSource: require('./../../assets/lottie/learn/Chameleon.lottie'),
-        title: 'Natural Usage',
-        description: 'Complete sentences using the right word',
+        title: 'Odd One Out',
+        description: 'Find the word that doesn\'t belong',
       },
       letters: {
         lottieSource: require('./../../assets/lottie/learn/Cat_playing.lottie'),
@@ -430,18 +522,30 @@ export default function AtlasPracticeIntegrated() {
   return (
     <View style={[styles.wrapper, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isLight ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+
+      {/* Dotted background pattern */}
+      <View style={styles.dotPatternContainer} pointerEvents="none">
+        {Array.from({ length: 50 }).map((_, rowIndex) => (
+          <View key={rowIndex} style={styles.dotPatternRow}>
+            {Array.from({ length: 25 }).map((_, colIndex) => (
+              <View
+                key={colIndex}
+                style={[
+                  styles.dotPattern,
+                  { backgroundColor: isLight ? '#D4D4D4' : '#333333' }
+                ]}
+              />
+            ))}
+          </View>
+        ))}
+      </View>
+
+      <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]}>
         {/* Minimal Header - just back button */}
         <View style={styles.headerMinimal}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={async () => {
-            // Save in-progress on manual exit
-            if (levelId && setId) {
-              try { await SetProgressService.markInProgress(String(levelId), String(setId), currentPhase); } catch {}
-            }
-            router.back();
-          }}
+          onPress={() => setShowLeaveModal(true)}
         >
           <X size={24} color={isLight ? '#9CA3AF' : '#6B7280'} strokeWidth={2.5} />
         </TouchableOpacity>
@@ -464,6 +568,47 @@ export default function AtlasPracticeIntegrated() {
         </View>
 
       </SafeAreaView>
+
+      {/* Custom Leave Confirmation Modal */}
+      <Modal
+        visible={showLeaveModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLeaveModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, isLight && styles.modalContainerLight]}>
+            <Text style={[styles.modalTitle, isLight && styles.modalTitleLight]}>Leave?</Text>
+            <Text style={[styles.modalMessage, isLight && styles.modalMessageLight]}>
+              Progress will be lost.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonStay, isLight && styles.modalButtonStayLight]}
+                onPress={() => setShowLeaveModal(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.modalButtonText, styles.modalButtonStayText]}>Stay</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonLeave]}
+                onPress={async () => {
+                  setShowLeaveModal(false);
+                  if (levelId && setId) {
+                    try {
+                      await SetProgressService.resetSet(String(levelId), String(setId));
+                    } catch {}
+                  }
+                  router.back();
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.modalButtonText, styles.modalButtonLeaveText]}>Leave</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -827,6 +972,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1E1E1E',
   },
+  dotPatternContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'column',
+    paddingTop: 16,
+    paddingLeft: 16,
+  },
+  dotPatternRow: {
+    flexDirection: 'row',
+    marginBottom: 22,
+  },
+  dotPattern: {
+    width: 2,
+    height: 2,
+    borderRadius: 1,
+    marginRight: 22,
+    opacity: 0.7,
+  },
   headerMinimal: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1041,5 +1207,85 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#9CA3AF',
     fontFamily: 'Feather-Bold',
+  },
+  // Leave Confirmation Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  modalContainer: {
+    backgroundColor: '#2A2A2A',
+    borderRadius: 20,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+    width: '100%',
+    maxWidth: 300,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#3A3A3A',
+  },
+  modalContainerLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    fontFamily: 'Ubuntu-Bold',
+  },
+  modalTitleLight: {
+    color: '#111827',
+  },
+  modalMessage: {
+    fontSize: 15,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginBottom: 24,
+    fontFamily: 'Feather-Bold',
+  },
+  modalMessageLight: {
+    color: '#6B7280',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderBottomWidth: 4,
+  },
+  modalButtonStay: {
+    backgroundColor: '#4ED9CB',
+    borderColor: '#1A1A1A',
+  },
+  modalButtonStayLight: {
+    backgroundColor: '#4ED9CB',
+    borderColor: '#2A8A80',
+  },
+  modalButtonLeave: {
+    backgroundColor: 'transparent',
+    borderColor: '#F25E86',
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
+  },
+  modalButtonStayText: {
+    color: '#FFFFFF',
+  },
+  modalButtonLeaveText: {
+    color: '#F25E86',
   },
 });

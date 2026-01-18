@@ -4361,7 +4361,7 @@ EXAMPLE: [sentence in ${langName}]`
       <View style={styles.dotContainer} pointerEvents="none">
         {Array.from({ length: 40 }).map((_, rowIndex) => (
           <View key={rowIndex} style={styles.dotRow}>
-            {Array.from({ length: 15 }).map((_, colIndex) => (
+            {Array.from({ length: 25 }).map((_, colIndex) => (
               <View
                 key={colIndex}
                 style={[
@@ -4469,7 +4469,7 @@ EXAMPLE: [sentence in ${langName}]`
             <View style={styles.missionActions}>
               <TouchableOpacity
                 activeOpacity={0.9}
-                style={[styles.storyWordsCta, { alignItems: 'center' }]}
+                style={[styles.storyWordsCta, theme === 'light' && styles.storyWordsCtaLight, { alignItems: 'center' }]}
                 onPress={() => openStoryViewer(storyStartIndex)}
               >
                 <Text style={styles.storyWordsCtaText}>{storyCtaLabel}</Text>
@@ -4980,7 +4980,7 @@ EXAMPLE: [sentence in ${langName}]`
                           </View>
                         </View>
 
-                        <Text style={{ fontSize: 15, color: colors.counterText, fontWeight: '600' }}>
+                        <Text style={{ fontSize: 15, color: colors.counterText, fontWeight: '600', fontFamily: 'Ubuntu-Bold' }}>
                           {displayQuestionNumber}/{totalQuestions}
                         </Text>
                       </View>
@@ -5000,15 +5000,17 @@ EXAMPLE: [sentence in ${langName}]`
                               borderRadius: 16,
                               overflow: 'hidden',
                               backgroundColor: colors.cardBg,
+                              borderWidth: 3,
+                              borderColor: '#1A1A1A',
                               shadowColor: '#000',
-                              shadowOffset: { width: 0, height: 2 },
-                              shadowOpacity: isDark ? 0.3 : 0.08,
-                              shadowRadius: 8,
-                              elevation: 3,
+                              shadowOffset: { width: 2, height: 3 },
+                              shadowOpacity: 0.4,
+                              shadowRadius: 0,
+                              elevation: 5,
                             }}>
                               <Image
                                 source={{ uri: answerImageUrl }}
-                                style={{ width: '100%', height: 160 }}
+                                style={{ width: '100%', height: 180 }}
                                 resizeMode="cover"
                               />
                             </View>
@@ -5018,10 +5020,11 @@ EXAMPLE: [sentence in ${langName}]`
                           <View style={{ paddingHorizontal: 20, marginBottom: 20 }}>
                             <Text style={{
                               color: colors.questionText,
-                              fontSize: 20,
-                              lineHeight: 30,
+                              fontSize: 22,
+                              lineHeight: 32,
                               textAlign: 'center',
-                              fontWeight: '600',
+                              fontWeight: '700',
+                              fontFamily: 'Feather-Bold',
                             }}>
                               {getSentenceWithBlank(currentWord)}
                             </Text>
@@ -5061,22 +5064,28 @@ EXAMPLE: [sentence in ${langName}]`
                                     activeOpacity={0.7}
                                     style={{
                                       width: '100%',
-                                      backgroundColor: bgColor,
-                                      borderRadius: 10,
+                                      backgroundColor: exerciseAnswered ? bgColor : (isDark ? '#1F1F1F' : '#FFFFFF'),
+                                      borderRadius: 14,
                                       paddingVertical: 24,
                                       paddingHorizontal: 10,
                                       justifyContent: 'center',
                                       alignItems: 'center',
-                                      borderWidth: 2,
-                                      borderColor,
+                                      borderWidth: 3,
+                                      borderColor: exerciseAnswered ? borderColor : '#1A1A1A',
                                       minHeight: 88,
+                                      shadowColor: '#000',
+                                      shadowOpacity: isDark ? 0.4 : 0.15,
+                                      shadowRadius: 0,
+                                      shadowOffset: { width: 2, height: 3 },
+                                      elevation: 5,
                                     }}
                                   >
                                     <Text style={{
-                                      color: textColor,
-                                      fontSize: 15,
-                                      fontWeight: '600',
+                                      color: exerciseAnswered ? textColor : (isDark ? '#E5E7EB' : '#111827'),
+                                      fontSize: 16,
+                                      fontWeight: '700',
                                       textAlign: 'center',
+                                      fontFamily: 'Ubuntu-Bold',
                                     }}>
                                       {opt}
                                     </Text>
@@ -5108,10 +5117,11 @@ EXAMPLE: [sentence in ${langName}]`
                               {exerciseSelectedAnswer?.toLowerCase() !== correctAnswer.toLowerCase() && (
                                 <Text style={{
                                   color: 'rgba(255,255,255,0.92)',
-                                  fontSize: 14,
+                                  fontSize: 15,
                                   fontWeight: '700',
                                   textAlign: 'center',
                                   marginBottom: 8,
+                                  fontFamily: 'Ubuntu-Bold',
                                 }}>
                                   Answer: {correctAnswer}
                                 </Text>
@@ -5120,17 +5130,25 @@ EXAMPLE: [sentence in ${langName}]`
 	                              onPress={handleNextQuestion}
 	                              activeOpacity={0.9}
 	                              style={{
-	                                backgroundColor: isDark ? '#1E2124' : '#FFFFFF',
-                                paddingVertical: 14,
-                                borderRadius: 12,
+	                                backgroundColor: '#FFFFFF',
+                                paddingVertical: 16,
+                                borderRadius: 14,
                                 marginTop: exerciseSelectedAnswer?.toLowerCase() === correctAnswer.toLowerCase() ? 12 : 4,
+                                borderWidth: 3,
+                                borderColor: '#1A1A1A',
+                                shadowColor: '#000',
+                                shadowOffset: { width: 2, height: 3 },
+                                shadowOpacity: 0.3,
+                                shadowRadius: 0,
+                                elevation: 5,
                               }}
                             >
                               <Text style={{
-                                color: exerciseSelectedAnswer?.toLowerCase() === correctAnswer.toLowerCase() ? '#7CE7A0' : '#EF4444',
-                                fontSize: 15,
+                                color: exerciseSelectedAnswer?.toLowerCase() === correctAnswer.toLowerCase() ? '#437F76' : '#DC2626',
+                                fontSize: 16,
                                 fontWeight: '700',
                                 textAlign: 'center',
+                                fontFamily: 'Ubuntu-Bold',
                               }}>
                                 {exerciseQuestionIndex + 1 < totalQuestions ? 'CONTINUE' : 'SEE RESULTS'}
                               </Text>
@@ -5153,10 +5171,11 @@ EXAMPLE: [sentence in ${langName}]`
 	                        />
 
 	                        <Text style={{
-	                          fontSize: 16,
+	                          fontSize: 17,
 	                          color: isDark ? '#9CA3AF' : '#6B7280',
 	                          textAlign: 'center',
 	                          marginBottom: 24,
+	                          fontFamily: 'Ubuntu-Medium',
 	                        }}>
 	                          You got {exerciseScore} out of {totalQuestions} questions right
 	                        </Text>
@@ -5164,26 +5183,26 @@ EXAMPLE: [sentence in ${langName}]`
 	                        {/* Score display */}
                         <View style={{
                           flexDirection: 'row',
-                          backgroundColor: isDark ? '#1E2124' : '#FFFFFF',
+                          backgroundColor: isDark ? '#1F1F1F' : '#FFFFFF',
                           borderRadius: 16,
                           padding: 20,
                           marginBottom: 32,
-                          borderWidth: 1,
-                          borderColor: isDark ? '#2A3033' : '#E5DED3',
+                          borderWidth: 3,
+                          borderColor: '#1A1A1A',
                           shadowColor: '#000',
-                          shadowOffset: { width: 0, height: 4 },
-                          shadowOpacity: isDark ? 0.25 : 0.08,
-                          shadowRadius: 12,
-                          elevation: 4,
+                          shadowOffset: { width: 2, height: 3 },
+                          shadowOpacity: 0.4,
+                          shadowRadius: 0,
+                          elevation: 5,
                         }}>
                           <View style={{ alignItems: 'center', paddingHorizontal: 24 }}>
-                            <Text style={{ fontSize: 32, fontWeight: '700', color: '#7CE7A0' }}>{exerciseScore}</Text>
-                            <Text style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 4 }}>Correct</Text>
+                            <Text style={{ fontSize: 32, fontWeight: '700', color: '#4ED9CB', fontFamily: 'Feather-Bold' }}>{exerciseScore}</Text>
+                            <Text style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 4, fontFamily: 'Ubuntu-Medium' }}>Correct</Text>
                           </View>
-                          <View style={{ width: 1, backgroundColor: isDark ? '#353D42' : '#E5DED3' }} />
+                          <View style={{ width: 2, backgroundColor: isDark ? '#333' : '#E5E7EB' }} />
                           <View style={{ alignItems: 'center', paddingHorizontal: 24 }}>
-                            <Text style={{ fontSize: 32, fontWeight: '700', color: '#EF4444' }}>{totalQuestions - exerciseScore}</Text>
-                            <Text style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 4 }}>Incorrect</Text>
+                            <Text style={{ fontSize: 32, fontWeight: '700', color: '#F25E86', fontFamily: 'Feather-Bold' }}>{totalQuestions - exerciseScore}</Text>
+                            <Text style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 4, fontFamily: 'Ubuntu-Medium' }}>Incorrect</Text>
                           </View>
                         </View>
 
@@ -5191,21 +5210,25 @@ EXAMPLE: [sentence in ${langName}]`
                           onPress={closeStoryViewer}
                           activeOpacity={0.9}
                           style={{
-                            backgroundColor: '#F8B070',
+                            backgroundColor: '#F25E86',
                             paddingVertical: 16,
                             paddingHorizontal: 48,
                             borderRadius: 14,
-                            shadowColor: '#F8B070',
-                            shadowOffset: { width: 0, height: 4 },
-                            shadowOpacity: 0.3,
-                            shadowRadius: 8,
+                            borderWidth: 3,
+                            borderColor: '#1A1A1A',
+                            shadowColor: '#000',
+                            shadowOffset: { width: 2, height: 3 },
+                            shadowOpacity: 0.4,
+                            shadowRadius: 0,
+                            elevation: 5,
                           }}
                         >
                           <Text style={{
-                            color: '#0D1117',
+                            color: '#FFFFFF',
                             fontSize: 16,
-                            fontWeight: '800',
+                            fontWeight: '700',
                             textAlign: 'center',
+                            fontFamily: 'Ubuntu-Bold',
                           }}>
                             CONTINUE
                           </Text>
@@ -5629,9 +5652,22 @@ EXAMPLE: [sentence in ${langName}]`
                     )}
                   </Text>
                   {!!sheetArticle.vocab?.length && (
-                    <View style={[styles.newsGlossary, { backgroundColor: articleBgColor === 'sepia' ? 'rgba(180,160,130,0.15)' : (articleBgColor === 'dark' || articleBgColor === 'black') ? 'rgba(255,255,255,0.05)' : theme === 'light' ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)' }]}>
+                    <View style={[
+                      styles.vocabSection,
+                      articleBgColor === 'sepia' && styles.vocabSectionSepia,
+                      (articleBgColor === 'dark' || articleBgColor === 'black') && styles.vocabSectionDark,
+                      theme === 'light' && articleBgColor !== 'sepia' && articleBgColor !== 'dark' && articleBgColor !== 'black' && styles.vocabSectionLight,
+                    ]}>
                       <View style={styles.vocabHeaderRow}>
-                        <Text style={[styles.newsGlossaryTitle, { color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#0D3B4A' : '#E5E7EB' }]}>Vocabulary</Text>
+                        <View style={styles.vocabTitleRow}>
+                          <View style={[styles.vocabTitleAccent, articleBgColor === 'sepia' && { backgroundColor: '#B45309' }]} />
+                          <Text style={[
+                            styles.vocabSectionTitle,
+                            articleBgColor === 'sepia' && { color: '#5D4E37' },
+                            (articleBgColor === 'dark' || articleBgColor === 'black') && { color: '#F8B070' },
+                            theme === 'light' && articleBgColor !== 'sepia' && articleBgColor !== 'dark' && articleBgColor !== 'black' && { color: '#F8B070' },
+                          ]}>VOCABULARY</Text>
+                        </View>
                         {sheetArticle.vocab.some(v => v.translation) && (
                           <TouchableOpacity
                             onPress={() => setShowVocabTranslations(!showVocabTranslations)}
@@ -5648,14 +5684,34 @@ EXAMPLE: [sentence in ${langName}]`
                           </TouchableOpacity>
                         )}
                       </View>
-                      {sheetArticle.vocab.map((item, vocabIndex) => (
-                        <Text key={`${item.word || 'word'}-${vocabIndex}`} style={[styles.newsGlossaryItem, { color: getArticleTextColor(), fontSize: 15 }]}>
-                          <Text style={{ fontWeight: '700' }}>{item.word}</Text> — {item.definition}
-                          {showVocabTranslations && !!item.translation && (
-                            <Text style={{ color: articleBgColor === 'sepia' ? '#B45309' : '#F8B070' }}> ({item.translation})</Text>
-                          )}
-                        </Text>
-                      ))}
+                      <View style={styles.vocabItemsContainer}>
+                        {sheetArticle.vocab.map((item, vocabIndex) => (
+                          <View
+                            key={`${item.word || 'word'}-${vocabIndex}`}
+                            style={[
+                              styles.vocabItem,
+                              articleBgColor === 'sepia' && styles.vocabItemSepia,
+                              (articleBgColor === 'dark' || articleBgColor === 'black') && styles.vocabItemDark,
+                              theme === 'light' && articleBgColor !== 'sepia' && articleBgColor !== 'dark' && articleBgColor !== 'black' && styles.vocabItemLight,
+                            ]}
+                          >
+                            <Text style={[
+                              styles.vocabWord,
+                              articleBgColor === 'sepia' && { color: '#8B4513' },
+                              (articleBgColor === 'dark' || articleBgColor === 'black') && { color: '#F8B070' },
+                              theme === 'light' && articleBgColor !== 'sepia' && articleBgColor !== 'dark' && articleBgColor !== 'black' && { color: '#D97706' },
+                            ]}>
+                              {item.word}
+                            </Text>
+                            <Text style={[styles.vocabDefinition, { color: getArticleTextColor() }]}>
+                              {item.definition}
+                              {showVocabTranslations && !!item.translation && (
+                                <Text style={{ color: articleBgColor === 'sepia' ? '#B45309' : '#F8B070', fontStyle: 'italic' }}> ({item.translation})</Text>
+                              )}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
                     </View>
                   )}
 
@@ -5887,7 +5943,7 @@ EXAMPLE: [sentence in ${langName}]`
       {/* Floating Action Button */}
       {!isPreview && (
         <TouchableOpacity
-          style={[styles.fab, { bottom: Math.max(48, insets.bottom + 52) }]}
+          style={[styles.fab, theme === 'light' && styles.fabLight, { bottom: Math.max(48, insets.bottom + 52) }]}
           onPress={() => (menuOpen ? closeMenu() : openMenu())}
           activeOpacity={0.8}
         >
@@ -6213,22 +6269,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     padding: 16,
     borderRadius: 16,
-    backgroundColor: '#2A2A2A',
-    borderWidth: 2,
-    borderColor: 'rgba(78,217,203,0.06)',
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderBottomColor: 'rgba(78,217,203,0.1)',
-    borderRightColor: 'rgba(78,217,203,0.08)',
+    backgroundColor: '#1F1F1F',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    shadowOffset: { width: 2, height: 3 },
+    elevation: 5,
   },
   storyWordsCardLight: {
     backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
     borderWidth: 2,
-    borderColor: 'rgba(78,217,203,0.2)',
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderBottomColor: 'rgba(78,217,203,0.25)',
-    borderRightColor: 'rgba(78,217,203,0.22)',
+    shadowOpacity: 0.1,
+    shadowColor: '#9CA3AF',
   },
   storyViewedLabel: {
     fontSize: 12,
@@ -6242,25 +6297,22 @@ const styles = StyleSheet.create({
     minWidth: 80,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 16,
-    backgroundColor: '#2A2A2A',
-    borderWidth: 2,
-    borderColor: 'rgba(78,217,203,0.06)',
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderBottomColor: 'rgba(78,217,203,0.1)',
-    borderRightColor: 'rgba(78,217,203,0.08)',
+    borderRadius: 12,
+    backgroundColor: '#1F1F1F',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 0,
+    shadowOffset: { width: 2, height: 2 },
+    elevation: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
   storyBubbleLight: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: 'rgba(78,217,203,0.2)',
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderBottomColor: 'rgba(78,217,203,0.25)',
-    borderRightColor: 'rgba(78,217,203,0.22)',
+    borderColor: '#1A1A1A',
+    shadowOpacity: 0.12,
   },
   storyBubbleText: {
     color: '#F9FAFB',
@@ -6276,23 +6328,20 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    borderRadius: 16,
-    backgroundColor: '#2A2A2A',
-    borderWidth: 2,
-    borderColor: 'rgba(78,217,203,0.06)',
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderBottomColor: 'rgba(78,217,203,0.1)',
-    borderRightColor: 'rgba(78,217,203,0.08)',
+    borderRadius: 14,
+    backgroundColor: '#1F1F1F',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 0,
+    shadowOffset: { width: 2, height: 3 },
+    elevation: 5,
   },
   storyDetailCardLight: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: 'rgba(78,217,203,0.2)',
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderBottomColor: 'rgba(78,217,203,0.25)',
-    borderRightColor: 'rgba(78,217,203,0.22)',
+    borderColor: '#1A1A1A',
+    shadowOpacity: 0.12,
   },
   storyDetailWord: {
     fontSize: 17,
@@ -6701,13 +6750,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#F25E86',
     paddingVertical: 12,
     paddingHorizontal: 32,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: 'rgba(242,94,134,0.3)',
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderBottomColor: 'rgba(242,94,134,0.5)',
-    borderRightColor: 'rgba(242,94,134,0.4)',
+    borderRadius: 14,
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    shadowOffset: { width: 2, height: 3 },
+    elevation: 5,
+  },
+  storyWordsCtaLight: {
+    borderColor: '#C94A6E',
+    shadowColor: '#C94A6E',
+    shadowOpacity: 0.25,
   },
   storyWordsCtaText: {
     color: '#FFFFFF',
@@ -6802,8 +6857,10 @@ const styles = StyleSheet.create({
   },
   synonymMatchCardLight: {
     backgroundColor: '#FFFFFF',
-    borderColor: '#1A1A1A',
-    shadowOpacity: 0.15,
+    borderColor: '#E5E7EB',
+    borderWidth: 2,
+    shadowOpacity: 0.1,
+    shadowColor: '#9CA3AF',
   },
   synonymMatchHeader: {
     marginBottom: 16,
@@ -6875,15 +6932,97 @@ const styles = StyleSheet.create({
   newsWhyMattersLight: { color: '#9A3412' },
   newsSummary: { marginTop: 6, fontSize: 17, lineHeight: 26, color: '#D1D5DB', fontFamily: 'Ubuntu-Regular' },
   newsSummaryLight: { color: '#374151' },
-  newsGlossary: { marginTop: 12, padding: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', gap: 6 },
-  newsGlossaryLight: { backgroundColor: '#F8FAFC', borderColor: '#E5E7EB' },
+  newsGlossary: { marginTop: 12, padding: 14, borderRadius: 14, backgroundColor: '#1F1F1F', borderWidth: 3, borderColor: '#1A1A1A', gap: 6, shadowColor: '#000', shadowOffset: { width: 2, height: 3 }, shadowOpacity: 0.4, shadowRadius: 0, elevation: 5 },
+  newsGlossaryLight: { backgroundColor: '#F8FAFC', borderColor: '#E5E7EB', borderWidth: 2, shadowOpacity: 0.1, shadowColor: '#9CA3AF' },
   newsGlossaryTitle: { fontSize: 12, fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: 'Ubuntu-Bold' },
   newsGlossaryTitleLight: { color: '#6B7280' },
-  vocabHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  vocabHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   vocabTranslationToggle: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
   vocabTranslationToggleText: { fontSize: 11, fontWeight: '600', fontFamily: 'Ubuntu-Medium' },
   newsGlossaryItem: { fontSize: 13, color: '#D1D5DB', lineHeight: 18, fontFamily: 'Ubuntu-Regular' },
   newsGlossaryItemLight: { color: '#4B5563' },
+  // New vocabulary section styles
+  vocabSection: {
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: '#2A2D2E',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 5,
+  },
+  vocabSectionLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+    shadowOpacity: 0.15,
+    shadowColor: '#9CA3AF',
+  },
+  vocabSectionSepia: {
+    backgroundColor: 'rgba(180,160,130,0.2)',
+    borderColor: 'rgba(180,83,9,0.3)',
+  },
+  vocabSectionDark: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  vocabTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  vocabTitleAccent: {
+    width: 4,
+    height: 16,
+    borderRadius: 2,
+    backgroundColor: '#F8B070',
+  },
+  vocabSectionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#F8B070',
+    letterSpacing: 1.5,
+    fontFamily: 'Feather-Bold',
+  },
+  vocabItemsContainer: {
+    gap: 12,
+  },
+  vocabItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#F8B070',
+  },
+  vocabItemLight: {
+    backgroundColor: 'rgba(248,176,112,0.08)',
+    borderLeftColor: '#F8B070',
+  },
+  vocabItemSepia: {
+    backgroundColor: 'rgba(180,83,9,0.1)',
+    borderLeftColor: '#B45309',
+  },
+  vocabItemDark: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderLeftColor: '#F8B070',
+  },
+  vocabWord: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#F8B070',
+    marginBottom: 4,
+    fontFamily: 'Feather-Bold',
+  },
+  vocabDefinition: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#D1D5DB',
+    fontFamily: 'Ubuntu-Regular',
+  },
   newsControlsRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' },
   newsChip: { paddingHorizontal: 8, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.08)' },
   newsChipLight: { borderColor: '#E5E7EB', backgroundColor: '#F3F4F6' },
@@ -7019,17 +7158,24 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 50,
     right: 24,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#88BBF5',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#4ED9CB',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
+    shadowOffset: { width: 2, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
     elevation: 6,
+  },
+  fabLight: {
+    borderColor: '#2D9A8F',
+    shadowColor: '#2D9A8F',
+    shadowOpacity: 0.25,
   },
   headerRow: {
     flexDirection: 'row',
@@ -7347,7 +7493,7 @@ const styles = StyleSheet.create({
   },
   magazineDualCard: {
     borderRadius: 16,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#2A2D2E',
     overflow: 'hidden',
   },
   magazineDualCardLight: {
@@ -7398,8 +7544,8 @@ const styles = StyleSheet.create({
   magazineListCard: {
     flexDirection: 'row',
     borderRadius: 14,
-    backgroundColor: '#1E1E1E',
-    minHeight: 120,
+    backgroundColor: '#2A2D2E',
+    height: 120,
     overflow: 'hidden',
     borderTopLeftRadius: 2,
     borderBottomLeftRadius: 2,
@@ -7411,8 +7557,8 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
   },
   magazineListImage: {
-    width: 130,
-    height: '100%',
+    width: 120,
+    height: 120,
     borderTopRightRadius: 14,
     borderBottomRightRadius: 14,
     resizeMode: 'cover',

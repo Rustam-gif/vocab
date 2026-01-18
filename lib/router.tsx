@@ -409,6 +409,8 @@ export function RouteRenderer() {
           if (data?.session?.user) {
             const progress = useAppStore.getState().userProgress;
             setUser(mapSupabaseUser(data.session.user, progress));
+            // Update engagement tracking with user info
+            engagementTrackingService.onUserLogin(data.session.user.id, data.session.user.email || undefined);
           }
         } catch (e) {
           console.log('Auth session check skipped:', e);
@@ -422,6 +424,8 @@ export function RouteRenderer() {
         if (session?.user) {
           const progress = useAppStore.getState().userProgress;
           setUser(mapSupabaseUser(session.user, progress));
+          // Update engagement tracking with user info
+          engagementTrackingService.onUserLogin(session.user.id, session.user.email || undefined);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
         }
@@ -618,6 +622,16 @@ export function RouteRenderer() {
       }
       ctx.setCurrentTab('home');
       ctx.setStack([{ pathname: '/' }]);
+      return;
+    }
+
+    // Account tab should always reset to clean profile route (no stale redirect params)
+    if (tabKey === 'account') {
+      if (currentTabKey !== 'account') {
+        ctx.setTabStacks(prev => ({ ...prev, [currentTabKey]: [...currentStack] }));
+      }
+      ctx.setCurrentTab('account');
+      ctx.setStack([{ pathname: '/profile' }]);
       return;
     }
 
@@ -939,7 +953,14 @@ export function RouteRenderer() {
               bottom: 0,
               left: 0,
               right: 0,
-              backgroundColor: themeName === 'light' ? '#FFFFFF' : '#0C0E10',
+              backgroundColor: colors.background,
+              borderTopWidth: 3,
+              borderTopColor: themeName === 'light' ? '#E5E7EB' : '#1A1A1A',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -2 },
+              shadowOpacity: themeName === 'light' ? 0.1 : 0.4,
+              shadowRadius: 0,
+              elevation: 3,
             }}
           />
           <View
@@ -978,11 +999,11 @@ export function RouteRenderer() {
                 }}
               >
                 {item.icon ? (
-                  <Image source={item.icon} style={{ width: 24, height: 24, opacity: active ? 1 : 0.5, ...(item.color ? { tintColor: item.color } : {}) }} resizeMode="contain" />
+                  <Image source={item.icon} style={{ width: 24, height: 24, opacity: active ? 1 : 0.7, ...(item.color ? { tintColor: item.color } : {}) }} resizeMode="contain" />
                 ) : item.lucideIcon ? (
-                  <item.lucideIcon size={24} color={item.color || '#888'} fill={item.color || '#888'} style={{ opacity: active ? 1 : 0.5 }} />
+                  <item.lucideIcon size={24} color={item.color || '#888'} fill={item.color || '#888'} style={{ opacity: active ? 1 : 0.7 }} />
                 ) : null}
-                <Text style={{ marginTop: 1, fontSize: 9.5, fontWeight: active ? '700' : '500', color: active ? (themeName === 'light' ? '#0F172A' : '#E5E7EB') : (themeName === 'light' ? '#9CA3AF' : '#6B7280') }}>
+                <Text style={{ marginTop: 1, fontSize: 10, fontWeight: '700', fontFamily: 'Feather-Bold', color: active ? (themeName === 'light' ? '#0F172A' : '#E5E7EB') : (themeName === 'light' ? '#9CA3AF' : '#6B7280') }}>
                   {item.label}
                 </Text>
               </Animated.View>

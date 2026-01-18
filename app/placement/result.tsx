@@ -115,6 +115,21 @@ export default function PlacementResult() {
 
         await SetProgressService.initialize();
         const recIndex = coreOrder.indexOf(appLevel);
+
+        // First, reset progress for levels at or above the new placement level
+        // This ensures that if user retests and level decreases, those circles are deactivated
+        const toReset = coreOrder.slice(recIndex);
+        for (const lvlId of toReset) {
+          const lvl = levels.find(l => l.id === lvlId);
+          if (!lvl) continue;
+          for (const s of lvl.sets) {
+            try {
+              await SetProgressService.resetSet(lvl.id, s.id);
+            } catch {}
+          }
+        }
+
+        // Then mark levels below placement as completed
         if (recIndex > 0) {
           const toComplete = coreOrder.slice(0, recIndex);
           for (const lvlId of toComplete) {

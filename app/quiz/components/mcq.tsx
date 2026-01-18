@@ -29,6 +29,7 @@ interface MCQProps {
   // Optional override list for dynamic quizzes not present in levels.ts
   wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
   showUfoAnimation?: boolean;
+  ufoAnimationKey?: number;
 }
 
 interface Question {
@@ -1934,7 +1935,7 @@ const typedFallbacks = (setTitle: string, pos: 'verb'|'noun'|'adjective'): strin
   return ['A general concept related to subject'];
 };
 
-export default function MCQComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride, showUfoAnimation }: MCQProps) {
+export default function MCQComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride, showUfoAnimation, ufoAnimationKey = 0 }: MCQProps) {
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
@@ -2958,6 +2959,7 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
             />
             {showUfoAnimation && (
               <LottieView
+                key={`ufo-${ufoAnimationKey}`}
                 source={require('../../../assets/lottie/learn/Ufo_animation.lottie')}
                 autoPlay
                 loop={false}
@@ -2985,7 +2987,7 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
       >
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 120 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 40, paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
@@ -3216,8 +3218,8 @@ const styles = StyleSheet.create({
   },
   nextButtonContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 70,
-    paddingTop: 8,
+    paddingBottom: 50,
+    paddingTop: 24,
     alignItems: 'center',
   },
   optionButton: {

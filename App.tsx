@@ -172,9 +172,9 @@ export default function App() {
     return () => { if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current); };
   }, []);
 
-  // Schedule daily streak reminder at 7 PM local time
+  // Initialize notifications (2x daily by default: 10:00 and 19:00)
   useEffect(() => {
-    NotificationService.ensureDailyReminder(19, 0).catch(() => {});
+    NotificationService.initialize().catch(() => {});
   }, []);
 
 

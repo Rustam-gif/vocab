@@ -54,12 +54,6 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
       lottie: require('../../assets/lottie/Onboarding/Scrolling.json'),
     },
     {
-      title: 'Choose Your Look',
-      body: 'Light or Dark — pick what feels good for your eyes and your mood.',
-      lottie: require('../../assets/lottie/Onboarding/Togglemode.json'),
-      type: 'theme' as const,
-    },
-    {
       title: 'Pick Your Language',
       body: "Choose your language and we'll translate while you learn.",
       lottie: require('../../assets/lottie/Onboarding/LanguageTranslator.json'),
@@ -316,23 +310,6 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
                 const scale = scrollX.interpolate({ inputRange, outputRange: [0.94, 1, 0.94], extrapolate: 'clamp' });
                 const translateY = scrollX.interpolate({ inputRange, outputRange: [14, 0, 14], extrapolate: 'clamp' });
                 const opacity = scrollX.interpolate({ inputRange, outputRange: [0.7, 1, 0.7], extrapolate: 'clamp' });
-                if ((p as any).type === 'theme') {
-                  const hasPlayed = !!playedRef.current[i];
-                  const shouldAuto = index === i && !hasPlayed;
-                  return (
-                    <Animated.View style={[styles.heroCard, previewIsLight ? styles.heroCardLight : styles.heroCardDark, { transform: [{ scale: Animated.multiply(scale, previewScale) }, { translateY }], opacity }]}>
-                      <LottieView
-                        ref={ref => { if (ref) lottieRefs.current[i] = ref; }}
-                        source={require('../../assets/lottie/Onboarding/Togglemode.json')}
-                        autoPlay={shouldAuto}
-                        loop={false}
-                        progress={shouldAuto ? undefined : hasPlayed ? 1 : 0}
-                        onAnimationFinish={() => handleLoopFinish(i, 3)}
-                        style={{ width: Math.min(280, width * 0.75), height: Math.min(280, width * 0.75), alignSelf: 'center' }}
-                      />
-                    </Animated.View>
-                  );
-                }
                 if ((p as any).type === 'lang') {
                   const hasPlayed = !!playedRef.current[i];
                   const shouldAuto = index === i && !hasPlayed;
@@ -557,24 +534,6 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
                   </Text>
                 </View>
               )}
-              {(p as any).type === 'theme' && (
-                <View style={styles.themeRow}>
-                  <TouchableOpacity
-                    style={[styles.themeBtn, previewIsLight && styles.themeBtnActive]}
-                    onPress={() => { setPreviewTheme('light'); setTheme('light'); }}
-                    activeOpacity={0.9}
-                  >
-                    <Text style={[styles.themeBtnText, previewIsLight && styles.themeBtnTextActive]}>Light</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.themeBtn, !previewIsLight && styles.themeBtnActive]}
-                    onPress={() => { setPreviewTheme('dark'); setTheme('dark'); }}
-                    activeOpacity={0.9}
-                  >
-                    <Text style={[styles.themeBtnText, !previewIsLight && styles.themeBtnTextActive]}>Dark</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
             </View>
           ))}
         </Animated.ScrollView>
@@ -704,7 +663,7 @@ const styles = StyleSheet.create({
   secondaryBtnLight: { backgroundColor: '#FFFFFF', borderColor: '#4ED9CB' },
   secondaryText: { color: '#0F172A', fontWeight: '700', fontFamily: 'Feather-Bold', fontSize: 16 },
   secondaryTextLight: { color: '#0F172A' },
-  primaryBtn: { minWidth: 160, paddingVertical: 16, borderRadius: 24, backgroundColor: '#F25E86', alignItems: 'center', shadowColor: '#F25E86', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
+  primaryBtn: { minWidth: 160, paddingVertical: 16, paddingHorizontal: 24, borderRadius: 24, backgroundColor: '#F25E86', alignItems: 'center', borderWidth: 3, borderColor: '#1A1A1A', shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 0, shadowOffset: { width: 2, height: 3 }, elevation: 6 },
   primaryText: { color: '#FFFFFF', fontWeight: '700', fontSize: 18, fontFamily: 'Feather-Bold' },
   subPrimaryBtn: { alignSelf: 'stretch', marginTop: 12 },
   // Practice time chips

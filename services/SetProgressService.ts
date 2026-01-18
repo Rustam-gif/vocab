@@ -47,6 +47,15 @@ class SetProgressServiceClass {
     }, 400);
   }
 
+  // Force immediate save (for use before navigation)
+  async flushSave(): Promise<void> {
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    await this.save();
+  }
+
   private ensurePath(levelId: string, setId: string | number) {
     if (!this.db[levelId]) this.db[levelId] = {};
     if (!this.db[levelId][setId]) {
@@ -90,6 +99,36 @@ class SetProgressServiceClass {
       updatedAt: new Date().toISOString(),
     };
     this.scheduleSave();
+  }
+
+  // Reset progress for a specific set (mark as not started)
+  async resetSet(levelId: string, setId: string | number): Promise<void> {
+    await this.initialize();
+    if (this.db[levelId] && this.db[levelId][setId]) {
+      this.db[levelId][setId] = {
+        status: 'not_started',
+        lastPhase: 0,
+        score: undefined,
+        updatedAt: new Date().toISOString(),
+      };
+      this.scheduleSave();
+    }
+  }
+
+  // Reset all progress for an entire level
+  async resetLevel(levelId: string): Promise<void> {
+    await this.initialize();
+    if (this.db[levelId]) {
+      for (const setId of Object.keys(this.db[levelId])) {
+        this.db[levelId][setId] = {
+          status: 'not_started',
+          lastPhase: 0,
+          score: undefined,
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      this.scheduleSave();
+    }
   }
 
   // Convenience to read UI flags for a list item

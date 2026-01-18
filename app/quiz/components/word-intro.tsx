@@ -21,7 +21,6 @@ import { getTheme } from '../../../lib/theme';
 import { levels } from '../data/levels';
 import AnimatedNextButton from './AnimatedNextButton';
 import { TranslationService } from '../../../services/TranslationService';
-import { LinearGradient } from '../../../lib/LinearGradient';
 
 interface WordIntroProps {
   setId: string;
@@ -409,13 +408,8 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
         <Animated.View style={[styles.card, { transform: [{ scale }], opacity }]}>
           {/* Card border wrapper for 3D effect */}
           <View style={styles.cardBorderWrapper}>
-            {/* Card gradient background */}
-            <LinearGradient
-              colors={isLight ? ['#FFFFFF', '#F8F9FA'] : ['#1F2128', '#16171C']}
-              style={styles.cardGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-            >
+            {/* Card solid background */}
+            <View style={[styles.cardGradient, { backgroundColor: isLight ? '#FFFFFF' : '#2A2D35' }]}>
 
             {/* Header with word */}
             <View style={styles.cardHeader}>
@@ -523,7 +517,7 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
                 </Text>
               </TouchableOpacity>
             )}
-            </LinearGradient>
+            </View>
           </View>
         </Animated.View>
       </View>
@@ -556,7 +550,7 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
   }
 
   return (
-    <View style={[styles.container, isLight && styles.containerLight]}>
+    <View style={[styles.container, { backgroundColor: 'transparent' }]}>
       {/* Navigation dots - above cards */}
       <View style={styles.dotsContainer}>
         {words.map((_, idx) => (
@@ -930,13 +924,13 @@ const styles = StyleSheet.create({
   bottomSection: {
     paddingHorizontal: 24,
     paddingBottom: 24,
-    paddingTop: 16,
+    paddingTop: 24,
   },
   dotsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 32,
+    marginTop: 48,
     marginBottom: 16,
   },
   dot: {
@@ -951,7 +945,7 @@ const styles = StyleSheet.create({
   },
   navButtonContainer: {
     alignItems: 'center',
-    paddingBottom: 70,
+    paddingBottom: 50,
     marginTop: -20,
   },
   nextButtonFull: {

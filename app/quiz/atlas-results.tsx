@@ -167,23 +167,20 @@ export default function AtlasResults() {
   };
 
   const renderHearts = () => {
-    // Calculate number of animations to show based on hearts remaining
-    // 5 hearts (full) = 3 animations, 3-4 hearts = 2 animations, 1-2 hearts = 1 animation
-    const animationCount = heartsRemaining >= 5 ? 3 : heartsRemaining >= 3 ? 2 : 1;
-
-    const animations = [];
-    for (let i = 0; i < animationCount; i++) {
-      animations.push(
+    // Show exactly heartsRemaining number of hearts
+    const hearts = [];
+    for (let i = 0; i < heartsRemaining; i++) {
+      hearts.push(
         <LottieView
           key={i}
           source={require('../../assets/lottie/learn/heart_away.lottie')}
           autoPlay
           loop={false}
-          style={{ width: 64, height: 64 }}
+          style={{ width: 180, height: 180, marginHorizontal: -55 }}
         />
       );
     }
-    return animations;
+    return hearts;
   };
 
   // Background gradient colors
@@ -214,7 +211,7 @@ export default function AtlasResults() {
               source={require('../../assets/lottie/learn/finish.lottie')}
               autoPlay
               loop={false}
-              style={{ width: 150, height: 150 }}
+              style={{ width: 220, height: 220 }}
             />
           </View>
 
@@ -270,8 +267,8 @@ const styles = StyleSheet.create({
 
   // Finish animation section
   checkSection: {
-    width: 150,
-    height: 150,
+    width: 220,
+    height: 220,
     marginBottom: 24,
     alignItems: 'center',
     justifyContent: 'center',
@@ -298,12 +295,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     marginBottom: 48,
-    borderWidth: 2,
-    borderColor: 'rgba(78, 217, 203, 0.3)',
   },
   heartsCardLight: {
     backgroundColor: '#FFFFFF',
-    borderColor: 'rgba(78, 217, 203, 0.4)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -314,8 +308,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   heartsLabel: {
     fontSize: 14,

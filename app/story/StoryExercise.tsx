@@ -1461,23 +1461,22 @@ const buildStoryFromContent = (
           ]}
         >
           <View style={styles.footer}>
-            <TouchableOpacity onPress={() => generateStory()} disabled={loading} style={{ flex: 1 }} activeOpacity={0.9}>
-              <LinearGradient
-                colors={["#F25E86", "#F25E86"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.regenerateButton, loading && { opacity: 0.7 }]}
-              >
-                <Text style={styles.regenerateButtonText}>Generate</Text>
-              </LinearGradient>
+            <TouchableOpacity
+              onPress={() => generateStory()}
+              disabled={loading}
+              style={[styles.regenerateButton, !isDarkMode && styles.regenerateButtonLight, loading && { opacity: 0.5 }]}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.regenerateButtonText, !isDarkMode && styles.regenerateButtonTextLight]}>{loading ? 'Generating...' : 'Generate'}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.checkButton, (!hasStory || loading) && styles.checkButtonDisabled]}
+              style={[styles.checkButton, !isDarkMode && styles.checkButtonLight, (!hasStory || loading) && styles.checkButtonDisabled]}
               onPress={checkAnswers}
               disabled={!hasStory || loading}
+              activeOpacity={0.8}
             >
-              <Text style={styles.checkButtonText}>Check Answers</Text>
+              <Text style={styles.checkButtonText}>Check</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -2726,8 +2725,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 52,
+    paddingTop: 10,
+    paddingBottom: 48,
     zIndex: 80,
   },
   footerOverlayLight: {
@@ -2763,10 +2762,12 @@ const styles = StyleSheet.create({
   },
   regenerateButton: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: '#2A2D2E',
     borderRadius: 12,
-    paddingVertical: 16,
+    paddingVertical: 10,
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#1A1A1A',
   },
   customizeButton: {
     backgroundColor: '#2C2C2C',
@@ -2780,35 +2781,46 @@ const styles = StyleSheet.create({
     minWidth: 56,
   },
   regenerateButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
-    fontFamily: 'Feather-Bold',
+    color: '#9CA3AF',
+    fontFamily: 'Ubuntu-Bold',
   },
   checkButton: {
     flex: 1,
     backgroundColor: '#F25E86',
-    borderRadius: 16,
-    paddingVertical: 16,
+    borderRadius: 12,
+    paddingVertical: 10,
     alignItems: 'center',
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: '#1A1A1A',
     shadowColor: '#000',
-    shadowOffset: { width: 2, height: 3 },
-    shadowOpacity: 0.4,
+    shadowOffset: { width: 1, height: 2 },
+    shadowOpacity: 0.3,
     shadowRadius: 0,
-    elevation: 5,
+    elevation: 3,
   },
   checkButtonDisabled: {
-    // Keep the button bright even when disabled so it doesn't look dimmed
-    opacity: 1,
+    opacity: 0.5,
     backgroundColor: '#F25E86',
   },
   checkButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
     fontFamily: 'Ubuntu-Bold',
+  },
+  regenerateButtonLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+  },
+  regenerateButtonTextLight: {
+    color: '#6B7280',
+  },
+  checkButtonLight: {
+    borderColor: '#C94A6E',
+    shadowColor: '#C94A6E',
+    shadowOpacity: 0.2,
   },
   // Save toast styles
   saveToastWrap: {
@@ -2961,10 +2973,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     borderRadius: 12,
     marginBottom: 28,
-    shadowColor: '#F25E86',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
     shadowOpacity: 0.4,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 0,
+    shadowOffset: { width: 2, height: 3 },
     elevation: 6,
   },
   storyPlaceholderButtonText: {

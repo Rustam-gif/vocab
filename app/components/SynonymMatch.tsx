@@ -2,7 +2,7 @@
  * SynonymMatch Component
  *
  * A matching exercise where users tap cards to match words with their synonyms.
- * Cards are color-coded and animate when matched correctly.
+ * Cards animate when matched correctly.
  */
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
@@ -229,21 +229,21 @@ export default function SynonymMatch({ words, isDarkMode, onComplete }: SynonymM
     }
   };
 
-  // Neutral/matched colors for cards
-  const NEUTRAL_COLOR = isDarkMode
-    ? { bg: '#2A2A2A', text: '#E5E7EB', border: '#1A1A1A' }
-    : { bg: '#FFFFFF', text: '#111827', border: '#1A1A1A' };
+  // Uniform color for all unmatched cards
+  const CARD_COLOR = isDarkMode
+    ? { bg: '#2A2D2E', text: '#FFFFFF', border: '#1A1A1A' }
+    : { bg: '#FFFFFF', text: '#374151', border: '#E5E7EB' };
   const MATCHED_COLOR = isDarkMode
-    ? { bg: 'rgba(30,144,255,0.15)', text: '#1E90FF', border: '#1E90FF' }
-    : { bg: 'rgba(30,144,255,0.12)', text: '#1E90FF', border: '#1E90FF' };
+    ? { bg: 'rgba(78,217,203,0.2)', text: '#4ED9CB', border: '#4ED9CB' }
+    : { bg: 'rgba(13,148,136,0.18)', text: '#0D9488', border: '#0D9488' };
 
   const renderCard = (card: Card, index: number) => {
     const isSelected = selectedCards.includes(card.id);
     const isMatched = matchedPairs.has(card.pairId);
     const isIncorrect = incorrectPair.includes(card.id);
 
-    // Teal highlight for matched pairs, neutral otherwise
-    const color = isMatched ? MATCHED_COLOR : NEUTRAL_COLOR;
+    // Use uniform color for unmatched, teal highlight when matched
+    const color = isMatched ? MATCHED_COLOR : CARD_COLOR;
 
     const cardScale = cardAnims.current[card.id] || new Animated.Value(1);
     const shakeX = shakeAnims.current[card.id] || new Animated.Value(0);

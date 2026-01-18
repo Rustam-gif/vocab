@@ -38,6 +38,7 @@ export interface MissingLettersProps {
   totalWords: number;
   hearts: number;
   showUfoAnimation?: boolean;
+  ufoAnimationKey?: number;
 }
 
 // Enable LayoutAnimation on Android
@@ -105,7 +106,7 @@ function pickHintPositions(letterIndices: number[]): number[] {
   return Array.from(new Set(result));
 }
 
-export default function MissingLetters({ word, ipa, clue, onResult, onNext, theme = 'dark', wordIndex, totalWords, hearts, showUfoAnimation }: MissingLettersProps) {
+export default function MissingLetters({ word, ipa, clue, onResult, onNext, theme = 'dark', wordIndex, totalWords, hearts, showUfoAnimation, ufoAnimationKey = 0 }: MissingLettersProps) {
   const displayWord = useMemo(() => word, [word]);
   const lettersOnly = useMemo(() => normalize(word), [word]);
   const canMountTextInput = useCanMountTextInput();
@@ -339,6 +340,7 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
             />
             {showUfoAnimation && (
               <LottieView
+                key={`ufo-${ufoAnimationKey}`}
                 source={require('../../../assets/lottie/learn/Ufo_animation.lottie')}
                 autoPlay
                 loop={false}
@@ -422,7 +424,7 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
       </View>
 
       {completed && (
-        <View style={{ marginTop: 'auto', paddingBottom: 70 }}>
+        <View style={{ marginTop: 'auto', paddingTop: 24, paddingBottom: 50 }}>
           <AnimatedNextButton
             onPress={onNext}
           />
@@ -496,7 +498,7 @@ const darkStyles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginTop: 40,
+    marginTop: 56,
     marginBottom: 18,
   },
   clue: {
@@ -635,7 +637,7 @@ const lightStyles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginTop: 40,
+    marginTop: 56,
     marginBottom: 18,
   },
   clue: {

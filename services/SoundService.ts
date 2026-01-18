@@ -100,6 +100,13 @@ class SoundServiceClass {
       return;
     }
 
+    // Ensure audio session is set for playback (ignores mute switch)
+    if (Platform.OS === 'ios') {
+      try {
+        Sound.setCategory('Playback', true);
+      } catch {}
+    }
+
     // Stop and rewind before playing (allows rapid replays)
     sound.stop(() => {
       sound.play((success) => {

@@ -1,5 +1,6 @@
 // Diagnostic words for placement test
-// 4 words from each level to determine user's vocabulary level
+// Extended set: 12 words per level (36 total) for detailed test
+// Quick test uses first 6 per level (18 total)
 
 export interface DiagnosticWord {
   word: string;
@@ -9,7 +10,8 @@ export interface DiagnosticWord {
 }
 
 export const diagnosticWords: DiagnosticWord[] = [
-  // Beginner (A1-A2) - Basic vocabulary everyone should know
+  // ========== BEGINNER (A1-A2) - Basic vocabulary everyone should know ==========
+  // First 6 - used in quick test
   {
     word: 'happy',
     phonetic: '/ˈhæpi/',
@@ -34,8 +36,58 @@ export const diagnosticWords: DiagnosticWord[] = [
     definition: 'Having great value or significance',
     level: 'beginner',
   },
+  {
+    word: 'different',
+    phonetic: '/ˈdɪfərənt/',
+    definition: 'Not the same as another',
+    level: 'beginner',
+  },
+  {
+    word: 'remember',
+    phonetic: '/rɪˈmembər/',
+    definition: 'To recall or think of again',
+    level: 'beginner',
+  },
+  // Additional 6 for detailed test
+  {
+    word: 'explain',
+    phonetic: '/ɪkˈspleɪn/',
+    definition: 'Make something clear or easy to understand',
+    level: 'beginner',
+  },
+  {
+    word: 'careful',
+    phonetic: '/ˈkeəfʊl/',
+    definition: 'Giving attention to avoid mistakes or danger',
+    level: 'beginner',
+  },
+  {
+    word: 'answer',
+    phonetic: '/ˈɑːnsər/',
+    definition: 'A response to a question',
+    level: 'beginner',
+  },
+  {
+    word: 'simple',
+    phonetic: '/ˈsɪmpəl/',
+    definition: 'Easy to understand or do',
+    level: 'beginner',
+  },
+  {
+    word: 'choose',
+    phonetic: '/tʃuːz/',
+    definition: 'Pick or select from options',
+    level: 'beginner',
+  },
+  {
+    word: 'perhaps',
+    phonetic: '/pəˈhæps/',
+    definition: 'Possibly; maybe',
+    level: 'beginner',
+  },
 
-  // Intermediate (B1-B2) - Conversational vocabulary
+  // ========== INTERMEDIATE (B1-B2) - Conversational vocabulary ==========
+  // First 6 - used in quick test
   {
     word: 'achieve',
     phonetic: '/əˈtʃiːv/',
@@ -60,8 +112,58 @@ export const diagnosticWords: DiagnosticWord[] = [
     definition: 'Important or large enough to have an effect',
     level: 'intermediate',
   },
+  {
+    word: 'reluctant',
+    phonetic: '/rɪˈlʌktənt/',
+    definition: 'Unwilling or hesitant to do something',
+    level: 'intermediate',
+  },
+  {
+    word: 'inevitable',
+    phonetic: '/ɪnˈevɪtəbl/',
+    definition: 'Certain to happen; unavoidable',
+    level: 'intermediate',
+  },
+  // Additional 6 for detailed test
+  {
+    word: 'apparent',
+    phonetic: '/əˈpærənt/',
+    definition: 'Clearly visible or obvious',
+    level: 'intermediate',
+  },
+  {
+    word: 'contribute',
+    phonetic: '/kənˈtrɪbjuːt/',
+    definition: 'Give something to help achieve a goal',
+    level: 'intermediate',
+  },
+  {
+    word: 'fundamental',
+    phonetic: '/ˌfʌndəˈmentl/',
+    definition: 'Forming a necessary base; essential',
+    level: 'intermediate',
+  },
+  {
+    word: 'ambiguous',
+    phonetic: '/æmˈbɪɡjuəs/',
+    definition: 'Having more than one possible meaning',
+    level: 'intermediate',
+  },
+  {
+    word: 'coherent',
+    phonetic: '/kəʊˈhɪərənt/',
+    definition: 'Logical and consistent; easy to follow',
+    level: 'intermediate',
+  },
+  {
+    word: 'diminish',
+    phonetic: '/dɪˈmɪnɪʃ/',
+    definition: 'Make or become smaller or less',
+    level: 'intermediate',
+  },
 
-  // Advanced (C1+) - Academic/sophisticated vocabulary
+  // ========== ADVANCED (C1+) - Academic/sophisticated vocabulary ==========
+  // First 6 - used in quick test
   {
     word: 'ubiquitous',
     phonetic: '/juːˈbɪkwɪtəs/',
@@ -86,36 +188,116 @@ export const diagnosticWords: DiagnosticWord[] = [
     definition: 'Showing great attention to detail',
     level: 'advanced',
   },
+  {
+    word: 'commensurate',
+    phonetic: '/kəˈmenʃərət/',
+    definition: 'Corresponding in size or degree; proportionate',
+    level: 'advanced',
+  },
+  {
+    word: 'juxtapose',
+    phonetic: '/ˌdʒʌkstəˈpəʊz/',
+    definition: 'Place close together for contrasting effect',
+    level: 'advanced',
+  },
+  // Additional 6 for detailed test
+  {
+    word: 'exacerbate',
+    phonetic: '/ɪɡˈzæsəbeɪt/',
+    definition: 'Make a problem or situation worse',
+    level: 'advanced',
+  },
+  {
+    word: 'quintessential',
+    phonetic: '/ˌkwɪntɪˈsenʃəl/',
+    definition: 'Representing the perfect example of something',
+    level: 'advanced',
+  },
+  {
+    word: 'sycophant',
+    phonetic: '/ˈsɪkəfænt/',
+    definition: 'A person who flatters to gain advantage',
+    level: 'advanced',
+  },
+  {
+    word: 'perfunctory',
+    phonetic: '/pəˈfʌŋktəri/',
+    definition: 'Done without care or interest',
+    level: 'advanced',
+  },
+  {
+    word: 'recalcitrant',
+    phonetic: '/rɪˈkælsɪtrənt/',
+    definition: 'Stubbornly resisting authority or control',
+    level: 'advanced',
+  },
+  {
+    word: 'obfuscate',
+    phonetic: '/ˈɒbfʌskeɪt/',
+    definition: 'Make something unclear or confusing',
+    level: 'advanced',
+  },
 ];
 
-// Shuffle words for the test (mix levels)
-export const getShuffledWords = (): DiagnosticWord[] => {
-  const shuffled = [...diagnosticWords];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+// Get words for test - quick test (18 words) or detailed test (36 words)
+export const getShuffledWords = (detailed: boolean = false): DiagnosticWord[] => {
+  let wordsToUse: DiagnosticWord[];
+
+  if (detailed) {
+    // Use all 36 words for detailed test
+    wordsToUse = [...diagnosticWords];
+  } else {
+    // Use first 6 of each level (18 words) for quick test
+    const beginner = diagnosticWords.filter(w => w.level === 'beginner').slice(0, 6);
+    const intermediate = diagnosticWords.filter(w => w.level === 'intermediate').slice(0, 6);
+    const advanced = diagnosticWords.filter(w => w.level === 'advanced').slice(0, 6);
+    wordsToUse = [...beginner, ...intermediate, ...advanced];
   }
-  return shuffled;
+
+  // Shuffle
+  for (let i = wordsToUse.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [wordsToUse[i], wordsToUse[j]] = [wordsToUse[j], wordsToUse[i]];
+  }
+  return wordsToUse;
 };
 
 // Calculate level based on known words
+// Handles both quick (6 per level) and detailed (12 per level) tests
 export const calculateLevel = (
-  knownWords: DiagnosticWord[]
+  knownWords: DiagnosticWord[],
+  totalWords: DiagnosticWord[]
 ): 'beginner' | 'intermediate' | 'advanced' => {
   const beginnerKnown = knownWords.filter(w => w.level === 'beginner').length;
   const intermediateKnown = knownWords.filter(w => w.level === 'intermediate').length;
   const advancedKnown = knownWords.filter(w => w.level === 'advanced').length;
 
-  // Weighted score: beginner=1, intermediate=2, advanced=3
-  const score = beginnerKnown * 1 + intermediateKnown * 2 + advancedKnown * 3;
+  // Calculate totals per level from the test (6 for quick, 12 for detailed)
+  const beginnerTotal = totalWords.filter(w => w.level === 'beginner').length;
+  const intermediateTotal = totalWords.filter(w => w.level === 'intermediate').length;
+  const advancedTotal = totalWords.filter(w => w.level === 'advanced').length;
 
-  // Thresholds (easier - only true beginners stay at beginner):
-  // Advanced: score >= 8 AND knows at least 1 advanced word
-  // Intermediate: score >= 4 AND knows at least 1 intermediate word
-  // Beginner: only if very low score (true beginners)
-  if (score >= 8 && advancedKnown >= 1) {
+  // Calculate percentages
+  const beginnerPercent = beginnerTotal > 0 ? beginnerKnown / beginnerTotal : 0;
+  const intermediatePercent = intermediateTotal > 0 ? intermediateKnown / intermediateTotal : 0;
+  const advancedPercent = advancedTotal > 0 ? advancedKnown / advancedTotal : 0;
+
+  // Stricter thresholds - must demonstrate mastery at each level:
+  //
+  // Advanced (C1+):
+  //   - Know at least 65% of beginner words
+  //   - Know at least 65% of intermediate words
+  //   - Know at least 50% of advanced words
+  //
+  // Intermediate (B1-B2):
+  //   - Know at least 65% of beginner words
+  //   - Know at least 50% of intermediate words
+  //
+  // Beginner (A1-A2): Default for everyone else
+
+  if (beginnerPercent >= 0.65 && intermediatePercent >= 0.65 && advancedPercent >= 0.5) {
     return 'advanced';
-  } else if (score >= 4 && intermediateKnown >= 1) {
+  } else if (beginnerPercent >= 0.65 && intermediatePercent >= 0.5) {
     return 'intermediate';
   }
   return 'beginner';

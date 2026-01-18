@@ -8,7 +8,7 @@ try {
   RNPush = require('react-native-push-notification');
 } catch {}
 
-export type ReminderFrequency = 1 | 3 | 5;
+export type ReminderFrequency = 1 | 2 | 3 | 5;
 
 const PREF_ENABLED = '@engniter.notify.enabled';
 const PREF_FREQ = '@engniter.notify.freq';
@@ -30,6 +30,7 @@ function pickMessage(i: number): string {
 function dailySlots(freq: ReminderFrequency): number[] {
   // return minutes-from-midnight for each reminder
   if (freq === 1) return [19 * 60]; // 19:00
+  if (freq === 2) return [10 * 60, 19 * 60]; // 10:00, 19:00
   if (freq === 3) return [10 * 60, 15 * 60, 20 * 60 + 30]; // 10:00, 15:00, 20:30
   return [8 * 60, 11 * 60 + 30, 15 * 60, 18 * 60 + 30, 21 * 60]; // 5x
 }
@@ -53,8 +54,10 @@ export const NotificationService = {
   async getSettings(): Promise<{ enabled: boolean; freq: ReminderFrequency; startH?: number; endH?: number }> {
     const enabledRaw = await AsyncStorage.getItem(PREF_ENABLED);
     const freqRaw = await AsyncStorage.getItem(PREF_FREQ);
-    const enabled = enabledRaw === '1';
-    const freq = (freqRaw === '3' ? 3 : freqRaw === '5' ? 5 : 1) as ReminderFrequency;
+    // Default to enabled if never set (first launch)
+    const enabled = enabledRaw === null ? true : enabledRaw === '1';
+    // Default to 2 notifications per day
+    const freq = (freqRaw === '1' ? 1 : freqRaw === '3' ? 3 : freqRaw === '5' ? 5 : 2) as ReminderFrequency;
     const startH = parseInt((await AsyncStorage.getItem(PREF_START_H)) || '10', 10);
     const endH = parseInt((await AsyncStorage.getItem(PREF_END_H)) || '22', 10);
     return { enabled, freq, startH, endH };
@@ -80,7 +83,8 @@ export const NotificationService = {
 
   async scheduleAll(freq: ReminderFrequency) {
     const enabledRaw = await AsyncStorage.getItem(PREF_ENABLED);
-    const enabled = enabledRaw === '1';
+    // Default to enabled if never set (first launch)
+    const enabled = enabledRaw === null ? true : enabledRaw === '1';
     if (!enabled) return;
     // Clear existing
     await cancelAllNative();
@@ -120,7 +124,8 @@ export const NotificationService = {
    */
   async scheduleWindow(count: number, startH: number, endH: number) {
     const enabledRaw = await AsyncStorage.getItem(PREF_ENABLED);
-    const enabled = enabledRaw === '1';
+    // Default to enabled if never set (first launch)
+    const enabled = enabledRaw === null ? true : enabledRaw === '1';
     if (!enabled) return;
     await cancelAllNative();
     try { RNPush?.createChannel?.({ channelId: 'engniter-reminders', channelName: 'Practice Reminders', importance: 3, vibrate: false }); } catch {}
@@ -221,38 +226,55 @@ export const NotificationService = {
   },
 
   /**
-   * Back-compat helper used by App.tsx to ensure a single daily reminder exists
-   * (default 19:00). Respects the user enable/disable preference.
+   * Initialize notifications on app startup.
+   * On first launch: enables notifications and schedules 2x daily (10:00 and 19:00).
+   * On subsequent launches: respects user preferences and reschedules.
    */
-  async ensureDailyReminder(hour = 19, minute = 0) {
+  async initialize() {
     const enabledRaw = await AsyncStorage.getItem(PREF_ENABLED);
-    const enabled = enabledRaw === '1';
-    if (!enabled) return;
-    try { RNPush?.createChannel?.({ channelId: 'engniter-reminders', channelName: 'Practice Reminders', importance: 3, vibrate: false }); } catch {}
-    const ok = await this.requestPermission();
-    if (!ok) return;
-    // Schedule a single daily event
-    const now = new Date();
-    const d = new Date();
-    d.setHours(hour, minute, 0, 0);
-    if (d <= now) d.setDate(d.getDate() + 1);
-    const message = pickMessage(Math.floor(Math.random() * MESSAGES.length));
-    if (RNPush) {
-      try {
-        RNPush.localNotificationSchedule?.({
-          channelId: 'engniter-reminders',
-          title: 'Practice Reminder',
-          message,
-          date: d,
-          allowWhileIdle: true,
-          repeatType: 'day',
-          playSound: false,
-          importance: 3,
-        });
-      } catch (e) {
-        console.warn('Failed to schedule daily reminder:', e);
-      }
+    const freqRaw = await AsyncStorage.getItem(PREF_FREQ);
+
+    // First launch: set defaults and enable
+    if (enabledRaw === null) {
+      await AsyncStorage.setItem(PREF_ENABLED, '1');
+      await AsyncStorage.setItem(PREF_FREQ, '2');
+      console.log('[Notifications] First launch - enabling with 2x daily');
     }
+
+    const settings = await this.getSettings();
+    if (!settings.enabled) {
+      console.log('[Notifications] Disabled by user');
+      return;
+    }
+
+    // Create channel (Android)
+    try {
+      RNPush?.createChannel?.({
+        channelId: 'engniter-reminders',
+        channelName: 'Practice Reminders',
+        importance: 3,
+        vibrate: false,
+        soundName: 'default',
+      });
+    } catch {}
+
+    // Request permission
+    const ok = await this.requestPermission();
+    if (!ok) {
+      console.log('[Notifications] Permission denied');
+      return;
+    }
+
+    // Schedule notifications based on frequency (default 2x daily)
+    await this.scheduleAll(settings.freq);
+    console.log(`[Notifications] Scheduled ${settings.freq}x daily reminders`);
+  },
+
+  /**
+   * Back-compat helper - now just calls initialize()
+   */
+  async ensureDailyReminder(_hour = 19, _minute = 0) {
+    await this.initialize();
   },
 };
 

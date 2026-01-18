@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppStore } from '../lib/store';
@@ -9,7 +9,6 @@ import { analyticsService } from '../services/AnalyticsService';
 import { ProgressService } from '../services/ProgressService';
 
 const QUESTION_TIME_MS = 10000; // 10 seconds per question
-const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 export default function WordSprint() {
   const router = useRouter();
@@ -324,89 +323,134 @@ export default function WordSprint() {
 
   if (!current) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
         <View style={styles.center}>
           <Text style={styles.emptyText}>No words in this folder.</Text>
         </View>
       </SafeAreaView>
     );
   }
-  const progressHeight = barAnim.interpolate({ inputRange: [0, 1], outputRange: [SCREEN_HEIGHT, 0] });
-  const progressOpacity = barAnim.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0.08] });
+
+  // Timer bar width animation
+  const timerBarWidth = barAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['100%', '0%'],
+  });
 
   return (
-    <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
-      {/* Snow overlay for a snowy environment */}
-      <Snowfall flakes={36} />
-      <View pointerEvents="none" style={styles.progressBackdrop}>
-        <Animated.View style={[styles.progressColumn, { height: progressHeight, opacity: progressOpacity }]} />
-      </View>
+    <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
       <View style={styles.content}>
-        <View style={[styles.header, isLight && { borderBottomColor: '#E5E7EB' }]}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity accessibilityRole="button" onPress={() => router.back()} style={[styles.closeBtn, isLight && { backgroundColor: '#E5E7EB', borderColor: '#E5E7EB' }]}>
-              <Text style={[styles.closeBtnText, isLight && { color: '#111827' }]}>✕</Text>
-            </TouchableOpacity>
-            <Text style={[styles.title, isLight && { color: '#111827' }]}>{title || 'Word Sprint'}</Text>
-          </View>
-          <View style={styles.headerMeta}>
-            <View style={[styles.timerBadge, isLight && { backgroundColor: '#E5E7EB', borderColor: '#E5E7EB' }]}>
-              <Text style={[styles.timerIcon, isLight && { color: '#F8B070' }]}>⌚</Text>
-              <Text style={[styles.timerText, isLight && { color: '#111827' }]}>{timeLeft.toFixed(1)}s</Text>
-            </View>
-            <Text style={[styles.counter, isLight && { color: '#6B7280' }]}>{index + 1}/{items.length}</Text>
-          </View>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            onPress={() => router.back()}
+            style={[styles.closeBtn, isLight && styles.closeBtnLight]}
+          >
+            <Text style={[styles.closeBtnText, isLight && styles.closeBtnTextLight]}>✕</Text>
+          </TouchableOpacity>
+          <Text style={[styles.title, isLight && styles.titleLight]} numberOfLines={1}>
+            {title || 'Word Sprint'}
+          </Text>
+          <Text style={[styles.counter, isLight && styles.counterLight]}>{index + 1}/{items.length}</Text>
         </View>
+
+        {/* Timer bar */}
+        <View style={[styles.timerBarContainer, isLight && styles.timerBarContainerLight]}>
+          <Animated.View style={[styles.timerBarFill, { width: timerBarWidth }]} />
+        </View>
+
+        {/* Time display */}
+        <View style={styles.timerDisplay}>
+          <Text style={[styles.timerText, isLight && styles.timerTextLight]}>{timeLeft.toFixed(1)}s</Text>
+        </View>
+
+        {/* Main content */}
         <View style={styles.body}>
-          <View style={[styles.card, isLight && styles.cardLight]}>
-            <Text style={[styles.definition, isLight && { color: '#111827' }]}>{current.definition}</Text>
-            <View style={{ height: 16 }} />
+          {/* Definition card */}
+          <View style={[styles.definitionCard, isLight && styles.definitionCardLight]}>
+            <Text style={[styles.definition, isLight && styles.definitionLight]}>{current.definition}</Text>
+          </View>
+
+          {/* Options */}
+          <View style={styles.optionsContainer}>
             {options.map((opt, i) => {
               const isPicked = selected === i;
               const isAnswer = revealed && opt === current.word;
               const wrong = revealed && isPicked && !isAnswer;
               return (
-                <TouchableOpacity key={`${opt}-${i}`} style={[styles.option, isLight && styles.optionLight, isAnswer && styles.correct, wrong && styles.wrong]} onPress={() => handlePick(i)} disabled={revealed}>
-                  <Text style={[styles.optionText, isLight && { color: '#111827' }]}>{opt}</Text>
+                <TouchableOpacity
+                  key={`${opt}-${i}`}
+                  style={[
+                    styles.option,
+                    isLight && styles.optionLight,
+                    isAnswer && styles.optionCorrect,
+                    wrong && styles.optionWrong,
+                  ]}
+                  onPress={() => handlePick(i)}
+                  disabled={revealed}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[
+                    styles.optionText,
+                    isLight && styles.optionTextLight,
+                    (isAnswer || wrong) && styles.optionTextRevealed,
+                  ]}>
+                    {opt}
+                  </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
-          {/* Timer animation below the card */}
+
+          {/* Mascot */}
           <View style={styles.mascotWrap}>
-            <View style={styles.riveCrop}>
-              <View style={{ alignItems: 'center' }}>
-                <LottieView
-                  ref={clockAnimRef}
-                  source={penguinSource as any}
-                  autoPlay={false}
-                  loop={false}
-                  style={styles.riveInner}
-                />
-              </View>
-            </View>
+            <LottieView
+              ref={clockAnimRef}
+              source={penguinSource as any}
+              autoPlay={false}
+              loop={false}
+              style={styles.mascot}
+            />
           </View>
         </View>
+
+        {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Correct: {correctCount}</Text>
+          <View style={[styles.scoreCard, isLight && styles.scoreCardLight]}>
+            <Text style={[styles.scoreLabel, isLight && styles.scoreLabelLight]}>Score</Text>
+            <Text style={[styles.scoreValue, isLight && styles.scoreValueLight]}>{correctCount}</Text>
+          </View>
         </View>
       </View>
+
+      {/* Results overlay */}
       {finished && (
-        <Animated.View style={[styles.resultOverlay, {
-          opacity: resultAnim,
-          transform: [{ translateY: resultAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }]
-        }]}
+        <Animated.View
+          style={[
+            styles.resultOverlay,
+            {
+              opacity: resultAnim,
+              transform: [{ translateY: resultAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }],
+            },
+          ]}
         >
-          <View style={styles.resultCard}>
-            <Text style={styles.resultTitle}>Sprint Complete!</Text>
-            <Text style={styles.resultScore}>{correctCount}/{items.length} correct</Text>
-            <Text style={styles.resultSub}>{Math.round((correctCount / Math.max(1, items.length)) * 100)}% accuracy</Text>
+          <View style={[styles.resultCard, isLight && styles.resultCardLight]}>
+            <Text style={[styles.resultTitle, isLight && styles.resultTitleLight]}>Sprint Complete!</Text>
+            <Text style={styles.resultScore}>{correctCount}/{items.length}</Text>
+            <Text style={[styles.resultAccuracy, isLight && styles.resultAccuracyLight]}>
+              {Math.round((correctCount / Math.max(1, items.length)) * 100)}% accuracy
+            </Text>
             <View style={styles.resultButtons}>
-              <TouchableOpacity style={[styles.resultButton, styles.resultPrimary]} onPress={handleRestart}>
-                <Text style={styles.resultButtonText}>Play Again</Text>
+              <TouchableOpacity style={styles.resultButtonPrimary} onPress={handleRestart} activeOpacity={0.8}>
+                <Text style={styles.resultButtonPrimaryText}>Play Again</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.resultButton, styles.resultGhost]} onPress={() => router.back()}>
-                <Text style={[styles.resultButtonText, styles.resultGhostText]}>Done</Text>
+              <TouchableOpacity
+                style={[styles.resultButtonSecondary, isLight && styles.resultButtonSecondaryLight]}
+                onPress={() => router.back()}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.resultButtonSecondaryText, isLight && styles.resultButtonSecondaryTextLight]}>Done</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -416,111 +460,360 @@ export default function WordSprint() {
   );
 }
 
-// Lightweight, self‑contained snowfall overlay without external assets
-const Snowfall: React.FC<{ flakes?: number }> = ({ flakes = 24 }) => {
-  const width = Dimensions.get('window').width;
-  const height = Dimensions.get('window').height;
-
-  const flakeViews = Array.from({ length: flakes }).map((_, i) => {
-    const size = Math.random() * 3 + 2; // 2–5 px
-    const left = Math.random() * width;
-    const duration = 8000 + Math.random() * 6000; // 8–14s
-    const delay = Math.random() * 4000; // up to 4s
-    const drift = (Math.random() - 0.5) * 40; // -20..20 px horizontal drift
-
-    const y = new Animated.Value(-20);
-    const x = new Animated.Value(0);
-
-    React.useEffect(() => {
-      const fall = Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(y, { toValue: height + 40, duration, easing: Easing.linear, useNativeDriver: true }),
-          Animated.timing(y, { toValue: -20, duration: 0, useNativeDriver: true }),
-        ])
-      );
-      const sway = Animated.loop(
-        Animated.sequence([
-          Animated.timing(x, { toValue: drift, duration: duration / 2, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-          Animated.timing(x, { toValue: 0, duration: duration / 2, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        ])
-      );
-      fall.start();
-      sway.start();
-      return () => {
-        fall.stop();
-        sway.stop();
-      };
-    }, []);
-
-    return (
-      <Animated.View
-        key={`flake-${i}`}
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: 'rgba(255,255,255,0.85)',
-          opacity: 0.95,
-          transform: [
-            { translateX: x },
-            { translateY: y },
-          ],
-          left,
-          top: -20,
-        }}
-      />
-    );
-  });
-
-  return <View pointerEvents="none" style={StyleSheet.absoluteFill}>{flakeViews}</View>;
-};
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { flex: 1, zIndex: 1 },
-  emptyText: { color: '#9CA3AF' },
-  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerLeft: { flexDirection: 'row', alignItems: 'center' },
-  title: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  closeBtn: { marginRight: 10, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(62,70,74,0.88)', alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: '#4b555a' },
-  closeBtnText: { color: '#f4f6f8', fontSize: 14, fontWeight: '800' },
-  headerMeta: { flexDirection: 'row', alignItems: 'center' },
-  timerBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(38,48,52,0.85)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: '#3f4a4f', marginRight: 8 },
-  timerIcon: { color: '#F8B070', fontSize: 14, marginRight: 4 },
-  timerText: { color: '#f4f6f8', fontSize: 13, fontWeight: '600' },
-  counter: { color: '#9CA3AF', fontSize: 12, fontWeight: '600' },
-  body: { flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
-  mascotWrap: { marginTop: 28, alignItems: 'center', justifyContent: 'center' },
-  // Crop box: keep centered, allow a bit more vertical room
-  riveCrop: { width: 180, height: 170, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  // Smaller penguin, nudged down, with 20% transparency
-  riveInner: { width: 180, height: 180, opacity: 0.8, transform: [{ translateY: 10 }, { translateX: 0 }, { scale: 0.8 }] },
-  progressBackdrop: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', alignItems: 'stretch', zIndex: 0, backgroundColor: 'rgba(99,179,237,0.08)' },
-  progressColumn: { backgroundColor: 'rgba(99,179,237,0.28)', borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.12)', shadowColor: '#60A5FA', shadowOpacity: 0.25, shadowRadius: 24, shadowOffset: { width: 0, height: -6 } },
-  card: { width: '100%', backgroundColor: 'rgba(30,41,59,0.92)', borderRadius: 16, padding: 24, borderWidth: StyleSheet.hairlineWidth, borderColor: '#324357', shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 12 }, elevation: 8 },
-  cardLight: { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' },
-  definition: { color: '#e0e0e0', fontSize: 16, lineHeight: 22, textAlign: 'center' },
-  option: { backgroundColor: 'rgba(62,70,74,0.88)', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 12, marginTop: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#4b555a' },
-  optionLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
-  optionText: { color: '#f4f6f8', fontSize: 16, fontWeight: '600', textAlign: 'center' },
-  // Revert to original success/error colors
-  correct: { backgroundColor: '#437F76', borderColor: '#437F76' },
-  wrong: { backgroundColor: '#924646', borderColor: '#924646' },
-  footer: { alignItems: 'center', paddingBottom: 20 },
-  footerText: { color: '#9CA3AF', fontSize: 12 },
-  resultOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24, backgroundColor: 'rgba(18,20,21,0.8)', zIndex: 5 },
-  resultCard: { width: '100%', maxWidth: 320, backgroundColor: 'rgba(38,43,46,0.96)', borderRadius: 20, paddingVertical: 28, paddingHorizontal: 24, alignItems: 'center', borderWidth: StyleSheet.hairlineWidth, borderColor: '#434d51', shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 18, shadowOffset: { width: 0, height: 12 } },
-  resultTitle: { color: '#f4f6f8', fontSize: 24, fontWeight: '800' },
-  resultScore: { color: '#F8B070', fontSize: 20, fontWeight: '700', marginTop: 12 },
-  resultSub: { color: '#9CA3AF', marginTop: 6 },
-  resultButtons: { flexDirection: 'row', justifyContent: 'center', marginTop: 22 },
-  resultButton: { paddingHorizontal: 22, paddingVertical: 12, borderRadius: 12, marginHorizontal: 6 },
-  resultPrimary: { backgroundColor: '#F8B070' },
-  resultGhost: { backgroundColor: 'rgba(44,47,47,0.7)', borderWidth: StyleSheet.hairlineWidth, borderColor: '#5b6469' },
-  resultButtonText: { color: '#121415', fontWeight: '700' },
-  resultGhostText: { color: '#f4f6f8' },
+  // Container
+  container: {
+    flex: 1,
+    backgroundColor: '#1E1E1E',
+  },
+  containerLight: {
+    backgroundColor: '#F8F8F8',
+  },
+  content: {
+    flex: 1,
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    color: '#9CA3AF',
+    fontFamily: 'Ubuntu-Medium',
+    fontSize: 16,
+  },
+
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#2A2D2E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 0,
+    shadowOffset: { width: 1, height: 2 },
+    elevation: 3,
+  },
+  closeBtnLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+    shadowOpacity: 0.1,
+  },
+  closeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  closeBtnTextLight: {
+    color: '#374151',
+  },
+  title: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: 'Feather-Bold',
+    textAlign: 'center',
+    marginHorizontal: 12,
+  },
+  titleLight: {
+    color: '#1A1A1A',
+  },
+  counter: {
+    color: '#F8B070',
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
+  },
+  counterLight: {
+    color: '#F8B070',
+  },
+
+  // Timer bar
+  timerBarContainer: {
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    marginHorizontal: 20,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  timerBarContainerLight: {
+    backgroundColor: 'rgba(0,0,0,0.1)',
+  },
+  timerBarFill: {
+    height: '100%',
+    backgroundColor: '#F8B070',
+    borderRadius: 4,
+  },
+  timerDisplay: {
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  timerText: {
+    color: '#F8B070',
+    fontSize: 24,
+    fontWeight: '700',
+    fontFamily: 'Feather-Bold',
+  },
+  timerTextLight: {
+    color: '#F8B070',
+  },
+
+  // Body
+  body: {
+    flex: 1,
+    paddingHorizontal: 20,
+    justifyContent: 'center',
+  },
+
+  // Definition card
+  definitionCard: {
+    backgroundColor: '#F8B070',
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 20,
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    shadowOffset: { width: 2, height: 3 },
+    elevation: 5,
+  },
+  definitionCardLight: {
+    backgroundColor: '#F8B070',
+    borderColor: '#C88F50',
+  },
+  definition: {
+    color: '#1A1A1A',
+    fontSize: 18,
+    fontWeight: '600',
+    lineHeight: 26,
+    textAlign: 'center',
+    fontFamily: 'Ubuntu-Medium',
+  },
+  definitionLight: {
+    color: '#1A1A1A',
+  },
+
+  // Options
+  optionsContainer: {
+    gap: 12,
+  },
+  option: {
+    backgroundColor: '#2A2D2E',
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    shadowOffset: { width: 2, height: 3 },
+    elevation: 4,
+  },
+  optionLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+    shadowOpacity: 0.15,
+  },
+  optionCorrect: {
+    backgroundColor: '#437F76',
+    borderColor: '#2D5A53',
+  },
+  optionWrong: {
+    backgroundColor: '#C75050',
+    borderColor: '#8B3A3A',
+  },
+  optionText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '600',
+    textAlign: 'center',
+    fontFamily: 'Feather-Bold',
+  },
+  optionTextLight: {
+    color: '#1A1A1A',
+  },
+  optionTextRevealed: {
+    color: '#FFFFFF',
+  },
+
+  // Mascot
+  mascotWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  mascot: {
+    width: 120,
+    height: 120,
+    opacity: 0.7,
+  },
+
+  // Footer
+  footer: {
+    alignItems: 'center',
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  scoreCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#2A2D2E',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 0,
+    shadowOffset: { width: 1, height: 2 },
+    elevation: 3,
+  },
+  scoreCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+    shadowOpacity: 0.1,
+  },
+  scoreLabel: {
+    color: '#9CA3AF',
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Ubuntu-Medium',
+  },
+  scoreLabelLight: {
+    color: '#6B7280',
+  },
+  scoreValue: {
+    color: '#F8B070',
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: 'Feather-Bold',
+  },
+  scoreValueLight: {
+    color: '#F8B070',
+  },
+
+  // Result overlay
+  resultOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    backgroundColor: 'rgba(30, 30, 30, 0.95)',
+    zIndex: 10,
+  },
+  resultCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#2A2D2E',
+    borderRadius: 20,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    shadowOffset: { width: 2, height: 4 },
+    elevation: 8,
+  },
+  resultCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+    shadowOpacity: 0.15,
+  },
+  resultTitle: {
+    color: '#FFFFFF',
+    fontSize: 26,
+    fontWeight: '800',
+    fontFamily: 'Feather-Bold',
+    marginBottom: 8,
+  },
+  resultTitleLight: {
+    color: '#1A1A1A',
+  },
+  resultScore: {
+    color: '#F8B070',
+    fontSize: 48,
+    fontWeight: '700',
+    fontFamily: 'Feather-Bold',
+    marginVertical: 8,
+  },
+  resultAccuracy: {
+    color: '#9CA3AF',
+    fontSize: 16,
+    fontFamily: 'Ubuntu-Medium',
+    marginBottom: 24,
+  },
+  resultAccuracyLight: {
+    color: '#6B7280',
+  },
+  resultButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  resultButtonPrimary: {
+    backgroundColor: '#F25E86',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    shadowOffset: { width: 2, height: 3 },
+    elevation: 4,
+  },
+  resultButtonPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
+  },
+  resultButtonSecondary: {
+    backgroundColor: '#3A3D3E',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 3,
+    borderColor: '#1A1A1A',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 0,
+    shadowOffset: { width: 2, height: 3 },
+    elevation: 4,
+  },
+  resultButtonSecondaryLight: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+  },
+  resultButtonSecondaryText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: 'Ubuntu-Bold',
+  },
+  resultButtonSecondaryTextLight: {
+    color: '#374151',
+  },
 });

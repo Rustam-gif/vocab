@@ -23,7 +23,6 @@ const LottieView = forwardRef<LottieViewHandle, Props>(function LottieShim(
     reset: () => {},
     pause: () => {},
   }), []);
-  try { console.log('[lottie] using stub component'); } catch {}
   return <View style={style} />;
 });
 

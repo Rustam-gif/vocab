@@ -31,6 +31,7 @@ interface SynonymProps {
   wordRange?: { start: number; end: number };
   wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
   showUfoAnimation?: boolean;
+  ufoAnimationKey?: number;
 }
 
 interface WordEntry {
@@ -736,11 +737,20 @@ const CORRECT_COLOR_LIGHT = '#4ED9CB';
 const INCORRECT_COLOR_LIGHT = '#F25E86';
 const ACCENT_COLOR = '#F25E86';
 
-export default function SynonymComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride, showUfoAnimation }: SynonymProps) {
+export default function SynonymComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride, showUfoAnimation, ufoAnimationKey = 0 }: SynonymProps) {
   const themeName = useAppStore(s => s.theme);
   const recordResult = useAppStore(s => s.recordExerciseResult);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
+
+  // Stabilize wordsOverride with a ref to prevent re-shuffling when parent re-renders
+  const wordsOverrideRef = useRef(wordsOverride);
+  // Only update ref if wordsOverride actually changes content (not just reference)
+  if (wordsOverride && (!wordsOverrideRef.current || JSON.stringify(wordsOverride.map(w => w.word)) !== JSON.stringify(wordsOverrideRef.current.map(w => w.word)))) {
+    wordsOverrideRef.current = wordsOverride;
+  }
+  const stableWordsOverride = wordsOverrideRef.current;
+
   // Get words from levels data
   const wordsData = useMemo(() => {
     const levelKey = String(levelId || '').toLowerCase();
@@ -760,8 +770,8 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
     try { console.log('SynonymComponent - params:', { setId, levelId, detectedLevel: level?.name, cefr: level?.cefr, isAdvancedB2C1, isBeginnerA1A2, isIntermediateB1 }); } catch {}
 
     // Use override when provided (dynamic quiz)
-    if (wordsOverride && wordsOverride.length) {
-      let words = wordsOverride;
+    if (stableWordsOverride && stableWordsOverride.length) {
+      let words = stableWordsOverride;
       if (wordRange) words = words.slice(wordRange.start, wordRange.end);
 
       // Advanced/Beginner/Intermediate enforcement also applies when using overrides
@@ -908,7 +918,8 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
         incorrectPool: WORDS.find(entry => entry.word === w.word)?.incorrectPool || ['other', 'different', 'alternative'],
       } as WordEntry;
     });
-  }, [setId, levelId, wordRange]);
+  // Use primitive values for wordRange and stable ref for wordsOverride to avoid re-computation
+  }, [setId, levelId, wordRange?.start, wordRange?.end, stableWordsOverride]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
@@ -1087,6 +1098,7 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
             />
             {showUfoAnimation && (
               <LottieView
+                key={`ufo-${ufoAnimationKey}`}
                 source={require('../../../assets/lottie/learn/Ufo_animation.lottie')}
                 autoPlay
                 loop={false}
@@ -1106,7 +1118,7 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
       </View>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingTop: 16, paddingBottom: 120 }}
+        contentContainerStyle={{ paddingTop: 40, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
@@ -1441,8 +1453,8 @@ const styles = StyleSheet.create({
   },
   footerButtons: {
     alignItems: 'center',
-    paddingTop: 12,
-    paddingBottom: 70,
+    paddingTop: 24,
+    paddingBottom: 50,
   },
   primaryButton: {
     paddingVertical: 14,

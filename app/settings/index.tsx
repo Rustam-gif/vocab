@@ -29,8 +29,8 @@ export default function SettingsScreen() {
   const userLangs = useAppStore(s => s.languagePreferences);
 
   // Reminders settings
-  const [notifyEnabled, setNotifyEnabled] = useState(false);
-  const [notifyFreq, setNotifyFreq] = useState<ReminderFrequency>(1);
+  const [notifyEnabled, setNotifyEnabled] = useState(true);
+  const [notifyFreq, setNotifyFreq] = useState<ReminderFrequency>(2);
   const [startH, setStartH] = useState<number>(10);
   const [endH, setEndH] = useState<number>(22);
   useEffect(() => {

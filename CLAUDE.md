@@ -4,7 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Engniter is a React Native vocabulary learning app (bare workflow, not Expo managed) with file-based routing via a custom expo-router shim.
+**Vocadoo** is a mobile vocabulary learning app built with React Native (bare workflow). The app helps users expand their English vocabulary through interactive exercises, spaced repetition, and AI-powered content.
+
+### Key Features
+- **Learn Mode**: Progressive vocabulary lessons organized by difficulty levels (Beginner → Proficient)
+- **Quiz Exercises**: Multiple exercise types including MCQ, synonyms, sentence usage, and missing letters
+- **Spaced Repetition (SRS)**: Smart scheduling to optimize word retention
+- **Daily Articles**: Curated news and productivity articles for contextual learning
+- **AI Stories**: Generate custom stories using learned vocabulary
+- **Progress Tracking**: XP system, streaks, and detailed analytics
+- **Premium Subscription**: In-app purchases for full content access
+
+### Tech Stack
+- React Native (bare workflow, NOT Expo managed)
+- TypeScript
+- Zustand (state management)
+- Supabase (auth, database, edge functions)
+- AsyncStorage (local persistence)
 
 ## Development Environment
 
@@ -49,8 +65,15 @@ npm run test:daily
 - `ProgressService.ts`: XP, levels, exercise completion tracking
 - `AnalyticsService.ts`: Usage analytics and exercise results
 - `StoryGenerator.ts`: AI story generation with vocabulary
-- `SubscriptionService.ts`: In-app purchase handling
+- `SubscriptionService.ts`: In-app purchase handling (react-native-iap)
+- `SoundService.ts`: Sound effects playback with user toggle
 - `dailyMission.ts`: Daily challenge logic
+
+### Premium/Freemium Model
+- **Free users**: Access to first vocabulary set only, first daily article only
+- **Premium users**: All vocabulary sets, all articles, AI stories, skip ahead
+- **Subscription SKUs**: `com.royal.vocadoo.premium.months`, `com.royal.vocadoo.premium.annually`
+- Premium status checked via `SubscriptionService.getStatus()`
 
 ### Backend
 - **Supabase** (`lib/supabase.ts`): Auth, database, Edge Functions
@@ -79,10 +102,39 @@ Each phase component accepts `onComplete` callback with score updates.
 
 ## Theme System
 - Dark theme default: `#1E1E1E` background
-- Orange accent: `#F2935C`
+- Teal accent: `#4ED9CB`
+- Pink accent: `#F25E86`
 - Correct/success green: `#437F76`
 - Muted text: `#9CA3AF`
 - Theme toggle persisted via `@engniter.theme` AsyncStorage key
+
+## UI Styling Patterns
+
+### 3D Card Effect
+Cards throughout the app use a subtle 3D effect with teal-tinted borders:
+```typescript
+{
+  backgroundColor: '#1F1F1F',
+  borderRadius: 18,
+  borderWidth: 2,
+  borderColor: 'rgba(78,217,203,0.06)',
+  borderBottomWidth: 4,
+  borderRightWidth: 4,
+  borderBottomColor: 'rgba(78,217,203,0.1)',
+  borderRightColor: 'rgba(78,217,203,0.08)',
+}
+```
+
+### Light Theme Variants
+Light mode cards use stronger teal tints:
+```typescript
+{
+  backgroundColor: '#FFFFFF',
+  borderColor: 'rgba(78,217,203,0.2)',
+  borderBottomColor: 'rgba(78,217,203,0.25)',
+  borderRightColor: 'rgba(78,217,203,0.22)',
+}
+```
 
 ## Metro Configuration
 Custom Metro config (`metro.config.cjs`) includes:
@@ -145,9 +197,12 @@ AppState.addEventListener('change', (nextState) => {
 ### Storage Keys
 - `@engniter.theme` - Theme preference ('light' | 'dark')
 - `@engniter.langs` - Language preferences (JSON array)
+- `@engniter.soundEnabled` - Sound effects toggle ('1' | '0')
 - `@engniter.news.payload` - Cached news articles
 - `@engniter.news.lastFetchedAt` - News cache timestamp
 - `@engniter.productivity.articles.v3` - Productivity articles cache
+- `@engniter.selectedLevel` - Currently selected vocabulary level
+- `@engniter.highestLevel` - Highest unlocked level
 
 ## News & Articles System
 

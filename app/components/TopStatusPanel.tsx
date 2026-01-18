@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     shadowRadius: 0,
     elevation: 3,
   },
-  streakPillLight: { backgroundColor: '#FFF7ED', borderColor: '#1A1A1A' },
+  streakPillLight: { backgroundColor: '#FFF7ED', borderColor: '#E5E7EB', shadowOpacity: 0.15, shadowColor: '#9CA3AF' },
   streakText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14, fontFamily: 'Ubuntu-Bold' },
   streakTextLight: { color: '#0D3B4A' },
   rightRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
     shadowRadius: 0,
     elevation: 3,
   },
-  translateBtnLight: { backgroundColor: '#F25E86', borderColor: '#1A1A1A' },
+  translateBtnLight: { backgroundColor: '#F25E86', borderColor: '#C94A6E', shadowOpacity: 0.2, shadowColor: '#C94A6E' },
   subBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
     shadowRadius: 0,
     elevation: 3,
   },
-  subBtnLight: { backgroundColor: '#4ED9CB', borderColor: '#1A1A1A' },
+  subBtnLight: { backgroundColor: '#4ED9CB', borderColor: '#2D9A8F', shadowOpacity: 0.2, shadowColor: '#2D9A8F' },
   subBtnText: { color: '#1A1A1A', fontWeight: '700', fontSize: 14, fontFamily: 'Ubuntu-Bold' },
   offerBtn: {
     flexDirection: 'row',

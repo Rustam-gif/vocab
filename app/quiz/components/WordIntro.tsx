@@ -20,8 +20,9 @@ const ACCENT_COLOR = '#F8B070';
 const ACCENT_TEAL = '#4ED9CB';
 const TEXT_MUTED = '#9CA3AF';
 const TEXT_PRIMARY = '#F9FAFB';
-const CARD_BG_START = '#2A2D2E';
-const CARD_BG_END = '#1A1C1D';
+// Lighter card backgrounds - warm gray tones
+const CARD_BG_START = '#3A3D3E';
+const CARD_BG_END = '#2D3031';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -426,7 +427,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   progressCurrent: {
-    color: ACCENT_TEAL,
+    color: ACCENT_COLOR,
     fontSize: 18,
     fontWeight: '700',
   },
@@ -447,7 +448,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: ACCENT_TEAL,
+    backgroundColor: ACCENT_COLOR,
     borderRadius: 3,
   },
   sliderContent: {
@@ -459,14 +460,14 @@ const styles = StyleSheet.create({
   slide: {
     borderRadius: 24,
     padding: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(78, 217, 203, 0.25)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
     minHeight: 380,
   },
   accentGlow: {
@@ -476,7 +477,7 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
     borderRadius: 75,
-    backgroundColor: 'rgba(78, 217, 203, 0.08)',
+    backgroundColor: 'rgba(248, 176, 112, 0.04)',
   },
   headerRow: {
     flexDirection: 'row',
@@ -497,9 +498,9 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(78, 217, 203, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(78, 217, 203, 0.3)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   iconBtnActive: {
     backgroundColor: ACCENT_COLOR,
@@ -531,7 +532,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: ACCENT_TEAL,
+    color: 'rgba(255, 255, 255, 0.5)',
     marginBottom: 6,
     letterSpacing: 1.2,
   },
@@ -560,13 +561,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
-    backgroundColor: 'rgba(248, 176, 112, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(248, 176, 112, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   synonymText: {
     fontSize: 13,
-    color: ACCENT_COLOR,
+    color: '#D1D5DB',
     fontWeight: '600',
   },
   dotsContainer: {
@@ -584,7 +585,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
   dotActive: {
-    backgroundColor: ACCENT_TEAL,
+    backgroundColor: ACCENT_COLOR,
     width: 24,
   },
   navRow: {
