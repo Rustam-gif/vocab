@@ -15,7 +15,7 @@ import {
   Image,
 } from 'react-native';
 import LottieView from 'lottie-react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Plus, Search, BookOpen, Trash2 } from 'lucide-react-native';
 import { useAppStore } from '../lib/store';
@@ -34,6 +34,7 @@ export default function VaultScreen() {
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
   const { isAppReady } = useAppReady();
+  const insets = useSafeAreaInsets();
   const canMountTextInput = useCanMountTextInput();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -94,11 +95,11 @@ export default function VaultScreen() {
     playEntrance();
   }, [foldersToShow.length, ensureAnimCount, playEntrance]);
 
-  // Also re-run when screen regains focus
+  // Refresh folders when screen regains focus (don't replay entrance animation)
   useFocusEffect(() => {
     // Refresh folders when screen regains focus (new folders may be created elsewhere)
     try { setFolders(getFolders()); } catch {}
-    playEntrance();
+    // Don't replay entrance animation on tab switch - it causes a flash
   });
 
   useEffect(() => {
@@ -218,7 +219,7 @@ export default function VaultScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
+      <SafeAreaView edges={['bottom']} style={[styles.container, isLight && { backgroundColor: colors.background }, { paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#F25E86" />
           <Text style={[styles.loadingText, isLight && { color: '#2D4A66' }]}>Loading your vocabulary...</Text>
@@ -228,7 +229,7 @@ export default function VaultScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
+    <SafeAreaView edges={['bottom']} style={[styles.container, isLight && { backgroundColor: colors.background }, { paddingTop: insets.top }]}>
       <View style={[styles.header, isLight && styles.headerLight]}>
         <View style={{ width: 32 }} />
         <Text style={[styles.title, isLight && styles.titleLight]}>Vocabulary Vault</Text>

@@ -543,7 +543,7 @@ export default function ProfileScreen() {
 
   if (!user) {
     return (
-      <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
+      <SafeAreaView edges={['bottom']} style={[styles.container, isLight && styles.containerLight, { paddingTop: insets.top }]}>
         <View style={[styles.header, isLight && styles.headerLight]}>
           <View style={styles.placeholder} />
           <Text style={[styles.title, isLight && styles.titleLight]}>Profile</Text>
@@ -948,7 +948,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
+    <SafeAreaView edges={['bottom']} style={[styles.container, isLight && styles.containerLight, { paddingTop: insets.top }]}>
       <View style={{ flex: 1 }}>
         <View style={[styles.header, isLight && styles.headerLight]}>
           <View style={styles.placeholder} />
@@ -1787,8 +1787,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     paddingVertical: 40,
     borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.15)',
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1797,8 +1795,6 @@ const styles = StyleSheet.create({
   },
   signInContentLight: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(78,217,203,0.3)',
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 12,

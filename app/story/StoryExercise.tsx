@@ -1234,7 +1234,7 @@ const buildStoryFromContent = (
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, !isDarkMode && styles.containerLight]}>
+      <SafeAreaView edges={['bottom']} style={[styles.container, !isDarkMode && styles.containerLight]}>
         <View style={styles.loadingContainer}>
           <LottieView
             source={require('./Poetry.json')}
@@ -1252,15 +1252,14 @@ const buildStoryFromContent = (
   const topOffset = !isFullscreen ? Math.max(0, insets.top - 20) : 0;
 
   return (
-    <SafeAreaView style={[styles.container, !isDarkMode && styles.containerLight]}>
+    <SafeAreaView edges={['bottom']} style={[styles.container, !isDarkMode && styles.containerLight]}>
       {!isFullscreen && (
         <TopStatusPanel
           floating
-          includeTopInset
-          style={{ marginBottom: 8 }}
+          style={{ marginBottom: 8, marginTop: 12 }}
         />
       )}
-      <View style={{ flex: 1, paddingTop: topOffset }}>
+      <View style={{ flex: 1 }}>
         {/* Mode Toggle - compact toggle only when user expands controls */}
         {!isFullscreen && hasStory && showControls && false && (
           <View style={styles.toggleContainer}>
