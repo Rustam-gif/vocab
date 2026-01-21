@@ -574,8 +574,8 @@ export default function LearnScreen() {
     }
 
     if (!isSignedIn) {
-      // Send users to Profile to sign in; avoid blocking overlays that steal touches
-      router.push('/profile?redirect=/quiz/learn');
+      // Show sign-up modal
+      setShowSignupModal(true);
       return;
     }
 
@@ -647,9 +647,8 @@ export default function LearnScreen() {
       shouldScrollOnFocus.current = false;
       const currentIndex = currentLevel.sets.findIndex(s => !s.completed && !s.locked);
       const targetIndex = currentIndex === -1 ? 0 : currentIndex;
-      setTimeout(() => {
-        scrollToPlanet(targetIndex, false);
-      }, 150);
+      // Scroll immediately without delay
+      scrollToPlanet(targetIndex, false);
     }
   }, [currentLevel, scrollToPlanet]);
 
@@ -660,11 +659,10 @@ export default function LearnScreen() {
     const newIndex = currentLevel.sets.findIndex(s => !s.completed && !s.locked);
     const targetIndex = newIndex === -1 ? 0 : newIndex;
     setCurrentSetIndex(targetIndex);
+    setCenteredPlanetIndex(targetIndex);
 
-    // Scroll to the current set after a brief delay to ensure layout is ready
-    setTimeout(() => {
-      scrollToPlanet(targetIndex, false);
-    }, 100);
+    // Scroll immediately
+    scrollToPlanet(targetIndex, false);
   }, [currentLevel, scrollToPlanet]);
 
   // Calculate stage gate positions and trigger haptic when scrolling past
@@ -836,7 +834,7 @@ export default function LearnScreen() {
         <TopStatusPanel floating includeTopInset />
         <View style={[styles.loadingContainer, { paddingTop: contentTop }]}>
           <LottieView
-            source={require('../../assets/lottie/loading.json')}
+            source={require('../../assets/lottie/learn/loading_inlearn.json')}
             autoPlay
             loop
             style={{ width: 140, height: 140 }}
@@ -947,12 +945,6 @@ export default function LearnScreen() {
           ]} numberOfLines={2}>
             {displayTitle}
           </Text>
-          {/* "For you" badge for current/available nodes */}
-          {isCurrent && !isCompleted && (
-            <View style={styles.forYouBadge}>
-              <Text style={styles.forYouText}>For you</Text>
-            </View>
-          )}
         </View>
 
         {/* UFO/Spacecraft for current node */}
@@ -1298,9 +1290,8 @@ export default function LearnScreen() {
     );
   };
 
-  // Render spacecraft animation overlay (temporarily disabled for debugging)
+  // Render spacecraft animation overlay
   const renderSpacecraftAnimation = () => {
-    return null; // Disabled for debugging
     if (!spacecraftAnimating) return null;
 
     const fromPos = getPlanetPosition(spacecraftFromIndex);
@@ -1441,8 +1432,8 @@ export default function LearnScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: SPACE_BG }]}>
-      {/* Space background with stars - temporarily disabled for debugging */}
-      {/* <StarField /> */}
+      {/* Space background with stars */}
+      <StarField />
 
       {/* Top status panel */}
       <TopStatusPanel floating includeTopInset />
@@ -1457,7 +1448,10 @@ export default function LearnScreen() {
         onScroll={handleScroll}
         scrollEventThrottle={32}
         removeClippedSubviews={true}
-        decelerationRate="fast"
+        decelerationRate={0.85}
+        snapToInterval={HORIZONTAL_SPACING}
+        snapToAlignment="center"
+        contentOffset={{ x: Math.max(0, currentSetIndex * HORIZONTAL_SPACING + 60 + PLANET_SIZE / 2 + 20 - SCREEN_WIDTH / 2), y: 0 }}
       >
         {/* Planet path */}
         {buildCurrentLevelPath()}
@@ -1469,12 +1463,6 @@ export default function LearnScreen() {
       {/* Start / Practice Again button at bottom */}
       {currentLevel && centeredSet && (
         <View style={styles.bottomButtonContainer}>
-          {/* Show centered set title */}
-          <Text style={styles.centeredSetTitle} numberOfLines={1}>
-            {(centeredSet as any).type === 'quiz'
-              ? `Quiz ${centeredSet.title.replace('Quiz ', '')}`
-              : cleanTitle(centeredSet.title)}
-          </Text>
           <TouchableOpacity
             style={[
               styles.startButton,
@@ -1501,12 +1489,26 @@ export default function LearnScreen() {
         </View>
       )}
 
-      {/* Alien spaceship FAB */}
-      <TouchableOpacity style={styles.alienFab} activeOpacity={0.9}>
-        <View style={styles.alienFabInner}>
-          <Text style={styles.alienFabEmoji}>🛸</Text>
-        </View>
-      </TouchableOpacity>
+      {/* Go to current planet FAB */}
+      {currentSetIndex !== centeredPlanetIndex && (
+        <TouchableOpacity
+          style={styles.alienFab}
+          activeOpacity={0.9}
+          onPress={() => scrollToPlanet(currentSetIndex, true)}
+        >
+          <View style={[
+            styles.alienFabInner,
+            { transform: [{ rotate: currentSetIndex > centeredPlanetIndex ? '45deg' : '-45deg' }] }
+          ]}>
+            <LottieView
+              source={require('../../assets/lottie/learn/current_planet.json')}
+              autoPlay
+              loop
+              style={styles.rocketFabAnimation}
+            />
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* Signup modal disabled to avoid invisible overlays blocking touches */}
 
@@ -1628,6 +1630,91 @@ export default function LearnScreen() {
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Sign Up Modal */}
+      <Modal
+        visible={showSignupModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowSignupModal(false)}
+      >
+        <View style={styles.signupOverlay}>
+          <View style={[styles.signupCard, isLight && styles.signupCardLight]}>
+            {/* Close button */}
+            <TouchableOpacity
+              style={styles.signupClose}
+              onPress={() => setShowSignupModal(false)}
+            >
+              <Text style={styles.signupCloseText}>✕</Text>
+            </TouchableOpacity>
+
+            {/* Astronaut animation */}
+            <View style={styles.signupIconContainer}>
+              <LottieView
+                source={PLANET_SOURCES.astronaut}
+                autoPlay
+                loop
+                style={styles.signupAstronaut}
+              />
+            </View>
+
+            {/* Title */}
+            <Text style={[styles.signupTitle, isLight && styles.signupTitleLight]}>
+              Create Your Account
+            </Text>
+
+            {/* Subtitle */}
+            <Text style={[styles.signupSubtitle, isLight && styles.signupSubtitleLight]}>
+              Sign up to save your progress and unlock your vocabulary learning journey
+            </Text>
+
+            {/* Features list */}
+            <View style={styles.signupFeatures}>
+              <View style={styles.signupFeatureRow}>
+                <Check size={18} color="#4ED9CB" />
+                <Text style={[styles.signupFeatureText, isLight && styles.signupFeatureTextLight]}>
+                  Track your learning progress
+                </Text>
+              </View>
+              <View style={styles.signupFeatureRow}>
+                <Check size={18} color="#4ED9CB" />
+                <Text style={[styles.signupFeatureText, isLight && styles.signupFeatureTextLight]}>
+                  Sync across all devices
+                </Text>
+              </View>
+              <View style={styles.signupFeatureRow}>
+                <Check size={18} color="#4ED9CB" />
+                <Text style={[styles.signupFeatureText, isLight && styles.signupFeatureTextLight]}>
+                  Earn XP and maintain streaks
+                </Text>
+              </View>
+            </View>
+
+            {/* CTA Button */}
+            <TouchableOpacity
+              style={styles.signupCta}
+              onPress={() => {
+                setShowSignupModal(false);
+                router.push('/profile');
+              }}
+            >
+              <Text style={styles.signupCtaText}>Sign Up Free</Text>
+            </TouchableOpacity>
+
+            {/* Sign in link */}
+            <TouchableOpacity
+              onPress={() => {
+                setShowSignupModal(false);
+                router.push('/profile');
+              }}
+            >
+              <Text style={[styles.signupSignIn, isLight && styles.signupSignInLight]}>
+                Already have an account? <Text style={styles.signupSignInLink}>Sign In</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -2074,6 +2161,10 @@ const styles = StyleSheet.create({
   },
   alienFabEmoji: {
     fontSize: 24,
+  },
+  rocketFabAnimation: {
+    width: 70,
+    height: 70,
   },
   // Keep old styles for compatibility
   nodeWrapper: {
@@ -2709,6 +2800,123 @@ const styles = StyleSheet.create({
   },
   paywallMaybeLaterLight: {
     color: '#9CA3AF',
+  },
+  // Sign Up Modal styles
+  signupOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  signupCard: {
+    backgroundColor: '#1F2937',
+    borderRadius: 24,
+    padding: 28,
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(78, 217, 203, 0.2)',
+  },
+  signupCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(78, 217, 203, 0.3)',
+  },
+  signupClose: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  signupCloseText: {
+    color: '#9CA3AF',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  signupIconContainer: {
+    width: 120,
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  signupAstronaut: {
+    width: 120,
+    height: 120,
+  },
+  signupTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 12,
+    fontFamily: 'Feather-Bold',
+  },
+  signupTitleLight: {
+    color: '#1F2937',
+  },
+  signupSubtitle: {
+    fontSize: 15,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+    paddingHorizontal: 8,
+  },
+  signupSubtitleLight: {
+    color: '#6B7280',
+  },
+  signupFeatures: {
+    width: '100%',
+    marginBottom: 24,
+  },
+  signupFeatureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    paddingHorizontal: 8,
+  },
+  signupFeatureText: {
+    fontSize: 15,
+    color: '#D1D5DB',
+    marginLeft: 12,
+  },
+  signupFeatureTextLight: {
+    color: '#4B5563',
+  },
+  signupCta: {
+    backgroundColor: '#4ED9CB',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    width: '100%',
+    marginBottom: 16,
+  },
+  signupCtaText: {
+    color: '#1F2937',
+    fontSize: 17,
+    fontWeight: '700',
+    textAlign: 'center',
+    fontFamily: 'Feather-Bold',
+  },
+  signupSignIn: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+  },
+  signupSignInLight: {
+    color: '#6B7280',
+  },
+  signupSignInLink: {
+    color: '#4ED9CB',
+    fontWeight: '600',
   },
   // Vertical scroll styles
   verticalScrollContainer: {

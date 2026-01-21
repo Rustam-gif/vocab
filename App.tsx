@@ -3,7 +3,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { RouterProvider, RouteRenderer } from './lib/router';
 import LottieView from 'lottie-react-native';
-import { View, StyleSheet, Platform, TextInput, AppState, AppStateStatus, InteractionManager, Keyboard } from 'react-native';
+import { View, StyleSheet, Platform, TextInput, AppState, AppStateStatus, InteractionManager, Keyboard, Dimensions } from 'react-native';
 import { useAppStore } from './lib/store';
 import { getTheme, ThemeName } from './lib/theme';
 import { Launch } from './lib/launch';
@@ -200,7 +200,12 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
+      <SafeAreaProvider
+        initialMetrics={{
+          insets: { top: 59, bottom: 34, left: 0, right: 0 },
+          frame: { x: 0, y: 0, width: Dimensions.get('window').width, height: Dimensions.get('window').height },
+        }}
+      >
         <TextInputGateProvider>
           <AppReadyProvider>
             <RouterProvider>
