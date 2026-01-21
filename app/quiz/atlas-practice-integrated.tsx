@@ -323,6 +323,9 @@ export default function AtlasPracticeIntegrated() {
 
         // Force immediate save to ensure data persists before navigation
         await SetProgressService.flushSave();
+
+        // Emit event so Learn screen refreshes immediately
+        DeviceEventEmitter.emit('SET_COMPLETED');
       }
     } catch {}
 

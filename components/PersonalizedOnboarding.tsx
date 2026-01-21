@@ -47,10 +47,41 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
   const setLanguagePreferences = useAppStore(s => s.setLanguagePreferences);
   const selectedLangs = useAppStore(s => s.languagePreferences);
 
-  const [step, setStep] = useState(0); // 0: welcome, 1: language, 2: focus, 3: goal, 4: forecast
+  const [step, setStep] = useState(0); // 0: welcome, 1: language, 2: focus, 3: goal, 4: wordKnowledge, 5: forecast
   const [selectedFocus, setSelectedFocus] = useState<FocusType | null>(null);
   const [selectedGoal, setSelectedGoal] = useState<DailyGoal>(10);
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(selectedLangs?.[0] || null);
+  const [selectedWords, setSelectedWords] = useState<Set<string>>(new Set());
+
+  // Word knowledge data grouped by level
+  const wordKnowledgeData = {
+    beginner: ['happy', 'friend', 'beautiful', 'different', 'important', 'together'],
+    intermediate: ['confident', 'ambitious', 'accomplish', 'remarkable', 'determine', 'generous'],
+    advanced: ['ephemeral', 'ubiquitous', 'juxtapose', 'pragmatic', 'eloquent', 'resilient'],
+  };
+
+  const toggleWord = (word: string) => {
+    setSelectedWords(prev => {
+      const next = new Set(prev);
+      if (next.has(word)) {
+        next.delete(word);
+      } else {
+        next.add(word);
+      }
+      return next;
+    });
+  };
+
+  // Determine user level based on selections
+  const determinedLevel = useMemo(() => {
+    const beginnerKnown = wordKnowledgeData.beginner.filter(w => selectedWords.has(w)).length;
+    const intermediateKnown = wordKnowledgeData.intermediate.filter(w => selectedWords.has(w)).length;
+    const advancedKnown = wordKnowledgeData.advanced.filter(w => selectedWords.has(w)).length;
+
+    if (advancedKnown >= 3) return 'Advanced';
+    if (intermediateKnown >= 3) return 'Intermediate';
+    return 'Beginner';
+  }, [selectedWords]);
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -104,7 +135,7 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
 
   // Forecast counter animation
   useEffect(() => {
-    if (step === 4) {
+    if (step === 5) {
       const monthly = selectedGoal * 30;
       const yearly = selectedGoal * 365;
 
@@ -386,7 +417,93 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
     </View>
   );
 
-  // Step 4: Forecast
+  // Step 4: Word Knowledge Assessment
+  const renderWordKnowledge = () => (
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ alignItems: 'center', paddingBottom: 20 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <LottieView
+          source={require('../assets/lottie/learn/planets/colorful_planet.json')}
+          autoPlay
+          loop
+          speed={0.5}
+          style={{ width: 100, height: 100, marginBottom: 8 }}
+        />
+        <Text style={styles.stepTitle}>What's your vocabulary level?</Text>
+        <Text style={styles.stepSubtitle}>Select the words you know</Text>
+
+        {/* Beginner Words */}
+        <Text style={styles.wordSectionTitle}>Beginner</Text>
+        <View style={styles.wordGrid}>
+          {wordKnowledgeData.beginner.map((word) => {
+            const isSelected = selectedWords.has(word);
+            return (
+              <TouchableOpacity
+                key={word}
+                style={[styles.wordChip, isSelected && styles.wordChipSelected]}
+                onPress={() => toggleWord(word)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.wordChipText, isSelected && styles.wordChipTextSelected]}>
+                  {word}
+                </Text>
+                {isSelected && <Check size={14} color="#4ED9CB" style={{ marginLeft: 4 }} />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Intermediate Words */}
+        <Text style={styles.wordSectionTitle}>Intermediate</Text>
+        <View style={styles.wordGrid}>
+          {wordKnowledgeData.intermediate.map((word) => {
+            const isSelected = selectedWords.has(word);
+            return (
+              <TouchableOpacity
+                key={word}
+                style={[styles.wordChip, isSelected && styles.wordChipSelected]}
+                onPress={() => toggleWord(word)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.wordChipText, isSelected && styles.wordChipTextSelected]}>
+                  {word}
+                </Text>
+                {isSelected && <Check size={14} color="#4ED9CB" style={{ marginLeft: 4 }} />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Advanced Words */}
+        <Text style={styles.wordSectionTitle}>Advanced</Text>
+        <View style={styles.wordGrid}>
+          {wordKnowledgeData.advanced.map((word) => {
+            const isSelected = selectedWords.has(word);
+            return (
+              <TouchableOpacity
+                key={word}
+                style={[styles.wordChip, isSelected && styles.wordChipSelected]}
+                onPress={() => toggleWord(word)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.wordChipText, isSelected && styles.wordChipTextSelected]}>
+                  {word}
+                </Text>
+                {isSelected && <Check size={14} color="#4ED9CB" style={{ marginLeft: 4 }} />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <Text style={styles.wordHint}>Tap words you know • {selectedWords.size} selected</Text>
+      </ScrollView>
+    </View>
+  );
+
+  // Step 5: Forecast
   const renderForecast = () => {
     const dailyMins = selectedGoal === 5 ? '3-5' : selectedGoal === 10 ? '5-8' : '10-12';
 
@@ -425,7 +542,7 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
     );
   };
 
-  const steps = [renderWelcome, renderLanguageStep, renderFocusStep, renderGoalStep, renderForecast];
+  const steps = [renderWelcome, renderLanguageStep, renderFocusStep, renderGoalStep, renderWordKnowledge, renderForecast];
 
   return (
     <View style={styles.container}>
@@ -434,7 +551,7 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
 
       {/* Progress indicator */}
       <View style={styles.progressContainer}>
-        {[0, 1, 2, 3, 4].map((s) => (
+        {[0, 1, 2, 3, 4, 5].map((s) => (
           <View
             key={s}
             style={[
@@ -467,7 +584,7 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
             !canContinue() && styles.continueButtonDisabled,
           ]}
           onPress={() => {
-            if (step < 4) {
+            if (step < 5) {
               animateToNextStep(step + 1);
             } else {
               handleComplete();
@@ -477,7 +594,7 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
           activeOpacity={0.8}
         >
           <Text style={styles.continueButtonText}>
-            {step === 0 ? 'Get Started' : step === 4 ? "Let's Go!" : 'Continue'}
+            {step === 0 ? 'Get Started' : step === 5 ? "Let's Go!" : 'Continue'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -843,4 +960,81 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: 'Feather-Bold',
   },
-  });
+  // Word Knowledge styles
+  levelIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(78, 217, 203, 0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(78, 217, 203, 0.3)',
+  },
+  levelLabel: {
+    color: '#9CA3AF',
+    fontSize: 15,
+    fontFamily: 'Feather-Bold',
+  },
+  levelValue: {
+    color: '#4ED9CB',
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: 'Feather-Bold',
+  },
+  wordSectionTitle: {
+    alignSelf: 'flex-start',
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: 'Feather-Bold',
+    marginTop: 16,
+    marginBottom: 10,
+    marginLeft: 4,
+  },
+  wordGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    width: '100%',
+  },
+  wordChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: '#1B263B',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderBottomColor: 'rgba(78, 217, 203, 0.1)',
+    borderRightColor: 'rgba(78, 217, 203, 0.08)',
+  },
+  wordChipSelected: {
+    backgroundColor: 'rgba(78, 217, 203, 0.15)',
+    borderColor: '#4ED9CB',
+    borderBottomColor: '#4ED9CB',
+    borderRightColor: '#4ED9CB',
+  },
+  wordChipText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: 'Feather-Bold',
+  },
+  wordChipTextSelected: {
+    color: '#4ED9CB',
+  },
+  wordHint: {
+    marginTop: 20,
+    color: '#9CA3AF',
+    fontSize: 13,
+    fontFamily: 'Feather-Bold',
+    textAlign: 'center',
+  },
+});

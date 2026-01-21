@@ -66,6 +66,12 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
       type: 'time' as const,
     },
     {
+      title: "What's your vocabulary level?",
+      body: "Select the words you know to personalize your learning",
+      lottie: require('../../assets/lottie/learn/planets/colorful_planet.json'),
+      type: 'wordKnowledge' as const,
+    },
+    {
       title: 'Unlock 70% Off',
       body: 'Yearly plan now 70% off. Keep your streak and words growing.',
       lottie: require('../../assets/lottie/Onboarding/Gift.json'),
@@ -106,6 +112,55 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
   const [annualPriceDisplay, setAnnualPriceDisplay] = useState<string | null>(null);
   const timeOptions = [5, 10, 15, 20] as const;
   const timeScales = useRef<Record<number, Animated.Value>>({ 5: new Animated.Value(1), 10: new Animated.Value(1), 15: new Animated.Value(1), 20: new Animated.Value(1) }).current;
+
+  // Word knowledge assessment state
+  const [selectedWords, setSelectedWords] = useState<Set<string>>(new Set());
+  const wordScales = useRef<Record<string, Animated.Value>>({}).current;
+
+  // Words grouped by difficulty level
+  const wordKnowledgeData = useMemo(() => ({
+    beginner: ['whisper', 'metal', 'genuine', 'borrow', 'eager', 'humble'],
+    intermediate: ['impeccable', 'morose', 'pervasive', 'eloquent', 'candid', 'resilient'],
+    advanced: ['logophile', 'lucubration', 'numinous', 'quixotic', 'ephemeral', 'sycophant'],
+  }), []);
+
+  const toggleWord = (word: string) => {
+    setSelectedWords(prev => {
+      const next = new Set(prev);
+      if (next.has(word)) {
+        next.delete(word);
+      } else {
+        next.add(word);
+      }
+      return next;
+    });
+    // Animate the word card
+    if (!wordScales[word]) {
+      wordScales[word] = new Animated.Value(1);
+    }
+    Animated.sequence([
+      Animated.spring(wordScales[word], { toValue: 0.95, useNativeDriver: true, friction: 4 }),
+      Animated.spring(wordScales[word], { toValue: 1, useNativeDriver: true, friction: 5 }),
+    ]).start();
+  };
+
+  const getWordScale = (word: string) => {
+    if (!wordScales[word]) {
+      wordScales[word] = new Animated.Value(1);
+    }
+    return wordScales[word];
+  };
+
+  // Determine user level based on word selections
+  const determinedLevel = useMemo(() => {
+    const beginnerKnown = wordKnowledgeData.beginner.filter(w => selectedWords.has(w)).length;
+    const intermediateKnown = wordKnowledgeData.intermediate.filter(w => selectedWords.has(w)).length;
+    const advancedKnown = wordKnowledgeData.advanced.filter(w => selectedWords.has(w)).length;
+
+    if (advancedKnown >= 3) return 'advanced';
+    if (intermediateKnown >= 3) return 'intermediate';
+    return 'beginner';
+  }, [selectedWords, wordKnowledgeData]);
   // Expanded catalog (>=150 languages)
   const LANGS = useMemo(() => LANGUAGES_WITH_FLAGS, []);
   const filteredLangs = useMemo(() => {
@@ -403,6 +458,135 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
                         })}
                       </View>
                       <Text style={[styles.timeHint, isLight && styles.timeHintLight]}>You can change this anytime.</Text>
+                    </Animated.View>
+                  );
+                }
+                if ((p as any).type === 'wordKnowledge') {
+                  const hasPlayed = !!playedRef.current[i];
+                  const shouldAuto = index === i && !hasPlayed;
+                  const allWords = [...wordKnowledgeData.beginner, ...wordKnowledgeData.intermediate, ...wordKnowledgeData.advanced];
+                  return (
+                    <Animated.View style={[styles.heroCard, isLight ? styles.heroCardLight : styles.heroCardDark, { transform: [{ scale }, { translateY }], opacity }]}>
+                      {/* Planet animation */}
+                      {p.lottie && (
+                        <LottieView
+                          source={p.lottie}
+                          autoPlay={shouldAuto}
+                          loop={true}
+                          style={{ width: Math.min(140, width * 0.35), height: Math.min(140, width * 0.35), alignSelf: 'center', marginBottom: 8 }}
+                        />
+                      )}
+
+                      {/* Level indicator */}
+                      <View style={styles.levelIndicator}>
+                        <Text style={[styles.levelLabel, isLight && styles.levelLabelLight]}>
+                          Your level: <Text style={styles.levelValue}>{determinedLevel.charAt(0).toUpperCase() + determinedLevel.slice(1)}</Text>
+                        </Text>
+                      </View>
+
+                      {/* Word sections */}
+                      <ScrollView
+                        style={{ maxHeight: height * 0.4, width: '100%' }}
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={{ paddingBottom: 16 }}
+                      >
+                        {/* Beginner Words */}
+                        <Text style={[styles.wordSectionTitle, isLight && styles.wordSectionTitleLight]}>Beginner</Text>
+                        <View style={styles.wordGrid}>
+                          {wordKnowledgeData.beginner.map((word) => {
+                            const isSelected = selectedWords.has(word);
+                            return (
+                              <Animated.View key={word} style={{ transform: [{ scale: getWordScale(word) }] }}>
+                                <TouchableOpacity
+                                  style={[
+                                    styles.wordChip,
+                                    isSelected && styles.wordChipSelected,
+                                    isLight && styles.wordChipLight,
+                                    isSelected && isLight && styles.wordChipSelectedLight,
+                                  ]}
+                                  onPress={() => toggleWord(word)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={[
+                                    styles.wordChipText,
+                                    isSelected && styles.wordChipTextSelected,
+                                    isLight && styles.wordChipTextLight,
+                                  ]}>
+                                    {word}
+                                  </Text>
+                                  {isSelected && <Check size={14} color="#4ED9CB" style={{ marginLeft: 4 }} />}
+                                </TouchableOpacity>
+                              </Animated.View>
+                            );
+                          })}
+                        </View>
+
+                        {/* Intermediate Words */}
+                        <Text style={[styles.wordSectionTitle, isLight && styles.wordSectionTitleLight]}>Intermediate</Text>
+                        <View style={styles.wordGrid}>
+                          {wordKnowledgeData.intermediate.map((word) => {
+                            const isSelected = selectedWords.has(word);
+                            return (
+                              <Animated.View key={word} style={{ transform: [{ scale: getWordScale(word) }] }}>
+                                <TouchableOpacity
+                                  style={[
+                                    styles.wordChip,
+                                    isSelected && styles.wordChipSelected,
+                                    isLight && styles.wordChipLight,
+                                    isSelected && isLight && styles.wordChipSelectedLight,
+                                  ]}
+                                  onPress={() => toggleWord(word)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={[
+                                    styles.wordChipText,
+                                    isSelected && styles.wordChipTextSelected,
+                                    isLight && styles.wordChipTextLight,
+                                  ]}>
+                                    {word}
+                                  </Text>
+                                  {isSelected && <Check size={14} color="#4ED9CB" style={{ marginLeft: 4 }} />}
+                                </TouchableOpacity>
+                              </Animated.View>
+                            );
+                          })}
+                        </View>
+
+                        {/* Advanced Words */}
+                        <Text style={[styles.wordSectionTitle, isLight && styles.wordSectionTitleLight]}>Advanced</Text>
+                        <View style={styles.wordGrid}>
+                          {wordKnowledgeData.advanced.map((word) => {
+                            const isSelected = selectedWords.has(word);
+                            return (
+                              <Animated.View key={word} style={{ transform: [{ scale: getWordScale(word) }] }}>
+                                <TouchableOpacity
+                                  style={[
+                                    styles.wordChip,
+                                    isSelected && styles.wordChipSelected,
+                                    isLight && styles.wordChipLight,
+                                    isSelected && isLight && styles.wordChipSelectedLight,
+                                  ]}
+                                  onPress={() => toggleWord(word)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={[
+                                    styles.wordChipText,
+                                    isSelected && styles.wordChipTextSelected,
+                                    isLight && styles.wordChipTextLight,
+                                  ]}>
+                                    {word}
+                                  </Text>
+                                  {isSelected && <Check size={14} color="#4ED9CB" style={{ marginLeft: 4 }} />}
+                                </TouchableOpacity>
+                              </Animated.View>
+                            );
+                          })}
+                        </View>
+                      </ScrollView>
+
+                      <Text style={[styles.wordHint, isLight && styles.wordHintLight]}>
+                        Tap words you know • {selectedWords.size} selected
+                      </Text>
                     </Animated.View>
                   );
                 }
@@ -878,6 +1062,98 @@ const styles = StyleSheet.create({
     fontFamily: 'Feather-Bold',
   },
   signupHintLight: {
+    color: '#64748B',
+  },
+  // Word Knowledge Assessment styles
+  levelIndicator: {
+    backgroundColor: 'rgba(78, 217, 203, 0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(78, 217, 203, 0.3)',
+  },
+  levelLabel: {
+    color: '#9CA3AF',
+    fontSize: 14,
+    fontFamily: 'Feather-Bold',
+  },
+  levelLabelLight: {
+    color: '#64748B',
+  },
+  levelValue: {
+    color: '#4ED9CB',
+    fontWeight: '700',
+  },
+  wordSectionTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: 'Feather-Bold',
+    marginTop: 12,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  wordSectionTitleLight: {
+    color: '#0D1B2A',
+  },
+  wordGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 4,
+  },
+  wordChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#2A3A4D',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderBottomColor: 'rgba(78, 217, 203, 0.1)',
+    borderRightColor: 'rgba(78, 217, 203, 0.08)',
+  },
+  wordChipLight: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+    borderBottomColor: 'rgba(78, 217, 203, 0.2)',
+    borderRightColor: 'rgba(78, 217, 203, 0.15)',
+  },
+  wordChipSelected: {
+    backgroundColor: 'rgba(78, 217, 203, 0.15)',
+    borderColor: '#4ED9CB',
+    borderBottomColor: '#4ED9CB',
+    borderRightColor: '#4ED9CB',
+  },
+  wordChipSelectedLight: {
+    backgroundColor: 'rgba(78, 217, 203, 0.2)',
+    borderColor: '#4ED9CB',
+  },
+  wordChipText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: 'Feather-Bold',
+  },
+  wordChipTextLight: {
+    color: '#374151',
+  },
+  wordChipTextSelected: {
+    color: '#4ED9CB',
+  },
+  wordHint: {
+    marginTop: 12,
+    color: '#9CA3AF',
+    fontSize: 13,
+    fontFamily: 'Feather-Bold',
+    textAlign: 'center',
+  },
+  wordHintLight: {
     color: '#64748B',
   },
 });

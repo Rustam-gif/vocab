@@ -339,11 +339,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   
-  // Theme: initialize from system to avoid a flash; default to dark
-  theme: ((): ThemeName => {
-    const sys = Appearance.getColorScheme();
-    return (sys === 'light' || sys === 'dark') ? (sys as ThemeName) : 'dark';
-  })(),
+  // Theme: always default to dark for first-time users
+  theme: 'dark' as ThemeName,
   setTheme: async (t: ThemeName) => {
     console.log('[Store] Setting theme:', t);
     set({ theme: t });
@@ -428,9 +425,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     // Apply prefs immediately, but only overwrite when we actually have a value from storage.
     set(state => {
-      // Fallbacks if nothing persisted: keep current theme or system default
-      const sys = Appearance.getColorScheme();
-      const fallbackTheme: ThemeName = state.theme || ((sys === 'light' || sys === 'dark') ? (sys as ThemeName) : 'dark');
+      // Fallback to dark if nothing persisted
+      const fallbackTheme: ThemeName = state.theme || 'dark';
       return {
         ...state,
         theme: themePref ?? fallbackTheme,

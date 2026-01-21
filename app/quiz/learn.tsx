@@ -124,6 +124,14 @@ export default function LearnScreen() {
     DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
   }, []);
 
+  // Listen for set completion events to refresh immediately
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('SET_COMPLETED', () => {
+      refreshLevel();
+    });
+    return () => subscription.remove();
+  }, [refreshLevel]);
+
   // Check premium status on mount
   const checkPremiumStatus = useCallback(async () => {
     try {
@@ -347,6 +355,7 @@ export default function LearnScreen() {
 
       const setsWithProgress = withQuizzes.map((set, index) => {
         const flags = SetProgressService.getSetFlags(activeLevelId, set.id);
+        const isQuizSet = (set as any).type === 'quiz';
         const baseSet = {
           ...set,
           completed: typeof flags.completed === 'boolean' ? flags.completed : !!set.completed,
@@ -358,27 +367,45 @@ export default function LearnScreen() {
           return { ...baseSet, locked: false, premiumLocked: false } as any;
         }
 
-        // For free users: only the first set is available
-        if (!isPremium && index > 0) {
-          return { ...baseSet, locked: true, premiumLocked: true };
-        }
-
-        // First set is always unlocked
+        // First set is always unlocked for everyone
         if (index === 0) {
-          return { ...baseSet, premiumLocked: false };
-        }
-
-        // After a completed quiz, only unlock the FIRST set after it (not all sets until next quiz)
-        // The rest should unlock one-by-one as each set is completed
-        if (lastCompletedQuizIdx >= 0 && index === lastCompletedQuizIdx + 1) {
-          // This is the first set after the last completed quiz - unlock it
           return { ...baseSet, locked: false, premiumLocked: false };
         }
 
-        // Default: check if previous set is completed
+        // For free users: only the first set is available, rest are premium locked
+        if (!isPremium) {
+          return { ...baseSet, locked: true, premiumLocked: true };
+        }
+
+        // --- Premium users below ---
+
+        // Check if previous set is completed
         const prevSet = withQuizzes[index - 1];
         const prevFlags = SetProgressService.getSetFlags(activeLevelId, prevSet.id);
-        const prevCompleted = typeof prevFlags.completed === 'boolean' ? prevFlags.completed : !!prevSet.completed;
+        const prevCompleted = prevFlags.completed === true;
+
+        // For regular sets: unlock only if previous set is completed
+        if (!isQuizSet) {
+          return { ...baseSet, locked: !prevCompleted, premiumLocked: false };
+        }
+
+        // For quiz sets: locked by default, but can be tapped for skip-ahead
+        // The skip-ahead logic is handled in canQuizSkipAhead and handleSetPress
+        // Quiz is unlocked if all 4 sets before it are completed
+        const quizNumber = parseInt(String(set.id).replace('quiz-', ''), 10);
+        if (!isNaN(quizNumber)) {
+          // Find the 4 sets this quiz covers (sets at indices: (quizNumber-1)*5 to (quizNumber-1)*5+3)
+          // Note: quizzes are inserted after every 4 sets, so quiz-1 is at index 4, quiz-2 at index 9, etc.
+          const quizIdx = index;
+          const setsBeforeQuiz = withQuizzes.slice(quizIdx - 4, quizIdx).filter(s => (s as any).type !== 'quiz');
+          const allSetsCompleted = setsBeforeQuiz.every(s => {
+            const sFlags = SetProgressService.getSetFlags(activeLevelId, s.id);
+            return sFlags.completed === true;
+          });
+          return { ...baseSet, locked: !allSetsCompleted, premiumLocked: false };
+        }
+
+        // Fallback: check previous set
         return { ...baseSet, locked: !prevCompleted, premiumLocked: false };
       });
 
@@ -418,10 +445,8 @@ export default function LearnScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const task = InteractionManager.runAfterInteractions(() => {
-        refreshLevel();
-      });
-      return () => task.cancel?.();
+      // Refresh immediately on focus - don't wait for InteractionManager
+      refreshLevel();
     }, [refreshLevel])
   );
 
@@ -455,7 +480,8 @@ export default function LearnScreen() {
   }, [activeLevelId]);
 
   // Check if skip ahead is available for a specific quiz
-  // Only the FIRST incomplete quiz can show skip ahead
+  // Skip ahead allows jumping to a quiz without completing the 4 sets before it
+  // But only if the PREVIOUS quiz is completed (or it's the first quiz)
   const canQuizSkipAhead = useCallback((quizSet: VocabSet, allSets: VocabSet[]) => {
     if (!activeLevelId) return false;
 
@@ -465,23 +491,16 @@ export default function LearnScreen() {
 
     if (quizIndex < 0) return false;
 
-    // For the first quiz in a level, check if previous level is completed
+    // For the first quiz in a level, skip ahead is always available (no previous quiz to check)
     if (quizIndex === 0) {
-      return isPreviousLevelCompleted();
+      return true;
     }
 
-    // For subsequent quizzes, check if ALL previous quizzes are completed
-    for (let i = 0; i < quizIndex; i++) {
-      const prevQuiz = quizzes[i];
-      const flags = SetProgressService.getSetFlags(activeLevelId, prevQuiz.id);
-      if (!flags.completed) {
-        return false; // Previous quiz not completed, can't skip ahead
-      }
-    }
-
-    // All previous quizzes completed, check if previous level is also completed
-    return isPreviousLevelCompleted();
-  }, [activeLevelId, isPreviousLevelCompleted]);
+    // For subsequent quizzes, check if the IMMEDIATELY PREVIOUS quiz is completed
+    const prevQuiz = quizzes[quizIndex - 1];
+    const flags = SetProgressService.getSetFlags(activeLevelId, prevQuiz.id);
+    return flags.completed === true;
+  }, [activeLevelId]);
 
   const handleSetPress = (set: VocabSet & { locked?: boolean; premiumLocked?: boolean }, allSets?: VocabSet[]) => {
     if (!activeLevelId) {
@@ -594,7 +613,10 @@ export default function LearnScreen() {
   const lastCenteredPlanet = useRef<number>(-1);
   const HORIZONTAL_SPACING = 280; // Must match buildCurrentLevelPath - more space between planets
 
-  // Scroll handler to detect centered planet and trigger haptic
+  // Ref to track pending state update
+  const pendingCenteredUpdate = useRef<NodeJS.Timeout | null>(null);
+
+  // Scroll handler to detect centered planet - debounced to reduce re-renders
   const handleScroll = useCallback((event: any) => {
     // Mark as scrolling and clear any pending end timer
     isScrollingRef.current = true;
@@ -614,11 +636,19 @@ export default function LearnScreen() {
     const planetIndex = Math.round((viewportCenter - 60 - PLANET_SIZE / 2 - 20) / HORIZONTAL_SPACING);
     const clampedIndex = Math.max(0, Math.min(planetIndex, (currentLevel?.sets.length || 1) - 1));
 
-    // Update centered planet and trigger haptic if changed
+    // Update ref immediately for haptic feedback
     if (clampedIndex !== lastCenteredPlanet.current) {
       lastCenteredPlanet.current = clampedIndex;
-      setCenteredPlanetIndex(clampedIndex);
       triggerHaptic('light');
+
+      // Debounce state update to reduce re-renders during fast scrolling
+      if (pendingCenteredUpdate.current) {
+        clearTimeout(pendingCenteredUpdate.current);
+      }
+      pendingCenteredUpdate.current = setTimeout(() => {
+        setCenteredPlanetIndex(clampedIndex);
+        pendingCenteredUpdate.current = null;
+      }, 50);
     }
   }, [triggerHaptic, currentLevel?.sets.length]);
 
@@ -927,11 +957,11 @@ export default function LearnScreen() {
             </View>
           )}
 
-          {/* Lottie Planet Animation */}
+          {/* Planet Lottie - only centered planet animates */}
           <LottieView
             source={planetSource}
-            autoPlay
-            loop
+            autoPlay={isCentered}
+            loop={isCentered}
             style={[
               { width: planetSize, height: planetSize },
               (isLocked && !quizCanSkipAhead) && styles.planetLocked,
@@ -1257,8 +1287,8 @@ export default function LearnScreen() {
         horizontal={true}
         showsHorizontalScrollIndicator={false}
         onScroll={handleScroll}
-        scrollEventThrottle={16}
-        removeClippedSubviews={false}
+        scrollEventThrottle={32}
+        removeClippedSubviews={true}
         decelerationRate="fast"
       >
         {/* Planet path */}
