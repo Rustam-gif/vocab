@@ -56,7 +56,7 @@ const PLANET_SOURCES = {
   checkpoint: require('../../assets/lottie/learn/planets/check_point_forquiz.json'),
 };
 
-// Planet type rotation for variety - use ALL planet types
+// Planet type rotation for variety - only actual planets
 const PLANET_TYPES = [
   'colorful',
   'orange',
@@ -66,8 +66,6 @@ const PLANET_TYPES = [
   'blue',
   'green',
   'red',
-  'astronaut',
-  'satellite',
 ] as const;
 type PlanetType = typeof PLANET_TYPES[number] | 'checkpoint';
 
@@ -722,21 +720,58 @@ export default function LearnScreen() {
     // Clean title for display
     const displayTitle = isQuiz ? `Quiz ${set.title.replace('Quiz ', '')}` : cleanTitle(set.title);
 
-    // Sparkle positions - small 4-pointed stars around planet
-    // Y=0 is top of planet, Y=planetSize is bottom
-    const sparkleData = [
-      // Small gold stars on left side of planet
-      { x: -5, y: 10, size: 7, type: 'star', color: '#FFD700' },
-      { x: -8, y: 55, size: 6, type: 'star', color: '#FFD700' },
-      { x: -3, y: 100, size: 6, type: 'star', color: '#FFD700' },
-      // Small gold stars on right side of planet
-      { x: planetSize + 5, y: 15, size: 6, type: 'star', color: '#FFD700' },
-      { x: planetSize + 8, y: 60, size: 7, type: 'star', color: '#FFD700' },
-      { x: planetSize + 3, y: 105, size: 6, type: 'star', color: '#FFD700' },
-      // Tiny white dots
-      { x: 0, y: 35, size: 3, type: 'dot', color: '#FFFFFF' },
-      { x: planetSize + 2, y: 80, size: 3, type: 'dot', color: '#FFFFFF' },
-    ];
+    // Sparkle positions - CIRCULAR pattern around planet center
+    // Planet center is at (planetSize/2, planetSize/2) = (65, 65)
+    // Planet radius is 65, so sparkles at radius 70-95 for circular halo
+    const center = planetSize / 2;
+    const generateCircularSparkles = () => {
+      const sparkles: Array<{x: number; y: number; size: number; type: string; color: string}> = [];
+
+      // Inner ring - close to planet (radius ~68-75)
+      const innerAngles = [0, 35, 70, 105, 140, 175, 210, 245, 280, 315];
+      innerAngles.forEach((deg, i) => {
+        const rad = (deg * Math.PI) / 180;
+        const radius = 68 + (i % 3) * 3;
+        sparkles.push({
+          x: center + Math.cos(rad) * radius - 3,
+          y: center + Math.sin(rad) * radius - 3,
+          size: 5 + (i % 2),
+          type: 'star',
+          color: '#FFD700',
+        });
+      });
+
+      // Outer ring - further out (radius ~85-100)
+      const outerAngles = [20, 55, 90, 125, 160, 195, 230, 265, 300, 335];
+      outerAngles.forEach((deg, i) => {
+        const rad = (deg * Math.PI) / 180;
+        const radius = 88 + (i % 4) * 4;
+        sparkles.push({
+          x: center + Math.cos(rad) * radius - 3,
+          y: center + Math.sin(rad) * radius - 3,
+          size: 6 + (i % 2),
+          type: 'star',
+          color: '#FFD700',
+        });
+      });
+
+      // Scattered white dots (small, at various radii)
+      const dotAngles = [15, 75, 135, 195, 255, 315];
+      dotAngles.forEach((deg, i) => {
+        const rad = (deg * Math.PI) / 180;
+        const radius = 72 + (i % 3) * 12;
+        sparkles.push({
+          x: center + Math.cos(rad) * radius - 1,
+          y: center + Math.sin(rad) * radius - 1,
+          size: 2 + (i % 2),
+          type: 'dot',
+          color: '#FFFFFF',
+        });
+      });
+
+      return sparkles;
+    };
+    const sparkleData = generateCircularSparkles();
 
     const wrapperWidth = planetSize + 40;
 
@@ -752,105 +787,9 @@ export default function LearnScreen() {
           },
         ]}
       >
-        {/* Sparkling stars animation around current/centered planet */}
-        {isCentered && (
-          <View style={[styles.sparkleContainerH, { width: wrapperWidth, height: planetSize + 40, top: 50 }]} pointerEvents="none">
-            {sparkleData.map((sparkle, i) => {
-              const animatedOpacity = levelPulseOpacity.interpolate({
-                inputRange: [0.2, 0.5],
-                outputRange: i % 2 === 0 ? [0.3, 1] : [1, 0.3],
-              });
-              const animatedScale = levelPulseAnim.interpolate({
-                inputRange: [1, 1.08],
-                outputRange: i % 3 === 0 ? [0.8, 1.2] : [1, 0.9],
-              });
 
-              if (sparkle.type === 'star') {
-                // 4-pointed star using two crossing rectangles
-                return (
-                  <Animated.View
-                    key={`sparkle-${i}`}
-                    style={{
-                      position: 'absolute',
-                      left: sparkle.x + 20,
-                      top: sparkle.y,
-                      width: sparkle.size,
-                      height: sparkle.size,
-                      opacity: animatedOpacity,
-                      transform: [{ scale: animatedScale }],
-                    }}
-                  >
-                    {/* Vertical bar */}
-                    <View style={{
-                      position: 'absolute',
-                      left: sparkle.size / 2 - 1.5,
-                      top: 0,
-                      width: 3,
-                      height: sparkle.size,
-                      backgroundColor: sparkle.color,
-                      borderRadius: 1.5,
-                    }} />
-                    {/* Horizontal bar */}
-                    <View style={{
-                      position: 'absolute',
-                      left: 0,
-                      top: sparkle.size / 2 - 1.5,
-                      width: sparkle.size,
-                      height: 3,
-                      backgroundColor: sparkle.color,
-                      borderRadius: 1.5,
-                    }} />
-                    {/* Diagonal bar 1 */}
-                    <View style={{
-                      position: 'absolute',
-                      left: sparkle.size / 2 - 1,
-                      top: sparkle.size * 0.15,
-                      width: 2,
-                      height: sparkle.size * 0.7,
-                      backgroundColor: sparkle.color,
-                      borderRadius: 1,
-                      transform: [{ rotate: '45deg' }],
-                    }} />
-                    {/* Diagonal bar 2 */}
-                    <View style={{
-                      position: 'absolute',
-                      left: sparkle.size / 2 - 1,
-                      top: sparkle.size * 0.15,
-                      width: 2,
-                      height: sparkle.size * 0.7,
-                      backgroundColor: sparkle.color,
-                      borderRadius: 1,
-                      transform: [{ rotate: '-45deg' }],
-                    }} />
-                  </Animated.View>
-                );
-              } else {
-                // Small circular dot
-                return (
-                  <Animated.View
-                    key={`sparkle-${i}`}
-                    style={[
-                      styles.sparkle,
-                      {
-                        left: sparkle.x + 20,
-                        top: sparkle.y,
-                        width: sparkle.size,
-                        height: sparkle.size,
-                        borderRadius: sparkle.size / 2,
-                        backgroundColor: sparkle.color,
-                        opacity: animatedOpacity,
-                        transform: [{ scale: animatedScale }],
-                      },
-                    ]}
-                  />
-                );
-              }
-            })}
-          </View>
-        )}
-
-        {/* Title label ABOVE planet */}
-        <View style={[styles.planetLabelContainerH, { width: wrapperWidth }]}>
+        {/* Title label ABOVE planet - centered over the planet */}
+        <View style={[styles.planetLabelContainerH, { width: planetSize + 80, left: 20 + planetSize / 2 - (planetSize + 80) / 2 }]}>
           <Text style={[
             styles.planetLabel,
             isLocked && !quizCanSkipAhead && styles.planetLabelLocked,
@@ -888,8 +827,106 @@ export default function LearnScreen() {
             height: planetSize,
             marginLeft: 20,
             transform: [{ scale: magnifyScale }],
+            overflow: 'visible',
           }]}
         >
+          {/* Sparkling stars around centered planet - positioned relative to planet */}
+          {isCentered && (
+            <View style={{ position: 'absolute', top: 0, left: 0, width: planetSize, height: planetSize, zIndex: 100, overflow: 'visible' }} pointerEvents="none">
+              {sparkleData.map((sparkle, i) => {
+                const animatedOpacity = levelPulseOpacity.interpolate({
+                  inputRange: [0.2, 0.5],
+                  outputRange: i % 2 === 0 ? [0.3, 1] : [1, 0.3],
+                });
+                const animatedScale = levelPulseAnim.interpolate({
+                  inputRange: [1, 1.08],
+                  outputRange: i % 3 === 0 ? [0.8, 1.2] : [1, 0.9],
+                });
+
+                if (sparkle.type === 'star') {
+                  // 4-pointed star using two crossing rectangles
+                  return (
+                    <Animated.View
+                      key={`sparkle-${i}`}
+                      style={{
+                        position: 'absolute',
+                        left: sparkle.x,
+                        top: sparkle.y,
+                        width: sparkle.size,
+                        height: sparkle.size,
+                        opacity: animatedOpacity,
+                        transform: [{ scale: animatedScale }],
+                      }}
+                    >
+                      {/* Vertical bar */}
+                      <View style={{
+                        position: 'absolute',
+                        left: sparkle.size / 2 - 1.5,
+                        top: 0,
+                        width: 3,
+                        height: sparkle.size,
+                        backgroundColor: sparkle.color,
+                        borderRadius: 1.5,
+                      }} />
+                      {/* Horizontal bar */}
+                      <View style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: sparkle.size / 2 - 1.5,
+                        width: sparkle.size,
+                        height: 3,
+                        backgroundColor: sparkle.color,
+                        borderRadius: 1.5,
+                      }} />
+                      {/* Diagonal bar 1 */}
+                      <View style={{
+                        position: 'absolute',
+                        left: sparkle.size / 2 - 1,
+                        top: sparkle.size * 0.15,
+                        width: 2,
+                        height: sparkle.size * 0.7,
+                        backgroundColor: sparkle.color,
+                        borderRadius: 1,
+                        transform: [{ rotate: '45deg' }],
+                      }} />
+                      {/* Diagonal bar 2 */}
+                      <View style={{
+                        position: 'absolute',
+                        left: sparkle.size / 2 - 1,
+                        top: sparkle.size * 0.15,
+                        width: 2,
+                        height: sparkle.size * 0.7,
+                        backgroundColor: sparkle.color,
+                        borderRadius: 1,
+                        transform: [{ rotate: '-45deg' }],
+                      }} />
+                    </Animated.View>
+                  );
+                } else {
+                  // Small circular dot
+                  return (
+                    <Animated.View
+                      key={`sparkle-${i}`}
+                      style={[
+                        styles.sparkle,
+                        {
+                          left: sparkle.x,
+                          top: sparkle.y,
+                          width: sparkle.size,
+                          height: sparkle.size,
+                          borderRadius: sparkle.size / 2,
+                          backgroundColor: sparkle.color,
+                          opacity: animatedOpacity,
+                          transform: [{ scale: animatedScale }],
+                        },
+                      ]}
+                    />
+                  );
+                }
+              })}
+            </View>
+          )}
+
           {/* Lottie Planet Animation */}
           <LottieView
             source={planetSource}
