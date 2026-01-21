@@ -83,11 +83,11 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '86%',
-    backgroundColor: '#1F2629',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#2A3033',
+    borderColor: '#1B263B',
   },
   cardLight: {
     backgroundColor: '#FFFFFF',
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     color: '#C7D2FE',
   },
   messageLight: {
-    color: '#374151',
+    color: '#2D4A66',
   },
   row: {
     flexDirection: 'row',
@@ -120,9 +120,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: '#2A3033',
+    backgroundColor: '#1B263B',
     borderWidth: 1,
-    borderColor: '#364147',
+    borderColor: '#2D4A66',
   },
   btnLight: {
     backgroundColor: '#FFFFFF',

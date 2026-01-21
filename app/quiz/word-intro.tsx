@@ -32,7 +32,7 @@ export default function WordIntroScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1B263B',
   },
   header: {
     flexDirection: 'row',
@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: '#243B53',
   },
   backButton: {
     padding: 8,

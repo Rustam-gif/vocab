@@ -10,11 +10,11 @@ export type Theme = {
 };
 
 const dark: Theme = {
-  background: '#1E1E1E',
-  surface: '#2C2C2C',
+  background: '#1A2744',
+  surface: '#1B263B',
   text: '#FFFFFF',
   subtext: '#9CA3AF',
-  border: '#333333',
+  border: '#0D1B2A',
   accent: '#F8B070',
 };
 
@@ -23,7 +23,7 @@ const light: Theme = {
   background: '#F8F8F8', // main screen color
   surface: '#FFFFFF',    // card color
   text: '#111827',
-  subtext: '#4B5563',
+  subtext: '#2D4A66',
   border: '#FFFFFF',
   accent: '#F8B070',
 };

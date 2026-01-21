@@ -79,15 +79,15 @@ export default function MissingLettersSimple({ onPhaseComplete, sharedScore, onS
         ? '#1E3A29' // soft green
         : isSelected
           ? '#3A1E1E' // soft red
-          : '#2C2C2C'
-      : '#2C2C2C';
+          : '#243B53'
+      : '#243B53';
     const borderColor = isAnswered
       ? showCorrect
         ? '#4CAF50'
         : isSelected
           ? '#EF4444'
-          : '#3A3A3A'
-      : '#3A3A3A';
+          : '#2D4A66'
+      : '#2D4A66';
 
     return (
       <TouchableOpacity
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
   },
   title: {
     fontSize: 24,

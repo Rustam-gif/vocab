@@ -1,0 +1,344 @@
+[
+  {
+    "word": "schedule",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "schedule",
+        "level": "ielts",
+        "set": "Scheduling & Appointments",
+        "lineNum": 916
+      },
+      {
+        "word": "schedule",
+        "level": "intermediate",
+        "set": "Reservations & Changes",
+        "lineNum": 1522
+      }
+    ]
+  },
+  {
+    "word": "argue",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "argue",
+        "level": "ielts",
+        "set": "Conversation & Disagreement",
+        "lineNum": 953
+      },
+      {
+        "word": "argue",
+        "level": "proficient",
+        "set": "Proficient  Argumentation Verbs",
+        "lineNum": 2752
+      }
+    ]
+  },
+  {
+    "word": "coordinate",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "coordinate",
+        "level": "office",
+        "set": "Project Management",
+        "lineNum": 1145
+      },
+      {
+        "word": "coordinate",
+        "level": "phrasal-verbs",
+        "set": "Phrasal Verbs  Meetings & Offers",
+        "lineNum": 2518
+      }
+    ]
+  },
+  {
+    "word": "negotiate",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "negotiate",
+        "level": "office",
+        "set": "Client Relations",
+        "lineNum": 1201
+      },
+      {
+        "word": "negotiate",
+        "level": "advanced",
+        "set": "Deals & Agreements Verbs",
+        "lineNum": 2195
+      }
+    ]
+  },
+  {
+    "word": "propose",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "propose",
+        "level": "intermediate",
+        "set": "Opinions & Decisions",
+        "lineNum": 1428
+      },
+      {
+        "word": "propose",
+        "level": "upper-intermediate",
+        "set": "Decisions & Delivery",
+        "lineNum": 1761
+      }
+    ]
+  },
+  {
+    "word": "sustain",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "sustain",
+        "level": "intermediate",
+        "set": "Environment & Nature",
+        "lineNum": 1670
+      },
+      {
+        "word": "sustain",
+        "level": "upper-intermediate",
+        "set": "Act & Uphold",
+        "lineNum": 1962
+      }
+    ]
+  },
+  {
+    "word": "corroborate",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "corroborate",
+        "level": "upper-intermediate",
+        "set": "Evidence & Methods",
+        "lineNum": 1833
+      },
+      {
+        "word": "corroborate",
+        "level": "advanced",
+        "set": "Inference & Reasoning Verbs",
+        "lineNum": 2377
+      }
+    ]
+  },
+  {
+    "word": "elucidate",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "elucidate",
+        "level": "upper-intermediate",
+        "set": "Data & Clarity",
+        "lineNum": 1847
+      },
+      {
+        "word": "elucidate",
+        "level": "advanced",
+        "set": "Knowledge & Expertise Verbs",
+        "lineNum": 2473
+      }
+    ]
+  },
+  {
+    "word": "synchronize",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "synchronize",
+        "level": "upper-intermediate",
+        "set": "Planning & Coordination",
+        "lineNum": 1860
+      },
+      {
+        "word": "synchronize",
+        "level": "advanced",
+        "set": "Law & Policy II Verbs",
+        "lineNum": 2330
+      }
+    ]
+  },
+  {
+    "word": "lessen",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "lessen",
+        "level": "upper-intermediate",
+        "set": "Change & Correction",
+        "lineNum": 1880
+      },
+      {
+        "word": "lessen",
+        "level": "advanced",
+        "set": "Change & Transformation Verbs",
+        "lineNum": 2413
+      }
+    ]
+  },
+  {
+    "word": "conclude",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "conclude",
+        "level": "upper-intermediate",
+        "set": "Change & Correction",
+        "lineNum": 1884
+      },
+      {
+        "word": "conclude",
+        "level": "advanced",
+        "set": "Inference & Reasoning Verbs",
+        "lineNum": 2374
+      }
+    ]
+  },
+  {
+    "word": "ratify",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "ratify",
+        "level": "upper-intermediate",
+        "set": "Refine & Verify",
+        "lineNum": 1919
+      },
+      {
+        "word": "ratify",
+        "level": "advanced",
+        "set": "Governance & Law Verbs",
+        "lineNum": 2136
+      }
+    ]
+  },
+  {
+    "word": "oppose",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "oppose",
+        "level": "upper-intermediate",
+        "set": "Evaluate & Persuade",
+        "lineNum": 1974
+      },
+      {
+        "word": "oppose",
+        "level": "advanced",
+        "set": "Communication & Discourse Verbs",
+        "lineNum": 2401
+      }
+    ]
+  },
+  {
+    "word": "dissuade",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "dissuade",
+        "level": "upper-intermediate",
+        "set": "People & Emotions",
+        "lineNum": 2090
+      },
+      {
+        "word": "dissuade",
+        "level": "advanced",
+        "set": "Influence & Persuasion Verbs",
+        "lineNum": 2438
+      }
+    ]
+  },
+  {
+    "word": "invalidate",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "invalidate",
+        "level": "advanced",
+        "set": "Analysis & Evidence Verbs",
+        "lineNum": 2125
+      },
+      {
+        "word": "invalidate",
+        "level": "proficient",
+        "set": "Proficient  Argumentation Verbs",
+        "lineNum": 2749
+      }
+    ]
+  },
+  {
+    "word": "theorize",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "theorize",
+        "level": "advanced",
+        "set": "Academic Writing Verbs",
+        "lineNum": 2149
+      },
+      {
+        "word": "theorize",
+        "level": "proficient",
+        "set": "Proficient  Argumentation Verbs",
+        "lineNum": 2753
+      }
+    ]
+  },
+  {
+    "word": "ameliorate",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "ameliorate",
+        "level": "advanced",
+        "set": "Change & Transformation Verbs",
+        "lineNum": 2411
+      },
+      {
+        "word": "ameliorate",
+        "level": "proficient",
+        "set": "Proficient  Precision Verbs II",
+        "lineNum": 2714
+      }
+    ]
+  },
+  {
+    "word": "inspect",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "inspect",
+        "level": "advanced",
+        "set": "Analysis & Examination Verbs",
+        "lineNum": 2422
+      },
+      {
+        "word": "inspect",
+        "level": "advanced",
+        "set": "Analysis & Examination Verbs",
+        "lineNum": 2424
+      }
+    ]
+  },
+  {
+    "word": "attest",
+    "count": 2,
+    "occurrences": [
+      {
+        "word": "attest",
+        "level": "advanced",
+        "set": "Validity & Legitimacy Verbs",
+        "lineNum": 2459
+      },
+      {
+        "word": "attest",
+        "level": "proficient",
+        "set": "Proficient  Argumentation Verbs",
+        "lineNum": 2751
+      }
+    ]
+  }
+]

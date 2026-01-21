@@ -21,7 +21,7 @@ const ACCENT_TEAL = '#4ED9CB';
 const TEXT_MUTED = '#9CA3AF';
 const TEXT_PRIMARY = '#F9FAFB';
 // Lighter card backgrounds - warm gray tones
-const CARD_BG_START = '#3A3D3E';
+const CARD_BG_START = '#2D4A66';
 const CARD_BG_END = '#2D3031';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -612,7 +612,7 @@ const styles = StyleSheet.create({
   navBtnNext: {
     backgroundColor: '#F25E86',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 3 },
     shadowOpacity: 0.4,

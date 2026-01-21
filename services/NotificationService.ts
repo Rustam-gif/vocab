@@ -14,14 +14,80 @@ const PREF_ENABLED = '@engniter.notify.enabled';
 const PREF_FREQ = '@engniter.notify.freq';
 const PREF_START_H = '@engniter.notify.startH';
 const PREF_END_H = '@engniter.notify.endH';
+const DAILY_GOAL_KEY = '@engniter.onboarding.dailyGoal';
+const TODAY_WORDS_KEY = '@engniter.progress.wordsToday';
+const TODAY_DATE_KEY = '@engniter.progress.todayDate';
 
 const MESSAGES: string[] = [
   'Quick win? 5 minutes improves your streak ✨',
   'Your words miss you. Learn 3 now! 📚',
   'Small steps today build fluency tomorrow 💪',
   'Practice moment: one story or 5 words 🔁',
-  'You’re close to your next milestone. Keep going! 🔥',
+  'You are close to your next milestone. Keep going! 🔥',
 ];
+
+// Personalized messages based on daily goal and progress
+const getPersonalizedMessage = async (): Promise<string> => {
+  try {
+    const [goalResult, wordsResult, dateResult] = await AsyncStorage.multiGet([
+      DAILY_GOAL_KEY,
+      TODAY_WORDS_KEY,
+      TODAY_DATE_KEY,
+    ]);
+
+    const dailyGoal = goalResult[1] ? parseInt(goalResult[1], 10) : 10;
+    const today = new Date().toISOString().split('T')[0];
+    const savedDate = dateResult[1];
+
+    // Check if today's data is current
+    let wordsToday = 0;
+    if (savedDate === today) {
+      wordsToday = wordsResult[1] ? parseInt(wordsResult[1], 10) : 0;
+    }
+
+    const remaining = Math.max(0, dailyGoal - wordsToday);
+    const percent = Math.round((wordsToday / dailyGoal) * 100);
+
+    // Calculate estimated time based on 1 word = ~30 seconds average
+    const mins = Math.ceil(remaining * 0.5);
+
+    // Choose message based on progress
+    if (wordsToday >= dailyGoal) {
+      // Goal completed - congratulations!
+      const congratsMessages = [
+        'Amazing! You hit your daily goal! Keep the momentum going tomorrow',
+        'Goal crushed! You are building an impressive vocabulary',
+        'Champion! Daily goal complete. Rest up for tomorrow',
+      ];
+      return congratsMessages[Math.floor(Math.random() * congratsMessages.length)];
+    } else if (wordsToday === 0) {
+      // Not started
+      const startMessages = [
+        `Time for your daily vocabulary boost! ${dailyGoal} words waiting`,
+        `Start your day with ${dailyGoal} new words. Just ${mins} minutes!`,
+        'Fresh words await! Begin your learning streak today',
+      ];
+      return startMessages[Math.floor(Math.random() * startMessages.length)];
+    } else if (percent >= 75) {
+      // Almost there
+      return `Almost there! Just ${remaining} more words to hit your goal`;
+    } else if (percent >= 50) {
+      // Halfway
+      return `Halfway done! ${remaining} words left. You've got this!`;
+    } else {
+      // In progress
+      const progressMessages = [
+        `${remaining} words left today! Just ${mins} more minutes`,
+        `You are ${percent}% done with today's goal! Keep going`,
+        `Quick session? ${remaining} words to complete your daily goal`,
+      ];
+      return progressMessages[Math.floor(Math.random() * progressMessages.length)];
+    }
+  } catch (e) {
+    // Fallback to default message
+    return MESSAGES[Math.floor(Math.random() * MESSAGES.length)];
+  }
+};
 
 function pickMessage(i: number): string {
   return MESSAGES[i % MESSAGES.length];
@@ -93,7 +159,9 @@ export const NotificationService = {
     let i = 0;
     for (const m of slots) {
       const fireDate = nextDateForMinutes(m);
-      const message = pickMessage(i++);
+      // Use personalized message for first slot, fallback for others
+      const message = i === 0 ? await getPersonalizedMessage() : pickMessage(i);
+      i++;
       if (RNPush) {
         try {
           RNPush.localNotificationSchedule?.({
@@ -112,8 +180,11 @@ export const NotificationService = {
       } else {
         // In-app lightweight fallback (only while app is open)
         const ms = fireDate.getTime() - Date.now();
-        setTimeout(() => {
-          try { Alert.alert('Practice Reminder', message); } catch {}
+        setTimeout(async () => {
+          try {
+            const personalizedMsg = await getPersonalizedMessage();
+            Alert.alert('Practice Reminder', personalizedMsg);
+          } catch {}
         }, Math.max(1000, ms));
       }
     }

@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingTop: 8, paddingBottom: 6 },
   iconBtn: { padding: 6 },
   title: { fontSize: 18, fontWeight: '800', color: '#111827' },
-  label: { marginTop: 10, color: '#374151', fontWeight: '700' },
+  label: { marginTop: 10, color: '#2D4A66', fontWeight: '700' },
   input: { marginTop: 6, backgroundColor: '#FFFFFF', borderColor: '#E5E7EB', borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 12, paddingVertical: Platform.OS === 'ios' ? 12 : 8, color: '#111827' },
   row: { flexDirection: 'row', marginTop: 12 },
   attachBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#B6E0E2', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10 },

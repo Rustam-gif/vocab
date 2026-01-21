@@ -25,7 +25,7 @@ const ACCENT_ORANGE = '#FE9602';
 const ACCENT_ORANGE_DARK = '#CC7A02';
 const ACCENT_TEAL = '#4ED9CB';
 const ACCENT_TEAL_DARK = '#3BB8AC';
-const BG_DARK = '#1E1E1E';
+const BG_DARK = '#1B263B';
 const CARD_BORDER = 'rgba(78, 217, 203, 0.35)';
 
 export default function PlacementResult() {
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: '#F25E86',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 3 },
     shadowOpacity: 0.4,

@@ -67,7 +67,7 @@ export default function VaultFolderScreen() {
         {items.length === 0 && !loading ? (
           <View style={styles.emptyState}>
             <Text style={[styles.emptyTitle, isLight && { color: '#111827' }]}>No words here yet</Text>
-            <Text style={[styles.emptySubtitle, isLight && { color: '#4B5563' }]}>Add or move words into this folder from your vault.</Text>
+            <Text style={[styles.emptySubtitle, isLight && { color: '#2D4A66' }]}>Add or move words into this folder from your vault.</Text>
           </View>
         ) : (
           <View style={styles.wordsList}>
@@ -136,7 +136,7 @@ export default function VaultFolderScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
   },
   headerLight: { },
   header: {
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
     fontFamily: 'Feather-Bold',
   },
-  titleLight: { color: '#1A1A1A' },
+  titleLight: { color: '#0D1B2A' },
   practiceActions: {
     flexDirection: 'row',
     gap: 10,
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     minWidth: 100,
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 3 },
     shadowOpacity: 0.4,
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   wordCard: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,

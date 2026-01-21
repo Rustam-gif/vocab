@@ -49,7 +49,7 @@ export default function WordSprint() {
       const ACCENT = toNorm('#F8B070'); // warm orange
       const TEAL = toNorm('#187486');   // brand teal
       const LIGHT = toNorm('#E5E7EB');  // off-white
-      const DARK = toNorm('#2A3033');   // dark slate
+      const DARK = toNorm('#1B263B');   // dark slate
 
       const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
       const setColor = (node: any, rgb: [number, number, number], a: number) => {
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
   // Container
   container: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
   },
   containerLight: {
     backgroundColor: '#F8F8F8',
@@ -496,11 +496,11 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 12,
-    backgroundColor: '#2A2D2E',
+    backgroundColor: '#243B53',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 0,
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   closeBtnTextLight: {
-    color: '#374151',
+    color: '#2D4A66',
   },
   title: {
     flex: 1,
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
   },
   titleLight: {
-    color: '#1A1A1A',
+    color: '#0D1B2A',
   },
   counter: {
     color: '#F8B070',
@@ -586,7 +586,7 @@ const styles = StyleSheet.create({
     padding: 24,
     marginBottom: 20,
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.4,
     shadowRadius: 0,
@@ -598,7 +598,7 @@ const styles = StyleSheet.create({
     borderColor: '#C88F50',
   },
   definition: {
-    color: '#1A1A1A',
+    color: '#0D1B2A',
     fontSize: 18,
     fontWeight: '600',
     lineHeight: 26,
@@ -606,7 +606,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Ubuntu-Medium',
   },
   definitionLight: {
-    color: '#1A1A1A',
+    color: '#0D1B2A',
   },
 
   // Options
@@ -614,12 +614,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   option: {
-    backgroundColor: '#2A2D2E',
+    backgroundColor: '#243B53',
     borderRadius: 14,
     paddingVertical: 16,
     paddingHorizontal: 16,
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.4,
     shadowRadius: 0,
@@ -633,7 +633,7 @@ const styles = StyleSheet.create({
   },
   optionCorrect: {
     backgroundColor: '#437F76',
-    borderColor: '#2D5A53',
+    borderColor: '#2D4A66',
   },
   optionWrong: {
     backgroundColor: '#C75050',
@@ -647,7 +647,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Feather-Bold',
   },
   optionTextLight: {
-    color: '#1A1A1A',
+    color: '#0D1B2A',
   },
   optionTextRevealed: {
     color: '#FFFFFF',
@@ -675,12 +675,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#2A2D2E',
+    backgroundColor: '#243B53',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 0,
@@ -723,13 +723,13 @@ const styles = StyleSheet.create({
   resultCard: {
     width: '100%',
     maxWidth: 320,
-    backgroundColor: '#2A2D2E',
+    backgroundColor: '#243B53',
     borderRadius: 20,
     paddingVertical: 32,
     paddingHorizontal: 24,
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.4,
     shadowRadius: 0,
@@ -749,7 +749,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   resultTitleLight: {
-    color: '#1A1A1A',
+    color: '#0D1B2A',
   },
   resultScore: {
     color: '#F8B070',
@@ -777,7 +777,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 14,
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.4,
     shadowRadius: 0,
@@ -791,12 +791,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Ubuntu-Bold',
   },
   resultButtonSecondary: {
-    backgroundColor: '#3A3D3E',
+    backgroundColor: '#2D4A66',
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 14,
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 0,
@@ -814,6 +814,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Ubuntu-Bold',
   },
   resultButtonSecondaryTextLight: {
-    color: '#374151',
+    color: '#2D4A66',
   },
 });

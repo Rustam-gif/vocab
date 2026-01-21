@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
   closeBtn: { padding: 6, paddingHorizontal: 10, borderRadius: 10 },
   closeTxt: { fontSize: 18, color: '#E5E7EB' },
   row: { flexDirection: 'row', gap: 12, marginTop: 18, justifyContent: 'space-between' },
-  card: { width: '48%', height: 190, backgroundColor: '#2C2C2C', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#333', shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 7, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  card: { width: '48%', height: 190, backgroundColor: '#243B53', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#243B53', shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 7, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
   cardLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
   cardLightShadow: { shadowColor: '#000', shadowOpacity: 0.10, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -98,5 +98,5 @@ const styles = StyleSheet.create({
   cardHint: { marginTop: 4, color: '#9CA3AF', fontSize: 13 },
   chevronPill: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   chevronPillLight: { backgroundColor: '#EEF2F7', borderWidth: 1, borderColor: '#E5E7EB' },
-  chevronPillDark: { backgroundColor: '#0F172A', borderWidth: 1, borderColor: '#334155' },
+  chevronPillDark: { backgroundColor: '#0D1B2A', borderWidth: 1, borderColor: '#2D4A66' },
 });

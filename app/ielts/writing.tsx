@@ -284,7 +284,7 @@ export default function IELTSWriting() {
                 <Text style={styles.topicRefreshText}>Regenerate</Text>
               </TouchableOpacity>
             </ScrollView>
-            <Text style={[styles.coachIntro, isLight && { color: '#374151' }]}>You are an IELTS Writing Task 2 coach using the “IELTS Advantage” essay structure.</Text>
+            <Text style={[styles.coachIntro, isLight && { color: '#2D4A66' }]}>You are an IELTS Writing Task 2 coach using the “IELTS Advantage” essay structure.</Text>
             <View style={{ height: 10 }} />
             <Text style={[styles.sectionTitle, isLight && { color: '#111827' }]}>1) Questions (choose one)</Text>
             {coachQs.map((q, i) => (
@@ -304,12 +304,12 @@ export default function IELTSWriting() {
           </>
         ) : (
           <>
-            <Text style={[styles.label, isLight && { color: '#374151' }]}>Prompt</Text>
+            <Text style={[styles.label, isLight && { color: '#2D4A66' }]}>Prompt</Text>
             <TextInput style={[styles.input, isLight && styles.inputLight, styles.promptBold]} multiline value={prompt} onChangeText={setPrompt} placeholder="Enter or paste the prompt"
               autoCorrect={false} spellCheck={false} autoCapitalize="none" autoComplete="off" keyboardType={Platform.OS === 'android' ? 'visible-password' : 'default'}
             />
             <View style={styles.rowBetween}>
-              <Text style={[styles.label, isLight && { color: '#374151' }]}>Your Essay</Text>
+              <Text style={[styles.label, isLight && { color: '#2D4A66' }]}>Your Essay</Text>
               <Text style={[styles.count, isLight && { color: '#6B7280' }]}>{wordCount} words</Text>
             </View>
             {/* Section chips */}
@@ -394,7 +394,7 @@ export default function IELTSWriting() {
             {result && (
               <View style={[styles.resultCard, isLight && styles.resultCardLight]}>
                 <Text style={[styles.band, isLight && { color: '#111827' }]}>Band {Number(result.band_estimate).toFixed(1)}</Text>
-                <Text style={[styles.subs, isLight && { color: '#374151' }]}>TR {result.subscores?.task_response?.toFixed?.(1)} • Coh {result.subscores?.coherence?.toFixed?.(1)} • Lex {result.subscores?.lexical?.toFixed?.(1)} • Gr {result.subscores?.grammar?.toFixed?.(1)}</Text>
+                <Text style={[styles.subs, isLight && { color: '#2D4A66' }]}>TR {result.subscores?.task_response?.toFixed?.(1)} • Coh {result.subscores?.coherence?.toFixed?.(1)} • Lex {result.subscores?.lexical?.toFixed?.(1)} • Gr {result.subscores?.grammar?.toFixed?.(1)}</Text>
               </View>
             )}
           </>
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '700', color: '#E5E7EB' },
   closeBtn: { padding: 6, paddingHorizontal: 10, borderRadius: 10 },
   closeTxt: { fontSize: 18, color: '#E5E7EB' },
-  topicChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: '#394150', backgroundColor: '#1F2937', marginRight: 8 },
+  topicChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: '#2D4A66', backgroundColor: '#1B263B', marginRight: 8 },
   topicChipLight: { backgroundColor: '#F1F5F9', borderColor: '#E5E7EB' },
   topicChipActive: { backgroundColor: '#CCE2FC', borderColor: '#B3D6FA' },
   topicChipText: { color: '#E5E7EB', fontWeight: '600', textTransform: 'capitalize' },
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
   coachIntro: { marginTop: 6, color: '#9CA3AF' },
   helper: { marginTop: 6, color: '#9CA3AF' },
   questionItem: { marginTop: 6, color: '#E5E7EB' },
-  questionCard: { marginTop: 10, borderRadius: 12, padding: 12, backgroundColor: '#111827', borderWidth: 1, borderColor: '#334155', shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 4 },
+  questionCard: { marginTop: 10, borderRadius: 12, padding: 12, backgroundColor: '#0D1B2A', borderWidth: 1, borderColor: '#2D4A66', shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 4 },
   questionCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
   questionText: { color: '#E5E7EB', fontWeight: '600' },
   tagsRow: { flexDirection: 'row', gap: 6, marginTop: 8, marginBottom: 8 },
@@ -434,7 +434,7 @@ const styles = StyleSheet.create({
   writeBtn: { alignSelf: 'flex-end', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: '#F8B070' },
   writeBtnTxt: { color: '#0D3B4A', fontWeight: '700' },
   modeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, borderWidth: 1, borderColor: '#334', backgroundColor: '#2C2C2C' },
+  chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, borderWidth: 1, borderColor: '#334', backgroundColor: '#243B53' },
   chipActive: { backgroundColor: '#CCE2FC', borderColor: '#B3D6FA' },
   chipText: { color: '#E5E7EB', fontWeight: '600' },
   chipTextActive: { color: '#0D3B4A' },
@@ -444,8 +444,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#1F2937',
+    borderColor: '#2D4A66',
+    backgroundColor: '#1B263B',
     marginRight: 8,
   },
   sectionChipLight: { backgroundColor: '#F1F5F9', borderColor: '#E5E7EB' },
@@ -460,19 +460,19 @@ const styles = StyleSheet.create({
   timerBtnStop: { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
   timerBtnText: { color: '#0D3B4A', fontWeight: '700' },
   label: { marginTop: 12, marginBottom: 6, color: '#9CA3AF', fontWeight: '600' },
-  input: { minHeight: 48, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#333', color: '#E5E7EB', backgroundColor: '#1F2937' },
+  input: { minHeight: 48, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#243B53', color: '#E5E7EB', backgroundColor: '#1B263B' },
   inputLight: { backgroundColor: '#FFFFFF', color: '#111827', borderColor: '#E5E7EB' },
   promptBold: { fontWeight: '700' },
-  plannerCard: { padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#333', backgroundColor: '#1F2937', gap: 8 },
+  plannerCard: { padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#243B53', backgroundColor: '#1B263B', gap: 8 },
   plannerCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
   planHeading: { fontWeight: '700', marginBottom: 6, color: '#E5E7EB' },
   planSub: { marginTop: 8, fontWeight: '600', color: '#9CA3AF' },
   planBullet: { marginTop: 4, color: '#9CA3AF' },
-  planInput: { minHeight: 44, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#394150', color: '#E5E7EB', backgroundColor: '#111827' },
-  essay: { minHeight: 220, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#333', color: '#E5E7EB', backgroundColor: '#111827' },
-  essayExpanded: { minHeight: Dimensions.get('window').height * 0.6, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#333', color: '#E5E7EB', backgroundColor: '#111827' },
+  planInput: { minHeight: 44, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#2D4A66', color: '#E5E7EB', backgroundColor: '#1B263B' },
+  essay: { minHeight: 220, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#243B53', color: '#E5E7EB', backgroundColor: '#1B263B' },
+  essayExpanded: { minHeight: Dimensions.get('window').height * 0.6, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#243B53', color: '#E5E7EB', backgroundColor: '#1B263B' },
   essayContainer: { borderRadius: 10, borderWidth: 1, position: 'relative' },
-  essayContainerDark: { backgroundColor: '#0F172A', borderColor: '#334155' },
+  essayContainerDark: { backgroundColor: '#0D1B2A', borderColor: '#2D4A66' },
   essayContainerLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
   essayInput: { flex: 1, padding: 12, color: '#E5E7EB', fontSize: 17, lineHeight: 26 },
   essayInputLight: { color: '#111827' },
@@ -493,12 +493,12 @@ const styles = StyleSheet.create({
   editorHeader: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   editorTitle: { color: '#E5E7EB', fontWeight: '700', fontSize: 18 },
   editorCount: { color: '#9CA3AF', fontWeight: '700' },
-  editorInput: { minHeight: Dimensions.get('window').height * 0.68, borderRadius: 12, borderWidth: 1, borderColor: '#334155', backgroundColor: '#0b1220', color: '#E5E7EB', padding: 12 },
+  editorInput: { minHeight: Dimensions.get('window').height * 0.68, borderRadius: 12, borderWidth: 1, borderColor: '#2D4A66', backgroundColor: '#0D1B2A', color: '#E5E7EB', padding: 12 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   count: { color: '#9CA3AF' },
   submitBtn: { marginTop: 14, backgroundColor: '#F8B070', paddingVertical: 12, borderRadius: 12, alignItems: 'center', alignSelf: 'center', width: '68%' },
   submitText: { color: '#0D3B4A', fontWeight: '700' },
-  resultCard: { marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155' },
+  resultCard: { marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: '#1B263B', borderWidth: 1, borderColor: '#2D4A66' },
   resultCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
   band: { fontSize: 24, fontWeight: '800', color: '#F8B070' },
   subs: { marginTop: 4, color: '#9CA3AF' },

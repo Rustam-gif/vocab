@@ -169,7 +169,7 @@ export default function JournalScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1B263B',
   },
   containerLight: {
     backgroundColor: '#F8F8F8',
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   storyCard: {
-    backgroundColor: '#2c2f2f',
+    backgroundColor: '#0D1B2A',
     borderRadius: 12,
     padding: 20,
     position: 'relative',
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   storyPreviewLight: {
-    color: '#2B2B2B',
+    color: '#1B263B',
   },
   storyFooter: {
     flexDirection: 'row',

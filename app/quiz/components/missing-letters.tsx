@@ -47,15 +47,15 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const DARK_COLORS = {
-  bg: '#1E1E1E',
+  bg: '#1B263B',
   text: '#FFFFFF',
   sub: '#9CA3AF',
-  slotNeutral: '#3A3A3A',
+  slotNeutral: '#2D4A66',
   slotCorrect: 'rgba(78,217,203,0.22)',
   slotWrong: 'rgba(242,94,134,0.22)',
   accent: '#F25E86',
-  border: '#333',
-  hint: '#2A2A2A',
+  border: '#243B53',
+  hint: '#1B263B',
 };
 
 const LIGHT_THEME = getTheme('light');

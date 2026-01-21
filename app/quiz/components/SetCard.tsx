@@ -249,7 +249,7 @@ export default function SetCard({ set, onPress }: SetCardProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#2A2D2D',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     padding: 14,
     paddingLeft: 18,
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   lockedContainer: {
-    backgroundColor: '#252525',
+    backgroundColor: '#1B263B',
     borderColor: 'rgba(255,255,255,0.03)',
   },
   lockedContainerLight: {
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F25E86',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 3 },
     shadowOpacity: 0.4,
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
     minWidth: 90,
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 3 },
     shadowOpacity: 0.4,

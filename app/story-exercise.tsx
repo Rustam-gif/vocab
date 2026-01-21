@@ -21,9 +21,9 @@ import { SubscriptionService } from '../services/SubscriptionService';
 import { soundService } from '../services/SoundService';
 
 const COLORS = {
-  background: '#1E1E1E',
-  surface: '#262626',
-  surfaceAlt: '#2F2F2F',
+  background: '#1B263B',
+  surface: '#243B53',
+  surfaceAlt: '#243B53',
   accent: '#F8B070',
   muted: '#9CA3AF',
   text: '#FFFFFF',
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
   iconButton: {
     padding: 8,
     borderRadius: 12,
-    backgroundColor: '#242424',
+    backgroundColor: '#1B263B',
   },
   headerTitle: {
     color: COLORS.text,
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#2D2D2D',
+    backgroundColor: '#243B53',
   },
   modeChipActive: {
     backgroundColor: COLORS.accent,
@@ -380,13 +380,13 @@ const styles = StyleSheet.create({
   lockOverlay: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#3A3A3A',
+    borderColor: '#2D4A66',
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     marginBottom: 12,
-    backgroundColor: '#242424',
+    backgroundColor: '#1B263B',
   },
   lockText: {
     color: COLORS.muted,
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     borderWidth: 1,
-    borderColor: '#323232',
+    borderColor: '#243B53',
   },
   secondaryButtonText: {
     color: COLORS.accent,
@@ -478,7 +478,7 @@ const styles = StyleSheet.create({
   modalIconButton: {
     padding: 8,
     borderRadius: 10,
-    backgroundColor: '#242424',
+    backgroundColor: '#1B263B',
   },
   modalHeaderTitle: {
     color: COLORS.text,
@@ -523,7 +523,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceAlt,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#3A3A3A',
+    borderColor: '#2D4A66',
     color: COLORS.text,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -547,7 +547,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#3A3A3A',
+    borderColor: '#2D4A66',
   },
   pillActive: {
     backgroundColor: 'rgba(248, 176, 112, 0.12)',
@@ -570,7 +570,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: '#3A3A3A',
+    borderColor: '#2D4A66',
     alignItems: 'center',
   },
   modalSecondaryText: {

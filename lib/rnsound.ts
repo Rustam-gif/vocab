@@ -94,24 +94,14 @@ class Sound {
     return this;
   }
 
-  static setCategory(value: string, mixWithOthers = false) {
-    if (Platform.OS === 'ios') {
-      try {
-        RNSound.setCategory?.(value, mixWithOthers);
-      } catch (e) {
-        console.warn('[Sound] setCategory error:', e);
-      }
-    }
+  static setCategory(_value: string, _mixWithOthers = false) {
+    // Disabled: native RNSound.setCategory has nullability issues causing crashes
+    // Audio session is configured in AppDelegate.swift instead
   }
 
-  static enableInSilenceMode(enabled: boolean) {
-    if (Platform.OS === 'ios') {
-      try {
-        RNSound.enableInSilenceMode?.(enabled);
-      } catch (e) {
-        console.warn('[Sound] enableInSilenceMode error:', e);
-      }
-    }
+  static enableInSilenceMode(_enabled: boolean) {
+    // Disabled: native method has nullability issues
+    // Audio session is configured in AppDelegate.swift instead
   }
 }
 

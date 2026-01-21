@@ -11,7 +11,7 @@ export default function StoryLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: '#1E1E1E' },
+        contentStyle: { backgroundColor: '#1B263B' },
           animation: 'simple_push',
       }}
     >

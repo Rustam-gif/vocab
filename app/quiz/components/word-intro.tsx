@@ -45,8 +45,8 @@ const ACCENT_ORANGE = '#F8B070';
 const ACCENT_TEAL = '#4ED9CB';
 const ACCENT_PINK = '#F25E86';
 const SUCCESS_GREEN = '#437F76';
-const DARK_BG = '#1E1E1E';
-const CARD_BG = '#1A1A1A';
+const DARK_BG = '#1B263B';
+const CARD_BG = '#0D1B2A';
 const CARD_BORDER = 'rgba(78, 217, 203, 0.15)';
 
 // Enable LayoutAnimation for Android
@@ -409,7 +409,7 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
           {/* Card border wrapper for 3D effect */}
           <View style={styles.cardBorderWrapper}>
             {/* Card solid background */}
-            <View style={[styles.cardGradient, { backgroundColor: isLight ? '#FFFFFF' : '#2A2D35' }]}>
+            <View style={[styles.cardGradient, { backgroundColor: isLight ? '#FFFFFF' : '#1B263B' }]}>
 
             {/* Header with word */}
             <View style={styles.cardHeader}>
@@ -735,7 +735,7 @@ const styles = StyleSheet.create({
   cardBorderWrapper: {
     borderRadius: 24,
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 3 },
@@ -861,7 +861,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Feather-Bold',
   },
   definitionTextLight: {
-    color: '#374151',
+    color: '#2D4A66',
   },
   exampleText: {
     fontSize: 15,
@@ -958,7 +958,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     gap: 6,
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 3 },
     shadowOpacity: 0.5,
@@ -983,7 +983,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalSheet: {
-    backgroundColor: '#1F2128',
+    backgroundColor: '#1B263B',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,

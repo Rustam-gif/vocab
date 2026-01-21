@@ -10,7 +10,7 @@ import ReactNativeHapticFeedback from '../../lib/haptics';
 import LottieView from 'lottie-react-native';
 
 // Colors matching Learn section
-const DARK_BG = '#1E1E1E';
+const DARK_BG = '#1B263B';
 const TOTAL_HEARTS = 5;
 
 // Haptic feedback helper with intensity levels
@@ -186,12 +186,12 @@ export default function AtlasResults() {
   // Background gradient colors
   const gradientColors = isLight
     ? ['#FFFFFF', '#F5F5F5', '#EBEBEB']
-    : ['#2A2A2A', '#222222', '#1A1A1A'];
+    : ['#1B263B', '#1B263B', '#0D1B2A'];
 
   return (
     <View style={[styles.container, isLight && styles.containerLight]}>
       {/* Background fill for notch */}
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: isLight ? '#FFFFFF' : '#2A2A2A' }} />
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: isLight ? '#FFFFFF' : '#1B263B' }} />
 
       <LinearGradient
         colors={gradientColors}
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Ubuntu-Bold',
   },
   successMessageLight: {
-    color: '#1E1E1E',
+    color: '#1B263B',
   },
 
   // Hearts card - matching exercise card style
@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     backgroundColor: '#F25E86',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 3 },
     shadowOpacity: 0.4,

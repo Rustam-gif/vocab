@@ -79,7 +79,7 @@ export default function AuthCallback() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121315',
+    backgroundColor: '#0D1B2A',
     justifyContent: 'center',
     alignItems: 'center',
   },

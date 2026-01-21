@@ -33,6 +33,6 @@ export default function QuizIndex() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#252525', justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1, backgroundColor: '#1B263B', justifyContent: 'center', alignItems: 'center' },
   text: { color: '#fff', fontSize: 16 },
 });

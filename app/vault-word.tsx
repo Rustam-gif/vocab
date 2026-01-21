@@ -85,7 +85,7 @@ export default function VaultWordScreen() {
           {!!item.example && (
             <>
               <Text style={[styles.sectionTitle, isLight && { color: '#111827' }]}>Example</Text>
-              <Text style={[styles.example, isLight && { color: '#374151' }]}>{item.example}</Text>
+              <Text style={[styles.example, isLight && { color: '#2D4A66' }]}>{item.example}</Text>
             </>
           )}
           {!!lang && (
@@ -103,7 +103,7 @@ export default function VaultWordScreen() {
                     <Text style={[styles.translationText, isLight && { color: '#1F2937' }]}>• Synonyms: {translation.synonyms.join(', ')}</Text>
                   ) : null}
                   {translation.example ? (
-                    <Text style={[styles.translationExample, isLight && { color: '#374151' }]}>“{translation.example}”</Text>
+                    <Text style={[styles.translationExample, isLight && { color: '#2D4A66' }]}>“{translation.example}”</Text>
                   ) : null}
                 </>
               ) : (
@@ -124,7 +124,7 @@ export default function VaultWordScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1E1E1E' },
+  container: { flex: 1, backgroundColor: '#1B263B' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
   headerLight: {},
   backButton: { padding: 8 },
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
   speakBtnLight: { backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: 'rgba(78,217,203,0.3)' },
   content: { flex: 1, padding: 16 },
   card: {
-    backgroundColor: '#1F1F1F',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1.5,
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     padding: 12,
     borderRadius: 12,
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderWidth: 1,
     borderColor: 'rgba(78,217,203,0.15)',
   },

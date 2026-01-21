@@ -68,7 +68,7 @@ export default function JournalDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#252525' },
+  container: { flex: 1, backgroundColor: '#1B263B' },
   containerLight: { backgroundColor: '#F8F8F8' },
   header: {
     flexDirection: 'row',
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#2c2f2f',
+    borderBottomColor: '#0D1B2A',
   },
   headerLight: { borderBottomColor: '#E5DED3' },
   backButton: { padding: 8 },
@@ -85,11 +85,11 @@ const styles = StyleSheet.create({
   titleLight: { color: '#111827' },
   content: { flex: 1, padding: 20 },
   storyText: { fontSize: 18, lineHeight: 28, color: '#E5E7EB' },
-  storyTextLight: { color: '#2B2B2B' },
+  storyTextLight: { color: '#1B263B' },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 },
   metaText: { fontSize: 12, color: '#9CA3AF' },
   metaTextLight: { color: '#6B7280' },
   missingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   missingText: { color: '#E5E7EB' },
-  missingTextLight: { color: '#374151' },
+  missingTextLight: { color: '#2D4A66' },
 });

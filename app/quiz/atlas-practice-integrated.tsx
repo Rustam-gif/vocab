@@ -109,6 +109,72 @@ export default function AtlasPracticeIntegrated() {
   const [mlIndex, setMlIndex] = useState(0);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
 
+  // Combo/Fire streak system
+  const [comboStreak, setComboStreak] = useState(0);
+  const [showFireAnimation, setShowFireAnimation] = useState(false);
+  const [comboMultiplier, setComboMultiplier] = useState(1);
+  const fireTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fireScaleAnim = useRef(new Animated.Value(0)).current;
+  const fireOpacityAnim = useRef(new Animated.Value(0)).current;
+
+  // Handle correct answer - increment combo
+  const handleCorrectAnswer = () => {
+    setComboStreak(prev => {
+      const newStreak = prev + 1;
+      // Show fire animation when streak reaches 3+
+      if (newStreak >= 3) {
+        // Update multiplier: 3 streak = 1.5x, 5 streak = 2x, 7+ streak = 2.5x
+        const multiplier = newStreak >= 7 ? 2.5 : newStreak >= 5 ? 2 : 1.5;
+        setComboMultiplier(multiplier);
+
+        // Show fire animation
+        if (fireTimeoutRef.current) {
+          clearTimeout(fireTimeoutRef.current);
+        }
+        setShowFireAnimation(true);
+
+        // Animate fire entrance
+        fireScaleAnim.setValue(0.5);
+        fireOpacityAnim.setValue(0);
+        Animated.parallel([
+          Animated.spring(fireScaleAnim, {
+            toValue: 1,
+            friction: 4,
+            tension: 100,
+            useNativeDriver: true,
+          }),
+          Animated.timing(fireOpacityAnim, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+        ]).start();
+
+        // Hide after 2 seconds
+        fireTimeoutRef.current = setTimeout(() => {
+          Animated.timing(fireOpacityAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }).start(() => {
+            setShowFireAnimation(false);
+          });
+        }, 2000);
+      }
+      return newStreak;
+    });
+  };
+
+  // Handle incorrect answer - reset combo
+  const handleIncorrectAnswer = () => {
+    setComboStreak(0);
+    setComboMultiplier(1);
+    if (fireTimeoutRef.current) {
+      clearTimeout(fireTimeoutRef.current);
+    }
+    setShowFireAnimation(false);
+  };
+
   // Handle losing a heart
   const handleHeartLost = () => {
     // Clear any existing UFO animation timeout
@@ -141,6 +207,11 @@ export default function AtlasPracticeIntegrated() {
       clearTimeout(ufoTimeoutRef.current);
       ufoTimeoutRef.current = null;
     }
+    // Clear fire animation timeout
+    if (fireTimeoutRef.current) {
+      clearTimeout(fireTimeoutRef.current);
+      fireTimeoutRef.current = null;
+    }
     setHearts(5);
     setShowUfoAnimation(false);
     setGameOver(false);
@@ -149,6 +220,10 @@ export default function AtlasPracticeIntegrated() {
     setTotalCorrect(0);
     setTotalQuestions(0);
     setMlIndex(0);
+    // Reset combo
+    setComboStreak(0);
+    setComboMultiplier(1);
+    setShowFireAnimation(false);
     setPhases(phases.map(p => ({ ...p, completed: false, score: undefined, totalQuestions: undefined })));
   };
 
@@ -260,6 +335,10 @@ export default function AtlasPracticeIntegrated() {
       correctAnswers: finalCorrect,
       totalQuestions: finalQuestions,
     });
+
+    // Emit words practiced event for ProgressPill
+    const wordsInSet = computedQuizWords?.length || set?.words?.length || 5;
+    DeviceEventEmitter.emit('WORDS_PRACTICED', wordsInSet);
 
     router.replace({
       pathname: '/quiz/atlas-results',
@@ -420,12 +499,15 @@ export default function AtlasPracticeIntegrated() {
           ufoAnimationKey={ufoAnimationKey}
           onResult={({ mistakes, usedReveal }) => {
             const hasMistake = (mistakes || 0) > 0 || usedReveal;
+            const isCorrect = (mistakes || 0) === 0 && !usedReveal;
             if (hasMistake) {
               handleHeartLost();
+              handleIncorrectAnswer();
+            } else {
+              handleCorrectAnswer();
             }
             // Record analytics for Missing Letters
             try {
-              const isCorrect = (mistakes || 0) === 0 && !usedReveal;
               recordResult({
                 wordId: w.word,
                 exerciseType: 'letters',
@@ -454,6 +536,8 @@ export default function AtlasPracticeIntegrated() {
         onPhaseComplete={handlePhaseComplete}
         hearts={hearts}
         onHeartLost={handleHeartLost}
+        onCorrectAnswer={handleCorrectAnswer}
+        onIncorrectAnswer={handleIncorrectAnswer}
         wordRange={wordRange}
         wordsOverride={computedQuizWords || undefined}
         showUfoAnimation={showUfoAnimation}
@@ -532,7 +616,7 @@ export default function AtlasPracticeIntegrated() {
                 key={colIndex}
                 style={[
                   styles.dotPattern,
-                  { backgroundColor: isLight ? '#D4D4D4' : '#333333' }
+                  { backgroundColor: isLight ? '#D4D4D4' : '#243B53' }
                 ]}
               />
             ))}
@@ -568,6 +652,67 @@ export default function AtlasPracticeIntegrated() {
         </View>
 
       </SafeAreaView>
+
+      {/* DEV: Skip exercises test button */}
+      <TouchableOpacity
+        style={{
+          position: 'absolute',
+          right: 16,
+          top: 60,
+          backgroundColor: '#10B981',
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+          borderRadius: 12,
+          zIndex: 9999,
+          elevation: 9999,
+        }}
+        onPress={() => navigateToResults(5, 5)}
+      >
+        <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 12 }}>Skip</Text>
+      </TouchableOpacity>
+
+      {/* Fire Combo Animation - Minimalist */}
+      {showFireAnimation && (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: 110,
+            alignSelf: 'center',
+            zIndex: 9998,
+            opacity: fireOpacityAnim,
+            transform: [{ scale: fireScaleAnim }],
+          }}
+        >
+          <View style={{
+            backgroundColor: comboStreak >= 7 ? '#9333EA' : comboStreak >= 5 ? '#DC2626' : '#F97316',
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            borderRadius: 24,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+          }}>
+            <Text style={{ fontSize: 16 }}>
+              {comboStreak >= 7 ? '⚡' : comboStreak >= 5 ? '🔥' : '✨'}
+            </Text>
+            <Text style={{
+              color: '#FFF',
+              fontSize: 14,
+              fontFamily: 'Feather-Bold',
+              letterSpacing: 0.5,
+            }}>
+              {comboStreak >= 7 ? 'Unstoppable' : comboStreak >= 5 ? 'On Fire' : comboStreak >= 4 ? 'Hot Streak' : 'Nice!'}
+            </Text>
+            <Text style={{
+              color: 'rgba(255,255,255,0.85)',
+              fontSize: 12,
+              fontFamily: 'Feather-Bold',
+            }}>
+              {comboStreak}×
+            </Text>
+          </View>
+        </Animated.View>
+      )}
 
       {/* Custom Leave Confirmation Modal */}
       <Modal
@@ -970,7 +1115,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
   },
   dotPatternContainer: {
     position: 'absolute',
@@ -1029,7 +1174,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#3A3A3A',
+    backgroundColor: '#2D4A66',
   },
   exerciseIntroProgressDotActive: {
     backgroundColor: '#4ED9CB',
@@ -1107,7 +1252,7 @@ const styles = StyleSheet.create({
   countdownBarContainer: {
     width: 200,
     height: 4,
-    backgroundColor: '#3A3A3A',
+    backgroundColor: '#2D4A66',
     borderRadius: 2,
     overflow: 'hidden',
     marginBottom: 24,
@@ -1185,7 +1330,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     minWidth: 220,
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 3 },
     shadowOpacity: 0.4,
@@ -1217,7 +1362,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   modalContainer: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 20,
     paddingVertical: 28,
     paddingHorizontal: 24,
@@ -1225,7 +1370,7 @@ const styles = StyleSheet.create({
     maxWidth: 300,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#3A3A3A',
+    borderColor: '#2D4A66',
   },
   modalContainerLight: {
     backgroundColor: '#FFFFFF',
@@ -1267,11 +1412,11 @@ const styles = StyleSheet.create({
   },
   modalButtonStay: {
     backgroundColor: '#4ED9CB',
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
   },
   modalButtonStayLight: {
     backgroundColor: '#4ED9CB',
-    borderColor: '#2A8A80',
+    borderColor: '#2D4A66',
   },
   modalButtonLeave: {
     backgroundColor: 'transparent',

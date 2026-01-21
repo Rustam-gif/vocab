@@ -327,7 +327,7 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
                         />
                       ) : null}
                       <View style={{ width: Math.min(360, width * 0.85) }}>
-                        <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, marginBottom: 10 }, isLight ? { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB' } : { backgroundColor: '#2A2D2D', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }]}>
+                        <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, marginBottom: 10 }, isLight ? { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB' } : { backgroundColor: '#1B263B', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }]}>
                           {/* CRITICAL: Only mount TextInput when gate allows AND user is near this page
                               This prevents iOS keyboard session from being created on fresh install */}
                           {canMountTextInput && index >= 5 ? (
@@ -357,7 +357,7 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
                                 key={l.code}
                                 style={[
                                   { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, marginBottom: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-                                  isLight ? { backgroundColor: selected ? '#FBE8DB' : '#FFFFFF', borderWidth: selected ? 2 : 1, borderColor: selected ? '#F8B070' : '#E5E7EB' } : { backgroundColor: selected ? 'rgba(248,176,112,0.1)' : '#2A2D2D', borderWidth: selected ? 2 : 1, borderColor: selected ? '#F8B070' : 'rgba(255,255,255,0.06)' }
+                                  isLight ? { backgroundColor: selected ? '#FBE8DB' : '#FFFFFF', borderWidth: selected ? 2 : 1, borderColor: selected ? '#F8B070' : '#E5E7EB' } : { backgroundColor: selected ? 'rgba(248,176,112,0.1)' : '#1B263B', borderWidth: selected ? 2 : 1, borderColor: selected ? '#F8B070' : 'rgba(255,255,255,0.06)' }
                                 ]}
                                 onPress={async () => { try { await useAppStore.getState().setLanguagePreferences([l.code]); } catch {} }}
                               >
@@ -614,13 +614,13 @@ export default function OnboardingModal({ visible, onClose, theme }: Props) {
 }
 
 const styles = StyleSheet.create({
-  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#1E1E1E', zIndex: 9999, elevation: 10 },
+  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#1B263B', zIndex: 9999, elevation: 10 },
   overlayLight: { backgroundColor: '#FFFFFF' },
   safe: { flex: 1 },
   slidePage: { width, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center', minHeight: height - 220 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8 },
   headerTitle: { color: '#FFFFFF', fontSize: 20, fontWeight: '700', fontFamily: 'Feather-Bold' },
-  headerTitleLight: { color: '#0F172A' },
+  headerTitleLight: { color: '#0D1B2A' },
   skipBtn: { padding: 8, borderRadius: 16 },
   skipText: { color: '#9CA3AF', fontWeight: '600', fontFamily: 'Feather-Bold', fontSize: 15 },
   skipTextLight: { color: '#64748B' },
@@ -635,20 +635,20 @@ const styles = StyleSheet.create({
   themeBtnTextActive: { color: '#FFFFFF', fontWeight: '700' },
   previewPhone: { width: Math.min(260, width * 0.7), borderRadius: 22, padding: 12 },
   previewPhoneLight: { backgroundColor: '#F8F8F8' },
-  previewPhoneDark: { backgroundColor: '#1E1E1E' },
+  previewPhoneDark: { backgroundColor: '#1B263B' },
   previewHeader: { flexDirection: 'row', gap: 6, marginBottom: 10 },
   previewDot: { width: 6, height: 6, borderRadius: 3 },
   previewCard: { borderRadius: 20, padding: 16 },
   previewCardLight: { backgroundColor: '#FFFFFF', borderWidth: 3, borderColor: '#4ED9CB' },
-  previewCardDark: { backgroundColor: '#2A2D2D', borderWidth: 2, borderColor: '#4ED9CB' },
+  previewCardDark: { backgroundColor: '#1B263B', borderWidth: 2, borderColor: '#4ED9CB' },
   previewTitle: { fontSize: 18, fontWeight: '700', fontFamily: 'Feather-Bold' },
-  previewTitleLight: { color: '#0F172A' },
+  previewTitleLight: { color: '#0D1B2A' },
   previewTitleDark: { color: '#FFFFFF' },
   previewBody: { marginTop: 6, fontSize: 14, fontFamily: 'Feather-Bold' },
   previewBodyLight: { color: '#64748B' },
   previewBodyDark: { color: '#9CA3AF' },
   title: { marginTop: 12, fontSize: 26, fontWeight: '700', color: '#FFFFFF', textAlign: 'center', fontFamily: 'Feather-Bold', letterSpacing: -0.5 },
-  titleLight: { color: '#0F172A' },
+  titleLight: { color: '#0D1B2A' },
   body: { marginTop: 8, fontSize: 16, color: '#9CA3AF', textAlign: 'center', paddingHorizontal: 12, lineHeight: 24, fontFamily: 'Feather-Bold' },
   bodyLight: { color: '#64748B' },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 24, paddingHorizontal: 16 },
@@ -661,9 +661,9 @@ const styles = StyleSheet.create({
   btnRow: { flexDirection: 'row', alignItems: 'center' },
   secondaryBtn: { minWidth: 120, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 24, backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: '#4ED9CB', alignItems: 'center' },
   secondaryBtnLight: { backgroundColor: '#FFFFFF', borderColor: '#4ED9CB' },
-  secondaryText: { color: '#0F172A', fontWeight: '700', fontFamily: 'Feather-Bold', fontSize: 16 },
-  secondaryTextLight: { color: '#0F172A' },
-  primaryBtn: { minWidth: 160, paddingVertical: 16, paddingHorizontal: 24, borderRadius: 24, backgroundColor: '#F25E86', alignItems: 'center', borderWidth: 3, borderColor: '#1A1A1A', shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 0, shadowOffset: { width: 2, height: 3 }, elevation: 6 },
+  secondaryText: { color: '#0D1B2A', fontWeight: '700', fontFamily: 'Feather-Bold', fontSize: 16 },
+  secondaryTextLight: { color: '#0D1B2A' },
+  primaryBtn: { minWidth: 160, paddingVertical: 16, paddingHorizontal: 24, borderRadius: 24, backgroundColor: '#F25E86', alignItems: 'center', borderWidth: 3, borderColor: '#0D1B2A', shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 0, shadowOffset: { width: 2, height: 3 }, elevation: 6 },
   primaryText: { color: '#FFFFFF', fontWeight: '700', fontSize: 18, fontFamily: 'Feather-Bold' },
   subPrimaryBtn: { alignSelf: 'stretch', marginTop: 12 },
   // Practice time chips
@@ -678,10 +678,10 @@ const styles = StyleSheet.create({
   timeHintLight: { color: '#64748B' },
   langChip: { paddingVertical: 12, paddingHorizontal: 16, borderRadius: 16, borderWidth: 2 },
   langChipLight: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0' },
-  langChipDark: { backgroundColor: '#2A2D2D', borderColor: 'rgba(255,255,255,0.06)' },
-  langChipText: { color: '#0F172A', fontWeight: '700', fontFamily: 'Feather-Bold', fontSize: 15 },
+  langChipDark: { backgroundColor: '#1B263B', borderColor: 'rgba(255,255,255,0.06)' },
+  langChipText: { color: '#0D1B2A', fontWeight: '700', fontFamily: 'Feather-Bold', fontSize: 15 },
   subHeadline: { fontSize: 24, fontWeight: '700', color: '#FFFFFF', textAlign: 'center', fontFamily: 'Feather-Bold' },
-  subHeadlineLight: { color: '#0F172A' },
+  subHeadlineLight: { color: '#0D1B2A' },
   subBody: { fontSize: 16, color: '#9CA3AF', textAlign: 'center', paddingHorizontal: 12, fontFamily: 'Feather-Bold', lineHeight: 24 },
   subBodyLight: { color: '#64748B' },
   countdownText: { fontSize: 18, fontWeight: '700', color: '#4ED9CB', textAlign: 'center', fontFamily: 'Feather-Bold' },

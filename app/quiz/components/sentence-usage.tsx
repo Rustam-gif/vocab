@@ -1812,7 +1812,7 @@ const styles = StyleSheet.create({
   progressBarPill: {
     flex: 1,
     height: 12,
-    backgroundColor: '#3A3A3A',
+    backgroundColor: '#2D4A66',
     borderRadius: 6,
     overflow: 'hidden',
     marginRight: 8,
@@ -1872,7 +1872,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 6,
-    backgroundColor: '#2c2f2f',
+    backgroundColor: '#0D1B2A',
     borderRadius: 3,
     overflow: 'hidden',
     marginBottom: 24,
@@ -1929,7 +1929,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   optionCard: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 14,

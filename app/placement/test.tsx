@@ -152,7 +152,7 @@ export default function PlacementTest() {
               style={{ padding: 6, marginLeft: 4 }}
               activeOpacity={0.8}
             >
-              <X size={18} color={isLight ? '#374151' : '#E5E7EB'} />
+              <X size={18} color={isLight ? '#2D4A66' : '#E5E7EB'} />
             </TouchableOpacity>
           </View>
         </View>
@@ -273,7 +273,7 @@ function toRGBA(hex: string, alpha: number) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#121315', paddingTop: 8 },
+  container: { flex: 1, backgroundColor: '#0D1B2A', paddingTop: 8 },
   containerLight: { backgroundColor: '#F8F8F8' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   text: { color: '#fff' },
@@ -285,13 +285,13 @@ const styles = StyleSheet.create({
   counterPill: { backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
   counterPillLight: { backgroundColor: '#FFFFFF', borderColor: '#E5DED3' },
   counterText: { color: '#E5E7EB', fontSize: 13, fontWeight: '700' },
-  counterTextLight: { color: '#374151' },
+  counterTextLight: { color: '#2D4A66' },
   headerText: { color: '#9CA3AF', fontWeight: '700' },
   streakWarn: { color: '#F8B070', fontWeight: '700', marginTop: 4 },
-  progressBar: { height: 6, backgroundColor: '#262D30', borderRadius: 6, overflow: 'hidden', borderWidth: 0, marginBottom: 4 },
+  progressBar: { height: 6, backgroundColor: '#243B53', borderRadius: 6, overflow: 'hidden', borderWidth: 0, marginBottom: 4 },
   progressBarLight: { backgroundColor: '#E5DED3' },
   progressFill: { height: '100%', backgroundColor: '#7CE7A0', borderRadius: 6 },
-  questionCard: { backgroundColor: '#1E2124', marginHorizontal: 16, borderRadius: 22, padding: 20, borderWidth: 1, borderColor: '#2A3033', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8, marginTop: 8 },
+  questionCard: { backgroundColor: '#1E2124', marginHorizontal: 16, borderRadius: 22, padding: 20, borderWidth: 1, borderColor: '#1B263B', shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8, marginTop: 8 },
   questionCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E5DED3', shadowOpacity: 0.1 },
   word: { color: '#E5E7EB', fontSize: 26, fontWeight: '900' },
   wordLight: { color: '#111827' },
@@ -300,16 +300,16 @@ const styles = StyleSheet.create({
   example: { color: '#9CA3AF', fontStyle: 'italic', marginBottom: 12 },
   exampleLight: { color: '#6B7280' },
   options: { gap: 10 },
-  option: { backgroundColor: '#262D30', borderWidth: 1, borderColor: '#353D42', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14 },
+  option: { backgroundColor: '#243B53', borderWidth: 1, borderColor: '#353D42', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14 },
   optionLight: { backgroundColor: '#FBF8F4', borderColor: '#E5DED3' },
   optionSelectedLight: { backgroundColor: 'rgba(248,176,112,0.15)', borderColor: '#F8B070' },
   optionSelected: { borderColor: '#7CE7A0', backgroundColor: 'rgba(124,231,160,0.12)' },
   optionInnerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' },
-  radio: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: '#4B5563', marginTop: 2 },
+  radio: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: '#2D4A66', marginTop: 2 },
   radioLight: { borderColor: '#9CA3AF' },
   radioActive: { borderColor: '#7CE7A0', backgroundColor: '#7CE7A0' },
   optionText: { color: '#E5E7EB', fontSize: 15, fontWeight: '600', flex: 1, flexShrink: 1, lineHeight: 20 },
-  optionTextLight: { color: '#374151' },
+  optionTextLight: { color: '#2D4A66' },
   footer: { flexDirection: 'row', gap: 10, padding: 16, marginTop: 4 },
   btn: { flex: 1, borderRadius: 12, paddingVertical: 0, alignItems: 'center', overflow: 'hidden' },
   nextGradient: { width: '100%', borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, minHeight: 44 },

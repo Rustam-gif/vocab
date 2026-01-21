@@ -210,7 +210,7 @@ function makeSignupRequiredScreen(feature: 'story' | 'learn'): React.ComponentTy
     const { View, Text, TouchableOpacity } = require('react-native');
     const isLight = themeName === 'light';
     const titleColor = isLight ? '#0D3B4A' : '#E5E7EB';
-    const bodyColor = isLight ? '#4B5563' : '#9CA3AF';
+    const bodyColor = isLight ? '#2D4A66' : '#9CA3AF';
 
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, paddingHorizontal: 24, justifyContent: 'center', alignItems: 'center' }}>
@@ -237,9 +237,9 @@ function makeSignupRequiredScreen(feature: 'story' | 'learn'): React.ComponentTy
               paddingHorizontal: 16,
               paddingVertical: 12,
               borderRadius: 12,
-              backgroundColor: isLight ? '#FFFFFF' : '#1F2629',
+              backgroundColor: isLight ? '#FFFFFF' : '#1B263B',
               borderWidth: 1,
-              borderColor: isLight ? '#E5DED3' : '#364147',
+              borderColor: isLight ? '#E5DED3' : '#2D4A66',
             }}
           >
             <Text style={{ fontWeight: '800', color: titleColor }}>Back</Text>
@@ -660,8 +660,8 @@ export function RouteRenderer() {
     { key: 'home', label: 'Home', icon: require('../assets/homepageicons/11.png'), color: '#D97EB0', go: () => switchToTab('home', { pathname: '/' }) },
     { key: 'story', label: 'Story', icon: require('../assets/homepageicons/13.png'), color: '#2D4B73', go: () => switchToTab('story', { pathname: '/story/StoryExercise' }) },
     { key: 'quiz', label: 'Learn', icon: require('../assets/homepageicons/12.png'), color: '#F2AB27', go: () => switchToTab('quiz', { pathname: '/quiz/learn' }) },
-    { key: 'vault', label: 'Vault', icon: require('../assets/homepageicons/book.png'), color: '#C4A484', go: () => switchToTab('vault', { pathname: '/vault' }) },
-    { key: 'account', label: 'Profile', icon: null, lucideIcon: User, color: '#E07850', go: () => switchToTab('account', { pathname: '/profile' }) },
+    { key: 'vault', label: 'Vault', icon: require('../assets/homepageicons/15.png'), color: '#C4A484', go: () => switchToTab('vault', { pathname: '/vault' }) },
+    { key: 'account', label: 'Profile', icon: require('../assets/homepageicons/14.png'), color: '#E07850', go: () => switchToTab('account', { pathname: '/profile' }) },
   ] as const;
   // Bottom-sheet style overlay for Translate
   const sheetAnim = React.useRef(new Animated.Value(0)).current; // 0 closed, 1 open
@@ -911,7 +911,7 @@ export function RouteRenderer() {
                     borderRadius: 12,
                     backgroundColor: themeName === 'light' ? 'rgba(255,255,255,0.9)' : 'rgba(15,23,42,0.9)',
                     borderWidth: 1,
-                    borderColor: themeName === 'light' ? '#E5E7EB' : '#334155',
+                    borderColor: themeName === 'light' ? '#E5E7EB' : '#2D4A66',
                     zIndex: 999,
                     elevation: 12,
                   }}
@@ -953,9 +953,9 @@ export function RouteRenderer() {
               bottom: 0,
               left: 0,
               right: 0,
-              backgroundColor: colors.background,
+              backgroundColor: '#1A2744',
               borderTopWidth: 3,
-              borderTopColor: themeName === 'light' ? '#E5E7EB' : '#1A1A1A',
+              borderTopColor: '#0D1B2A',
               shadowColor: '#000',
               shadowOffset: { width: 0, height: -2 },
               shadowOpacity: themeName === 'light' ? 0.1 : 0.4,
@@ -968,9 +968,9 @@ export function RouteRenderer() {
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-around',
-              paddingVertical: 10,
+              paddingTop: 2,
               paddingHorizontal: 12,
-              paddingBottom: 24,
+              paddingBottom: 14,
             }}
           >
           {navItems.map((item, idx) => (
@@ -999,11 +999,11 @@ export function RouteRenderer() {
                 }}
               >
                 {item.icon ? (
-                  <Image source={item.icon} style={{ width: 24, height: 24, opacity: active ? 1 : 0.7, ...(item.color ? { tintColor: item.color } : {}) }} resizeMode="contain" />
+                  <Image source={item.icon} style={{ width: 40, height: 40, opacity: active ? 1 : 0.7 }} resizeMode="contain" />
                 ) : item.lucideIcon ? (
                   <item.lucideIcon size={24} color={item.color || '#888'} fill={item.color || '#888'} style={{ opacity: active ? 1 : 0.7 }} />
                 ) : null}
-                <Text style={{ marginTop: 1, fontSize: 10, fontWeight: '700', fontFamily: 'Feather-Bold', color: active ? (themeName === 'light' ? '#0F172A' : '#E5E7EB') : (themeName === 'light' ? '#9CA3AF' : '#6B7280') }}>
+                <Text style={{ marginTop: 1, fontSize: 10, fontWeight: '700', fontFamily: 'Feather-Bold', color: active ? (themeName === 'light' ? '#0D1B2A' : '#E5E7EB') : (themeName === 'light' ? '#9CA3AF' : '#6B7280') }}>
                   {item.label}
                 </Text>
               </Animated.View>

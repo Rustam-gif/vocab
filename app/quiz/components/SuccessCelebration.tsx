@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 340,
     borderRadius: 24,
-    backgroundColor: '#1F2933',
+    backgroundColor: '#1B263B',
     paddingVertical: 32,
     paddingHorizontal: 24,
     alignItems: 'center',

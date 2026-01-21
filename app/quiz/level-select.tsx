@@ -156,7 +156,7 @@ export default function LevelSelectScreen() {
             <Image source={getLevelIcon(item.id)} style={styles.levelImage} resizeMode="contain" />
             <View style={styles.levelDetails}>
               <Text style={[styles.levelName, isLight && { color: '#111827' }]}>{item.name}</Text>
-              <Text style={[styles.levelDescription, isLight && { color: '#4B5563' }]}>{item.description}</Text>
+              <Text style={[styles.levelDescription, isLight && { color: '#2D4A66' }]}>{item.description}</Text>
               <Text style={[styles.levelCefr, { color: accent }]}>CEFR {item.cefr}</Text>
             </View>
           </View>
@@ -235,7 +235,7 @@ export default function LevelSelectScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
   },
   header: {
     flexDirection: 'row',
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Ubuntu-Bold',
   },
   levelCard: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
   },
   levelCardLight: { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' },
   selectedCard: {
-    backgroundColor: '#3A3A3A',
+    backgroundColor: '#2D4A66',
   },
   selectedCardLight: {
     backgroundColor: '#F3E6D7', // slightly deeper than surface for focus
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
     paddingHorizontal: 20,
     paddingTop: 12,
   },

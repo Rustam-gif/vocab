@@ -1244,7 +1244,7 @@ const STORY_IMAGE_REQUEST_STATE_VERSION = 2;
 
 const STORY_GRADIENT_SCHEMES: Array<{ colors: [string, string]; blob: string; accent: string }> = [
   { colors: ['#4C1D95', '#9333EA'], blob: 'rgba(236, 72, 153, 0.35)', accent: '#FDE68A' },
-  { colors: ['#0F172A', '#2563EB'], blob: 'rgba(14, 165, 233, 0.35)', accent: '#C7D2FE' },
+  { colors: ['#0D1B2A', '#2563EB'], blob: 'rgba(14, 165, 233, 0.35)', accent: '#C7D2FE' },
   { colors: ['#6D28D9', '#F472B6'], blob: 'rgba(236, 72, 153, 0.3)', accent: '#F8CFFF' },
   { colors: ['#047857', '#6EE7B7'], blob: 'rgba(16, 185, 129, 0.25)', accent: '#ECFCCB' },
   { colors: ['#1E3A8A', '#22D3EE'], blob: 'rgba(59, 130, 246, 0.35)', accent: '#E0F2FE' },
@@ -2141,16 +2141,16 @@ export default function HomeScreen(props?: { preview?: boolean }) {
     switch (articleBgColor) {
       case 'sepia': return { backgroundColor: '#F5F0E1' };
       case 'dark': return { backgroundColor: '#1E3A5F' };
-      case 'black': return { backgroundColor: '#0D0D0D' };
-      default: return theme === 'light' ? { backgroundColor: '#FFFFFF' } : { backgroundColor: '#1E1E1E' };
+      case 'black': return { backgroundColor: '#0D1B2A' };
+      default: return theme === 'light' ? { backgroundColor: '#FFFFFF' } : { backgroundColor: '#1B263B' };
     }
   };
   const getArticleTextColor = () => {
     switch (articleBgColor) {
-      case 'sepia': return '#3D3D3D';
+      case 'sepia': return '#1B263B';
       case 'dark': return '#E5E7EB';
       case 'black': return '#E5E7EB';
-      default: return theme === 'light' ? '#374151' : '#D1D5DB';
+      default: return theme === 'light' ? '#2D4A66' : '#D1D5DB';
     }
   };
   // Quiz state
@@ -3352,8 +3352,9 @@ Avoid fiction and avoid specific unverifiable claims.
     (async () => {
       const level = await AsyncStorage.getItem(SELECTED_LEVEL_KEY);
       if (level) setStoredLevel(level);
-      const done = await AsyncStorage.getItem('@engniter.onboarding_done_v1');
-      setShowOnboarding(!done);
+      // Old onboarding disabled - using PersonalizedOnboarding in App.tsx
+      // const done = await AsyncStorage.getItem('@engniter.onboarding_done_v1');
+      // setShowOnboarding(!done);
       try { await loadProgress(); } catch {}
     })();
   }, []);
@@ -3796,8 +3797,8 @@ Avoid fiction and avoid specific unverifiable claims.
 
   // Organized sections with softer colors
   const accent = '#187486';
-  /// Use theme background (light: #F8F9FB, dark: #1E1E1E)
-  const background = theme === 'light' ? '#F8F9FB' : '#1E1E1E';
+  /// Use space theme background
+  const background = theme === 'light' ? '#F8F9FB' : '#1A2744';
   const homeIcons = {
     vault: require('../assets/homepageicons/11.png'),
     quiz: require('../assets/homepageicons/12.png'),
@@ -4366,7 +4367,7 @@ EXAMPLE: [sentence in ${langName}]`
                 key={colIndex}
                 style={[
                   styles.dot,
-                  { backgroundColor: theme === 'light' ? '#D4D4D4' : '#333333' }
+                  { backgroundColor: theme === 'light' ? '#D4D4D4' : '#1B263B' }
                 ]}
               />
             ))}
@@ -4400,83 +4401,6 @@ EXAMPLE: [sentence in ${langName}]`
         scrollEventThrottle={16}
       >
         {/* Header is fixed above — list starts below */}
-
-	        {!!storyWords.length && (
-	          <View style={[
-	            styles.storyWordsCard,
-	            theme === 'light' && styles.storyWordsCardLight,
-	            storyWordsDoneForToday && { paddingTop: 40 },
-	          ]}>
-	            <View style={styles.missionHeader}>
-	              <View style={{ flex: 1 }}>
-	                <Text style={[styles.missionTitle, theme === 'light' && styles.missionTitleLight]}>
-	                  Story Words
-	                </Text>
-	                <Text style={[styles.missionSubtitle, theme === 'light' && styles.missionSubtitleLight]}>
-	                  {storyWordsDoneForToday ? 'Done for today.' : '5 words · 5 questions'}
-	                </Text>
-	                <View style={styles.missionPillsRow}>
-                  <View style={[styles.timePill, theme === 'light' && styles.timePillLight]}>
-                    <Clock size={14} color={theme === 'light' ? '#0D3B4A' : '#4ED9CB'} />
-                    <Text style={[styles.timePillText, theme === 'light' && styles.timePillTextLight]}>≈ 3 min</Text>
-                  </View>
-                  {storyWordsDoneForToday ? (
-                    <View
-                      style={[
-                        styles.streakPill,
-                        { backgroundColor: 'rgba(78,217,203,0.18)' },
-                      ]}
-                    >
-                      <Check size={12} color="#4ED9CB" strokeWidth={3} />
-                      <Text style={[styles.streakPillText, { color: '#4ED9CB', marginLeft: 4 }]}>Completed</Text>
-                    </View>
-                  ) : (
-                    <View
-                      style={[
-                        styles.streakPill,
-                        {
-                          backgroundColor:
-                            theme === 'light' ? 'rgba(242,94,134,0.16)' : 'rgba(242,94,134,0.12)',
-                        },
-                      ]}
-                    >
-                      <Text style={[styles.streakPillText, { color: '#F25E86' }]}>Daily exercise</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-		              {storyWordsDoneForToday && (
-		                <LottieView
-		                  source={require('../assets/lottie/storywords/donefortoday.json')}
-		                  autoPlay
-		                  loop={false}
-		                  style={{ position: 'absolute', right: -20, top: -40, width: 150, height: 110, transform: [{ scaleX: -1 }] }}
-		                />
-	              )}
-	            </View>
-
-	            {!storyWordsDoneForToday && (
-	              <View style={styles.missionProgressRow}>
-	                <Text style={[styles.missionProgressText, theme === 'light' && styles.missionProgressTextLight]}>
-	                  {`${storyViewedCount}/${storyWords.length} viewed`}
-	                </Text>
-                <View style={[styles.missionProgressBar, theme === 'light' && styles.missionProgressBarLight]}>
-                  <View style={[styles.missionProgressFill, { width: `${Math.round(storyProgressRatio * 100)}%` }]} />
-                </View>
-              </View>
-            )}
-
-            <View style={styles.missionActions}>
-              <TouchableOpacity
-                activeOpacity={0.9}
-                style={[styles.storyWordsCta, theme === 'light' && styles.storyWordsCtaLight, { alignItems: 'center' }]}
-                onPress={() => openStoryViewer(storyStartIndex)}
-              >
-                <Text style={styles.storyWordsCtaText}>{storyCtaLabel}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
 
         {/* Synonym Match Exercise */}
         {!synonymMatchDone && !synonymMatchLoading && synonymMatchWords.length > 0 && (
@@ -4917,29 +4841,29 @@ EXAMPLE: [sentence in ${langName}]`
                 // Dark mode colors - matching app design
                 const isDark = theme === 'dark';
                 const colors = {
-                  bg: isDark ? '#121315' : '#F8F8F8',
-                  headerBg: isDark ? '#1E2124' : '#FFFFFF',
-                  headerBorder: isDark ? '#2A3033' : '#E5DED3',
+                  bg: isDark ? '#0D1B2A' : '#F8F8F8',
+                  headerBg: isDark ? '#1B263B' : '#FFFFFF',
+                  headerBorder: isDark ? '#1B263B' : '#E5DED3',
                   closeBtn: isDark ? '#9CA3AF' : '#6B7280',
-                  progressBg: isDark ? '#262D30' : '#E5DED3',
+                  progressBg: isDark ? '#243B53' : '#E5DED3',
                   progressFill: '#F8B070',
                   counterText: isDark ? '#9CA3AF' : '#6B7280',
-                  cardBg: isDark ? '#1E2124' : '#FFFFFF',
+                  cardBg: isDark ? '#1B263B' : '#FFFFFF',
                   questionText: isDark ? '#E5E7EB' : '#111827',
-                  answerBg: isDark ? '#262D30' : '#FBF8F4',
-                  answerBorder: isDark ? '#353D42' : '#E5DED3',
-                  answerText: isDark ? '#E5E7EB' : '#374151',
+                  answerBg: isDark ? '#243B53' : '#FBF8F4',
+                  answerBorder: isDark ? '#2D4A66' : '#E5DED3',
+                  answerText: isDark ? '#E5E7EB' : '#2D4A66',
                   correctBg: isDark ? 'rgba(124,231,160,0.15)' : '#DCFCE7',
                   correctBorder: '#7CE7A0',
                   correctText: isDark ? '#7CE7A0' : '#166534',
                   incorrectBg: isDark ? 'rgba(239,68,68,0.15)' : '#FEE2E2',
                   incorrectBorder: '#EF4444',
                   incorrectText: isDark ? '#EF4444' : '#DC2626',
-                  dimmedBg: isDark ? '#121315' : '#F8F8F8',
+                  dimmedBg: isDark ? '#0D1B2A' : '#F8F8F8',
                   dimmedText: isDark ? '#6B7280' : '#9CA3AF',
                   resultTitle: isDark ? '#E5E7EB' : '#111827',
                   resultSubtitle: isDark ? '#9CA3AF' : '#6B7280',
-                  divider: isDark ? '#353D42' : '#E5DED3',
+                  divider: isDark ? '#2D4A66' : '#E5DED3',
                   emojiCircleBgGood: isDark ? 'rgba(124,231,160,0.2)' : '#DCFCE7',
                   emojiCircleBgWarn: isDark ? 'rgba(248,176,112,0.2)' : '#FEF3C7',
                 };
@@ -5001,7 +4925,7 @@ EXAMPLE: [sentence in ${langName}]`
                               overflow: 'hidden',
                               backgroundColor: colors.cardBg,
                               borderWidth: 3,
-                              borderColor: '#1A1A1A',
+                              borderColor: '#0D1B2A',
                               shadowColor: '#000',
                               shadowOffset: { width: 2, height: 3 },
                               shadowOpacity: 0.4,
@@ -5064,14 +4988,14 @@ EXAMPLE: [sentence in ${langName}]`
                                     activeOpacity={0.7}
                                     style={{
                                       width: '100%',
-                                      backgroundColor: exerciseAnswered ? bgColor : (isDark ? '#1F1F1F' : '#FFFFFF'),
+                                      backgroundColor: exerciseAnswered ? bgColor : (isDark ? '#1B263B' : '#FFFFFF'),
                                       borderRadius: 14,
                                       paddingVertical: 24,
                                       paddingHorizontal: 10,
                                       justifyContent: 'center',
                                       alignItems: 'center',
                                       borderWidth: 3,
-                                      borderColor: exerciseAnswered ? borderColor : '#1A1A1A',
+                                      borderColor: exerciseAnswered ? borderColor : '#0D1B2A',
                                       minHeight: 88,
                                       shadowColor: '#000',
                                       shadowOpacity: isDark ? 0.4 : 0.15,
@@ -5135,7 +5059,7 @@ EXAMPLE: [sentence in ${langName}]`
                                 borderRadius: 14,
                                 marginTop: exerciseSelectedAnswer?.toLowerCase() === correctAnswer.toLowerCase() ? 12 : 4,
                                 borderWidth: 3,
-                                borderColor: '#1A1A1A',
+                                borderColor: '#0D1B2A',
                                 shadowColor: '#000',
                                 shadowOffset: { width: 2, height: 3 },
                                 shadowOpacity: 0.3,
@@ -5183,12 +5107,12 @@ EXAMPLE: [sentence in ${langName}]`
 	                        {/* Score display */}
                         <View style={{
                           flexDirection: 'row',
-                          backgroundColor: isDark ? '#1F1F1F' : '#FFFFFF',
+                          backgroundColor: isDark ? '#1B263B' : '#FFFFFF',
                           borderRadius: 16,
                           padding: 20,
                           marginBottom: 32,
                           borderWidth: 3,
-                          borderColor: '#1A1A1A',
+                          borderColor: '#0D1B2A',
                           shadowColor: '#000',
                           shadowOffset: { width: 2, height: 3 },
                           shadowOpacity: 0.4,
@@ -5199,7 +5123,7 @@ EXAMPLE: [sentence in ${langName}]`
                             <Text style={{ fontSize: 32, fontWeight: '700', color: '#4ED9CB', fontFamily: 'Feather-Bold' }}>{exerciseScore}</Text>
                             <Text style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 4, fontFamily: 'Ubuntu-Medium' }}>Correct</Text>
                           </View>
-                          <View style={{ width: 2, backgroundColor: isDark ? '#333' : '#E5E7EB' }} />
+                          <View style={{ width: 2, backgroundColor: isDark ? '#243B53' : '#E5E7EB' }} />
                           <View style={{ alignItems: 'center', paddingHorizontal: 24 }}>
                             <Text style={{ fontSize: 32, fontWeight: '700', color: '#F25E86', fontFamily: 'Feather-Bold' }}>{totalQuestions - exerciseScore}</Text>
                             <Text style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280', marginTop: 4, fontFamily: 'Ubuntu-Medium' }}>Incorrect</Text>
@@ -5215,7 +5139,7 @@ EXAMPLE: [sentence in ${langName}]`
                             paddingHorizontal: 48,
                             borderRadius: 14,
                             borderWidth: 3,
-                            borderColor: '#1A1A1A',
+                            borderColor: '#0D1B2A',
                             shadowColor: '#000',
                             shadowOffset: { width: 2, height: 3 },
                             shadowOpacity: 0.4,
@@ -5315,7 +5239,7 @@ EXAMPLE: [sentence in ${langName}]`
             <SafeAreaView style={styles.vocabPreviewSafeArea}>
               {/* Close button */}
               <TouchableOpacity onPress={vocabPreviewSkip} style={styles.vocabPreviewCloseBtn}>
-                <X size={24} color={theme === 'light' ? '#374151' : '#9CA3AF'} />
+                <X size={24} color={theme === 'light' ? '#2D4A66' : '#9CA3AF'} />
               </TouchableOpacity>
 
               {/* Header with article info */}
@@ -5398,7 +5322,7 @@ EXAMPLE: [sentence in ${langName}]`
                           <View style={[styles.vocabPreviewDivider, theme === 'light' && { backgroundColor: '#E5E7EB' }]} />
 
                           {/* Definition */}
-                          <Text style={[styles.vocabPreviewDefinitionNew, theme === 'light' && { color: '#374151' }]}>
+                          <Text style={[styles.vocabPreviewDefinitionNew, theme === 'light' && { color: '#2D4A66' }]}>
                             {currentWord.definition}
                           </Text>
 
@@ -5481,7 +5405,7 @@ EXAMPLE: [sentence in ${langName}]`
               ]}
             >
               <View {...newsPan.panHandlers} style={{ paddingVertical: 12, alignItems: 'center', marginBottom: 4 }}>
-                <View style={[styles.newsModalHandle, { marginBottom: 0 }, articleBgColor === 'sepia' ? { backgroundColor: '#C9B99A' } : (articleBgColor === 'dark' || articleBgColor === 'black') ? { backgroundColor: '#4B5563' } : theme === 'light' ? styles.newsModalHandleLight : null]} />
+                <View style={[styles.newsModalHandle, { marginBottom: 0 }, articleBgColor === 'sepia' ? { backgroundColor: '#C9B99A' } : (articleBgColor === 'dark' || articleBgColor === 'black') ? { backgroundColor: '#2D4A66' } : theme === 'light' ? styles.newsModalHandleLight : null]} />
               </View>
               {/* Text Settings Button */}
               <TouchableOpacity
@@ -5497,7 +5421,7 @@ EXAMPLE: [sentence in ${langName}]`
                   position: 'absolute',
                   top: 40,
                   right: 12,
-                  backgroundColor: articleBgColor === 'sepia' ? '#FAF7F0' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#2A2A2A' : theme === 'light' ? '#FFFFFF' : '#2A2A2A',
+                  backgroundColor: articleBgColor === 'sepia' ? '#FAF7F0' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#1B263B' : theme === 'light' ? '#FFFFFF' : '#1B263B',
                   borderRadius: 16,
                   padding: 16,
                   zIndex: 100,
@@ -5511,7 +5435,7 @@ EXAMPLE: [sentence in ${langName}]`
                   {/* Background Color Options */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>
                     {(['default', 'sepia', 'dark', 'black'] as const).map((bg) => {
-                      const bgColors = { default: theme === 'light' ? '#FFFFFF' : '#1E1E1E', sepia: '#F5F0E1', dark: '#1E3A5F', black: '#0D0D0D' };
+                      const bgColors = { default: theme === 'light' ? '#FFFFFF' : '#1B263B', sepia: '#F5F0E1', dark: '#1E3A5F', black: '#0D0D0D' };
                       const isSelected = articleBgColor === bg;
                       return (
                         <TouchableOpacity
@@ -5534,8 +5458,8 @@ EXAMPLE: [sentence in ${langName}]`
                   </View>
                   {/* Font Size Slider */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#374151' : '#E5E7EB' }}>Aa</Text>
-                    <View style={{ flex: 1, height: 4, backgroundColor: articleBgColor === 'sepia' ? '#D4C9B5' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#4B5563' : theme === 'light' ? '#E5E7EB' : '#4B5563', borderRadius: 2 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#2D4A66' : '#E5E7EB' }}>Aa</Text>
+                    <View style={{ flex: 1, height: 4, backgroundColor: articleBgColor === 'sepia' ? '#D4C9B5' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#2D4A66' : theme === 'light' ? '#E5E7EB' : '#2D4A66', borderRadius: 2 }}>
                       <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${((articleFontSize - 14) / 10) * 100}%`, backgroundColor: '#3B82F6', borderRadius: 2 }} />
                       <View
                         style={{
@@ -5555,7 +5479,7 @@ EXAMPLE: [sentence in ${langName}]`
                         }}
                       />
                     </View>
-                    <Text style={{ fontSize: 20, fontWeight: '700', color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#374151' : '#E5E7EB' }}>Aa</Text>
+                    <Text style={{ fontSize: 20, fontWeight: '700', color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#2D4A66' : '#E5E7EB' }}>Aa</Text>
                   </View>
                   {/* Slider Touch Area */}
                   <View
@@ -5607,7 +5531,7 @@ EXAMPLE: [sentence in ${langName}]`
 	                  <View style={styles.newsModalTagRow}>
 	                    <Text style={[styles.newsModalTag, { backgroundColor: getTagColor(sheetArticle.tag).bg, color: getTagColor(sheetArticle.tag).text }]}>{(sheetArticle.tag || 'Story').toUpperCase()}</Text>
 	                  </View>
-	                  <Text style={[styles.newsModalTitle, { color: articleBgColor === 'sepia' ? '#3D3D3D' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#0D3B4A' : '#E5E7EB' }]}>
+	                  <Text style={[styles.newsModalTitle, { color: articleBgColor === 'sepia' ? '#1B263B' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#0D3B4A' : '#E5E7EB' }]}>
 	                    {sheetArticle.hookTitle || sheetArticle.title}
 	                  </Text>
 	                  <Text
@@ -5768,7 +5692,7 @@ EXAMPLE: [sentence in ${langName}]`
                               alignItems: 'center',
                             }}
                           >
-                            <Text style={{ color: '#1E1E1E', fontWeight: '700', fontSize: 16 }}>Start Quiz</Text>
+                            <Text style={{ color: '#1B263B', fontWeight: '700', fontSize: 16 }}>Start Quiz</Text>
                           </TouchableOpacity>
                         </>
                       ) : quizShowResult ? (
@@ -5987,30 +5911,13 @@ EXAMPLE: [sentence in ${langName}]`
         </>
       )}
 
-      {/* Onboarding */}
-	      {!isPreview && (
-	      <OnboardingModal
-	        visible={showOnboarding}
-	        theme={theme}
-	        onClose={async (next) => {
-	          try { await AsyncStorage.setItem('@engniter.onboarding_done_v1', '1'); } catch {}
-	          if (next === 'profile') {
-	            try { router.replace('/profile'); } catch {}
-	            // Small delay before hiding modal to prevent flash
-	            setTimeout(() => setShowOnboarding(false), 100);
-	            return;
-	          }
-          // Navigate first, then hide modal to prevent flash of home screen
-          try { router.replace('/placement/level-select'); } catch {}
-          setTimeout(() => setShowOnboarding(false), 100);
-        }}
-      />)}
+      {/* Old Onboarding - disabled, using PersonalizedOnboarding in App.tsx instead */}
 
       {/* Daily streak celebration (once per day) */}
       {showStreakCelebrate && !isPreview && (
         <View style={styles.celebrateOverlay}>
           <LinearGradient
-            colors={theme === 'light' ? ['#FFFFFF', '#F8F9FA'] : ['#2A2D2E', '#1A1C1D']}
+            colors={theme === 'light' ? ['#FFFFFF', '#F8F9FA'] : ['#243B53', '#0D1B2A']}
             style={[styles.celebrateCard]}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
@@ -6201,7 +6108,7 @@ EXAMPLE: [sentence in ${langName}]`
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
   },
   dotContainer: {
     position: 'absolute',
@@ -6262,16 +6169,16 @@ const styles = StyleSheet.create({
     fontFamily: 'Ubuntu-Medium',
   },
   sectionTitleLight: {
-    color: '#4B5563',
+    color: '#2D4A66',
   },
   storyWordsCard: {
     marginHorizontal: 16,
     marginBottom: 12,
     padding: 16,
     borderRadius: 16,
-    backgroundColor: '#1F1F1F',
+    backgroundColor: '#1B263B',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.4,
     shadowRadius: 0,
@@ -6298,9 +6205,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: '#1F1F1F',
+    backgroundColor: '#1B263B',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 0,
@@ -6311,7 +6218,7 @@ const styles = StyleSheet.create({
   },
   storyBubbleLight: {
     backgroundColor: '#FFFFFF',
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowOpacity: 0.12,
   },
   storyBubbleText: {
@@ -6329,9 +6236,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 14,
-    backgroundColor: '#1F1F1F',
+    backgroundColor: '#1B263B',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.35,
     shadowRadius: 0,
@@ -6340,7 +6247,7 @@ const styles = StyleSheet.create({
   },
   storyDetailCardLight: {
     backgroundColor: '#FFFFFF',
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowOpacity: 0.12,
   },
   storyDetailWord: {
@@ -6360,7 +6267,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Ubuntu-Regular',
   },
   storyDetailDefinitionLight: {
-    color: '#4B5563',
+    color: '#2D4A66',
   },
   storyDetailExample: {
     fontSize: 14,
@@ -6482,12 +6389,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Ubuntu-Medium',
   },
   card: {
-    backgroundColor: '#2C2C2C',
+    backgroundColor: '#243B53',
     marginHorizontal: 12,
     marginBottom: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#243B53',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.12,
@@ -6507,12 +6414,12 @@ const styles = StyleSheet.create({
   tile: {
     width: '100%',
     height: 190,
-    backgroundColor: '#2C2C2C',
+    backgroundColor: '#243B53',
     borderRadius: 18,
     marginBottom: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#243B53',
     shadowColor: '#000',
     shadowOpacity: 0.14,
     shadowRadius: 7,
@@ -6603,7 +6510,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontFamily: 'Ubuntu-Regular',
   },
-  cardSubtitleLight: { color: '#4B5563' },
+  cardSubtitleLight: { color: '#2D4A66' },
   missionCard: {
     marginHorizontal: 16,
     marginBottom: 12,
@@ -6721,7 +6628,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     fontFamily: 'Ubuntu-Regular',
   },
-  missionStepDescLight: { color: '#4B5563' },
+  missionStepDescLight: { color: '#2D4A66' },
   missionProgressRow: {
     marginTop: 10,
     gap: 6,
@@ -6734,7 +6641,7 @@ const styles = StyleSheet.create({
   missionProgressTextLight: { color: '#6B7280' },
   missionProgressBar: {
     height: 6,
-    backgroundColor: '#333',
+    backgroundColor: '#243B53',
     borderRadius: 999,
     overflow: 'hidden',
   },
@@ -6752,7 +6659,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     borderRadius: 14,
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.4,
     shadowRadius: 0,
@@ -6837,7 +6744,7 @@ const styles = StyleSheet.create({
     color: '#E5E7EB',
     fontFamily: 'Ubuntu-Regular',
   },
-  missionHelperLight: { color: '#4B5563' },
+  missionHelperLight: { color: '#2D4A66' },
   // Synonym Match styles
   synonymMatchCard: {
     marginHorizontal: 16,
@@ -6846,9 +6753,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 16,
     borderRadius: 16,
-    backgroundColor: '#1F1F1F',
+    backgroundColor: '#1B263B',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.4,
     shadowRadius: 0,
@@ -6925,14 +6832,14 @@ const styles = StyleSheet.create({
   },
   newsHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   newsLabel: { fontSize: 12, fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.6, fontFamily: 'Ubuntu-Bold' },
-  newsLabelLight: { color: '#4B5563' },
+  newsLabelLight: { color: '#2D4A66' },
   newsTitle: { marginTop: 4, fontSize: 18, fontWeight: '800', color: '#E5E7EB', fontFamily: 'Ubuntu-Bold' },
   newsTitleLight: { color: '#0D3B4A' },
   newsWhyMatters: { marginTop: 2, fontSize: 12, fontWeight: '700', color: '#F8B070', fontFamily: 'Ubuntu-Medium' },
   newsWhyMattersLight: { color: '#9A3412' },
   newsSummary: { marginTop: 6, fontSize: 17, lineHeight: 26, color: '#D1D5DB', fontFamily: 'Ubuntu-Regular' },
-  newsSummaryLight: { color: '#374151' },
-  newsGlossary: { marginTop: 12, padding: 14, borderRadius: 14, backgroundColor: '#1F1F1F', borderWidth: 3, borderColor: '#1A1A1A', gap: 6, shadowColor: '#000', shadowOffset: { width: 2, height: 3 }, shadowOpacity: 0.4, shadowRadius: 0, elevation: 5 },
+  newsSummaryLight: { color: '#2D4A66' },
+  newsGlossary: { marginTop: 12, padding: 14, borderRadius: 14, backgroundColor: '#1B263B', borderWidth: 3, borderColor: '#0D1B2A', gap: 6, shadowColor: '#000', shadowOffset: { width: 2, height: 3 }, shadowOpacity: 0.4, shadowRadius: 0, elevation: 5 },
   newsGlossaryLight: { backgroundColor: '#F8FAFC', borderColor: '#E5E7EB', borderWidth: 2, shadowOpacity: 0.1, shadowColor: '#9CA3AF' },
   newsGlossaryTitle: { fontSize: 12, fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: 'Ubuntu-Bold' },
   newsGlossaryTitleLight: { color: '#6B7280' },
@@ -6940,15 +6847,15 @@ const styles = StyleSheet.create({
   vocabTranslationToggle: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
   vocabTranslationToggleText: { fontSize: 11, fontWeight: '600', fontFamily: 'Ubuntu-Medium' },
   newsGlossaryItem: { fontSize: 13, color: '#D1D5DB', lineHeight: 18, fontFamily: 'Ubuntu-Regular' },
-  newsGlossaryItemLight: { color: '#4B5563' },
+  newsGlossaryItemLight: { color: '#2D4A66' },
   // New vocabulary section styles
   vocabSection: {
     marginTop: 20,
     padding: 16,
     borderRadius: 16,
-    backgroundColor: '#2A2D2E',
+    backgroundColor: '#243B53',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 3 },
     shadowOpacity: 0.4,
@@ -7072,7 +6979,7 @@ const styles = StyleSheet.create({
   newsToggleTextLight: { color: '#0D3B4A' },
   newsToggleInline: { marginTop: 2 },
   newsCarouselSection: { marginTop: 14, gap: 8 },
-  newsPreviewCard: { width: 220, height: 150, borderRadius: 14, overflow: 'hidden', backgroundColor: '#111827', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  newsPreviewCard: { width: 220, height: 150, borderRadius: 14, overflow: 'hidden', backgroundColor: '#0D1B2A', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   newsPreviewCardLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' },
   newsPreviewImage: { width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 },
   newsPreviewOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.28)' },
@@ -7082,20 +6989,20 @@ const styles = StyleSheet.create({
   newsPreviewTitle: { color: '#FFFFFF', fontWeight: '800', fontSize: 14, fontFamily: 'Ubuntu-Bold' },
   newsPreviewTitleLight: { color: '#0D3B4A' },
   newsPreviewSummary: { color: '#E5E7EB', fontSize: 12, lineHeight: 16, fontFamily: 'Ubuntu-Regular' },
-  newsPreviewSummaryLight: { color: '#374151' },
+  newsPreviewSummaryLight: { color: '#2D4A66' },
   newsExtraList: { marginTop: 14, gap: 10 },
   newsExtraRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
   newsExtraRowLight: { backgroundColor: '#F8FAFC', borderColor: '#E5E7EB' },
-  newsExtraThumb: { width: 64, height: 64, borderRadius: 12, backgroundColor: '#111827' },
+  newsExtraThumb: { width: 64, height: 64, borderRadius: 12, backgroundColor: '#1B263B' },
   newsExtraTitle: { fontSize: 14, fontWeight: '800', color: '#E5E7EB', fontFamily: 'Ubuntu-Bold' },
   newsExtraTitleLight: { color: '#0D3B4A' },
   newsExtraSummary: { fontSize: 13, lineHeight: 18, color: '#D1D5DB', fontFamily: 'Ubuntu-Regular' },
-  newsExtraSummaryLight: { color: '#4B5563' },
+  newsExtraSummaryLight: { color: '#2D4A66' },
   newsModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
   newsModalBackdrop: { flex: 1 },
-  newsModalSheet: { backgroundColor: '#1E1E1E', borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 18, paddingBottom: 0, maxHeight: '98%' },
+  newsModalSheet: { backgroundColor: '#1B263B', borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 18, paddingBottom: 0, maxHeight: '98%' },
   newsModalSheetLight: { backgroundColor: '#FFFFFF' },
-  newsModalHandle: { width: 42, height: 4, borderRadius: 999, alignSelf: 'center', backgroundColor: '#4B5563', marginBottom: 12 },
+  newsModalHandle: { width: 42, height: 4, borderRadius: 999, alignSelf: 'center', backgroundColor: '#2D4A66', marginBottom: 12 },
   newsModalHandleLight: { backgroundColor: '#E5E7EB' },
   newsModalImage: { width: '100%', height: 180, borderRadius: 12, marginBottom: 12 },
   newsModalTagRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
@@ -7106,9 +7013,9 @@ const styles = StyleSheet.create({
   newsModalOriginalTitle: { marginTop: 6, fontSize: 12, color: '#9CA3AF', fontFamily: 'Ubuntu-Medium' },
   newsModalOriginalTitleLight: { color: '#6B7280' },
   newsModalWhy: { marginTop: 8, fontSize: 14, lineHeight: 19, color: '#E5E7EB', opacity: 0.9, fontFamily: 'Ubuntu-Regular' },
-  newsModalWhyLight: { color: '#374151' },
+  newsModalWhyLight: { color: '#2D4A66' },
   newsModalSummary: { marginTop: 8, fontSize: 17, lineHeight: 27, color: '#D1D5DB', fontFamily: 'Ubuntu-Regular', flexShrink: 1, width: '100%', flexWrap: 'wrap' },
-  newsModalSummaryLight: { color: '#374151' },
+  newsModalSummaryLight: { color: '#2D4A66' },
   offerRow: {
     marginTop: 8,
     gap: 6,
@@ -7165,7 +7072,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 3 },
     shadowOpacity: 0.4,
@@ -7259,7 +7166,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 24,
     bottom: 96,
-    backgroundColor: '#2C2C2C',
+    backgroundColor: '#243B53',
     borderRadius: 12,
     paddingVertical: 8,
     minWidth: 180,
@@ -7382,7 +7289,7 @@ const styles = StyleSheet.create({
   },
   celebrateBtnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 17, letterSpacing: 0.5 },
   navBar: { paddingHorizontal: 12, gap: 10 },
-  navItem: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, backgroundColor: '#2A3033', borderWidth: 1, borderColor: '#364147', marginRight: 10, alignItems: 'center', width: 84 },
+  navItem: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, backgroundColor: '#1B263B', borderWidth: 1, borderColor: '#2D4A66', marginRight: 10, alignItems: 'center', width: 84 },
   navItemLight: { backgroundColor: '#E9F4F1', borderColor: '#D7E7E2' },
   navIconWrap: { width: 42, height: 42, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   navIcon: { width: 28, height: 28 },
@@ -7393,7 +7300,7 @@ const styles = StyleSheet.create({
   magazineHeroCard: {
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#1A1A1A',
+    backgroundColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 12,
@@ -7493,7 +7400,7 @@ const styles = StyleSheet.create({
   },
   magazineDualCard: {
     borderRadius: 16,
-    backgroundColor: '#2A2D2E',
+    backgroundColor: '#243B53',
     overflow: 'hidden',
   },
   magazineDualCardLight: {
@@ -7544,7 +7451,7 @@ const styles = StyleSheet.create({
   magazineListCard: {
     flexDirection: 'row',
     borderRadius: 14,
-    backgroundColor: '#2A2D2E',
+    backgroundColor: '#243B53',
     height: 120,
     overflow: 'hidden',
     borderTopLeftRadius: 2,
@@ -7589,7 +7496,7 @@ const styles = StyleSheet.create({
   // Vocab Preview Modal Styles - Full screen elegant design
   vocabPreviewOverlay: {
     flex: 1,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: '#0D1B2A',
   },
   vocabPreviewOverlayLight: {
     backgroundColor: '#F5F5F5',
@@ -7638,7 +7545,7 @@ const styles = StyleSheet.create({
   vocabPreviewProgressBg: {
     flex: 1,
     height: 6,
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -7656,11 +7563,11 @@ const styles = StyleSheet.create({
   },
   vocabPreviewCardNew: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1B263B',
     borderRadius: 28,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#243B53',
   },
   vocabPreviewCardNewLight: {
     backgroundColor: '#FFFFFF',
@@ -7692,7 +7599,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#333',
+    backgroundColor: '#243B53',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -7728,7 +7635,7 @@ const styles = StyleSheet.create({
   vocabPreviewDivider: {
     width: 60,
     height: 3,
-    backgroundColor: '#333',
+    backgroundColor: '#243B53',
     borderRadius: 2,
     marginBottom: 16,
   },
@@ -7775,7 +7682,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Ubuntu-Medium',
   },
   vocabPreviewTranslationNewLight: {
-    color: '#374151',
+    color: '#2D4A66',
   },
   vocabPreviewLoadingInBox: {
     fontSize: 12,
@@ -7814,17 +7721,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   vocabPreviewExampleTextInBoxLight: {
-    color: '#4B5563',
+    color: '#2D4A66',
   },
   vocabPreviewExampleBox: {
     marginTop: 16,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 14,
     width: '100%',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#243B53',
   },
   vocabPreviewExampleLabel: {
     fontSize: 10,
@@ -7861,7 +7768,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: '#333',
+    borderColor: '#243B53',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -7934,7 +7841,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   articlePaywallCard: {
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
     borderRadius: 24,
     padding: 28,
     width: '100%',
@@ -8017,7 +7924,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Feather-Bold',
   },
   articlePaywallFeatureTextLight: {
-    color: '#374151',
+    color: '#2D4A66',
   },
   articlePaywallCta: {
     width: '100%',

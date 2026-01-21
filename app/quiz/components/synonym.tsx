@@ -28,6 +28,8 @@ interface SynonymProps {
   onPhaseComplete: (score: number, totalQuestions: number) => void;
   hearts: number;
   onHeartLost: () => void;
+  onCorrectAnswer?: () => void;
+  onIncorrectAnswer?: () => void;
   wordRange?: { start: number; end: number };
   wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
   showUfoAnimation?: boolean;
@@ -737,7 +739,7 @@ const CORRECT_COLOR_LIGHT = '#4ED9CB';
 const INCORRECT_COLOR_LIGHT = '#F25E86';
 const ACCENT_COLOR = '#F25E86';
 
-export default function SynonymComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride, showUfoAnimation, ufoAnimationKey = 0 }: SynonymProps) {
+export default function SynonymComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, onCorrectAnswer, onIncorrectAnswer, wordRange, wordsOverride, showUfoAnimation, ufoAnimationKey = 0 }: SynonymProps) {
   const themeName = useAppStore(s => s.theme);
   const recordResult = useAppStore(s => s.recordExerciseResult);
   const colors = getTheme(themeName);
@@ -767,15 +769,16 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
     const isAdvancedB2C1 = isAdvancedByParam || isAdvancedByLevel;
     const isBeginnerA1A2 = /(^|\b)beginner(\b|$)/i.test(String(levelId || '')) || /(^|\b)beginner(\b|$)/i.test(String(level?.name || '')) || cefrUpper.includes('A1-A2') || cefrUpper.includes('A1') || cefrUpper.includes('A2');
     const isIntermediateB1 = (String(levelId || '').toLowerCase() === 'intermediate') || (String(level?.id || '').toLowerCase() === 'intermediate') || (String(level?.name || '').toLowerCase() === 'intermediate') || (cefrUpper === 'B1');
-    try { console.log('SynonymComponent - params:', { setId, levelId, detectedLevel: level?.name, cefr: level?.cefr, isAdvancedB2C1, isBeginnerA1A2, isIntermediateB1 }); } catch {}
+    const isUpperIntermediate = /upper.?intermediate/i.test(String(levelId || '')) || /upper.?intermediate/i.test(String(level?.name || '')) || /upper.?intermediate/i.test(String(level?.id || '')) || cefrUpper.includes('B1+') || cefrUpper === 'B2';
+    try { console.log('SynonymComponent - params:', { setId, levelId, detectedLevel: level?.name, cefr: level?.cefr, isAdvancedB2C1, isBeginnerA1A2, isIntermediateB1, isUpperIntermediate }); } catch {}
 
     // Use override when provided (dynamic quiz)
     if (stableWordsOverride && stableWordsOverride.length) {
       let words = stableWordsOverride;
       if (wordRange) words = words.slice(wordRange.start, wordRange.end);
 
-      // Advanced/Beginner/Intermediate enforcement also applies when using overrides
-      if (isAdvancedB2C1 || isBeginnerA1A2 || isIntermediateB1) {
+      // Use peer synonyms for ALL levels
+      if (isAdvancedB2C1 || isBeginnerA1A2 || isIntermediateB1 || isUpperIntermediate || true) {
         const mode = isAdvancedB2C1 ? 'Advanced' : isBeginnerA1A2 ? 'Beginner' : 'Intermediate';
         try { console.log(`SynonymComponent - Using ${mode} peer-synonym mode (override path)`); } catch {}
         return words.map(w => {
@@ -859,10 +862,10 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
         } as WordEntry;
       }
 
-      // Advanced/Beginner/Intermediate rule: incorrect options should be real synonyms
+      // Use peer synonyms for ALL levels - incorrect options should be real synonyms
       // from other words in the same set (no invented distractors).
-      if (isAdvancedB2C1 || isBeginnerA1A2 || isIntermediateB1) {
-        const mode = isAdvancedB2C1 ? 'Advanced' : isBeginnerA1A2 ? 'Beginner' : 'Intermediate';
+      if (isAdvancedB2C1 || isBeginnerA1A2 || isIntermediateB1 || isUpperIntermediate || true) {
+        const mode = isAdvancedB2C1 ? 'Advanced' : isBeginnerA1A2 ? 'Beginner' : isUpperIntermediate ? 'Upper-Intermediate' : 'Intermediate';
         try { console.log(`SynonymComponent - Using ${mode} peer-synonym mode (set path)`); } catch {}
         const correct = (w.synonyms || []).slice(0, 3);
         const correctSet = new Set(correct.map(s => (s || '').toLowerCase().trim()));
@@ -1029,9 +1032,11 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
     if (selectedCorrect) {
       setPhaseCorrect(prev => prev + 1);
       soundService.playCorrectAnswer();
+      onCorrectAnswer?.();
     } else {
       // Lose a heart on wrong answer
       onHeartLost();
+      onIncorrectAnswer?.();
       triggerHeartLostAnimation();
       soundService.playIncorrectAnswer();
     }
@@ -1134,7 +1139,7 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
 
           <View style={styles.wordHeader}>
             <Text style={[styles.wordHighlight, isLight && { color: '#111827' }]}>{currentWord.word}</Text>
-            <Text style={[styles.promptText, isLight && { color: '#4B5563' }]}>
+            <Text style={[styles.promptText, isLight && { color: '#2D4A66' }]}>
               Select {requiredCount} {pluralised}
             </Text>
             <Text style={[styles.ipaText, isLight && { color: '#6B7280' }]}>{currentWord.ipa}</Text>
@@ -1198,7 +1203,7 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 12,
@@ -1222,7 +1227,7 @@ const styles = StyleSheet.create({
   progressBarPill: {
     flex: 1,
     height: 12,
-    backgroundColor: '#3A3A3A',
+    backgroundColor: '#2D4A66',
     borderRadius: 6,
     overflow: 'hidden',
     marginRight: 8,
@@ -1285,7 +1290,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 6,
-    backgroundColor: '#333',
+    backgroundColor: '#243B53',
     borderRadius: 3,
     overflow: 'hidden',
     width: '100%',
@@ -1358,7 +1363,7 @@ const styles = StyleSheet.create({
   },
   optionButton: {
     width: '100%',
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     paddingVertical: 24,
     paddingHorizontal: 10,

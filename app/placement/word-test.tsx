@@ -6,27 +6,218 @@ import {
   Dimensions,
   DeviceEventEmitter,
   Animated,
-  PanResponder,
-  Easing,
   TouchableOpacity,
+  ScrollView,
+  Vibration,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { DiagnosticWord, getShuffledWords, calculateLevel, mapToAppLevel } from './diagnostic-words';
+import { DiagnosticWord, diagnosticWords, calculateLevel, mapToAppLevel } from './diagnostic-words';
 import { useAppStore } from '../../lib/store';
-import LottieView from 'lottie-react-native';
-import { X, CheckCircle2 } from 'lucide-react-native';
+import { X, Sparkles, Rocket, Star, Zap } from 'lucide-react-native';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const CARD_W = Math.min(340, SCREEN_WIDTH - 48);
-const CARD_H = Math.min(420, Math.round(SCREEN_HEIGHT * 0.48));
-const SWIPE_THRESHOLD = 70;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Colors matching app theme
 const ACCENT_ORANGE = '#F8B070';
 const ACCENT_TEAL = '#4ED9CB';
 const ACCENT_PINK = '#F25E86';
-const BG_DARK = '#1E1E1E';
+const BG_DARK = '#1A2744';
+const SURFACE = '#1B263B';
+const CARD_BG = '#243B53';
+
+// XP points per word level
+const XP_BY_LEVEL = {
+  beginner: 5,
+  intermediate: 10,
+  advanced: 20,
+};
+
+// Floating XP animation component
+const FloatingXP = ({ amount, x, y, onComplete }: { amount: number; x: number; y: number; onComplete: () => void }) => {
+  const translateY = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+  const scale = useRef(new Animated.Value(0.5)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: -60,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.timing(scale, {
+          toValue: 1.2,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scale, {
+          toValue: 1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 800,
+        delay: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => onComplete());
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        styles.floatingXP,
+        {
+          left: x - 25,
+          top: y - 20,
+          transform: [{ translateY }, { scale }],
+          opacity,
+        },
+      ]}
+    >
+      <Text style={styles.floatingXPText}>+{amount} XP</Text>
+    </Animated.View>
+  );
+};
+
+// Twinkling star component
+const TwinklingStar = ({ delay, size, left, top }: { delay: number; size: number; left: number; top: number }) => {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    const animate = () => {
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 1, duration: 1000 + Math.random() * 500, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 1000 + Math.random() * 500, useNativeDriver: true }),
+      ]).start(() => animate());
+    };
+    const timer = setTimeout(animate, delay);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <Animated.View style={[styles.star, { left, top, opacity }]}>
+      <Star size={size} color="#FFFFFF" fill="#FFFFFF" />
+    </Animated.View>
+  );
+};
+
+// Word card component
+const WordCard = ({
+  word,
+  isSelected,
+  onToggle,
+  color,
+  index,
+}: {
+  word: DiagnosticWord;
+  isSelected: boolean;
+  onToggle: (event: { nativeEvent: { pageX: number; pageY: number } }) => void;
+  color: string;
+  index: number;
+}) => {
+  const scale = useRef(new Animated.Value(1)).current;
+  const glowOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scale, {
+        toValue: isSelected ? 1.02 : 1,
+        useNativeDriver: true,
+        friction: 5,
+      }),
+      Animated.timing(glowOpacity, {
+        toValue: isSelected ? 1 : 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [isSelected]);
+
+  const handlePress = (e: any) => {
+    if (Platform.OS === 'ios') {
+      Vibration.vibrate(10);
+    }
+    Animated.sequence([
+      Animated.timing(scale, { toValue: 0.95, duration: 50, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: isSelected ? 1 : 1.02, useNativeDriver: true, friction: 5 }),
+    ]).start();
+    onToggle(e);
+  };
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={handlePress}
+      style={styles.wordCardTouchable}
+    >
+      <Animated.View style={[styles.wordCardOuter, { transform: [{ scale }] }]}>
+        {/* Glow effect */}
+        <Animated.View style={[styles.cardGlow, { opacity: glowOpacity, borderColor: color }]} />
+
+        <View style={[styles.wordCard, isSelected && { borderColor: color, borderWidth: 2.5 }]}>
+          {/* Selection indicator */}
+          {isSelected && (
+            <View style={[styles.selectedBadge, { backgroundColor: color }]}>
+              <Sparkles size={12} color="#FFFFFF" />
+            </View>
+          )}
+
+          <Text style={[styles.wordText, isSelected && { color }]}>{word.word}</Text>
+        </View>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
+// Level section component
+const LevelSection = ({
+  title,
+  words,
+  selectedWords,
+  onToggle,
+  color,
+  icon: Icon,
+}: {
+  title: string;
+  words: DiagnosticWord[];
+  selectedWords: Set<string>;
+  onToggle: (word: DiagnosticWord, event: any) => void;
+  color: string;
+  icon: any;
+}) => {
+  return (
+    <View style={styles.levelSection}>
+      <View style={styles.levelHeader}>
+        <View style={[styles.levelIconWrap, { backgroundColor: color + '20' }]}>
+          <Icon size={18} color={color} />
+        </View>
+        <Text style={styles.levelTitle}>{title}</Text>
+        <View style={styles.levelBadge}>
+          <Text style={[styles.levelBadgeText, { color }]}>{selectedWords.size}/{words.length}</Text>
+        </View>
+      </View>
+
+      <View style={styles.wordsGrid}>
+        {words.map((word, index) => (
+          <WordCard
+            key={word.word}
+            word={word}
+            isSelected={selectedWords.has(word.word)}
+            onToggle={(e) => onToggle(word, e)}
+            color={color}
+            index={index}
+          />
+        ))}
+      </View>
+    </View>
+  );
+};
 
 export default function WordTest() {
   const router = useRouter();
@@ -34,35 +225,101 @@ export default function WordTest() {
   const selectedLevel = (params.selectedLevel as string) || 'beginner';
   const isRetake = params.retake === 'true';
 
-  // Keep hook count consistent
   const _theme = useAppStore(s => s.theme);
 
-  // Use detailed test (36 words) for retake, quick test (18 words) for initial
-  const [words] = useState<DiagnosticWord[]>(() => getShuffledWords(isRetake));
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [knownWords, setKnownWords] = useState<DiagnosticWord[]>([]);
-  const [showCoach, setShowCoach] = useState(true);
+  // Show intro screen first
+  const [showIntro, setShowIntro] = useState(true);
+  const introOpacity = useRef(new Animated.Value(1)).current;
+  const introScale = useRef(new Animated.Value(0.9)).current;
+  const rocketY = useRef(new Animated.Value(0)).current;
 
-  // Animation values
-  const panX = useRef(new Animated.Value(0)).current;
-  const cardOpacity = useRef(new Animated.Value(1)).current;
-  const nextCardScale = useRef(new Animated.Value(0.95)).current;
-  const nextCardTranslateY = useRef(new Animated.Value(15)).current;
+  // Word selection state
+  const [selectedWords, setSelectedWords] = useState<Set<string>>(new Set());
+  const [totalXP, setTotalXP] = useState(0);
+  const [floatingXPs, setFloatingXPs] = useState<Array<{ id: number; amount: number; x: number; y: number }>>([]);
+  const xpIdCounter = useRef(0);
+
+  // Score animation
+  const scoreScale = useRef(new Animated.Value(1)).current;
+
+  // Get words by level
+  const beginnerWords = useMemo(() => diagnosticWords.filter(w => w.level === 'beginner').slice(0, 6), []);
+  const intermediateWords = useMemo(() => diagnosticWords.filter(w => w.level === 'intermediate').slice(0, 6), []);
+  const advancedWords = useMemo(() => diagnosticWords.filter(w => w.level === 'advanced').slice(0, 6), []);
+
+  // Selected words by level
+  const selectedBeginner = useMemo(() => new Set([...selectedWords].filter(w => beginnerWords.some(bw => bw.word === w))), [selectedWords, beginnerWords]);
+  const selectedIntermediate = useMemo(() => new Set([...selectedWords].filter(w => intermediateWords.some(iw => iw.word === w))), [selectedWords, intermediateWords]);
+  const selectedAdvanced = useMemo(() => new Set([...selectedWords].filter(w => advancedWords.some(aw => aw.word === w))), [selectedWords, advancedWords]);
 
   useEffect(() => {
     DeviceEventEmitter.emit('NAV_VISIBILITY', 'hide');
     return () => DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
   }, []);
 
-  // Coach overlay timer
+  // Intro animation
   useEffect(() => {
-    if (!showCoach) return;
-    const timer = setTimeout(() => setShowCoach(false), 3000);
-    return () => clearTimeout(timer);
-  }, [showCoach]);
+    if (showIntro) {
+      Animated.spring(introScale, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
+      // Floating rocket animation
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(rocketY, { toValue: -10, duration: 1500, useNativeDriver: true }),
+          Animated.timing(rocketY, { toValue: 10, duration: 1500, useNativeDriver: true }),
+        ])
+      ).start();
+    }
+  }, [showIntro]);
 
-  const goToResult = useCallback((known: DiagnosticWord[]) => {
-    const determinedLevel = calculateLevel(known, words);
+  const handleStartTest = () => {
+    Animated.parallel([
+      Animated.timing(introOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+      Animated.timing(introScale, { toValue: 1.1, duration: 300, useNativeDriver: true }),
+    ]).start(() => setShowIntro(false));
+  };
+
+  const handleToggleWord = useCallback((word: DiagnosticWord, event: any) => {
+    const isCurrentlySelected = selectedWords.has(word.word);
+
+    setSelectedWords(prev => {
+      const next = new Set(prev);
+      if (next.has(word.word)) {
+        next.delete(word.word);
+      } else {
+        next.add(word.word);
+      }
+      return next;
+    });
+
+    // XP animation
+    if (!isCurrentlySelected) {
+      const xp = XP_BY_LEVEL[word.level];
+      setTotalXP(prev => prev + xp);
+
+      // Animate score
+      Animated.sequence([
+        Animated.timing(scoreScale, { toValue: 1.3, duration: 100, useNativeDriver: true }),
+        Animated.spring(scoreScale, { toValue: 1, useNativeDriver: true, friction: 5 }),
+      ]).start();
+
+      // Add floating XP
+      const id = xpIdCounter.current++;
+      setFloatingXPs(prev => [...prev, { id, amount: xp, x: event.nativeEvent.pageX, y: event.nativeEvent.pageY }]);
+    } else {
+      const xp = XP_BY_LEVEL[word.level];
+      setTotalXP(prev => Math.max(0, prev - xp));
+    }
+  }, [selectedWords]);
+
+  const removeFloatingXP = useCallback((id: number) => {
+    setFloatingXPs(prev => prev.filter(xp => xp.id !== id));
+  }, []);
+
+  const handleContinue = useCallback(() => {
+    // Calculate level from selected words
+    const knownWords = diagnosticWords.filter(w => selectedWords.has(w.word));
+    const allTestWords = [...beginnerWords, ...intermediateWords, ...advancedWords];
+    const determinedLevel = calculateLevel(knownWords, allTestWords);
     const appLevel = mapToAppLevel(determinedLevel);
 
     router.replace({
@@ -71,114 +328,89 @@ export default function WordTest() {
         selectedLevel,
         determinedLevel,
         appLevel,
-        knownCount: known.length.toString(),
-        totalCount: words.length.toString(),
+        knownCount: selectedWords.size.toString(),
+        totalCount: allTestWords.length.toString(),
         isRetake: isRetake ? 'true' : 'false',
       },
     });
-  }, [router, selectedLevel, words, isRetake]);
-
-  const handleSwipeComplete = useCallback((direction: 'left' | 'right') => {
-    const currentWord = words[currentIndex];
-
-    let newKnownWords = knownWords;
-    if (direction === 'right') {
-      newKnownWords = [...knownWords, currentWord];
-      setKnownWords(newKnownWords);
-    }
-
-    if (currentIndex >= words.length - 1) {
-      goToResult(direction === 'right' ? newKnownWords : knownWords);
-    } else {
-      setCurrentIndex(prev => prev + 1);
-      panX.setValue(0);
-      cardOpacity.setValue(1);
-      nextCardScale.setValue(0.95);
-      nextCardTranslateY.setValue(15);
-    }
-  }, [currentIndex, words, knownWords, goToResult, panX, cardOpacity, nextCardScale, nextCardTranslateY]);
-
-  const handleSwipeCompleteRef = useRef(handleSwipeComplete);
-  useEffect(() => {
-    handleSwipeCompleteRef.current = handleSwipeComplete;
-  }, [handleSwipeComplete]);
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 8,
-        onPanResponderMove: (_, g) => {
-          panX.setValue(g.dx);
-          const progress = Math.min(Math.abs(g.dx) / SWIPE_THRESHOLD, 1);
-          nextCardScale.setValue(0.95 + progress * 0.05);
-          nextCardTranslateY.setValue(15 - progress * 15);
-        },
-        onPanResponderRelease: (_, g) => {
-          const goLeft = g.dx <= -SWIPE_THRESHOLD;
-          const goRight = g.dx >= SWIPE_THRESHOLD;
-
-          if (!goLeft && !goRight) {
-            Animated.spring(panX, { toValue: 0, useNativeDriver: true, friction: 6 }).start();
-            Animated.spring(nextCardScale, { toValue: 0.95, useNativeDriver: true }).start();
-            Animated.spring(nextCardTranslateY, { toValue: 15, useNativeDriver: true }).start();
-            return;
-          }
-
-          const toValue = goLeft ? -SCREEN_WIDTH * 1.5 : SCREEN_WIDTH * 1.5;
-          Animated.parallel([
-            Animated.timing(panX, {
-              toValue,
-              duration: 250,
-              easing: Easing.out(Easing.cubic),
-              useNativeDriver: true,
-            }),
-            Animated.timing(cardOpacity, {
-              toValue: 0,
-              duration: 200,
-              useNativeDriver: true,
-            }),
-            Animated.spring(nextCardScale, { toValue: 1, useNativeDriver: true }),
-            Animated.spring(nextCardTranslateY, { toValue: 0, useNativeDriver: true }),
-          ]).start(() => {
-            handleSwipeCompleteRef.current(goRight ? 'right' : 'left');
-          });
-        },
-        onPanResponderTerminate: () => {
-          Animated.spring(panX, { toValue: 0, useNativeDriver: true }).start();
-        },
-      }),
-    [panX, cardOpacity, nextCardScale, nextCardTranslateY]
-  );
-
-  const currentWord = words[currentIndex];
-  const nextWord = currentIndex + 1 < words.length ? words[currentIndex + 1] : null;
-  const progress = (currentIndex + 1) / words.length;
-
-  const cardRotate = panX.interpolate({
-    inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
-    outputRange: ['-10deg', '0deg', '10deg'],
-    extrapolate: 'clamp',
-  });
-
-  const knowLabelOpacity = panX.interpolate({
-    inputRange: [0, SWIPE_THRESHOLD],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-
-  const dontKnowLabelOpacity = panX.interpolate({
-    inputRange: [-SWIPE_THRESHOLD, 0],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
+  }, [router, selectedLevel, selectedWords, beginnerWords, intermediateWords, advancedWords, isRetake]);
 
   const handleClose = useCallback(() => {
     router.back();
   }, [router]);
 
+  // Render intro screen
+  if (showIntro) {
+    return (
+      <View style={styles.container}>
+        {/* Background stars */}
+        <TwinklingStar delay={0} size={6} left={30} top={100} />
+        <TwinklingStar delay={300} size={4} left={SCREEN_WIDTH - 60} top={150} />
+        <TwinklingStar delay={600} size={5} left={80} top={250} />
+        <TwinklingStar delay={200} size={4} left={SCREEN_WIDTH - 100} top={300} />
+        <TwinklingStar delay={500} size={6} left={50} top={400} />
+        <TwinklingStar delay={100} size={5} left={SCREEN_WIDTH - 50} top={450} />
+
+        <SafeAreaView style={styles.introSafe}>
+          <Animated.View style={[styles.introContent, { opacity: introOpacity, transform: [{ scale: introScale }] }]}>
+            {/* Floating rocket */}
+            <Animated.View style={[styles.introRocketWrap, { transform: [{ translateY: rocketY }] }]}>
+              <View style={styles.introRocket}>
+                <Rocket size={64} color={ACCENT_ORANGE} />
+              </View>
+            </Animated.View>
+
+            <Text style={styles.introTitle}>Let's discover{'\n'}your vocabulary!</Text>
+            <Text style={styles.introSubtitle}>
+              Tap all the words you know.{'\n'}
+              No pressure – be honest!
+            </Text>
+
+            <View style={styles.introTips}>
+              <View style={styles.introTip}>
+                <View style={[styles.introTipDot, { backgroundColor: ACCENT_TEAL }]} />
+                <Text style={styles.introTipText}>Beginner → +5 XP</Text>
+              </View>
+              <View style={styles.introTip}>
+                <View style={[styles.introTipDot, { backgroundColor: ACCENT_ORANGE }]} />
+                <Text style={styles.introTipText}>Intermediate → +10 XP</Text>
+              </View>
+              <View style={styles.introTip}>
+                <View style={[styles.introTipDot, { backgroundColor: ACCENT_PINK }]} />
+                <Text style={styles.introTipText}>Advanced → +20 XP</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.introButton} activeOpacity={0.8} onPress={handleStartTest}>
+              <View style={[styles.introButtonGradient, { backgroundColor: ACCENT_ORANGE }]}>
+                <Text style={styles.introButtonText}>Start Word Check</Text>
+                <Zap size={20} color="#FFFFFF" fill="#FFFFFF" />
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
+      {/* Background stars */}
+      <TwinklingStar delay={0} size={4} left={20} top={80} />
+      <TwinklingStar delay={400} size={5} left={SCREEN_WIDTH - 40} top={120} />
+      <TwinklingStar delay={200} size={4} left={60} top={200} />
+
+      {/* Floating XP animations */}
+      {floatingXPs.map(xp => (
+        <FloatingXP
+          key={xp.id}
+          amount={xp.amount}
+          x={xp.x}
+          y={xp.y}
+          onComplete={() => removeFloatingXP(xp.id)}
+        />
+      ))}
+
       <SafeAreaView style={styles.safe}>
         {/* Header */}
         <View style={styles.header}>
@@ -187,121 +419,74 @@ export default function WordTest() {
               <X size={20} color="#FFFFFF" />
             </TouchableOpacity>
           ) : (
-            <View style={{ width: 40 }} />
+            <View style={{ width: 44 }} />
           )}
+
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>{isRetake ? 'Level Retest' : 'Word Check'}</Text>
-            <Text style={styles.headerSubtitle}>{currentIndex + 1} of {words.length}</Text>
+            <Text style={styles.headerTitle}>Word Check</Text>
+            <Text style={styles.headerSubtitle}>Tap words you know</Text>
           </View>
-          <View style={{ width: 40 }} />
-        </View>
 
-        {/* Progress Bar */}
-        <View style={styles.progressBarBg}>
-          <Animated.View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
-        </View>
-
-        {/* Swipe hints at top */}
-        <View style={styles.swipeHintsTop}>
-          <View style={styles.hintLeft}>
-            <X size={16} color={ACCENT_PINK} />
-            <Text style={[styles.hintText, { color: ACCENT_PINK }]}>Don't know</Text>
-          </View>
-          <Text style={styles.instructions}>Swipe the card</Text>
-          <View style={styles.hintRight}>
-            <Text style={[styles.hintText, { color: ACCENT_TEAL }]}>I know</Text>
-            <CheckCircle2 size={16} color={ACCENT_TEAL} />
-          </View>
-        </View>
-
-        {/* Cards Stack */}
-        <View style={styles.cardContainer}>
-          {/* Next Card (behind) */}
-          {nextWord && (
-            <Animated.View
-              style={[
-                styles.nextCardWrap,
-                {
-                  transform: [
-                    { scale: nextCardScale },
-                    { translateY: nextCardTranslateY },
-                  ],
-                },
-              ]}
-            >
-              <View style={styles.nextCard}>
-                <Text style={styles.nextCardWord}>{nextWord.word}</Text>
-              </View>
-            </Animated.View>
-          )}
-
-          {/* Current Card */}
-          <Animated.View
-            style={[
-              styles.cardOuter,
-              {
-                opacity: cardOpacity,
-                transform: [
-                  { translateX: panX },
-                  { rotate: cardRotate },
-                ],
-              },
-            ]}
-            {...panResponder.panHandlers}
-          >
-            <View style={styles.card}>
-              {/* Know overlay */}
-              <Animated.View style={[styles.feedbackOverlay, styles.feedbackKnow, { opacity: knowLabelOpacity }]}>
-                <View style={[styles.feedbackBadge, styles.feedbackBadgeKnow]}>
-                  <CheckCircle2 size={28} color="#FFFFFF" />
-                  <Text style={styles.feedbackBadgeText}>I know!</Text>
-                </View>
-              </Animated.View>
-
-              {/* Don't Know overlay */}
-              <Animated.View style={[styles.feedbackOverlay, styles.feedbackDont, { opacity: dontKnowLabelOpacity }]}>
-                <View style={[styles.feedbackBadge, styles.feedbackBadgeDont]}>
-                  <X size={28} color="#FFFFFF" />
-                  <Text style={styles.feedbackBadgeText}>Learning</Text>
-                </View>
-              </Animated.View>
-
-              <View style={styles.cardContent}>
-                <Text style={styles.cardLabel}>VOCABULARY</Text>
-                <Text style={styles.word}>{currentWord?.word}</Text>
-                <Text style={styles.phonetic}>{currentWord?.phonetic}</Text>
-
-                <View style={styles.divider} />
-
-                <Text style={styles.definition}>{currentWord?.definition}</Text>
-              </View>
-
-              {/* Coach overlay */}
-              {showCoach && (
-                <View style={styles.coachWrap} pointerEvents="none">
-                  <LottieView
-                    source={require('../../assets/lottie/HandSwipe.json')}
-                    autoPlay
-                    loop
-                    style={styles.coachAnimation}
-                  />
-                </View>
-              )}
-            </View>
+          {/* XP Score */}
+          <Animated.View style={[styles.xpBadge, { transform: [{ scale: scoreScale }] }]}>
+            <Sparkles size={14} color={ACCENT_ORANGE} />
+            <Text style={styles.xpText}>{totalXP}</Text>
           </Animated.View>
         </View>
 
-        {/* Bottom stats */}
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{knownWords.length}</Text>
-            <Text style={styles.statLabel}>Known</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{currentIndex - knownWords.length}</Text>
-            <Text style={styles.statLabel}>Learning</Text>
-          </View>
+        {/* Content */}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Beginner Section */}
+          <LevelSection
+            title="Beginner"
+            words={beginnerWords}
+            selectedWords={selectedBeginner}
+            onToggle={handleToggleWord}
+            color={ACCENT_TEAL}
+            icon={Star}
+          />
+
+          {/* Intermediate Section */}
+          <LevelSection
+            title="Intermediate"
+            words={intermediateWords}
+            selectedWords={selectedIntermediate}
+            onToggle={handleToggleWord}
+            color={ACCENT_ORANGE}
+            icon={Zap}
+          />
+
+          {/* Advanced Section */}
+          <LevelSection
+            title="Advanced"
+            words={advancedWords}
+            selectedWords={selectedAdvanced}
+            onToggle={handleToggleWord}
+            color={ACCENT_PINK}
+            icon={Rocket}
+          />
+
+          {/* Bottom padding for button */}
+          <View style={{ height: 100 }} />
+        </ScrollView>
+
+        {/* Continue Button */}
+        <View style={styles.bottomBar}>
+          <TouchableOpacity
+            style={[styles.continueBtn, selectedWords.size === 0 && styles.continueBtnDisabled]}
+            activeOpacity={0.8}
+            onPress={handleContinue}
+          >
+            <View style={[styles.continueBtnGradient, { backgroundColor: selectedWords.size > 0 ? ACCENT_ORANGE : '#3D4F65' }]}>
+              <Text style={styles.continueBtnText}>
+                {selectedWords.size === 0 ? "I don't know any" : `Continue (${selectedWords.size} selected)`}
+              </Text>
+            </View>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     </View>
@@ -315,12 +500,97 @@ const styles = StyleSheet.create({
   },
   safe: {
     flex: 1,
+  },
+  star: {
+    position: 'absolute',
+    zIndex: 0,
+  },
+
+  // Intro styles
+  introSafe: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  introContent: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  introRocketWrap: {
+    marginBottom: 32,
+  },
+  introRocket: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: SURFACE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: ACCENT_ORANGE + '40',
+  },
+  introTitle: {
+    fontSize: 32,
+    fontFamily: 'Feather-Bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 40,
+  },
+  introSubtitle: {
+    fontSize: 16,
+    fontFamily: 'Ubuntu-Medium',
+    color: '#9CA3AF',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  introTips: {
+    width: '100%',
+    marginBottom: 40,
+    gap: 12,
+  },
+  introTip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     paddingHorizontal: 20,
   },
+  introTipDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  introTipText: {
+    fontSize: 15,
+    fontFamily: 'Ubuntu-Medium',
+    color: '#9CA3AF',
+  },
+  introButton: {
+    width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  introButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    gap: 10,
+  },
+  introButtonText: {
+    fontSize: 18,
+    fontFamily: 'Feather-Bold',
+    color: '#FFFFFF',
+  },
+
+  // Header styles
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 20,
     paddingVertical: 12,
   },
   headerCenter: {
@@ -329,238 +599,177 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: '#F9FAFB',
     fontSize: 20,
-    fontWeight: '700',
     fontFamily: 'Feather-Bold',
   },
   headerSubtitle: {
-    color: ACCENT_ORANGE,
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#6B7280',
+    fontSize: 13,
     fontFamily: 'Ubuntu-Medium',
     marginTop: 2,
   },
   closeBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#2A2D2E',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: SURFACE,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
   },
-  progressBarBg: {
-    height: 6,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 3,
-    marginBottom: 16,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: ACCENT_ORANGE,
-    borderRadius: 3,
-  },
-  swipeHintsTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    marginBottom: 16,
-  },
-  instructions: {
-    color: '#6B7280',
-    fontSize: 13,
-    fontWeight: '500',
-    textAlign: 'center',
-    fontFamily: 'Ubuntu-Medium',
-  },
-  hintLeft: {
+  xpBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: SURFACE,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
     gap: 6,
+    borderWidth: 2,
+    borderColor: ACCENT_ORANGE + '30',
   },
-  hintRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  hintText: {
-    fontSize: 13,
-    fontWeight: '600',
-    fontFamily: 'Ubuntu-Medium',
-  },
-  cardContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nextCardWrap: {
-    position: 'absolute',
-    width: CARD_W,
-    height: CARD_H,
-  },
-  nextCard: {
-    width: CARD_W,
-    height: CARD_H,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#232627',
-    borderWidth: 3,
-    borderColor: '#1A1A1A',
-  },
-  nextCardWord: {
-    color: 'rgba(255,255,255,0.3)',
-    fontSize: 26,
-    fontWeight: '700',
-    fontFamily: 'Feather-Bold',
-  },
-  cardOuter: {
-    width: CARD_W,
-    height: CARD_H,
-    borderRadius: 22,
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 0,
-    elevation: 10,
-  },
-  card: {
-    width: CARD_W,
-    height: CARD_H,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#2A2D2E',
-    borderWidth: 3,
-    borderColor: '#1A1A1A',
-    overflow: 'hidden',
-  },
-  cardContent: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 28,
-  },
-  cardLabel: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 2,
-    marginBottom: 16,
-    fontFamily: 'Ubuntu-Bold',
-  },
-  feedbackOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
-  },
-  feedbackKnow: {
-    backgroundColor: 'rgba(78, 217, 203, 0.3)',
-  },
-  feedbackDont: {
-    backgroundColor: 'rgba(242, 94, 134, 0.3)',
-  },
-  feedbackBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 50,
-    gap: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
-  },
-  feedbackBadgeKnow: {
-    backgroundColor: ACCENT_TEAL,
-  },
-  feedbackBadgeDont: {
-    backgroundColor: ACCENT_PINK,
-  },
-  feedbackBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-    fontFamily: 'Ubuntu-Bold',
-  },
-  word: {
-    color: '#FFFFFF',
-    fontSize: 34,
-    fontWeight: '700',
-    marginBottom: 8,
-    letterSpacing: -0.5,
-    textAlign: 'center',
-    fontFamily: 'Feather-Bold',
-  },
-  phonetic: {
-    color: '#6B7280',
-    fontSize: 15,
-    fontStyle: 'italic',
-    marginBottom: 24,
-    fontFamily: 'Ubuntu-Medium',
-  },
-  divider: {
-    width: 60,
-    height: 3,
-    backgroundColor: ACCENT_ORANGE,
-    borderRadius: 2,
-    marginBottom: 24,
-  },
-  definition: {
-    color: '#9CA3AF',
+  xpText: {
     fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 24,
-    paddingHorizontal: 8,
-    fontFamily: 'Ubuntu-Medium',
+    fontFamily: 'Ubuntu-Bold',
+    color: ACCENT_ORANGE,
   },
-  coachWrap: {
+
+  // Floating XP
+  floatingXP: {
     position: 'absolute',
-    bottom: 20,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
+    zIndex: 100,
   },
-  coachAnimation: {
-    width: 90,
-    height: 90,
+  floatingXPText: {
+    fontSize: 18,
+    fontFamily: 'Ubuntu-Bold',
+    color: ACCENT_ORANGE,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
-  statsRow: {
+
+  // Scroll content
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+
+  // Level section
+  levelSection: {
+    marginBottom: 28,
+  },
+  levelHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    gap: 10,
+  },
+  levelIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 20,
-    gap: 32,
   },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
+  levelTitle: {
+    fontSize: 18,
+    fontFamily: 'Feather-Bold',
     color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '700',
+    flex: 1,
+  },
+  levelBadge: {
+    backgroundColor: SURFACE,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  levelBadgeText: {
+    fontSize: 13,
     fontFamily: 'Ubuntu-Bold',
   },
-  statLabel: {
-    color: '#6B7280',
-    fontSize: 13,
-    fontWeight: '500',
-    fontFamily: 'Ubuntu-Medium',
-    marginTop: 2,
+
+  // Words grid
+  wordsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  statDivider: {
-    width: 1,
-    height: 36,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+  wordCardTouchable: {
+    width: (SCREEN_WIDTH - 40 - 20) / 3,
+  },
+  wordCardOuter: {
+    position: 'relative',
+  },
+  cardGlow: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderRadius: 16,
+    borderWidth: 2,
+  },
+  wordCard: {
+    backgroundColor: CARD_BG,
+    borderRadius: 14,
+    paddingVertical: 18,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#0D1B2A',
+    minHeight: 60,
+  },
+  selectedBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: BG_DARK,
+  },
+  wordText: {
+    fontSize: 13,
+    fontFamily: 'Ubuntu-Bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+
+  // Bottom bar
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    paddingTop: 12,
+    backgroundColor: BG_DARK,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+  },
+  continueBtn: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  continueBtnDisabled: {
+    opacity: 0.7,
+  },
+  continueBtnGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  continueBtnText: {
+    fontSize: 17,
+    fontFamily: 'Feather-Bold',
+    color: '#FFFFFF',
   },
 });

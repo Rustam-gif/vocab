@@ -231,8 +231,8 @@ export default function SynonymMatch({ words, isDarkMode, onComplete }: SynonymM
 
   // Uniform color for all unmatched cards
   const CARD_COLOR = isDarkMode
-    ? { bg: '#2A2D2E', text: '#FFFFFF', border: '#1A1A1A' }
-    : { bg: '#FFFFFF', text: '#374151', border: '#E5E7EB' };
+    ? { bg: '#243B53', text: '#FFFFFF', border: '#1B263B' }
+    : { bg: '#FFFFFF', text: '#2D4A66', border: '#E5E7EB' };
   const MATCHED_COLOR = isDarkMode
     ? { bg: 'rgba(78,217,203,0.2)', text: '#4ED9CB', border: '#4ED9CB' }
     : { bg: 'rgba(13,148,136,0.18)', text: '#0D9488', border: '#0D9488' };
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 8,
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 3 },
     shadowOpacity: 0.4,

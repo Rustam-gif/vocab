@@ -154,7 +154,7 @@ export default function SentenceBestComponent({ onPhaseComplete }: SentenceBestP
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#252525',
+    backgroundColor: '#1B263B',
     paddingHorizontal: 20,
     paddingVertical: 24,
   },
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 6,
-    backgroundColor: '#333',
+    backgroundColor: '#243B53',
     borderRadius: 3,
     overflow: 'hidden',
     marginBottom: 24,
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 16,
     borderRadius: 16,
-    backgroundColor: '#3A3A3A',
+    backgroundColor: '#2D4A66',
   },
   optionText: {
     color: '#fff',

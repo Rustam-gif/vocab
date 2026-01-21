@@ -236,7 +236,7 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
                 <View style={styles.synonymsWrap}>
                   {result.synonyms.slice(0, 6).map((syn, idx) => (
                     <View key={idx} style={[styles.synonymChip, isLight && styles.synonymChipLight]}>
-                      <Text style={[styles.synonymText, isLight && { color: '#374151' }]}>{syn}</Text>
+                      <Text style={[styles.synonymText, isLight && { color: '#2D4A66' }]}>{syn}</Text>
                     </View>
                   ))}
                 </View>
@@ -253,7 +253,7 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
                   const renderHighlighted = (text: string, term: string) => {
                     const safe = term?.toString?.() || '';
                     if (!text || !safe) {
-                      return <Text style={[styles.example, isLight && { color: '#374151' }]}>{text}</Text>;
+                      return <Text style={[styles.example, isLight && { color: '#2D4A66' }]}>{text}</Text>;
                     }
                     const esc = safe.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                     const boundary = new RegExp(`(\\b${esc}\\b)`, 'ig');
@@ -261,7 +261,7 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
                     const regex = hasBoundary ? boundary : new RegExp(`(${esc})`, 'ig');
                     const parts = String(text).split(regex);
                     return (
-                      <Text style={[styles.example, isLight && { color: '#374151' }]}>
+                      <Text style={[styles.example, isLight && { color: '#2D4A66' }]}>
                         {parts.map((p, i) => (
                           i % 2 === 1 ? (
                             <Text key={i} style={[styles.exampleBold, isLight && styles.exampleBoldLight]}>{p}</Text>
@@ -310,7 +310,7 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
                 })()}
               </View>
             ) : (
-              !!result.example && <Text style={[styles.example, isLight && { color: '#374151' }]}>“{result.example}”</Text>
+              !!result.example && <Text style={[styles.example, isLight && { color: '#2D4A66' }]}>“{result.example}”</Text>
             )}
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
               {saved ? (
@@ -453,7 +453,7 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#1E1E1E' },
+  page: { flex: 1, backgroundColor: '#1B263B' },
   pageLight: { backgroundColor: '#FFFFFF' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 0, paddingBottom: 6 },
   headerLight: {},
@@ -465,11 +465,11 @@ const styles = StyleSheet.create({
   subtitle: { color: '#9CA3AF', fontSize: 12, fontFamily: 'Ubuntu-Medium' },
   subtitleLight: { color: '#6B7280' },
   card: {
-    backgroundColor: '#1F1F1F',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     padding: 14,
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.4,
     shadowRadius: 0,
@@ -480,13 +480,13 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   input: {
     flex: 1,
-    backgroundColor: '#262626',
+    backgroundColor: '#243B53',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     color: '#E5E7EB',
     borderWidth: 2,
-    borderColor: '#333333',
+    borderColor: '#243B53',
     fontSize: 16,
   },
   inputLight: { backgroundColor: '#F9FAFB', borderColor: '#E5E7EB', color: '#111827' },
@@ -497,9 +497,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: '#1F1F1F',
+    backgroundColor: '#1B263B',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 0,
@@ -509,11 +509,11 @@ const styles = StyleSheet.create({
   swapLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB', shadowOpacity: 0.1, shadowColor: '#9CA3AF' },
   swapTxt: { color: '#4ED9CB', fontWeight: '800', fontFamily: 'Ubuntu-Bold' },
   swapIcon: {
-    backgroundColor: '#1F1F1F',
+    backgroundColor: '#1B263B',
     borderRadius: 10,
     padding: 8,
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 0,
@@ -527,7 +527,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.4,
     shadowRadius: 0,
@@ -538,11 +538,11 @@ const styles = StyleSheet.create({
   translateBtnTxt: { color: '#0D3B4A', fontWeight: '800', fontSize: 15, fontFamily: 'Ubuntu-Bold' },
   resultCard: {
     marginTop: 12,
-    backgroundColor: '#1F1F1F',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     padding: 16,
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.4,
     shadowRadius: 0,
@@ -555,12 +555,12 @@ const styles = StyleSheet.create({
   synonymsLabel: { color: '#9CA3AF', fontSize: 12, fontWeight: '700', marginBottom: 6, fontFamily: 'Ubuntu-Bold' },
   synonymsWrap: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6 },
   synonymChip: {
-    backgroundColor: '#1F1F1F',
+    backgroundColor: '#1B263B',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
   },
   synonymChipLight: { backgroundColor: '#F3F4F6', borderColor: '#E5E7EB' },
   synonymText: { color: '#4ED9CB', fontSize: 13, fontWeight: '700', fontFamily: 'Ubuntu-Bold' },
@@ -583,9 +583,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
-    backgroundColor: '#1F1F1F',
+    backgroundColor: '#1B263B',
     borderWidth: 2,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
   },
   showMoreTxt: { color: '#4ED9CB', fontWeight: '800', fontFamily: 'Ubuntu-Bold' },
   showMoreTxtLight: { color: '#0D3B4A' },
@@ -598,7 +598,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#4ED9CB',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowRadius: 0,
@@ -613,14 +613,14 @@ const styles = StyleSheet.create({
   historyText: { color: '#E5E7EB', fontFamily: 'Ubuntu-Medium' },
   // Language modal styles
   modalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center', zIndex: 50 },
-  langModalCard: { width: '90%', backgroundColor: '#2C2C2C', borderRadius: 24, padding: 16, overflow: 'hidden' },
+  langModalCard: { width: '90%', backgroundColor: '#243B53', borderRadius: 24, padding: 16, overflow: 'hidden' },
   langModalCardLight: { backgroundColor: '#FFFFFF' },
   langSearchInput: { flex: 1, height: 40, fontSize: 16, color: '#E5E7EB', fontFamily: 'Ubuntu-Medium' },
-  langSearchBox: { marginTop: 10, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#1F2629', borderWidth: 1.5, borderColor: '#2A3033', flexDirection: 'row', alignItems: 'center' },
+  langSearchBox: { marginTop: 10, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#1B263B', borderWidth: 1.5, borderColor: '#1B263B', flexDirection: 'row', alignItems: 'center' },
   langSearchBoxLight: { backgroundColor: '#FFFFFF', borderColor: '#E5DED3' },
   langRow: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, marginTop: 6 },
   langRowLight: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5DED3' },
-  langRowDark: { backgroundColor: '#1F2629', borderWidth: 1, borderColor: '#2A3033' },
+  langRowDark: { backgroundColor: '#1B263B', borderWidth: 1, borderColor: '#1B263B' },
   modalTitleSmall: { color: '#E5E7EB', fontWeight: '800', fontSize: 16, fontFamily: 'Feather-Bold' },
   modalDoneBtn: { alignSelf: 'flex-end', marginTop: 12, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: '#FDBA74' },
   modalDoneTxt: { color: '#0D3B4A', fontWeight: '800', fontFamily: 'Ubuntu-Bold' },

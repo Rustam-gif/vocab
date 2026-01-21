@@ -105,7 +105,7 @@ export default function PlacementLevelSelect() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1E1E1E' },
+  container: { flex: 1, backgroundColor: '#1B263B' },
   containerLight: { backgroundColor: '#F8F8F8' },
   safe: { flex: 1, padding: 20 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
@@ -113,9 +113,9 @@ const styles = StyleSheet.create({
   headerTitleLight: { color: '#111827' },
   backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   subtitle: { fontSize: 14, color: '#9CA3AF', marginBottom: 16, fontFamily: 'Ubuntu-Regular' },
-  subtitleLight: { color: '#4B5563' },
+  subtitleLight: { color: '#2D4A66' },
   cardsContainer: { gap: 12, marginTop: 12 },
-  card: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 14, backgroundColor: '#2A2D2D', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  card: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 14, backgroundColor: '#1B263B', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   cardLight: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   emoji: { fontSize: 28, marginRight: 12 },
   cardContent: { flex: 1, gap: 4 },
@@ -127,5 +127,5 @@ const styles = StyleSheet.create({
   cefrText: { fontSize: 12, fontWeight: '700', color: '#E5E7EB', fontFamily: 'Ubuntu-Bold' },
   cefrTextLight: { color: '#111827' },
   cardDesc: { fontSize: 13, color: '#9CA3AF', fontFamily: 'Ubuntu-Regular' },
-  cardDescLight: { color: '#4B5563' },
+  cardDescLight: { color: '#2D4A66' },
 });

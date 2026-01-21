@@ -26,6 +26,8 @@ interface OddOneOutProps {
   onPhaseComplete: (score: number, totalQuestions: number) => void;
   hearts: number;
   onHeartLost: () => void;
+  onCorrectAnswer?: () => void;
+  onIncorrectAnswer?: () => void;
   wordRange?: { start: number; end: number };
   wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
   showUfoAnimation?: boolean;
@@ -44,6 +46,8 @@ export default function OddOneOutComponent({
   onPhaseComplete,
   hearts,
   onHeartLost,
+  onCorrectAnswer,
+  onIncorrectAnswer,
   wordRange,
   wordsOverride,
   showUfoAnimation,
@@ -255,8 +259,10 @@ export default function OddOneOutComponent({
     if (isCorrect) {
       setCorrectCount(prev => prev + 1);
       soundService.playCorrectAnswer();
+      onCorrectAnswer?.();
     } else {
       onHeartLost();
+      onIncorrectAnswer?.();
       triggerHeartLostAnimation();
       soundService.playIncorrectAnswer();
     }
@@ -486,7 +492,7 @@ const styles = StyleSheet.create({
   progressBarPill: {
     flex: 1,
     height: 12,
-    backgroundColor: '#3A3A3A',
+    backgroundColor: '#2D4A66',
     borderRadius: 6,
     overflow: 'hidden',
     marginRight: 8,
@@ -535,12 +541,12 @@ const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    backgroundColor: '#3D3D3D',
+    backgroundColor: '#1B263B',
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     borderBottomWidth: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -563,7 +569,7 @@ const styles = StyleSheet.create({
     borderColor: '#F25E86',
   },
   cardCorrect: {
-    backgroundColor: '#2D5A55',
+    backgroundColor: '#2D4A66',
     borderColor: '#4ED9CB',
   },
   cardCorrectLight: {

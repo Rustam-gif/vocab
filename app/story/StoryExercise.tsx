@@ -1934,7 +1934,7 @@ const buildStoryFromContent = (
                   disabled={sanitizeWords(tempSelection).length < MAX_BLANKS || loading}
                 >
                   {loading ? (
-                    <ActivityIndicator color="#1E1E1E" />
+                    <ActivityIndicator color="#1B263B" />
                   ) : (
                     <Text style={styles.modalPrimaryText}>Use Words</Text>
                   )}
@@ -2117,7 +2117,7 @@ const LocalPaywall: React.FC<{
           )}
         </TouchableOpacity>
         {hasTrial && (
-          <Text style={{ marginTop: 8, textAlign: 'center', color: isLight ? '#374151' : '#D1D5DB', fontSize: 12 }}>
+          <Text style={{ marginTop: 8, textAlign: 'center', color: isLight ? '#2D4A66' : '#D1D5DB', fontSize: 12 }}>
             After the 7‑day trial, your subscription renews at $4.99/month unless canceled at least 24 hours before renewal.
           </Text>
         )}
@@ -2212,7 +2212,7 @@ const MagicSparkles: React.FC<{ progress: Animated.Value; dark?: boolean }> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
   },
   containerLight: {
     backgroundColor: '#F8F8F8',
@@ -2283,7 +2283,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#374151',
+    backgroundColor: '#2D4A66',
     justifyContent: 'center',
     padding: 2,
   },
@@ -2325,13 +2325,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignSelf: 'flex-start',
     borderRadius: 12,
-    backgroundColor: '#2A2F30',
+    backgroundColor: '#1B263B',
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#2D4A66',
     overflow: 'hidden',
   },
   modeSeg: { paddingVertical: 6, paddingHorizontal: 12 },
-  modeSegLeft: { borderRightWidth: 1, borderRightColor: '#374151' },
+  modeSegLeft: { borderRightWidth: 1, borderRightColor: '#2D4A66' },
   modeSegRight: {},
   modeSegActive: { backgroundColor: '#4ED9CB' },
   modeSegText: { color: '#9CA3AF', fontWeight: '700', fontSize: 12, fontFamily: 'Feather-Bold' },
@@ -2363,7 +2363,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
-    backgroundColor: '#1F1F1F',
+    backgroundColor: '#1B263B',
     borderWidth: 2,
     borderColor: 'rgba(78,217,203,0.08)',
     borderBottomWidth: 4,
@@ -2398,7 +2398,7 @@ const styles = StyleSheet.create({
   },
   dockItemDisabled: { opacity: 0.5 },
   dockText: { color: '#E5E7EB', fontSize: 12, fontWeight: '700', fontFamily: 'Feather-Bold' },
-  dockTextLight: { color: '#374151' },
+  dockTextLight: { color: '#2D4A66' },
   wordBank: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -2409,7 +2409,7 @@ const styles = StyleSheet.create({
   wordPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: 16,
@@ -2458,14 +2458,14 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   pickWordsButton: {
-    backgroundColor: '#374151',
+    backgroundColor: '#2D4A66',
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
   },
   pickWordsText: { fontSize: 12, color: '#9CA3AF', fontWeight: '500', textAlign: 'center', fontFamily: 'Feather-Bold' },
   wordBankActionButton: {
-    backgroundColor: '#374151',
+    backgroundColor: '#2D4A66',
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
@@ -2497,7 +2497,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
     zIndex: 5,
     paddingTop: 60,
     paddingHorizontal: 20,
@@ -2544,7 +2544,7 @@ const styles = StyleSheet.create({
     // Light theme wrapper (no additional styles needed)
   },
   sentenceCard: {
-    backgroundColor: '#2D2D2D',
+    backgroundColor: '#243B53',
     borderRadius: 12,
     padding: 20,
     marginBottom: 16,
@@ -2557,7 +2557,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   sentenceTextPaper: {
-    color: '#2B2B2B',
+    color: '#1B263B',
     fontSize: 22,
     lineHeight: 32,
     fontFamily: 'Feather-Bold',
@@ -2622,8 +2622,8 @@ const styles = StyleSheet.create({
     borderColor: '#C7E3E9',
   },
   themeChipLight: {
-    backgroundColor: '#2D3537',
-    borderColor: '#3B4547',
+    backgroundColor: '#243B53',
+    borderColor: '#2D4A66',
   },
   themeChipText: { fontSize: 12, fontWeight: '800', fontFamily: 'Feather-Bold' },
   sentenceTextLight: {
@@ -2762,15 +2762,15 @@ const styles = StyleSheet.create({
   },
   regenerateButton: {
     flex: 1,
-    backgroundColor: '#2A2D2E',
+    backgroundColor: '#243B53',
     borderRadius: 12,
     paddingVertical: 10,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
   },
   customizeButton: {
-    backgroundColor: '#2C2C2C',
+    backgroundColor: '#243B53',
     borderRadius: 12,
     paddingVertical: 16,
     paddingHorizontal: 20,
@@ -2793,7 +2793,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOffset: { width: 1, height: 2 },
     shadowOpacity: 0.3,
@@ -2866,7 +2866,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Feather-Bold',
   },
   saveToastTextLight: {
-    color: '#4B5563',
+    color: '#2D4A66',
   },
   saveToastActions: {
     marginTop: 10,
@@ -2887,7 +2887,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Feather-Bold',
   },
   saveToastBtnTextLight: {
-    color: '#374151',
+    color: '#2D4A66',
   },
   saveToastPrimary: {
     backgroundColor: '#F25E86',
@@ -2964,7 +2964,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Feather-Bold',
   },
   storyPlaceholderBodyLight: {
-    color: '#4B5563',
+    color: '#2D4A66',
   },
   storyPlaceholderButton: {
     marginTop: 18,
@@ -2974,7 +2974,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 28,
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOpacity: 0.4,
     shadowRadius: 0,
@@ -2999,7 +2999,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   modalContent: {
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     padding: 20,
     width: '100%',
@@ -3046,9 +3046,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: '#2C2C2C',
+    backgroundColor: '#243B53',
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#2D4A66',
   },
   optionPillLight: { backgroundColor: '#F3F4F6', borderColor: '#E5E7EB' },
   optionPillSelected: {
@@ -3061,7 +3061,7 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontFamily: 'Feather-Bold',
   },
-  optionPillTextLight: { color: '#374151' },
+  optionPillTextLight: { color: '#2D4A66' },
   optionPillTextSelected: {
     color: '#FFFFFF',
     fontWeight: '500',
@@ -3092,7 +3092,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.35)',
   },
   wordSelectionModal: {
-    backgroundColor: '#1F1F1F',
+    backgroundColor: '#1B263B',
     borderRadius: 20,
     maxWidth: 320,
     width: '90%',
@@ -3148,7 +3148,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   clearPillTextLight: {
-    color: '#374151',
+    color: '#2D4A66',
   },
   wordSelectionHeaderLight: {
     borderBottomColor: '#E5E7EB',
@@ -3175,7 +3175,7 @@ const styles = StyleSheet.create({
   wordSelectionItem: {
     paddingVertical: 14,
     paddingHorizontal: 16,
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     margin: 4,
     borderWidth: 2,
@@ -3241,7 +3241,7 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
   wordPickerContent: {
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 16,
@@ -3278,8 +3278,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#374151',
-    backgroundColor: '#2D2D2D',
+    borderColor: '#2D4A66',
+    backgroundColor: '#243B53',
   },
   filterChipActive: {
     borderColor: '#F25E86',
@@ -3323,7 +3323,7 @@ const styles = StyleSheet.create({
   folderChipLight: { backgroundColor: 'transparent', borderColor: 'transparent' },
   folderChipActive: { borderColor: '#F25E86', backgroundColor: 'rgba(242,94,134,0.10)' },
   folderChipText: { color: '#9CA3AF', fontWeight: '700', fontSize: 12 },
-  folderChipTextLight: { color: '#374151' },
+  folderChipTextLight: { color: '#2D4A66' },
   folderChipsContent: {
     alignItems: 'center',
     paddingVertical: 2,
@@ -3334,8 +3334,8 @@ const styles = StyleSheet.create({
   searchInputWrap: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#374151',
-    backgroundColor: '#2D2D2D',
+    borderColor: '#2D4A66',
+    backgroundColor: '#243B53',
     paddingHorizontal: 10,
   },
   searchInput: {
@@ -3350,7 +3350,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   wordPickerItem: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     padding: 16,
     marginBottom: 10,
@@ -3450,7 +3450,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
   },
   wordPickerFooterLight: {
     backgroundColor: '#FFFFFF',
@@ -3465,8 +3465,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: '#374151',
-    backgroundColor: '#2D2D2D',
+    borderColor: '#2D4A66',
+    backgroundColor: '#243B53',
   },
   modalResetDisabled: {
     opacity: 0.5,
@@ -3505,11 +3505,11 @@ const styles = StyleSheet.create({
     borderRightColor: '#F25E86',
   },
   wordPickerWordLight: { color: '#111827' },
-  wordPickerDefinitionLight: { color: '#374151' },
+  wordPickerDefinitionLight: { color: '#2D4A66' },
   wordPickerExampleLight: { color: '#6B7280' },
   wordPickerCountLight: { color: '#6B7280' },
   modalResetLight: { borderColor: '#E5E7EB', backgroundColor: '#FFFFFF' },
-  modalResetTextLight: { color: '#374151' },
+  modalResetTextLight: { color: '#2D4A66' },
   wordPickerCount: {
     fontSize: 12,
     color: '#9CA3AF',
@@ -3526,7 +3526,7 @@ const styles = StyleSheet.create({
   modalPrimaryText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1E1E1E',
+    color: '#1B263B',
     fontFamily: 'Feather-Bold',
   },
   signInOverlay: {
@@ -3555,7 +3555,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   signInTitleLight: {
-    color: '#0F172A',
+    color: '#0D1B2A',
   },
   signInSubtitle: {
     fontSize: 15,
@@ -3628,7 +3628,7 @@ const styles = StyleSheet.create({
   paywallHeadlineLight: { color: '#111827' },
   paywallBullets: { marginTop: 16, gap: 8 },
   paywallBullet: { color: '#D1D5DB', fontSize: 16 },
-  paywallBulletLight: { color: '#374151' },
+  paywallBulletLight: { color: '#2D4A66' },
   paywallPlansRow: { flexDirection: 'row', gap: 12, marginTop: 18 },
   planCard: { flex: 1, backgroundColor: '#E5E7EB', borderRadius: 16, padding: 14 },
   planCardActive: { backgroundColor: '#B6E0E2' },
@@ -3641,6 +3641,6 @@ const styles = StyleSheet.create({
   paywallCtaText: { color: '#0D3B4A', fontWeight: '800', fontSize: 18 },
   paywallFooterRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 14 },
   paywallLink: { color: '#9CA3AF' },
-  paywallLinkLight: { color: '#374151' },
+  paywallLinkLight: { color: '#2D4A66' },
   paywallDot: { color: '#9CA3AF' },
 });

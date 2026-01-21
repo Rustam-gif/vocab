@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#AFC3E3',
   },
-  subtitleLight: { color: '#4B5563' },
+  subtitleLight: { color: '#2D4A66' },
   introHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -532,7 +532,7 @@ const styles = StyleSheet.create({
     color: '#C7D7F0',
     fontSize: 13,
   },
-  bulletTextLight: { color: '#4B5563' },
+  bulletTextLight: { color: '#2D4A66' },
   streakPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
-    backgroundColor: '#12243c',
+    backgroundColor: '#1B263B',
   },
   metaChipText: {
     fontSize: 12,
@@ -568,7 +568,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
   },
   metaChipTextLight: {
-    color: '#4B5563',
+    color: '#2D4A66',
   },
   rewardStrip: {
     marginTop: 14,
@@ -627,7 +627,7 @@ const styles = StyleSheet.create({
     color: '#C7D7F0',
     textAlign: 'center',
   },
-  questionPromptLight: { color: '#4B5563' },
+  questionPromptLight: { color: '#2D4A66' },
   fillSentence: {
     marginTop: 4,
   },
@@ -659,8 +659,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#1f2b40',
-    backgroundColor: '#12243c',
+    borderColor: '#2D4A66',
+    backgroundColor: '#1B263B',
   },
   optionBtnLight: {
     borderColor: '#E5E7EB',
@@ -741,9 +741,9 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#152740',
+    backgroundColor: '#1B263B',
     borderWidth: 2,
-    borderColor: '#24344f',
+    borderColor: '#1B263B',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -754,7 +754,7 @@ const styles = StyleSheet.create({
   nodeLine: {
     flex: 1,
     height: 2,
-    backgroundColor: '#24344f',
+    backgroundColor: '#1B263B',
     marginHorizontal: 4,
     borderRadius: 999,
   },
@@ -771,7 +771,7 @@ const styles = StyleSheet.create({
   storyIllustration: {
     height: 80,
     borderRadius: 18,
-    backgroundColor: '#12243c',
+    backgroundColor: '#1B263B',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,

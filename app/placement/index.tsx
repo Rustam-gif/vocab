@@ -120,7 +120,7 @@ export default function PlacementIntro() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
   },
   containerLight: {
     backgroundColor: '#F8F8F8',
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     height: 220,
   },
   card: {
-    backgroundColor: '#2A2D2D',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     padding: 22,
     borderWidth: 1,
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Ubuntu-Medium',
   },
   infoRowLight: {
-    color: '#4B5563',
+    color: '#2D4A66',
   },
   cta: {
     marginTop: 20,

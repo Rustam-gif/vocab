@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Image, ImageBackground, Animated, Easing, InteractionManager, Dimensions, DeviceEventEmitter, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Image, Animated, Easing, InteractionManager, Dimensions, DeviceEventEmitter, Platform, Modal } from 'react-native';
 
 // Use local haptic feedback shim (no-op since native module not available)
 import ReactNativeHapticFeedback from '../../lib/haptics';
@@ -19,18 +19,65 @@ import { getTheme } from '../../lib/theme';
 import TopStatusPanel from '../components/TopStatusPanel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LimitModal from '../../lib/LimitModal';
-import { Lock, Check, Star, CheckCircle, Flag, Trophy, Crown, RefreshCw } from 'lucide-react-native';
+import { Lock, Check, Star, CheckCircle, Flag, Trophy, Crown } from 'lucide-react-native';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { LinearGradient } from '../../lib/LinearGradient';
+import StarField from './components/StarField';
 
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 const HIGHEST_LEVEL_KEY = '@engniter.highestLevel';
 const PLACEMENT_LEVEL_KEY = '@engniter.placementLevel';
 const UNLOCK_ALL_SETS = false;
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const NODE_SIZE = 72;
-const NODE_SPACING = 100;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const PLANET_SIZE = 130; // Normal planet size
+const PLANET_SIZE_SELECTED = 145; // Slightly larger when selected (subtle magnifying)
+const NODE_SIZE = 72; // Keep for compatibility
+const NODE_SPACING = 100; // Vertical spacing (kept for compatibility)
+const NODE_SPACING_H = 200; // Horizontal spacing between planets
 const LEVEL_NODE_SIZE = 80;
+
+// Space theme colors
+const SPACE_BG = '#1A2744';
+const SPACE_BG_LIGHT = '#243B5C';
+
+// Planet Lottie sources mapping - use ALL available planets for variety
+const PLANET_SOURCES = {
+  colorful: require('../../assets/lottie/learn/planets/colorful_planet.json'),
+  orange: require('../../assets/lottie/learn/planets/planet_orange.json'),
+  moon: require('../../assets/lottie/learn/planets/moon_grey.json'),
+  darkPurple: require('../../assets/lottie/learn/planets/dark_purple_planet.json'),
+  purple: require('../../assets/lottie/learn/planets/planet_purple.json'),
+  blue: require('../../assets/lottie/learn/planets/planet_blue.json'),
+  green: require('../../assets/lottie/learn/planets/planet_green.json'),
+  red: require('../../assets/lottie/learn/planets/RedPlanet.lottie'),
+  astronaut: require('../../assets/lottie/learn/planets/astronaut_complete.json'),
+  satellite: require('../../assets/lottie/learn/planets/satellite.json'),
+  spacecraft: require('../../assets/lottie/learn/planets/space_craft.json'),
+  checkpoint: require('../../assets/lottie/learn/planets/check_point_forquiz.json'),
+};
+
+// Planet type rotation for variety - use ALL planet types
+const PLANET_TYPES = [
+  'colorful',
+  'orange',
+  'moon',
+  'darkPurple',
+  'purple',
+  'blue',
+  'green',
+  'red',
+  'astronaut',
+  'satellite',
+] as const;
+type PlanetType = typeof PLANET_TYPES[number] | 'checkpoint';
+
+// Get planet type based on index for visual variety
+const getPlanetType = (index: number, isQuiz: boolean, title: string): PlanetType => {
+  // Use checkpoint animation for quiz nodes
+  if (isQuiz) return 'checkpoint';
+  // Rotate through ALL planet types for maximum variety
+  return PLANET_TYPES[index % PLANET_TYPES.length];
+};
 
 // Level ordering for core levels
 const CORE_ORDER = ['beginner', 'intermediate', 'upper-intermediate', 'advanced', 'proficient'];
@@ -57,7 +104,6 @@ export default function LearnScreen() {
   const [activeLevelId, setActiveLevelId] = useState<string | null>(levelId ?? null);
   const [highestLevel, setHighestLevel] = useState<string | null>(null);
   const [placementLevel, setPlacementLevel] = useState<string | null>(null);
-  const [showSignupPrompt, setShowSignupPrompt] = useState(false);
   const nodeAnims = useRef<Animated.Value[]>([]);
   const levelNodeAnims = useRef<Animated.Value[]>([]);
   const levelPulseAnim = useRef(new Animated.Value(1)).current;
@@ -68,30 +114,25 @@ export default function LearnScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const isScrollingRef = useRef(false);
   const scrollEndTimer = useRef<NodeJS.Timeout | null>(null);
-
-  // Path animation values for newly completed connectors
-  const pathAnimValues = useRef<{ [key: number]: Animated.Value }>({});
-  const prevCompletedPaths = useRef<Set<number>>(new Set());
-  const [animatingPaths, setAnimatingPaths] = useState<Set<number>>(new Set());
+  const [centeredPlanetIndex, setCenteredPlanetIndex] = useState<number>(0);
+  const planetScaleAnims = useRef<Animated.Value[]>([]);
 
   // Premium status for gating content
   const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [showPaywall, setShowPaywall] = useState<boolean>(false);
 
   // Ensure nav bar is visible when this screen is shown
   useEffect(() => {
     DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
   }, []);
 
-  // Check premium status on mount - returns the status so callers can use it
-  const checkPremiumStatus = useCallback(async (): Promise<boolean> => {
+  // Check premium status on mount
+  const checkPremiumStatus = useCallback(async () => {
     try {
       const status = await SubscriptionService.getStatus();
-      const isActive = status?.active ?? false;
-      setIsPremium(isActive);
-      return isActive;
+      setIsPremium(status?.active ?? false);
     } catch {
       setIsPremium(false);
-      return false;
     }
   }, []);
 
@@ -99,13 +140,11 @@ export default function LearnScreen() {
     checkPremiumStatus();
   }, [checkPremiumStatus]);
 
-  // Re-check premium status on focus
   useFocusEffect(
     useCallback(() => {
       checkPremiumStatus();
     }, [checkPremiumStatus])
   );
-
 
   // Breathing animation for current level outer ring
   // Using longer duration to reduce CPU usage
@@ -377,13 +416,14 @@ export default function LearnScreen() {
     }
   }, [activeLevelId, isPremium]);
 
-  // refreshLevel is called automatically when isPremium or activeLevelId changes
   useEffect(() => { refreshLevel(); }, [refreshLevel]);
 
-  // Also refresh progress data when screen gains focus (e.g., after returning from quiz results)
   useFocusEffect(
     useCallback(() => {
-      refreshLevel();
+      const task = InteractionManager.runAfterInteractions(() => {
+        refreshLevel();
+      });
+      return () => task.cancel?.();
     }, [refreshLevel])
   );
 
@@ -417,7 +457,7 @@ export default function LearnScreen() {
   }, [activeLevelId]);
 
   // Check if skip ahead is available for a specific quiz
-  // Premium users can skip ahead to the first incomplete quiz in the current level
+  // Only the FIRST incomplete quiz can show skip ahead
   const canQuizSkipAhead = useCallback((quizSet: VocabSet, allSets: VocabSet[]) => {
     if (!activeLevelId) return false;
 
@@ -427,24 +467,23 @@ export default function LearnScreen() {
 
     if (quizIndex < 0) return false;
 
-    // Check if this quiz is already completed
-    const thisQuizFlags = SetProgressService.getSetFlags(activeLevelId, quizSet.id);
-    if (thisQuizFlags.completed) return false; // Already completed, no need to skip
+    // For the first quiz in a level, check if previous level is completed
+    if (quizIndex === 0) {
+      return isPreviousLevelCompleted();
+    }
 
-    // For premium users, allow skip ahead to the FIRST incomplete quiz
-    // Find the first incomplete quiz
-    let firstIncompleteQuizIndex = -1;
-    for (let i = 0; i < quizzes.length; i++) {
-      const flags = SetProgressService.getSetFlags(activeLevelId, quizzes[i].id);
+    // For subsequent quizzes, check if ALL previous quizzes are completed
+    for (let i = 0; i < quizIndex; i++) {
+      const prevQuiz = quizzes[i];
+      const flags = SetProgressService.getSetFlags(activeLevelId, prevQuiz.id);
       if (!flags.completed) {
-        firstIncompleteQuizIndex = i;
-        break;
+        return false; // Previous quiz not completed, can't skip ahead
       }
     }
 
-    // Only allow skip ahead to the first incomplete quiz
-    return quizIndex === firstIncompleteQuizIndex;
-  }, [activeLevelId]);
+    // All previous quizzes completed, check if previous level is also completed
+    return isPreviousLevelCompleted();
+  }, [activeLevelId, isPreviousLevelCompleted]);
 
   const handleSetPress = (set: VocabSet & { locked?: boolean; premiumLocked?: boolean }, allSets?: VocabSet[]) => {
     if (!activeLevelId) {
@@ -454,7 +493,7 @@ export default function LearnScreen() {
 
     // Premium-locked sets show paywall
     if ((set as any).premiumLocked) {
-      router.push('/profile?paywall=1');
+      setShowPaywall(true);
       return;
     }
 
@@ -469,14 +508,15 @@ export default function LearnScreen() {
     // For locked quiz sets, check if this specific quiz can skip ahead (premium only)
     if (set.locked && isQuizSet && allSets && (!isPremium || !canQuizSkipAhead(set, allSets))) {
       if (!isPremium) {
-        router.push('/profile?paywall=1');
+        setShowPaywall(true);
         return;
       }
       return;
     }
 
     if (!isSignedIn) {
-      setShowSignupPrompt(true);
+      // Send users to Profile to sign in; avoid blocking overlays that steal touches
+      router.push('/profile?redirect=/quiz/learn');
       return;
     }
 
@@ -484,19 +524,17 @@ export default function LearnScreen() {
     router.push(url);
   };
 
-  const getNodePosition = (index: number): 'center' | 'left' | 'right' => {
-    // Create a smooth S-curve winding path: left → right → left → right
-    const pattern = ['left', 'right', 'left', 'right'] as const;
-    return pattern[index % 4];
+  // Vertical scrolling with winding left-right path like the screenshots
+  const getNodePosition = (index: number): 'left' | 'right' => {
+    // Simple alternating left-right pattern
+    return index % 2 === 0 ? 'left' : 'right';
   };
 
-  const getNodeOffset = (position: 'center' | 'left' | 'right'): number => {
-    // Create gentle winding path
-    const centerX = SCREEN_WIDTH / 2;
+  const getNodeOffset = (position: 'left' | 'right'): number => {
+    // Position planets on left or right side of screen
     switch (position) {
-      case 'left': return centerX - 45;
-      case 'right': return centerX + 45;
-      default: return centerX;
+      case 'left': return SCREEN_WIDTH * 0.3; // 30% from left
+      case 'right': return SCREEN_WIDTH * 0.7; // 70% from left
     }
   };
 
@@ -554,8 +592,11 @@ export default function LearnScreen() {
     }
   }, []);
 
-  // Debounced scroll handler to prevent excessive haptic triggers
-  const lastHapticTime = useRef(0);
+  // Track last centered planet for haptic feedback
+  const lastCenteredPlanet = useRef<number>(-1);
+  const HORIZONTAL_SPACING = 280; // Must match buildCurrentLevelPath - more space between planets
+
+  // Scroll handler to detect centered planet and trigger haptic
   const handleScroll = useCallback((event: any) => {
     // Mark as scrolling and clear any pending end timer
     isScrollingRef.current = true;
@@ -567,25 +608,21 @@ export default function LearnScreen() {
       isScrollingRef.current = false;
     }, 150);
 
-    const now = Date.now();
-    // Only check for haptic feedback every 500ms to prevent jank
-    if (now - lastHapticTime.current < 500) return;
+    const scrollX = event.nativeEvent.contentOffset.x;
+    const viewportWidth = event.nativeEvent.layoutMeasurement.width;
+    const viewportCenter = scrollX + viewportWidth / 2;
 
-    const scrollY = event.nativeEvent.contentOffset.y;
-    const viewportHeight = event.nativeEvent.layoutMeasurement.height;
-    const viewportCenter = scrollY + viewportHeight / 2;
+    // Calculate which planet is centered based on scroll position
+    const planetIndex = Math.round((viewportCenter - 60 - PLANET_SIZE / 2 - 20) / HORIZONTAL_SPACING);
+    const clampedIndex = Math.max(0, Math.min(planetIndex, (currentLevel?.sets.length || 1) - 1));
 
-    stageGatePositions.current.forEach((gateY, stageNumber) => {
-      // Check if stage gate is now in the center of viewport
-      const isInView = Math.abs(viewportCenter - gateY) < 100;
-
-      if (isInView && !passedStageGates.current.has(stageNumber)) {
-        passedStageGates.current.add(stageNumber);
-        lastHapticTime.current = now;
-        triggerHaptic('light');
-      }
-    });
-  }, [triggerHaptic]);
+    // Update centered planet and trigger haptic if changed
+    if (clampedIndex !== lastCenteredPlanet.current) {
+      lastCenteredPlanet.current = clampedIndex;
+      setCenteredPlanetIndex(clampedIndex);
+      triggerHaptic('light');
+    }
+  }, [triggerHaptic, currentLevel?.sets.length]);
 
   const getIconSource = (title: string, type?: string) => {
     if (type === 'quiz') return require('../../assets/wordset_icons/quiz.png');
@@ -634,7 +671,8 @@ export default function LearnScreen() {
       const nextPos = getNodePosition(index + 1);
       const currentX = getNodeOffset(currentPos);
       const nextX = getNodeOffset(nextPos);
-      const connectorHeight = NODE_SPACING - NODE_SIZE + 20;
+      // Taller connectors for planets
+      const connectorHeight = NODE_SPACING - 40;
       const midY = connectorHeight / 2;
       return {
         pathD: `M ${currentX} 0 C ${currentX} ${midY}, ${nextX} ${midY}, ${nextX} ${connectorHeight}`,
@@ -643,53 +681,6 @@ export default function LearnScreen() {
       };
     });
   }, [currentLevel?.sets?.length, currentLevel?.sets?.map(s => s.completed).join(',')]);
-
-  // Detect newly completed paths and trigger animation
-  useEffect(() => {
-    if (!connectorPaths || connectorPaths.length === 0) return;
-
-    const currentCompleted = new Set<number>();
-    connectorPaths.forEach((path, index) => {
-      if (path?.isCompleted) currentCompleted.add(index);
-    });
-
-    // Find newly completed paths
-    const newlyCompleted: number[] = [];
-    currentCompleted.forEach(index => {
-      if (!prevCompletedPaths.current.has(index)) {
-        newlyCompleted.push(index);
-      }
-    });
-
-    if (newlyCompleted.length > 0) {
-      // Create animated values for new paths
-      newlyCompleted.forEach(index => {
-        if (!pathAnimValues.current[index]) {
-          pathAnimValues.current[index] = new Animated.Value(0);
-        } else {
-          pathAnimValues.current[index].setValue(0);
-        }
-      });
-
-      // Start animations
-      setAnimatingPaths(new Set(newlyCompleted));
-      const animations = newlyCompleted.map(index =>
-        Animated.timing(pathAnimValues.current[index], {
-          toValue: 1,
-          duration: 800,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        })
-      );
-
-      Animated.parallel(animations).start(() => {
-        // Clear animating state after completion
-        setAnimatingPaths(new Set());
-      });
-    }
-
-    prevCompletedPaths.current = currentCompleted;
-  }, [connectorPaths]);
 
   if (!currentLevel) {
     return (
@@ -708,222 +699,251 @@ export default function LearnScreen() {
     );
   }
 
-  const renderNode = (set: VocabSet & { locked?: boolean; premiumLocked?: boolean }, index: number, isCurrentLevel: boolean, allSets: VocabSet[]) => {
-    const position = getNodePosition(index);
-    const offsetX = getNodeOffset(position);
+  const renderPlanetNode = (set: VocabSet & { locked?: boolean; premiumLocked?: boolean }, index: number, isCurrentLevel: boolean, allSets: VocabSet[]) => {
     const isLocked = set.locked;
-    const isPremiumLocked = (set as any).premiumLocked === true;
     const isCompleted = set.completed;
     const isQuiz = (set as any).type === 'quiz';
-    // Only the first uncompleted, unlocked node in the CURRENT level is "current"
     const isCurrent = isCurrentLevel && index === currentSetIndex;
-    // Check if this specific quiz can skip ahead (only first incomplete quiz) - premium only
+    const isCentered = index === centeredPlanetIndex; // Magnifying effect
     const quizCanSkipAhead = isPremium && isQuiz && isLocked && canQuizSkipAhead(set, allSets);
 
     const anim = nodeAnims.current[index] || new Animated.Value(1);
-    const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
+    const baseScale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
     const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
-    const premiumFaceColor = '#6B8AF6'; // muted indigo to stand apart from current node
-    const premiumEdgeColor = '#344B9C';
+
+    // Magnifying effect - subtle scale increase for centered planet
+    const magnifyScale = isCentered ? 1.08 : 1;
+    const planetSize = PLANET_SIZE; // Keep same size, just scale
+
+    // Get planet type for this node
+    const planetType = getPlanetType(index, isQuiz, set.title);
+    const planetSource = PLANET_SOURCES[planetType] || PLANET_SOURCES.colorful;
+
+    // Clean title for display
+    const displayTitle = isQuiz ? `Quiz ${set.title.replace('Quiz ', '')}` : cleanTitle(set.title);
+
+    // Sparkle positions - small 4-pointed stars around planet
+    // Y=0 is top of planet, Y=planetSize is bottom
+    const sparkleData = [
+      // Small gold stars on left side of planet
+      { x: -5, y: 10, size: 7, type: 'star', color: '#FFD700' },
+      { x: -8, y: 55, size: 6, type: 'star', color: '#FFD700' },
+      { x: -3, y: 100, size: 6, type: 'star', color: '#FFD700' },
+      // Small gold stars on right side of planet
+      { x: planetSize + 5, y: 15, size: 6, type: 'star', color: '#FFD700' },
+      { x: planetSize + 8, y: 60, size: 7, type: 'star', color: '#FFD700' },
+      { x: planetSize + 3, y: 105, size: 6, type: 'star', color: '#FFD700' },
+      // Tiny white dots
+      { x: 0, y: 35, size: 3, type: 'dot', color: '#FFFFFF' },
+      { x: planetSize + 2, y: 80, size: 3, type: 'dot', color: '#FFFFFF' },
+    ];
+
+    const wrapperWidth = planetSize + 40;
 
     return (
       <Animated.View
-        key={`node-${set.id}-${index}`}
+        key={`planet-${set.id}-${index}`}
         style={[
-          styles.nodeWrapper,
+          styles.planetWrapperH,
           {
-            transform: [{ scale }],
+            transform: [{ scale: baseScale }],
             opacity,
-            left: offsetX - NODE_SIZE / 2,
+            width: wrapperWidth,
           },
         ]}
       >
-        {/* Breathing ring for current set */}
-        {isCurrent && (
-          <Animated.View
-            style={[
-              styles.setBreathingRing,
-              {
-                backgroundColor: '#FE9602',
-                opacity: levelPulseOpacity,
-                transform: [{ scale: levelPulseAnim }],
-              },
-            ]}
-          />
-        )}
+        {/* Sparkling stars animation around current/centered planet */}
+        {isCentered && (
+          <View style={[styles.sparkleContainerH, { width: wrapperWidth, height: planetSize + 40, top: 50 }]} pointerEvents="none">
+            {sparkleData.map((sparkle, i) => {
+              const animatedOpacity = levelPulseOpacity.interpolate({
+                inputRange: [0.2, 0.5],
+                outputRange: i % 2 === 0 ? [0.3, 1] : [1, 0.3],
+              });
+              const animatedScale = levelPulseAnim.interpolate({
+                inputRange: [1, 1.08],
+                outputRange: i % 3 === 0 ? [0.8, 1.2] : [1, 0.9],
+              });
 
-        {/* Breathing ring for skip ahead quiz nodes - purple */}
-        {quizCanSkipAhead && !isCurrent && (
-          <Animated.View
-            style={[
-              styles.setBreathingRing,
-              {
-                backgroundColor: '#9333EA',
-                opacity: levelPulseOpacity,
-                transform: [{ scale: levelPulseAnim }],
-              },
-            ]}
-          />
-        )}
-
-        {/* 3D coin edge (darker bottom) */}
-        {(() => {
-          const isQuizDisabled = isQuiz && isLocked && !quizCanSkipAhead;
-          return (
-            <View style={[
-              styles.coinEdge,
-              // Premium locked nodes use a cooler indigo edge
-              isPremiumLocked && { backgroundColor: premiumEdgeColor },
-              // Available nodes show teal edge
-              !isPremiumLocked && !isLocked && !isCompleted && !isCurrent && styles.coinEdgeCompleted,
-              // Current node shows orange edge
-              !isPremiumLocked && isCurrent && styles.coinEdgeActive,
-              // Completed nodes show teal edge
-              !isPremiumLocked && isCompleted && styles.coinEdgeCompleted,
-              // Locked nodes show gray edge
-              !isPremiumLocked && isLocked && !isQuiz && styles.coinEdgeLocked,
-              !isPremiumLocked && isLocked && !isQuiz && !isLight && { backgroundColor: '#3A3A3A' },
-              // Quiz nodes that can't skip ahead show gray
-              !isPremiumLocked && isQuizDisabled && styles.coinEdgeLocked,
-              !isPremiumLocked && isQuizDisabled && !isLight && { backgroundColor: '#3A3A3A', opacity: 0.6 },
-              // Quiz nodes get purple/pink color (only if not disabled)
-              !isPremiumLocked && isQuiz && !isCompleted && !isLocked && { backgroundColor: '#9333EA' },
-              !isPremiumLocked && isQuiz && isCompleted && { backgroundColor: '#C94A6A' },
-              !isPremiumLocked && quizCanSkipAhead && { backgroundColor: '#6B21A8' },
-            ]} />
-          );
-        })()}
-
-        {/* "Skip ahead" or "Review" label for quiz nodes */}
-        {isQuiz && !isCompleted && (() => {
-          const quizScore = (set as any).score;
-          const hasFailed = typeof quizScore === 'number' && quizScore > 0 && quizScore < 70;
-
-          // Don't show "Skip ahead" label if this quiz can't skip ahead
-          if (isLocked && !quizCanSkipAhead) return null;
-
-          return (
-            <Animated.View
-              style={[
-                styles.skipAheadLabel,
-                {
-                  transform: [{ scale: levelPulseAnim }],
-                  opacity: levelPulseOpacity.interpolate({
-                    inputRange: [0.2, 0.5],
-                    outputRange: [1, 0.7],
-                  }),
-                },
-              ]}
-            >
-              <Text style={[
-                styles.skipAheadText,
-                isLocked && styles.skipAheadTextLocked,
-                hasFailed && styles.skipAheadTextFailed,
-              ]}>
-                {hasFailed ? 'Review sets!' : isLocked ? 'Skip ahead!' : 'Take Quiz!'}
-              </Text>
-            </Animated.View>
-          );
-        })()}
-
-        {/* Main coin face */}
-        {(() => {
-          const isQuizDisabled = isQuiz && isLocked && !quizCanSkipAhead;
-          return (
-            <TouchableOpacity
-              onPress={() => handleSetPress(set, allSets)}
-              disabled={!isPremiumLocked && isLocked && (!isQuiz || !quizCanSkipAhead)}
-              activeOpacity={0.9}
-              style={[
-                styles.coinFace,
-                // Premium locked nodes use a cooler indigo tone
-                isPremiumLocked && { backgroundColor: premiumFaceColor, borderColor: 'rgba(255,255,255,0.35)' },
-                // Available nodes (not locked, not completed) show as teal
-                !isPremiumLocked && !isLocked && !isCompleted && !isCurrent && styles.coinFaceCompleted,
-                // Current node shows as orange
-                !isPremiumLocked && isCurrent && styles.coinFaceActive,
-                // Completed nodes show as teal
-                !isPremiumLocked && isCompleted && styles.coinFaceCompleted,
-                // Locked nodes show as gray
-                !isPremiumLocked && isLocked && !isQuiz && styles.coinFaceLocked,
-                !isPremiumLocked && isLocked && !isQuiz && !isLight && { backgroundColor: '#4A4A4A', borderColor: 'rgba(255,255,255,0.1)' },
-                // Quiz nodes that can't skip ahead show gray
-                !isPremiumLocked && isQuizDisabled && styles.coinFaceLocked,
-                !isPremiumLocked && isQuizDisabled && !isLight && { backgroundColor: '#4A4A4A', borderColor: 'rgba(255,255,255,0.1)', opacity: 0.6 },
-                // Quiz nodes get purple/pink color (only if not disabled)
-                !isPremiumLocked && isQuiz && !isCompleted && !isLocked && { backgroundColor: '#A855F7', borderColor: 'rgba(255,255,255,0.4)' },
-                !isPremiumLocked && isQuiz && isCompleted && { backgroundColor: '#F25E86' },
-                !isPremiumLocked && quizCanSkipAhead && { backgroundColor: '#7C3AED', borderColor: 'rgba(255,255,255,0.2)' },
-              ]}
-            >
-              {/* Glossy reflection highlight */}
-              <View style={[styles.coinReflection, isPremiumLocked && { backgroundColor: 'rgba(255,255,255,0.18)' }]} pointerEvents="none" />
-              {isPremiumLocked ? (
-                <Crown size={28} color="#FFFFFF" strokeWidth={2.5} />
-              ) : (
-                <Image
-                  source={getIconSource(set.title, (set as any).type)}
-                  style={[styles.coinIcon, (isLocked || isQuizDisabled) && styles.coinIconLocked]}
-                  resizeMode="contain"
-                />
-              )}
-            </TouchableOpacity>
-          );
-        })()}
-
-        {/* Premium badge for locked sets */}
-        {isPremiumLocked && (
-          <View style={styles.premiumBadge}>
-            <Text style={styles.premiumBadgeText}>PRO</Text>
+              if (sparkle.type === 'star') {
+                // 4-pointed star using two crossing rectangles
+                return (
+                  <Animated.View
+                    key={`sparkle-${i}`}
+                    style={{
+                      position: 'absolute',
+                      left: sparkle.x + 20,
+                      top: sparkle.y,
+                      width: sparkle.size,
+                      height: sparkle.size,
+                      opacity: animatedOpacity,
+                      transform: [{ scale: animatedScale }],
+                    }}
+                  >
+                    {/* Vertical bar */}
+                    <View style={{
+                      position: 'absolute',
+                      left: sparkle.size / 2 - 1.5,
+                      top: 0,
+                      width: 3,
+                      height: sparkle.size,
+                      backgroundColor: sparkle.color,
+                      borderRadius: 1.5,
+                    }} />
+                    {/* Horizontal bar */}
+                    <View style={{
+                      position: 'absolute',
+                      left: 0,
+                      top: sparkle.size / 2 - 1.5,
+                      width: sparkle.size,
+                      height: 3,
+                      backgroundColor: sparkle.color,
+                      borderRadius: 1.5,
+                    }} />
+                    {/* Diagonal bar 1 */}
+                    <View style={{
+                      position: 'absolute',
+                      left: sparkle.size / 2 - 1,
+                      top: sparkle.size * 0.15,
+                      width: 2,
+                      height: sparkle.size * 0.7,
+                      backgroundColor: sparkle.color,
+                      borderRadius: 1,
+                      transform: [{ rotate: '45deg' }],
+                    }} />
+                    {/* Diagonal bar 2 */}
+                    <View style={{
+                      position: 'absolute',
+                      left: sparkle.size / 2 - 1,
+                      top: sparkle.size * 0.15,
+                      width: 2,
+                      height: sparkle.size * 0.7,
+                      backgroundColor: sparkle.color,
+                      borderRadius: 1,
+                      transform: [{ rotate: '-45deg' }],
+                    }} />
+                  </Animated.View>
+                );
+              } else {
+                // Small circular dot
+                return (
+                  <Animated.View
+                    key={`sparkle-${i}`}
+                    style={[
+                      styles.sparkle,
+                      {
+                        left: sparkle.x + 20,
+                        top: sparkle.y,
+                        width: sparkle.size,
+                        height: sparkle.size,
+                        borderRadius: sparkle.size / 2,
+                        backgroundColor: sparkle.color,
+                        opacity: animatedOpacity,
+                        transform: [{ scale: animatedScale }],
+                      },
+                    ]}
+                  />
+                );
+              }
+            })}
           </View>
         )}
 
+        {/* Title label ABOVE planet */}
+        <View style={[styles.planetLabelContainerH, { width: wrapperWidth }]}>
+          <Text style={[
+            styles.planetLabel,
+            isLocked && !quizCanSkipAhead && styles.planetLabelLocked,
+            isCentered && styles.planetLabelCentered,
+          ]} numberOfLines={2}>
+            {displayTitle}
+          </Text>
+          {/* "For you" badge for current/available nodes */}
+          {isCurrent && !isCompleted && (
+            <View style={styles.forYouBadge}>
+              <Text style={styles.forYouText}>For you</Text>
+            </View>
+          )}
+        </View>
+
+        {/* UFO/Spacecraft for current node */}
+        {isCurrent && !isCompleted && (
+          <View style={[styles.spacecraftContainerH, { left: wrapperWidth / 2 - 35 }]}>
+            <LottieView
+              source={PLANET_SOURCES.spacecraft}
+              autoPlay
+              loop
+              style={styles.spacecraft}
+            />
+          </View>
+        )}
+
+        {/* Planet touchable area with magnifying effect */}
+        <TouchableOpacity
+          onPress={() => handleSetPress(set, allSets)}
+          disabled={isLocked && (!isQuiz || !quizCanSkipAhead)}
+          activeOpacity={0.9}
+          style={[styles.planetTouchableH, {
+            width: planetSize,
+            height: planetSize,
+            marginLeft: 20,
+            transform: [{ scale: magnifyScale }],
+          }]}
+        >
+          {/* Lottie Planet Animation */}
+          <LottieView
+            source={planetSource}
+            autoPlay
+            loop
+            style={[
+              { width: planetSize, height: planetSize },
+              (isLocked && !quizCanSkipAhead) && styles.planetLocked,
+            ]}
+          />
+
+          {/* Flag on completed planets */}
+          {isCompleted && (
+            <View style={[styles.flagContainerH, { left: planetSize / 2 - 5 }]}>
+              <View style={styles.flagPoleH} />
+              <View style={styles.flagBannerH}>
+                <View style={styles.flagTriangleH} />
+              </View>
+            </View>
+          )}
+        </TouchableOpacity>
       </Animated.View>
     );
   };
 
-  const renderConnector = (index: number, total: number) => {
-    if (index >= total - 1) return null;
-    const cached = connectorPaths[index];
-    if (!cached) return null;
+  // Curved connector between planets - smooth S-curve dashed line
+  const renderCurvedConnector = (x1: number, y1: number, x2: number, y2: number) => {
+    // Space theme: subtle grey dashed lines
+    const lineColor = 'rgba(150, 160, 180, 0.25)';
 
-    // Use teal color for completed connectors, gray for incomplete
-    const lineColor = cached.isCompleted
-      ? '#4ED9CB' // Teal for completed
-      : (isLight ? '#E5E7EB' : '#3A3A3A');
-    const glowColor = '#4ED9CB';
-    const isAnimating = animatingPaths.has(index);
-    const animValue = pathAnimValues.current[index];
+    // Create smooth bezier curve
+    // Control points offset to create natural S-curve flow
+    const dx = x2 - x1;
+    const dy = y2 - y1;
 
-    // Animated glow opacity for newly completed paths
-    const animatedGlowOpacity = isAnimating && animValue
-      ? animValue.interpolate({
-          inputRange: [0, 0.5, 1],
-          outputRange: [0, 0.8, 0.3],
-        })
-      : 0.3;
+    // For diagonal paths, use control points that curve smoothly
+    const cp1x = x1 + dx * 0.4;
+    const cp1y = y1;
+    const cp2x = x2 - dx * 0.4;
+    const cp2y = y2;
 
-    // Animated scale for the glow effect
-    const animatedGlowScale = isAnimating && animValue
-      ? animValue.interpolate({
-          inputRange: [0, 0.5, 1],
-          outputRange: [0.5, 1.2, 1],
-        })
-      : 1;
+    const pathD = `M ${x1} ${y1} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
 
     return (
-      <View key={`connector-${index}`} style={styles.connectorWrapper} pointerEvents="none">
-        <Svg height={cached.height} width={SCREEN_WIDTH} pointerEvents="none">
-          {/* Main path */}
-          <Path
-            d={cached.pathD}
-            stroke={lineColor}
-            strokeWidth={3}
-            strokeDasharray="8,8"
-            fill="none"
-          />
-        </Svg>
-      </View>
+      <Svg style={{ position: 'absolute', top: 0, left: 0 }} height="100%" width="100%" pointerEvents="none">
+        <Path
+          d={pathD}
+          stroke={lineColor}
+          strokeWidth={2}
+          strokeDasharray="8,6"
+          fill="none"
+          strokeLinecap="round"
+        />
+      </Svg>
     );
   };
 
@@ -1098,223 +1118,224 @@ export default function LearnScreen() {
     );
   };
 
-  // Build the path for current level only
+  // Build the path for current level only - DIAGONAL WINDING S-CURVE
   const buildCurrentLevelPath = () => {
     if (!currentLevel) return null;
 
     const setsToRender = currentLevel.sets;
+    const spacing = HORIZONTAL_SPACING; // Use constant from scroll handler
+    const totalWidth = setsToRender.length * spacing + 200;
+    const pathHeight = SCREEN_HEIGHT - 200;
 
-    // Track which stage we're in (increments after each quiz)
-    let currentStage = 0;
+    // Calculate position for diagonal winding S-curve path
+    const getPosition = (index: number): { x: number; y: number } => {
+      const x = index * spacing + 60;
+      // S-curve: alternates between going down and up diagonally
+      const phase = (index % 4); // 4-node cycle for S-curve
+      let y;
+
+      if (phase === 0) {
+        y = 80; // Top position (moved down)
+      } else if (phase === 1) {
+        y = 200; // Going down
+      } else if (phase === 2) {
+        y = 320; // Bottom position
+      } else {
+        y = 200; // Going back up
+      }
+
+      return { x, y };
+    };
+
+    // Offset for planet center within wrapper
+    const wrapperOffset = 20 + PLANET_SIZE / 2;
 
     return (
-      <View style={styles.levelSetsContainer}>
-        {/* Level header banner */}
-        <View style={[styles.levelBanner, isLight && styles.levelBannerLight]}>
-          <View style={styles.levelBannerEdge} />
-          <View style={styles.levelBannerContent}>
-            {/* Icon circle */}
-            <View style={styles.levelBannerIconCircle}>
-              <Image source={getLevelIcon(currentLevel.id)} style={styles.levelBannerIcon} resizeMode="contain" />
-            </View>
-            {/* Info */}
-            <View style={styles.levelBannerInfo}>
-              <Text style={styles.levelBannerTitle}>{currentLevel.name}</Text>
-              <Text style={styles.levelBannerSubtitle}>Level {currentLevel.cefr}</Text>
-            </View>
-            {/* Progress badge */}
-            <View style={styles.levelBannerBadge}>
-              <Text style={styles.levelBannerBadgeText}>{progress.completed}/{progress.total}</Text>
-            </View>
-          </View>
-          {/* Retake test button */}
-          <TouchableOpacity
-            style={[styles.retakeTestButton, isLight && styles.retakeTestButtonLight]}
-            onPress={() => router.push({ pathname: '/placement/word-test', params: { retake: 'true', selectedLevel: currentLevel.id } })}
-            activeOpacity={0.7}
-          >
-            <RefreshCw size={13} color="rgba(26,26,26,0.5)" />
-            <Text style={[styles.retakeTestText, isLight && styles.retakeTestTextLight]}>
-              Level feels wrong? Retake test
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Sets path */}
+      <View style={[styles.planetPathContainerH, { width: totalWidth, height: pathHeight }]}>
+        {/* Render connectors first (behind planets) */}
         {setsToRender.map((set, index) => {
-          const isQuiz = (set as any).type === 'quiz';
-          const isQuizCompleted = isQuiz && set.completed;
-
-          // Check if previous item was a completed quiz (to show stage gate)
-          const prevSet = index > 0 ? setsToRender[index - 1] : null;
-          const showStageGate = prevSet && (prevSet as any).type === 'quiz';
-          const stageUnlocked = prevSet && prevSet.completed;
-
-          if (showStageGate) {
-            currentStage++;
-          }
+          if (index >= setsToRender.length - 1) return null;
+          const current = getPosition(index);
+          const next = getPosition(index + 1);
+          const currentX = current.x + wrapperOffset;
+          const nextX = next.x + wrapperOffset;
+          const currentY = current.y + PLANET_SIZE / 2 + 55; // Account for label height
+          const nextY = next.y + PLANET_SIZE / 2 + 55;
 
           return (
-            <View key={`path-item-${index}`}>
-              {/* Stage gate after quiz */}
-              {showStageGate && renderStageGate(currentStage - 1, !!stageUnlocked)}
-
-              {/* Show one character per chapter section, alternating sides - well spaced */}
-              {index === 2 && renderCharacter(index, 'monkey', 'right', !set.locked)}
-              {index === 7 && renderCharacter(index, 'giraffe', 'left', !set.locked)}
-              {index === 12 && renderCharacter(index, 'chameleon', 'right', !set.locked)}
-              {index === 17 && renderCharacter(index, 'fox', 'left', !set.locked)}
-              {index === 22 && renderCharacter(index, 'sloth', 'right', !set.locked)}
-              {renderNode(set as any, index, true, setsToRender)}
-              {renderConnector(index, setsToRender.length)}
+            <View
+              key={`connector-${index}`}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: totalWidth,
+                height: pathHeight,
+                zIndex: 1,
+              }}
+              pointerEvents="none"
+            >
+              {renderCurvedConnector(currentX, currentY, nextX, nextY)}
             </View>
           );
         })}
-        {/* Final connector to star */}
-        {setsToRender.length > 0 && (() => {
-          const starConnectorHeight = NODE_SPACING - NODE_SIZE + 20;
-          const lastX = getNodeOffset(getNodePosition(setsToRender.length - 1));
-          const starX = getNodeOffset(getNodePosition(setsToRender.length));
-          const midY = starConnectorHeight / 2;
-          const starPathD = `M ${lastX} 0 C ${lastX} ${midY}, ${starX} ${midY}, ${starX} ${starConnectorHeight}`;
+        {/* Planet nodes */}
+        {setsToRender.map((set, index) => {
+          const pos = getPosition(index);
           return (
-            <View style={styles.connectorWrapper}>
-              <Svg height={starConnectorHeight} width={SCREEN_WIDTH}>
-                <Path
-                  d={starPathD}
-                  stroke={isLight ? '#E5E7EB' : '#3A3A3A'}
-                  strokeWidth={3}
-                  strokeDasharray="8,8"
-                  fill="none"
-                />
-              </Svg>
+            <View
+              key={`planet-container-${index}`}
+              style={{
+                position: 'absolute',
+                top: pos.y,
+                left: pos.x,
+                zIndex: 10,
+              }}
+            >
+              {renderPlanetNode(set as any, index, true, setsToRender)}
             </View>
           );
-        })()}
-        {renderStarNode()}
+        })}
       </View>
     );
   };
 
-  // Subtle gradient colors for depth - slightly more visible
-  const gradientColors = isLight
-    ? ['#FFFFFF', '#F5F5F5', '#EBEBEB']
-    : ['transparent', 'transparent', 'transparent'];
+  // Find the current set for the Start/Practice Again button
+  const currentSet = currentLevel?.sets.find(s => !s.completed && !s.locked);
+  const allCompleted = currentLevel && currentLevel.sets.every(s => s.completed);
 
   return (
-    <View style={[styles.container, { backgroundColor: isLight ? colors.background : '#2A2D2E' }]}>
-      {/* Header bar */}
-      <View style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: insets.top + 50,
-        backgroundColor: isLight ? '#FFFFFF' : '#2A2D2E',
-        zIndex: 10,
-        borderBottomWidth: 2,
-        borderBottomColor: isLight ? '#E5E7EB' : '#1A1A1A',
-      }} />
+    <View style={[styles.container, { backgroundColor: SPACE_BG }]}>
+      {/* Space background with stars */}
+      <StarField />
+
+      {/* Top status panel */}
       <TopStatusPanel floating includeTopInset />
 
+      {/* Main HORIZONTAL scrollable content */}
       <ScrollView
         ref={scrollViewRef}
-        style={{ flex: 1, paddingTop: contentTop }}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+        style={styles.horizontalScrollContainer}
+        contentContainerStyle={styles.horizontalScrollContent}
+        horizontal={true}
+        showsHorizontalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={16}
         removeClippedSubviews={false}
+        decelerationRate="fast"
       >
-        {/* Path for current level only */}
-        <View style={styles.pathContainer}>
-          {buildCurrentLevelPath()}
-        </View>
-
-        <View style={{ height: 100 }} />
+        {/* Planet path */}
+        {buildCurrentLevelPath()}
       </ScrollView>
 
-      {/* DEV: Test complete set button */}
-      {__DEV__ && (
-        <TouchableOpacity
-          style={{
-            position: 'absolute',
-            bottom: 100,
-            right: 20,
-            backgroundColor: '#F25E86',
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            borderRadius: 20,
-            zIndex: 100,
-          }}
-          onPress={async () => {
-            // Complete the first set of current level
-            const currentLevelData = levels.find(l => l.id === selectedLevel);
-            if (currentLevelData && currentLevelData.sets.length > 0) {
-              const firstSet = currentLevelData.sets[0];
-              await SetProgressService.markSetCompleted(firstSet.id, selectedLevel, 100);
-              // Refresh completed sets
-              const completed = await SetProgressService.getCompletedSetsForLevel(selectedLevel);
-              setCompletedSetIds(new Set(completed));
-              console.log('[TEST] Completed set:', firstSet.id);
-            }
-          }}
-        >
-          <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 12 }}>Test Complete Set</Text>
-        </TouchableOpacity>
+      {/* Start / Practice Again button at bottom */}
+      {currentLevel && (
+        <View style={styles.bottomButtonContainer}>
+          <TouchableOpacity
+            style={styles.startButton}
+            onPress={() => {
+              if (currentSet) {
+                handleSetPress(currentSet as any, currentLevel.sets);
+              }
+            }}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.startButtonText}>
+              {allCompleted ? 'Practice Again' : 'Start'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       )}
 
-      {/* Signup prompt (inline overlay to avoid RN Modal) */}
-      {showSignupPrompt && (
-        <View style={styles.signupOverlay} pointerEvents="auto">
-          <TouchableOpacity style={styles.signupBackdrop} activeOpacity={1} onPress={() => setShowSignupPrompt(false)} />
-          <View style={[styles.signupCard, isLight && styles.signupCardLight]}>
-            {/* Icon */}
-            <View style={styles.signupIconWrap}>
-              <View style={[styles.signupIconCircle, isLight && styles.signupIconCircleLight]}>
-                <Lock size={28} color={isLight ? '#0F766E' : '#4ED9CB'} />
-              </View>
+      {/* Alien spaceship FAB */}
+      <TouchableOpacity style={styles.alienFab} activeOpacity={0.9}>
+        <View style={styles.alienFabInner}>
+          <Text style={styles.alienFabEmoji}>🛸</Text>
+        </View>
+      </TouchableOpacity>
+
+      {/* Signup modal disabled to avoid invisible overlays blocking touches */}
+
+      {/* Premium Paywall Modal */}
+      <Modal
+        visible={showPaywall}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPaywall(false)}
+      >
+        <View style={styles.paywallOverlay}>
+          <View style={[styles.paywallCard, isLight && styles.paywallCardLight]}>
+            {/* Close button */}
+            <TouchableOpacity
+              style={styles.paywallClose}
+              onPress={() => setShowPaywall(false)}
+            >
+              <Text style={styles.paywallCloseText}>✕</Text>
+            </TouchableOpacity>
+
+            {/* Crown icon */}
+            <View style={styles.paywallCrownContainer}>
+              <Crown size={48} color="#FFD700" strokeWidth={2} />
             </View>
 
-            <Text style={[styles.signupTitle, isLight && styles.signupTitleLight]}>Create Your Account</Text>
-            <Text style={[styles.signupMessage, isLight && styles.signupMessageLight]}>
-              Sign up to unlock this lesson and sync your progress across all your devices.
+            {/* Title */}
+            <Text style={[styles.paywallTitle, isLight && styles.paywallTitleLight]}>
+              Unlock All Lessons
+            </Text>
+
+            {/* Subtitle */}
+            <Text style={[styles.paywallSubtitle, isLight && styles.paywallSubtitleLight]}>
+              Get unlimited access to all vocabulary sets and learning features with Vocadoo Premium
             </Text>
 
             {/* Features list */}
-            <View style={styles.signupFeatures}>
-              <View style={styles.signupFeatureRow}>
-                <Check size={16} color="#4ED9CB" />
-                <Text style={[styles.signupFeatureText, isLight && styles.signupFeatureTextLight]}>Back up your vocabulary</Text>
+            <View style={styles.paywallFeatures}>
+              <View style={styles.paywallFeatureRow}>
+                <Check size={18} color="#4ED9CB" />
+                <Text style={[styles.paywallFeatureText, isLight && styles.paywallFeatureTextLight]}>
+                  All vocabulary lessons unlocked
+                </Text>
               </View>
-              <View style={styles.signupFeatureRow}>
-                <Check size={16} color="#4ED9CB" />
-                <Text style={[styles.signupFeatureText, isLight && styles.signupFeatureTextLight]}>Sync across devices</Text>
+              <View style={styles.paywallFeatureRow}>
+                <Check size={18} color="#4ED9CB" />
+                <Text style={[styles.paywallFeatureText, isLight && styles.paywallFeatureTextLight]}>
+                  Skip ahead to any quiz
+                </Text>
               </View>
-              <View style={styles.signupFeatureRow}>
-                <Check size={16} color="#4ED9CB" />
-                <Text style={[styles.signupFeatureText, isLight && styles.signupFeatureTextLight]}>Track your progress</Text>
+              <View style={styles.paywallFeatureRow}>
+                <Check size={18} color="#4ED9CB" />
+                <Text style={[styles.paywallFeatureText, isLight && styles.paywallFeatureTextLight]}>
+                  All daily articles
+                </Text>
+              </View>
+              <View style={styles.paywallFeatureRow}>
+                <Check size={18} color="#4ED9CB" />
+                <Text style={[styles.paywallFeatureText, isLight && styles.paywallFeatureTextLight]}>
+                  AI-powered stories
+                </Text>
               </View>
             </View>
 
-            <View style={styles.signupActions}>
-              <TouchableOpacity
-                style={styles.signupPrimary}
-                onPress={() => {
-                  setShowSignupPrompt(false);
-                  router.push('/profile?redirect=/quiz/learn');
-                }}
-              >
-                <Text style={styles.signupPrimaryText}>Sign Up Free</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.signupSecondary, isLight && styles.signupSecondaryLight]} onPress={() => setShowSignupPrompt(false)}>
-                <Text style={[styles.signupSecondaryText, isLight && styles.signupSecondaryTextLight]}>Maybe Later</Text>
-              </TouchableOpacity>
-            </View>
+            {/* CTA Button */}
+            <TouchableOpacity
+              style={styles.paywallCta}
+              onPress={() => {
+                setShowPaywall(false);
+                router.push('/profile?paywall=1');
+              }}
+            >
+              <Text style={styles.paywallCtaText}>Upgrade to Premium</Text>
+            </TouchableOpacity>
+
+            {/* Maybe later */}
+            <TouchableOpacity onPress={() => setShowPaywall(false)}>
+              <Text style={[styles.paywallMaybeLater, isLight && styles.paywallMaybeLaterLight]}>
+                Maybe later
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
-      )}
-
+      </Modal>
     </View>
   );
 }
@@ -1322,7 +1343,7 @@ export default function LearnScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    // backgroundColor handled inline for dark mode Lottie transparency
+    backgroundColor: '#1E1E1E',
   },
   scrollContent: {
     paddingBottom: 40,
@@ -1396,6 +1417,270 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 40,
   },
+  // Horizontal scroll styles
+  horizontalScrollContainer: {
+    flex: 1,
+    marginTop: 100, // Space for top panel
+  },
+  horizontalScrollContent: {
+    paddingHorizontal: 20,
+  },
+  planetPathContainerH: {
+    position: 'relative',
+  },
+  planetWrapperH: {
+    position: 'absolute',
+    width: PLANET_SIZE,
+    height: PLANET_SIZE + 60,
+  },
+  planetLabelContainerH: {
+    position: 'absolute',
+    top: -50,
+    left: -30,
+    right: -30,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  spacecraftContainerH: {
+    position: 'absolute',
+    top: -30,
+    left: PLANET_SIZE / 2 - 40,
+    width: 80,
+    height: 80,
+    zIndex: 20,
+  },
+  planetTouchableH: {
+    width: PLANET_SIZE,
+    height: PLANET_SIZE,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  flagContainerH: {
+    position: 'absolute',
+    top: 5,
+    left: PLANET_SIZE / 2 - 5,
+    alignItems: 'center',
+  },
+  flagPoleH: {
+    width: 3,
+    height: 35,
+    backgroundColor: '#D4A574',
+    borderRadius: 1,
+  },
+  flagBannerH: {
+    position: 'absolute',
+    top: 2,
+    left: 3,
+  },
+  flagTriangleH: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 18,
+    borderTopWidth: 12,
+    borderBottomWidth: 12,
+    borderLeftColor: '#4ED9CB',
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+  },
+  sparkleContainerH: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: PLANET_SIZE,
+    height: PLANET_SIZE + 60,
+    zIndex: 5,
+    pointerEvents: 'none',
+  },
+  // Keep old vertical styles for compatibility
+  scrollContentSpace: {
+    paddingBottom: 40,
+  },
+  planetPathContainer: {
+    paddingTop: 30,
+    paddingBottom: 60,
+  },
+  planetWrapper: {
+    position: 'relative',
+    height: PLANET_SIZE + 60,
+    marginBottom: 30,
+  },
+  planetLabelContainer: {
+    position: 'absolute',
+    top: 0,
+    left: -40,
+    right: -40,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  planetLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.7)',
+    fontFamily: 'Feather-Bold',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  planetLabelLocked: {
+    color: 'rgba(255,255,255,0.3)',
+  },
+  planetLabelCentered: {
+    fontSize: 20,
+    color: '#FFFFFF',
+  },
+  forYouBadge: {
+    backgroundColor: '#F8B070',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 6,
+  },
+  forYouText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    fontFamily: 'Ubuntu-Bold',
+  },
+  spacecraftContainer: {
+    position: 'absolute',
+    top: 20,
+    left: PLANET_SIZE / 2 - 40,
+    width: 80,
+    height: 80,
+    zIndex: 20,
+  },
+  spacecraft: {
+    width: 80,
+    height: 80,
+  },
+  planetTouchable: {
+    width: PLANET_SIZE,
+    height: PLANET_SIZE,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 40, // Space for label
+  },
+  planetLottie: {
+    width: PLANET_SIZE,
+    height: PLANET_SIZE,
+  },
+  planetLocked: {
+    opacity: 0.4,
+  },
+  flagContainer: {
+    position: 'absolute',
+    top: 10,
+    left: PLANET_SIZE / 2 - 5,
+    alignItems: 'center',
+  },
+  flagPole: {
+    width: 3,
+    height: 30,
+    backgroundColor: '#D4A574',
+    borderRadius: 1,
+  },
+  flagBanner: {
+    position: 'absolute',
+    top: 2,
+    left: 3,
+  },
+  flagTriangle: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 16,
+    borderTopWidth: 10,
+    borderBottomWidth: 10,
+    borderLeftColor: '#4ED9CB',
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+  },
+  lockOverlay: {
+    position: 'absolute',
+    top: PLANET_SIZE / 2 - 16,
+    left: PLANET_SIZE / 2 - 16,
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  premiumBadgePlanet: {
+    position: 'absolute',
+    bottom: 40,
+    right: 10,
+    backgroundColor: '#FFD700',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#B8860B',
+  },
+  connectorWrapperPlanet: {
+    height: NODE_SPACING - 40,
+    marginTop: -20,
+    marginBottom: -20,
+  },
+  bottomButtonContainer: {
+    position: 'absolute',
+    bottom: 100,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  startButton: {
+    backgroundColor: '#4ED9CB',
+    paddingVertical: 18,
+    paddingHorizontal: 60,
+    borderRadius: 30,
+    shadowColor: '#4ED9CB',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  startButtonText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    fontFamily: 'Feather-Bold',
+  },
+  alienFab: {
+    position: 'absolute',
+    bottom: 110,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#1A2744',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#4ED9CB',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  alienFabInner: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#243B5C',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  alienFabEmoji: {
+    fontSize: 24,
+  },
+  // Keep old styles for compatibility
   nodeWrapper: {
     position: 'relative',
     height: NODE_SIZE + 8,
@@ -1483,14 +1768,15 @@ const styles = StyleSheet.create({
   coinIcon: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    tintColor: '#FFFFFF',
     shadowColor: '#FFB366',
     shadowOffset: { width: 1, height: 1 },
     shadowOpacity: 0.8,
     shadowRadius: 2,
   },
   coinIconLocked: {
-    opacity: 0.6,
+    opacity: 1,
+    tintColor: '#888888',
     shadowOpacity: 0,
   },
   premiumBadge: {
@@ -1728,9 +2014,7 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   levelBannerLight: {
-    borderColor: '#9A6B3D',
-    shadowOpacity: 0.2,
-    shadowColor: '#9A6B3D',
+    borderColor: '#1A1A1A',
   },
   levelBannerEdge: {
     display: 'none',
@@ -1739,39 +2023,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8B070',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderTopLeftRadius: 13,
-    borderTopRightRadius: 13,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 13,
   },
   levelBannerIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
   levelBannerIcon: {
-    width: 24,
-    height: 24,
+    width: 30,
+    height: 30,
     tintColor: '#F8B070',
   },
   levelBannerInfo: {
     flex: 1,
   },
   levelBannerTitle: {
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: '700',
     color: '#1A1A1A',
-    marginBottom: 1,
+    marginBottom: 2,
     fontFamily: 'Feather-Bold',
   },
   levelBannerSubtitle: {
@@ -1791,29 +2072,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1A1A1A',
     fontFamily: 'Ubuntu-Bold',
-  },
-  retakeTestButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    gap: 5,
-    backgroundColor: '#E89F60',
-    borderBottomLeftRadius: 13,
-    borderBottomRightRadius: 13,
-  },
-  retakeTestButtonLight: {
-    backgroundColor: '#E89F60',
-  },
-  retakeTestText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: 'rgba(26,26,26,0.6)',
-    fontFamily: 'Ubuntu-Medium',
-  },
-  retakeTestTextLight: {
-    color: 'rgba(26,26,26,0.7)',
   },
   nextLevelButton: {
     marginTop: 16,
@@ -2057,220 +2315,100 @@ const styles = StyleSheet.create({
   paywallMaybeLaterLight: {
     color: '#9CA3AF',
   },
-  paywallCtaDisabled: {
-    opacity: 0.6,
-  },
-  paywallPlans: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-    marginBottom: 16,
-  },
-  paywallPlanCard: {
+  // Vertical scroll styles
+  verticalScrollContainer: {
     flex: 1,
-    backgroundColor: '#2A2A2A',
-    borderRadius: 14,
-    padding: 14,
+    marginTop: 100, // Space for top panel
+  },
+  verticalScrollContent: {
+    paddingTop: 40,
+    paddingBottom: 200, // Space for bottom button
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(78,217,203,0.15)',
+  },
+  // Vertical planet path
+  planetPathContainerV: {
+    width: SCREEN_WIDTH,
     position: 'relative',
   },
-  paywallPlanCardLight: {
-    backgroundColor: '#F3F4F6',
-    borderColor: 'rgba(78,217,203,0.25)',
+  planetWrapperV: {
+    position: 'relative',
+    width: PLANET_SIZE,
+    height: PLANET_SIZE + 80, // Extra space for label above
+    marginBottom: 80, // Vertical spacing between planets
   },
-  paywallPlanCardSelected: {
-    borderColor: '#4ED9CB',
-    backgroundColor: 'rgba(78,217,203,0.1)',
+  planetLabelContainerV: {
+    alignItems: 'center',
+    marginBottom: 8,
+    height: 50,
+    justifyContent: 'flex-end',
   },
-  paywallPlanBadge: {
+  spacecraftContainerV: {
     position: 'absolute',
-    top: -10,
-    backgroundColor: '#F25E86',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    top: 30,
+    left: PLANET_SIZE / 2 - 40,
+    width: 80,
+    height: 80,
+    zIndex: 20,
   },
-  paywallPlanBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  paywallPlanTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#9CA3AF',
-    marginBottom: 4,
-  },
-  paywallPlanTitleLight: {
-    color: '#6B7280',
-  },
-  paywallPlanPrice: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#E5E7EB',
-  },
-  paywallPlanPriceLight: {
-    color: '#111827',
-  },
-  paywallPlanPeriod: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  paywallPlanPeriodLight: {
-    color: '#9CA3AF',
-  },
-  paywallPlanCheck: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#4ED9CB',
+  planetTouchableV: {
+    width: PLANET_SIZE,
+    height: PLANET_SIZE,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  paywallSuccessContainer: {
+  flagContainerV: {
+    position: 'absolute',
+    top: 55,
+    left: PLANET_SIZE / 2 - 5,
     alignItems: 'center',
-    paddingVertical: 24,
-    gap: 12,
   },
-  paywallSuccessText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#E5E7EB',
+  flagPoleV: {
+    width: 3,
+    height: 35,
+    backgroundColor: '#D4A574',
+    borderRadius: 1,
   },
-  paywallSuccessTextLight: {
-    color: '#111827',
+  flagBannerV: {
+    position: 'absolute',
+    top: 2,
+    left: 3,
   },
-  signupOverlay: {
+  flagTriangleV: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 18,
+    borderTopWidth: 12,
+    borderBottomWidth: 12,
+    borderLeftColor: '#4ED9CB',
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+  },
+  sparkleContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    zIndex: 100,
+    width: PLANET_SIZE,
+    height: PLANET_SIZE + 80,
+    zIndex: 5,
+    pointerEvents: 'none',
   },
-  signupBackdrop: {
-    ...StyleSheet.absoluteFillObject as any,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
-  signupCard: {
-    width: '100%',
-    maxWidth: 340,
-    backgroundColor: '#1F1F1F',
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(78,217,203,0.08)',
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
-    borderBottomColor: 'rgba(78,217,203,0.12)',
-    borderRightColor: 'rgba(78,217,203,0.1)',
-    shadowColor: '#000',
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 10,
-  },
-  signupCardLight: {
+  sparkle: {
+    position: 'absolute',
     backgroundColor: '#FFFFFF',
-    borderColor: 'rgba(78,217,203,0.2)',
-    borderBottomColor: 'rgba(78,217,203,0.25)',
-    borderRightColor: 'rgba(78,217,203,0.22)',
-    shadowOpacity: 0.15,
+    borderRadius: 10,
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
   },
-  signupIconWrap: {
-    marginBottom: 16,
-  },
-  signupIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(78,217,203,0.12)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(78,217,203,0.2)',
-  },
-  signupIconCircleLight: {
-    backgroundColor: 'rgba(78,217,203,0.1)',
-    borderColor: 'rgba(78,217,203,0.3)',
-  },
-  signupTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#E5E7EB',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  signupTitleLight: {
-    color: '#111827',
-  },
-  signupMessage: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  signupMessageLight: {
-    color: '#6B7280',
-  },
-  signupFeatures: {
-    marginTop: 16,
-    marginBottom: 8,
-    width: '100%',
-    gap: 8,
-  },
-  signupFeatureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  signupFeatureText: {
-    fontSize: 14,
-    color: '#E5E7EB',
-    fontWeight: '500',
-  },
-  signupFeatureTextLight: {
-    color: '#374151',
-  },
-  signupActions: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    width: '100%',
-    gap: 10,
-    marginTop: 16,
-  },
-  signupPrimary: {
-    width: '100%',
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: '#4ED9CB',
-    alignItems: 'center',
-  },
-  signupPrimaryText: {
-    color: '#0D3B4A',
-    fontWeight: '800',
-    fontSize: 16,
-  },
-  signupSecondary: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  signupSecondaryLight: {},
-  signupSecondaryText: {
-    color: '#9CA3AF',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  signupSecondaryTextLight: {
-    color: '#6B7280',
+  connectorWrapperV: {
+    position: 'absolute',
+    top: PLANET_SIZE + 30, // After planet
+    left: 0,
+    width: SCREEN_WIDTH,
+    zIndex: 1,
+    pointerEvents: 'none',
   },
 });

@@ -96,7 +96,7 @@ export default function DialogueSimple({ onPhaseComplete, sharedScore, onScoreSh
           const isCorrect = option.isCorrect;
           const showFeedback = isAnswered;
           
-          let backgroundColor = '#2C2C2C';
+          let backgroundColor = '#243B53';
           if (showFeedback) {
             if (isCorrect) {
               backgroundColor = '#4CAF50';
@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
   },
   title: {
     fontSize: 24,
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   dialogueContainer: {
-    backgroundColor: '#2C2C2C',
+    backgroundColor: '#243B53',
     padding: 20,
     borderRadius: 12,
     marginBottom: 30,

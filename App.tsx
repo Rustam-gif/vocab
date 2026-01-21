@@ -13,6 +13,7 @@ import { engagementTrackingService } from './services/EngagementTrackingService'
 import { AppReadyProvider } from './lib/AppReadyContext';
 import { TextInputGateProvider } from './lib/TextInputGate';
 import { soundService } from './services/SoundService';
+import PersonalizedOnboarding from './components/PersonalizedOnboarding';
 
 // CRITICAL: Workaround for iOS UIEmojiSearchOperations deadlock
 // iOS's keyboard session can become corrupted if a TextInput is destroyed during keyboard transition.
@@ -41,6 +42,8 @@ console.log('=== APP.TSX MODULE LOADED ===');
 export default function App() {
   const themeName = useAppStore(s => s.theme);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
 
   // Extra safety: dismiss any phantom keyboard session a few seconds after launch
   useEffect(() => {
@@ -66,10 +69,15 @@ export default function App() {
     const loadSettings = async () => {
       console.log('=== LOADING SETTINGS FROM ASYNCSTORAGE ===');
       try {
-        const [themeResult, langsResult] = await AsyncStorage.multiGet(['@engniter.theme', '@engniter.langs']);
+        const [themeResult, langsResult, onboardingResult] = await AsyncStorage.multiGet([
+          '@engniter.theme',
+          '@engniter.langs',
+          '@engniter.onboarding.completed',
+        ]);
         const savedTheme = themeResult[1];
         const savedLangs = langsResult[1];
-        console.log('=== LOADED FROM STORAGE === theme:', savedTheme, 'langs:', savedLangs);
+        const onboardingCompleted = onboardingResult[1] === 'true';
+        console.log('=== LOADED FROM STORAGE === theme:', savedTheme, 'langs:', savedLangs, 'onboarding:', onboardingCompleted);
 
         if (savedTheme === 'light' || savedTheme === 'dark') {
           const currentTheme = useAppStore.getState().theme;
@@ -88,8 +96,15 @@ export default function App() {
             }
           } catch {}
         }
+
+        // Show onboarding if not completed
+        if (!onboardingCompleted) {
+          setShowOnboarding(true);
+        }
+        setOnboardingChecked(true);
       } catch (e) {
         console.error('=== FAILED TO LOAD SETTINGS ===', e);
+        setOnboardingChecked(true);
       }
       setPrefsLoaded(true);
     };
@@ -178,6 +193,11 @@ export default function App() {
   }, []);
 
 
+  // Handle onboarding completion
+  const handleOnboardingComplete = () => {
+    setShowOnboarding(false);
+  };
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
@@ -186,36 +206,46 @@ export default function App() {
             <RouterProvider>
               <RouteRenderer />
             {/* No custom keyboard accessory; use native keyboard UI */}
+
+            {/* Personalized Onboarding overlay - shows after launch animation */}
+            {!showLaunch && onboardingChecked && showOnboarding && (
+              <View style={styles.onboardingOverlay}>
+                <PersonalizedOnboarding onComplete={handleOnboardingComplete} />
+              </View>
+            )}
+
+            {/* Launch animation overlay */}
             {showLaunch && (
-            <View
-              style={[styles.launchOverlay, themeName === 'light' && { backgroundColor: colors.background }]}
-              pointerEvents="none"
-            >
-              <LottieView
-                ref={launchRef}
-                source={require('./assets/lottie/launch.json')}
-                autoPlay
-                loop={false}
-                speed={0.7}
-                onError={() => {
-                  if (finishedRef.current) return;
-                  finishedRef.current = true;
-                  setShowLaunch(false);
-                  try { Launch.markDone(); } catch {}
-                }}
-                onAnimationFinish={() => {
-                  if (finishedRef.current) return;
-                  finishedRef.current = true;
-                  if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-                  setTimeout(() => {
+              <View
+                style={[styles.launchOverlay, themeName === 'light' && { backgroundColor: colors.background }]}
+                pointerEvents="none"
+              >
+                <LottieView
+                  ref={launchRef}
+                  source={require('./assets/lottie/launch.json')}
+                  autoPlay
+                  loop={false}
+                  speed={0.7}
+                  onError={() => {
+                    if (finishedRef.current) return;
+                    finishedRef.current = true;
                     setShowLaunch(false);
                     try { Launch.markDone(); } catch {}
-                  }, 2000);
-                }}
-                style={styles.launchLottie}
-              />
-            </View>
-          )}
+                  }}
+                  onAnimationFinish={() => {
+                    if (finishedRef.current) return;
+                    finishedRef.current = true;
+                    if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+                    setTimeout(() => {
+                      setShowLaunch(false);
+                      try { Launch.markDone(); } catch {}
+                    }, 2000);
+                  }}
+                  style={styles.launchLottie}
+                />
+              </View>
+            )}
+
             </RouterProvider>
           </AppReadyProvider>
         </TextInputGateProvider>
@@ -231,7 +261,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#121415',
+    backgroundColor: '#0D1B2A',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 9999,
@@ -240,5 +270,12 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
   },
-  // (no keyboard accessory styles)
+  onboardingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9998,
+  },
 });

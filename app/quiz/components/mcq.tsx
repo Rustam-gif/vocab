@@ -25,6 +25,8 @@ interface MCQProps {
   onPhaseComplete: (score: number, totalQuestions: number) => void;
   hearts: number;
   onHeartLost: () => void;
+  onCorrectAnswer?: () => void;
+  onIncorrectAnswer?: () => void;
   wordRange?: { start: number; end: number };
   // Optional override list for dynamic quizzes not present in levels.ts
   wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
@@ -1935,7 +1937,7 @@ const typedFallbacks = (setTitle: string, pos: 'verb'|'noun'|'adjective'): strin
   return ['A general concept related to subject'];
 };
 
-export default function MCQComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, wordRange, wordsOverride, showUfoAnimation, ufoAnimationKey = 0 }: MCQProps) {
+export default function MCQComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, onCorrectAnswer, onIncorrectAnswer, wordRange, wordsOverride, showUfoAnimation, ufoAnimationKey = 0 }: MCQProps) {
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
@@ -2022,7 +2024,9 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, hearts, 
       String(level?.id || '').toLowerCase() === 'proficient';
     const isBeginnerA1A2 = /(^|\b)beginner(\b|$)/i.test(String(levelId || '')) || /(^|\b)beginner(\b|$)/i.test(String(level?.name || '')) || cefrUpper.includes('A1-A2') || cefrUpper.includes('A1') || cefrUpper.includes('A2');
     const isIntermediateB1 = (String(levelId || '').toLowerCase() === 'intermediate') || (String(level?.id || '').toLowerCase() === 'intermediate') || (String(level?.name || '').toLowerCase() === 'intermediate') || (cefrUpper === 'B1');
-    if (isAdvancedB2C1 || isBeginnerA1A2 || isIntermediateB1) {
+    const isUpperIntermediate = /upper.?intermediate/i.test(String(levelId || '')) || /upper.?intermediate/i.test(String(level?.name || '')) || /upper.?intermediate/i.test(String(level?.id || '')) || cefrUpper.includes('B1+') || cefrUpper === 'B2';
+    // Use peer definitions for ALL levels
+    if (isAdvancedB2C1 || isBeginnerA1A2 || isIntermediateB1 || isUpperIntermediate || true) {
       const mode = isAdvancedB2C1 ? 'Advanced' : isBeginnerA1A2 ? 'Beginner' : 'Intermediate';
       console.log(`MCQComponent - Using ${mode} peer-definition mode`);
       // Seed advanced context for any deeper fallback paths
@@ -2112,8 +2116,8 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, hearts, 
       return t.charAt(0).toUpperCase() + t.slice(1);
     };
 
-    // Seed context for generic path too (defensive)
-    __ADV_CTX = { isAdvanced: (level?.id === 'advanced') || /advanced/i.test(level?.name || '') || ((level?.cefr || '').toUpperCase().includes('B2-C1')), words: (words as any[]).map(w => ({ word: w.word, definition: w.definition })) };
+    // Seed context for generic path too (defensive) - use peer definitions for ALL levels
+    __ADV_CTX = { isAdvanced: true, words: (words as any[]).map(w => ({ word: w.word, definition: w.definition })) };
     const generatedQuestions: Question[] = words.map(word => {
       // Check for exact override first
       const override = set ? MCQ_OVERRIDES[levelId || '']?.[String(set.id)]?.[word.word.toLowerCase()] : undefined;
@@ -2758,7 +2762,489 @@ const getTopicDistracts = (setTitle: string) => {
       ]
     };
   }
-  
+
+  // Upper-Intermediate B2 Level Topics
+
+  // Descriptive & Attitudes
+  if (title.includes('descriptive') || title.includes('attitudes') || title.includes('actions')) {
+    return {
+      opposite: [
+        'To remain passive without taking any action',
+        'To show indifference toward the outcome',
+        'To avoid responsibility for decisions made',
+        'To maintain the status quo without change'
+      ],
+      similar: [
+        'To take initiative in addressing issues',
+        'To demonstrate commitment to a goal',
+        'To accept accountability for results',
+        'To implement changes when necessary'
+      ],
+      unrelated: [
+        'A recipe for preparing traditional cuisine',
+        'A guideline for maintaining physical fitness',
+        'A schedule for public transportation routes',
+        'A manual for operating household appliances'
+      ]
+    };
+  }
+
+  // Decisions & Delivery
+  if (title.includes('decision') || title.includes('delivery')) {
+    return {
+      opposite: [
+        'To postpone making a choice indefinitely',
+        'To withhold information from stakeholders',
+        'To abandon a project before completion',
+        'To ignore deadlines and schedules'
+      ],
+      similar: [
+        'To reach a conclusion after consideration',
+        'To provide results on time as promised',
+        'To fulfill commitments and obligations',
+        'To meet expectations consistently'
+      ],
+      unrelated: [
+        'A technique for artistic expression',
+        'A method for preserving food items',
+        'A practice for meditation and relaxation',
+        'A strategy for winning competitive games'
+      ]
+    };
+  }
+
+  // Compare & Explain
+  if (title.includes('compare') || title.includes('explain') || title.includes('restate')) {
+    return {
+      opposite: [
+        'To overlook differences between options',
+        'To leave concepts unclear and confusing',
+        'To misrepresent facts or information',
+        'To complicate simple ideas unnecessarily'
+      ],
+      similar: [
+        'To analyze similarities and differences',
+        'To clarify meaning for better understanding',
+        'To describe accurately using examples',
+        'To simplify complex information clearly'
+      ],
+      unrelated: [
+        'A tool for measuring physical distances',
+        'A device for recording audio content',
+        'A container for storing liquid beverages',
+        'A vehicle for transporting heavy cargo'
+      ]
+    };
+  }
+
+  // Planning & Problem Solving & Coordination
+  if (title.includes('planning') || title.includes('problem') || title.includes('coordination')) {
+    return {
+      opposite: [
+        'To act without any prior preparation',
+        'To ignore obstacles and difficulties',
+        'To work independently without collaboration',
+        'To react impulsively without strategy'
+      ],
+      similar: [
+        'To organize activities in advance',
+        'To find solutions to challenges faced',
+        'To synchronize efforts with team members',
+        'To anticipate potential issues proactively'
+      ],
+      unrelated: [
+        'A performance for entertainment purposes',
+        'A celebration marking special occasions',
+        'A competition between athletic teams',
+        'A gathering for social interaction'
+      ]
+    };
+  }
+
+  // Evaluation & Reasoning
+  if (title.includes('evaluation') || title.includes('reasoning') || title.includes('evaluate')) {
+    return {
+      opposite: [
+        'To accept claims without any analysis',
+        'To make decisions based on emotion only',
+        'To dismiss evidence without consideration',
+        'To reach conclusions without justification'
+      ],
+      similar: [
+        'To assess quality against set criteria',
+        'To think logically about situations',
+        'To weigh pros and cons carefully',
+        'To support conclusions with valid arguments'
+      ],
+      unrelated: [
+        'A routine for daily physical exercise',
+        'A process for manufacturing products',
+        'A procedure for medical examinations',
+        'A system for organizing personal files'
+      ]
+    };
+  }
+
+  // Advocacy & Analysis & Claims
+  if (title.includes('advocacy') || title.includes('analysis') || title.includes('claims') || title.includes('argument')) {
+    return {
+      opposite: [
+        'To remain neutral without taking sides',
+        'To accept information at face value',
+        'To withdraw support from a cause',
+        'To concede points without objection'
+      ],
+      similar: [
+        'To support a position with conviction',
+        'To examine data to draw conclusions',
+        'To assert opinions based on evidence',
+        'To defend ideas against criticism'
+      ],
+      unrelated: [
+        'A method for preparing healthy meals',
+        'A technique for landscaping gardens',
+        'A practice for learning musical instruments',
+        'A guide for planning vacation trips'
+      ]
+    };
+  }
+
+  // Evidence & Methods & Inquiry & Research
+  if (title.includes('evidence') || title.includes('method') || title.includes('inquiry') || title.includes('research')) {
+    return {
+      opposite: [
+        'To rely on assumptions without proof',
+        'To use random approaches without structure',
+        'To avoid asking questions about topics',
+        'To accept results without verification'
+      ],
+      similar: [
+        'To gather facts that support findings',
+        'To follow systematic procedures carefully',
+        'To investigate topics through questioning',
+        'To study subjects using proven techniques'
+      ],
+      unrelated: [
+        'A recipe for baking desserts at home',
+        'A routine for morning skincare habits',
+        'A schedule for weekly cleaning tasks',
+        'A plan for organizing birthday parties'
+      ]
+    };
+  }
+
+  // Data & Clarity & Verify & Refine
+  if (title.includes('data') || title.includes('clarity') || title.includes('verify') || title.includes('refine')) {
+    return {
+      opposite: [
+        'To present information in confusing ways',
+        'To accept data without checking accuracy',
+        'To leave work in rough unfinished form',
+        'To ignore errors and inconsistencies'
+      ],
+      similar: [
+        'To organize information systematically',
+        'To confirm facts through checking sources',
+        'To improve quality through revisions',
+        'To ensure accuracy in all details'
+      ],
+      unrelated: [
+        'A game played for casual entertainment',
+        'A show watched for relaxation time',
+        'A hobby pursued during free hours',
+        'A sport practiced for physical fitness'
+      ]
+    };
+  }
+
+  // Legal & Compliance & Authorize & Prohibit
+  if (title.includes('legal') || title.includes('compliance') || title.includes('authorize') || title.includes('prohibit')) {
+    return {
+      opposite: [
+        'To violate rules and regulations knowingly',
+        'To act without proper permission granted',
+        'To allow activities that are forbidden',
+        'To ignore legal requirements completely'
+      ],
+      similar: [
+        'To follow laws and established guidelines',
+        'To grant official approval for actions',
+        'To restrict activities that cause harm',
+        'To ensure adherence to set standards'
+      ],
+      unrelated: [
+        'A dish prepared for family dinner meals',
+        'A trip planned for summer vacation time',
+        'A song played at celebration events',
+        'A book read for personal enjoyment'
+      ]
+    };
+  }
+
+  // Change & Correction & Trends
+  if (title.includes('change') || title.includes('correction') || title.includes('trends') || title.includes('adapt')) {
+    return {
+      opposite: [
+        'To maintain existing conditions unchanged',
+        'To ignore mistakes without fixing them',
+        'To resist new developments stubbornly',
+        'To remain inflexible despite circumstances'
+      ],
+      similar: [
+        'To modify approaches when needed',
+        'To fix errors to improve results',
+        'To recognize patterns over time periods',
+        'To adjust behavior to new situations'
+      ],
+      unrelated: [
+        'A tool used for home repair tasks',
+        'A device for personal communication needs',
+        'A product for cleaning household surfaces',
+        'A machine for preparing food items'
+      ]
+    };
+  }
+
+  // Emphasis & Response & Resolve & Clarify
+  if (title.includes('emphasis') || title.includes('response') || title.includes('resolve') || title.includes('clarify')) {
+    return {
+      opposite: [
+        'To downplay the importance of issues',
+        'To ignore communications completely',
+        'To leave problems unsolved indefinitely',
+        'To create confusion about meanings'
+      ],
+      similar: [
+        'To highlight key points for attention',
+        'To reply appropriately to inquiries',
+        'To find solutions to disagreements',
+        'To make meanings clear and understood'
+      ],
+      unrelated: [
+        'A method for growing garden vegetables',
+        'A process for developing photographs',
+        'A technique for styling hair properly',
+        'A practice for training pets at home'
+      ]
+    };
+  }
+
+  // Act & Uphold & Persuade & Influence
+  if (title.includes('act') || title.includes('uphold') || title.includes('persuade') || title.includes('influence')) {
+    return {
+      opposite: [
+        'To remain inactive despite circumstances',
+        'To abandon principles under pressure',
+        'To fail to convince others effectively',
+        'To have no impact on outcomes'
+      ],
+      similar: [
+        'To take steps toward achieving goals',
+        'To maintain standards and values firmly',
+        'To encourage others to accept views',
+        'To affect decisions through actions'
+      ],
+      unrelated: [
+        'A pattern for sewing clothing items',
+        'A formula for mixing paint colors',
+        'A diagram for assembling furniture pieces',
+        'A chart for tracking weather conditions'
+      ]
+    };
+  }
+
+  // Process Improvement
+  if (title.includes('process') || title.includes('improvement')) {
+    return {
+      opposite: [
+        'To continue inefficient practices unchanged',
+        'To reduce quality of work produced',
+        'To complicate procedures unnecessarily',
+        'To ignore feedback about performance'
+      ],
+      similar: [
+        'To streamline workflows for efficiency',
+        'To enhance quality of deliverables',
+        'To simplify steps in procedures',
+        'To incorporate suggestions for betterment'
+      ],
+      unrelated: [
+        'A genre of music for listening pleasure',
+        'A style of art for visual enjoyment',
+        'A type of cuisine for dining experiences',
+        'A form of dance for physical expression'
+      ]
+    };
+  }
+
+  // Finance & Procurement & Policy & Resources
+  if (title.includes('finance') || title.includes('procurement') || title.includes('policy') || title.includes('resources')) {
+    return {
+      opposite: [
+        'To waste funds without accountability',
+        'To acquire items without proper approval',
+        'To operate without established guidelines',
+        'To deplete assets without replacement'
+      ],
+      similar: [
+        'To manage budgets responsibly and carefully',
+        'To obtain supplies through proper channels',
+        'To follow organizational rules consistently',
+        'To allocate assets based on priorities'
+      ],
+      unrelated: [
+        'A routine for daily meditation practice',
+        'A program for learning new languages',
+        'A schedule for regular exercise sessions',
+        'A plan for weekend leisure activities'
+      ]
+    };
+  }
+
+  // Deploy & Maintain
+  if (title.includes('deploy') || title.includes('maintain')) {
+    return {
+      opposite: [
+        'To keep systems offline and inactive',
+        'To neglect equipment until it fails',
+        'To remove features without replacement',
+        'To abandon infrastructure without care'
+      ],
+      similar: [
+        'To launch systems into active operation',
+        'To preserve functionality through upkeep',
+        'To ensure continuous service availability',
+        'To support ongoing operational needs'
+      ],
+      unrelated: [
+        'A recipe for making homemade desserts',
+        'A guide for planning road trip routes',
+        'A tutorial for crafting handmade items',
+        'A manual for playing board games'
+      ]
+    };
+  }
+
+  // People & Emotions
+  if (title.includes('people') || title.includes('emotion')) {
+    return {
+      opposite: [
+        'To show no concern for others feelings',
+        'To isolate oneself from social contact',
+        'To suppress emotional expression entirely',
+        'To disregard interpersonal relationships'
+      ],
+      similar: [
+        'To demonstrate empathy toward others',
+        'To build connections with colleagues',
+        'To express feelings appropriately',
+        'To value human interaction and bonds'
+      ],
+      unrelated: [
+        'A formula for calculating measurements',
+        'A system for organizing digital files',
+        'A method for analyzing statistical data',
+        'A process for testing software code'
+      ]
+    };
+  }
+
+  // Proficient/Elite C2 Level Topics
+  if (title.includes('proficient') || title.includes('elite') || title.includes('precision') || title.includes('nuanced')) {
+    return {
+      opposite: [
+        'To obscure or make something more confusing',
+        'To diminish the significance of an achievement',
+        'To abandon a position without justification',
+        'To contradict previous statements entirely'
+      ],
+      similar: [
+        'To articulate complex ideas with clarity',
+        'To substantiate claims with evidence',
+        'To synthesize information from multiple sources',
+        'To evaluate critically before deciding'
+      ],
+      unrelated: [
+        'A mundane task requiring minimal effort',
+        'A recreational activity for leisure time',
+        'A basic household item for daily use',
+        'A common practice without significance'
+      ]
+    };
+  }
+
+  // Abstract concepts (for Abstract Nouns sets)
+  if (title.includes('abstract') || title.includes('philosophy') || title.includes('logic')) {
+    return {
+      opposite: [
+        'A tangible object that can be physically touched',
+        'A state of complete certainty without doubt',
+        'The abandonment of all ethical principles',
+        'A simplistic view lacking depth or nuance'
+      ],
+      similar: [
+        'A theoretical framework for understanding phenomena',
+        'An intangible quality that cannot be measured',
+        'A fundamental principle guiding behavior',
+        'A complex notion requiring careful analysis'
+      ],
+      unrelated: [
+        'A physical tool used for construction work',
+        'A recipe for preparing a traditional dish',
+        'A sports technique for improving performance',
+        'A travel destination popular with tourists'
+      ]
+    };
+  }
+
+  // Argumentation and Debate (for Argumentation Verbs sets)
+  if (title.includes('argument') || title.includes('debate') || title.includes('evaluative')) {
+    return {
+      opposite: [
+        'To accept claims without any scrutiny',
+        'To concede a point without resistance',
+        'To withdraw from the discussion entirely',
+        'To ignore evidence that contradicts beliefs'
+      ],
+      similar: [
+        'To challenge assumptions with logic',
+        'To defend a position with evidence',
+        'To refute opposing arguments effectively',
+        'To persuade others through reasoning'
+      ],
+      unrelated: [
+        'To prepare ingredients for cooking meals',
+        'To navigate through unfamiliar terrain safely',
+        'To maintain equipment in working condition',
+        'To organize files in alphabetical order'
+      ]
+    };
+  }
+
+  // Science and Research (for Science/Logic sets)
+  if (title.includes('science') || title.includes('research') || title.includes('economics')) {
+    return {
+      opposite: [
+        'To dismiss findings without investigation',
+        'A random occurrence without any pattern',
+        'An unsubstantiated claim lacking evidence',
+        'A regression to earlier methods or practices'
+      ],
+      similar: [
+        'To investigate phenomena systematically',
+        'A predictable outcome based on variables',
+        'A verified conclusion supported by data',
+        'An advancement in methodology or technique'
+      ],
+      unrelated: [
+        'A decorative item for aesthetic purposes',
+        'A casual conversation among acquaintances',
+        'A traditional ceremony marking occasions',
+        'A recreational sport played for enjoyment'
+      ]
+    };
+  }
+
   // Default fallback for quiz or unlisted topics
   return {
     opposite: ['Something different from topic', 'The reverse meaning of concept', 'An opposite action to behavior', 'A contrary thing to subject'],
@@ -2831,9 +3317,11 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
 
     if (correct) {
       setPhaseCorrect(prev => prev + 1);
+      onCorrectAnswer?.();
     } else {
       // Lose a heart on wrong answer
       onHeartLost();
+      onIncorrectAnswer?.();
       triggerHeartLostAnimation();
     }
     setIsProcessingNext(false);
@@ -3066,13 +3554,13 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#252525',
+    backgroundColor: '#1B263B',
   },
   loadingText: {
     fontSize: 16,
@@ -3095,7 +3583,7 @@ const styles = StyleSheet.create({
   progressBarPill: {
     flex: 1,
     height: 12,
-    backgroundColor: '#3A3A3A',
+    backgroundColor: '#2D4A66',
     borderRadius: 6,
     overflow: 'hidden',
     marginRight: 8,
@@ -3165,7 +3653,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 6,
-    backgroundColor: '#333',
+    backgroundColor: '#243B53',
     borderRadius: 3,
     overflow: 'hidden',
     marginBottom: 24,
@@ -3223,7 +3711,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   optionButton: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     paddingVertical: 18,
     paddingHorizontal: 20,

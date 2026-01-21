@@ -221,7 +221,7 @@ export default function VaultScreen() {
       <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#F25E86" />
-          <Text style={[styles.loadingText, isLight && { color: '#4B5563' }]}>Loading your vocabulary...</Text>
+          <Text style={[styles.loadingText, isLight && { color: '#2D4A66' }]}>Loading your vocabulary...</Text>
         </View>
       </SafeAreaView>
     );
@@ -261,7 +261,7 @@ export default function VaultScreen() {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.guideTitle, isLight && { color: '#111827' }]}>Organize your vault</Text>
-          <Text style={[styles.guideText, isLight && { color: '#4B5563' }]}>Create folders like “Travel”, “Work”, “Phrasal Verbs”, or “Daily Practice”.</Text>
+          <Text style={[styles.guideText, isLight && { color: '#2D4A66' }]}>Create folders like “Travel”, “Work”, “Phrasal Verbs”, or “Daily Practice”.</Text>
         </View>
         <TouchableOpacity onPress={() => setShowFolderCreate(true)} style={[styles.guideBtn, isLight && styles.guideBtnLight]}>
           <Text style={[styles.guideBtnText, isLight && { color: '#FFFFFF' }]}>Create</Text>
@@ -295,7 +295,7 @@ export default function VaultScreen() {
             <Text style={[styles.emptyTitle, isLight && { color: '#111827' }]}>
               {searchQuery ? 'No folders found' : 'No folders yet'}
             </Text>
-            <Text style={[styles.emptySubtitle, isLight && { color: '#4B5563' }]}>Create a folder to organize your saved words.</Text>
+            <Text style={[styles.emptySubtitle, isLight && { color: '#2D4A66' }]}>Create a folder to organize your saved words.</Text>
           </View>
         ) : (
           <View style={styles.wordsList}>
@@ -335,7 +335,7 @@ export default function VaultScreen() {
                     />
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <Text style={[styles.folderTitle, isLight && { color: '#111827' }]}>{f.title}</Text>
-                      <Text style={[styles.folderSubtitle, isLight && { color: '#4B5563' }]}>{count} {count === 1 ? 'word' : 'words'}</Text>
+                      <Text style={[styles.folderSubtitle, isLight && { color: '#2D4A66' }]}>{count} {count === 1 ? 'word' : 'words'}</Text>
                     </View>
                     {!isDefaultFolder && (
                       <TouchableOpacity
@@ -515,7 +515,7 @@ export default function VaultScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
   },
   loadingContainer: {
     flex: 1,
@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
   headerLight: {
   },
   meaningCard: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     padding: 14,
     marginTop: 8,
@@ -560,7 +560,7 @@ const styles = StyleSheet.create({
   },
   meaningCardActive: { borderColor: '#4ED9CB', backgroundColor: 'rgba(78, 217, 203, 0.1)' },
   meaningDef: { color: '#FFFFFF', fontWeight: '700', fontFamily: 'Ubuntu-Bold' },
-  meaningDefLight: { color: '#1A1A1A' },
+  meaningDefLight: { color: '#0D1B2A' },
   meaningExample: { color: '#9CA3AF', marginTop: 4, fontStyle: 'italic', fontFamily: 'Ubuntu-Medium' },
   meaningExampleLight: { color: '#6B7280' },
   title: {
@@ -569,7 +569,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'Feather-Bold',
   },
-  titleLight: { color: '#1A1A1A' },
+  titleLight: { color: '#0D1B2A' },
   addButtonIcon: {
     padding: 8,
   },
@@ -578,7 +578,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: 20,
     marginVertical: 16,
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     paddingHorizontal: 16,
     borderWidth: 2,
@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 8,
     marginBottom: 6,
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     padding: 14,
     borderWidth: 2,
@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: '#F25E86',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 3 },
     shadowOpacity: 0.4,
@@ -678,7 +678,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   wordCard: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -734,7 +734,7 @@ const styles = StyleSheet.create({
   moveButton: {
     marginTop: 10,
     alignSelf: 'flex-start',
-    backgroundColor: '#2A2D2D',
+    backgroundColor: '#1B263B',
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 8,
@@ -749,7 +749,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
@@ -771,7 +771,7 @@ const styles = StyleSheet.create({
     borderRightColor: 'rgba(78,217,203,0.22)',
   },
   folderChipStatic: {
-    backgroundColor: '#2A2D2D',
+    backgroundColor: '#1B263B',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
@@ -789,7 +789,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Ubuntu-Bold',
   },
   folderChipTextLight: {
-    color: '#1A1A1A',
+    color: '#0D1B2A',
   },
   practiceInfo: {
     flex: 1,
@@ -820,7 +820,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 18,
     padding: 24,
     width: '90%',
@@ -841,7 +841,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Feather-Bold',
   },
   modalInput: {
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -870,7 +870,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#1B263B',
     borderWidth: 2,
     borderColor: 'rgba(78, 217, 203, 0.35)',
   },
@@ -886,12 +886,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Ubuntu-Bold',
   },
   cancelButtonTextLight: {
-    color: '#374151',
+    color: '#2D4A66',
   },
   addButton: {
     backgroundColor: '#F25E86',
     borderWidth: 3,
-    borderColor: '#1A1A1A',
+    borderColor: '#0D1B2A',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 3 },
     shadowOpacity: 0.4,
@@ -908,7 +908,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     padding: 14,
     marginBottom: 8,
@@ -936,7 +936,7 @@ const styles = StyleSheet.create({
   folderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2A2A2A',
+    backgroundColor: '#1B263B',
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
