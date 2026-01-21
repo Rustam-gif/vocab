@@ -435,52 +435,9 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
         <Text style={styles.stepTitle}>What's your vocabulary level?</Text>
         <Text style={styles.stepSubtitle}>Select the words you know</Text>
 
-        {/* Beginner Words */}
-        <Text style={styles.wordSectionTitle}>Beginner</Text>
+        {/* All Words Combined */}
         <View style={styles.wordGrid}>
-          {wordKnowledgeData.beginner.map((word) => {
-            const isSelected = selectedWords.has(word);
-            return (
-              <TouchableOpacity
-                key={word}
-                style={[styles.wordChip, isSelected && styles.wordChipSelected]}
-                onPress={() => toggleWord(word)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.wordChipText, isSelected && styles.wordChipTextSelected]}>
-                  {word}
-                </Text>
-                {isSelected && <Check size={14} color="#4ED9CB" style={{ marginLeft: 4 }} />}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Intermediate Words */}
-        <Text style={styles.wordSectionTitle}>Intermediate</Text>
-        <View style={styles.wordGrid}>
-          {wordKnowledgeData.intermediate.map((word) => {
-            const isSelected = selectedWords.has(word);
-            return (
-              <TouchableOpacity
-                key={word}
-                style={[styles.wordChip, isSelected && styles.wordChipSelected]}
-                onPress={() => toggleWord(word)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.wordChipText, isSelected && styles.wordChipTextSelected]}>
-                  {word}
-                </Text>
-                {isSelected && <Check size={14} color="#4ED9CB" style={{ marginLeft: 4 }} />}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Advanced Words */}
-        <Text style={styles.wordSectionTitle}>Advanced</Text>
-        <View style={styles.wordGrid}>
-          {wordKnowledgeData.advanced.map((word) => {
+          {[...wordKnowledgeData.beginner, ...wordKnowledgeData.intermediate, ...wordKnowledgeData.advanced].map((word) => {
             const isSelected = selectedWords.has(word);
             return (
               <TouchableOpacity

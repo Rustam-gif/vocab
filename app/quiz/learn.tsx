@@ -6,8 +6,8 @@ import ReactNativeHapticFeedback from '../../lib/haptics';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
 import LottieView from 'lottie-react-native';
-import { levels } from './data/levels';
-import type { Level, Set as VocabSet } from './data/levels';
+import { levels, getOrderedSetsForLevel } from './data/levels';
+import type { Level, Set as VocabSet, SetCategory } from './data/levels';
 import ErrorBoundary from './components/ErrorBoundary';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -27,6 +27,7 @@ import StarField from './components/StarField';
 const SELECTED_LEVEL_KEY = '@engniter.selectedLevel';
 const HIGHEST_LEVEL_KEY = '@engniter.highestLevel';
 const PLACEMENT_LEVEL_KEY = '@engniter.placementLevel';
+const USER_FOCUS_KEY = '@engniter.onboarding.focus';
 const UNLOCK_ALL_SETS = false;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PLANET_SIZE = 130; // Normal planet size
@@ -34,6 +35,7 @@ const PLANET_SIZE_SELECTED = 145; // Slightly larger when selected (subtle magni
 const NODE_SIZE = 72; // Keep for compatibility
 const NODE_SPACING = 100; // Vertical spacing (kept for compatibility)
 const NODE_SPACING_H = 200; // Horizontal spacing between planets
+const HORIZONTAL_SPACING = 280; // Space between planets in horizontal scroll
 const LEVEL_NODE_SIZE = 80;
 
 // Space theme colors
@@ -68,6 +70,19 @@ const PLANET_TYPES = [
   'red',
 ] as const;
 type PlanetType = typeof PLANET_TYPES[number] | 'checkpoint';
+
+// Simple colors for static planet circles (when not using Lottie)
+const PLANET_COLORS: Record<string, string[]> = {
+  colorful: ['#FF6B6B', '#4ECDC4'],
+  orange: ['#FF9F43', '#EE5A24'],
+  moon: ['#A0A0A0', '#707070'],
+  darkPurple: ['#6C5CE7', '#4A3F9F'],
+  purple: ['#A55EEA', '#8854D0'],
+  blue: ['#54A0FF', '#2E86DE'],
+  green: ['#26DE81', '#20BF6B'],
+  red: ['#FF6B6B', '#EE5253'],
+  checkpoint: ['#FFD700', '#FFA500'],
+};
 
 // Get planet type based on index for visual variety
 const getPlanetType = (index: number, isQuiz: boolean, title: string): PlanetType => {
@@ -112,25 +127,28 @@ export default function LearnScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const isScrollingRef = useRef(false);
   const scrollEndTimer = useRef<NodeJS.Timeout | null>(null);
+  const lastCenteredPlanet = useRef<number>(-1);
   const [centeredPlanetIndex, setCenteredPlanetIndex] = useState<number>(0);
   const planetScaleAnims = useRef<Animated.Value[]>([]);
 
   // Premium status for gating content
   const [isPremium, setIsPremium] = useState<boolean>(false);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
+  const [showLockedPopup, setShowLockedPopup] = useState<boolean>(false);
+
+  // User's focus preference from onboarding (business, travel, exams, general)
+  const [userFocus, setUserFocus] = useState<SetCategory | null>(null);
+
+  // Spacecraft animation state
+  const [spacecraftAnimating, setSpacecraftAnimating] = useState(false);
+  const [spacecraftFromIndex, setSpacecraftFromIndex] = useState(0);
+  const [spacecraftToIndex, setSpacecraftToIndex] = useState(0);
+  const spacecraftAnim = useRef(new Animated.Value(0)).current;
 
   // Ensure nav bar is visible when this screen is shown
   useEffect(() => {
     DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
   }, []);
-
-  // Listen for set completion events to refresh immediately
-  useEffect(() => {
-    const subscription = DeviceEventEmitter.addListener('SET_COMPLETED', () => {
-      refreshLevel();
-    });
-    return () => subscription.remove();
-  }, [refreshLevel]);
 
   // Check premium status on mount
   const checkPremiumStatus = useCallback(async () => {
@@ -142,9 +160,22 @@ export default function LearnScreen() {
     }
   }, []);
 
+  // Load user's focus preference from onboarding
+  const loadUserFocus = useCallback(async () => {
+    try {
+      const focus = await AsyncStorage.getItem(USER_FOCUS_KEY);
+      if (focus && ['general', 'travel', 'business', 'exams'].includes(focus)) {
+        setUserFocus(focus as SetCategory);
+      }
+    } catch {
+      // Keep default (null)
+    }
+  }, []);
+
   useEffect(() => {
     checkPremiumStatus();
-  }, [checkPremiumStatus]);
+    loadUserFocus();
+  }, [checkPremiumStatus, loadUserFocus]);
 
   useFocusEffect(
     useCallback(() => {
@@ -289,12 +320,18 @@ export default function LearnScreen() {
     if (level) {
       await Promise.all([ProgressService.initialize(), SetProgressService.initialize()]);
 
-      const baseSets = level.id === 'upper-intermediate'
-        ? level.sets.filter(s => {
-            const n = Number(s.id);
-            return isNaN(n) || n > 10;
-          })
-        : level.sets;
+      // Get sets ordered by user's focus preference (Business, Travel, IELTS, General)
+      // For levels with category-based sets, use the ordered sets
+      const categoryLevels = ['beginner', 'intermediate', 'upper-intermediate', 'advanced'];
+      let baseSets: VocabSet[];
+
+      if (categoryLevels.includes(level.id)) {
+        // Use ordered sets based on user's focus preference
+        baseSets = getOrderedSetsForLevel(level.id, userFocus) as VocabSet[];
+      } else {
+        // For other levels (advanced-plus, proficient), use default sets
+        baseSets = level.sets;
+      }
 
       // Auto-insert recap quizzes after every 4 sets
       const buildWithQuizzes = (sets: VocabSet[]) => {
@@ -439,14 +476,19 @@ export default function LearnScreen() {
         }, 100);
       }
     }
-  }, [activeLevelId, isPremium]);
+  }, [activeLevelId, isPremium, userFocus]);
 
   useEffect(() => { refreshLevel(); }, [refreshLevel]);
+
+  // Track if we need to scroll on next render (after focus)
+  const shouldScrollOnFocus = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
       // Refresh immediately on focus - don't wait for InteractionManager
       refreshLevel();
+      // Mark that we should scroll to current set
+      shouldScrollOnFocus.current = true;
     }, [refreshLevel])
   );
 
@@ -555,14 +597,75 @@ export default function LearnScreen() {
     }
   };
 
-  // Update current set index when level changes
+  // Scroll to a specific planet index
+  const scrollToPlanet = useCallback((index: number, animated: boolean = true) => {
+    if (!scrollViewRef.current) return;
+    // Calculate scroll position to center the planet
+    // Based on: planetIndex = Math.round((viewportCenter - 60 - PLANET_SIZE / 2 - 20) / HORIZONTAL_SPACING)
+    // Reverse: scrollX = index * HORIZONTAL_SPACING + 60 + PLANET_SIZE / 2 + 20 - SCREEN_WIDTH / 2
+    const scrollX = index * HORIZONTAL_SPACING + 60 + PLANET_SIZE / 2 + 20 - SCREEN_WIDTH / 2;
+    scrollViewRef.current.scrollTo({ x: Math.max(0, scrollX), animated });
+    setCenteredPlanetIndex(index);
+    lastCenteredPlanet.current = index;
+  }, []);
+
+  // Listen for set completion events to refresh and animate spacecraft
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('SET_COMPLETED', (data?: { setId: number }) => {
+      refreshLevel();
+
+      // Trigger spacecraft animation if we have the completed set info
+      if (data?.setId && currentLevel) {
+        const completedIndex = currentLevel.sets.findIndex(s => s.id === data.setId);
+        if (completedIndex >= 0 && completedIndex < currentLevel.sets.length - 1) {
+          // Animate from completed planet to next planet
+          setSpacecraftFromIndex(completedIndex);
+          setSpacecraftToIndex(completedIndex + 1);
+          setSpacecraftAnimating(true);
+          spacecraftAnim.setValue(0);
+
+          // Run the animation
+          Animated.timing(spacecraftAnim, {
+            toValue: 1,
+            duration: 1200,
+            easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+            useNativeDriver: true,
+          }).start(() => {
+            setSpacecraftAnimating(false);
+            // Scroll to the next planet after animation
+            scrollToPlanet(completedIndex + 1, true);
+          });
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, [refreshLevel, currentLevel, spacecraftAnim, scrollToPlanet]);
+
+  // Scroll to current set when focus changes and level is loaded
+  useEffect(() => {
+    if (shouldScrollOnFocus.current && currentLevel) {
+      shouldScrollOnFocus.current = false;
+      const currentIndex = currentLevel.sets.findIndex(s => !s.completed && !s.locked);
+      const targetIndex = currentIndex === -1 ? 0 : currentIndex;
+      setTimeout(() => {
+        scrollToPlanet(targetIndex, false);
+      }, 150);
+    }
+  }, [currentLevel, scrollToPlanet]);
+
+  // Update current set index when level changes and scroll to it
   useEffect(() => {
     if (!currentLevel) return;
 
     const newIndex = currentLevel.sets.findIndex(s => !s.completed && !s.locked);
-    if (newIndex === -1) return;
-    setCurrentSetIndex(newIndex);
-  }, [currentLevel]);
+    const targetIndex = newIndex === -1 ? 0 : newIndex;
+    setCurrentSetIndex(targetIndex);
+
+    // Scroll to the current set after a brief delay to ensure layout is ready
+    setTimeout(() => {
+      scrollToPlanet(targetIndex, false);
+    }, 100);
+  }, [currentLevel, scrollToPlanet]);
 
   // Calculate stage gate positions and trigger haptic when scrolling past
   const stageGateIndices = useRef<number[]>([]);
@@ -608,10 +711,6 @@ export default function LearnScreen() {
       // Haptic feedback not available
     }
   }, []);
-
-  // Track last centered planet for haptic feedback
-  const lastCenteredPlanet = useRef<number>(-1);
-  const HORIZONTAL_SPACING = 280; // Must match buildCurrentLevelPath - more space between planets
 
   // Ref to track pending state update
   const pendingCenteredUpdate = useRef<NodeJS.Timeout | null>(null);
@@ -688,6 +787,27 @@ export default function LearnScreen() {
 
   // Extra padding to prevent level circle from overlapping with status bar
   const contentTop = insets.top + 20;
+
+  // Calculate position for diagonal winding S-curve path (shared function)
+  // MUST be before early return to avoid hooks order issues
+  const getPlanetPosition = useCallback((index: number): { x: number; y: number } => {
+    const x = index * HORIZONTAL_SPACING + 60;
+    // S-curve: alternates between going down and up diagonally
+    const phase = (index % 4); // 4-node cycle for S-curve
+    let y;
+
+    if (phase === 0) {
+      y = 80; // Top position (moved down)
+    } else if (phase === 1) {
+      y = 200; // Going down
+    } else if (phase === 2) {
+      y = 320; // Bottom position
+    } else {
+      y = 200; // Going back up
+    }
+
+    return { x, y };
+  }, []);
 
   // Memoize connector paths to prevent recalculation on every render
   // Must be before any early returns to avoid hook order issues
@@ -957,26 +1077,19 @@ export default function LearnScreen() {
             </View>
           )}
 
-          {/* Planet Lottie - only centered planet animates */}
+          {/* Planet Lottie - only centered planet animates, others are frozen */}
           <LottieView
             source={planetSource}
             autoPlay={isCentered}
             loop={isCentered}
+            speed={isCentered ? 1 : 0}
+            progress={isCentered ? undefined : 0}
             style={[
               { width: planetSize, height: planetSize },
               (isLocked && !quizCanSkipAhead) && styles.planetLocked,
             ]}
           />
 
-          {/* Flag on completed planets */}
-          {isCompleted && (
-            <View style={[styles.flagContainerH, { left: planetSize / 2 - 5 }]}>
-              <View style={styles.flagPoleH} />
-              <View style={styles.flagBannerH}>
-                <View style={styles.flagTriangleH} />
-              </View>
-            </View>
-          )}
         </TouchableOpacity>
       </Animated.View>
     );
@@ -1185,6 +1298,68 @@ export default function LearnScreen() {
     );
   };
 
+  // Render spacecraft animation overlay (temporarily disabled for debugging)
+  const renderSpacecraftAnimation = () => {
+    return null; // Disabled for debugging
+    if (!spacecraftAnimating) return null;
+
+    const fromPos = getPlanetPosition(spacecraftFromIndex);
+    const toPos = getPlanetPosition(spacecraftToIndex);
+
+    // Calculate center positions (account for planet size and label offset)
+    const fromX = fromPos.x + 20 + PLANET_SIZE / 2;
+    const fromY = fromPos.y + PLANET_SIZE / 2 + 100; // +100 for top margin
+    const toX = toPos.x + 20 + PLANET_SIZE / 2;
+    const toY = toPos.y + PLANET_SIZE / 2 + 100;
+
+    // Interpolate position
+    const translateX = spacecraftAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [fromX - 30, toX - 30], // Center the 60px spacecraft
+    });
+    const translateY = spacecraftAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [fromY - 30, toY - 30],
+    });
+
+    // Add a slight arc to the path
+    const arcOffset = spacecraftAnim.interpolate({
+      inputRange: [0, 0.5, 1],
+      outputRange: [0, -60, 0], // Arc up in the middle
+    });
+
+    // Rotate spacecraft to face direction of travel
+    const rotate = spacecraftAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['0deg', '0deg'],
+    });
+
+    // Scale animation (grow slightly in middle)
+    const scale = spacecraftAnim.interpolate({
+      inputRange: [0, 0.5, 1],
+      outputRange: [1, 1.3, 1],
+    });
+
+    return (
+      <Animated.View
+        style={[
+          styles.spacecraftAnimContainer,
+          {
+            transform: [
+              { translateX },
+              { translateY: Animated.add(translateY, arcOffset) },
+              { scale },
+              { rotate },
+            ],
+          },
+        ]}
+        pointerEvents="none"
+      >
+        <Text style={styles.spacecraftEmoji}>🚀</Text>
+      </Animated.View>
+    );
+  };
+
   // Build the path for current level only - DIAGONAL WINDING S-CURVE
   const buildCurrentLevelPath = () => {
     if (!currentLevel) return null;
@@ -1194,33 +1369,23 @@ export default function LearnScreen() {
     const totalWidth = setsToRender.length * spacing + 200;
     const pathHeight = SCREEN_HEIGHT - 200;
 
-    // Calculate position for diagonal winding S-curve path
-    const getPosition = (index: number): { x: number; y: number } => {
-      const x = index * spacing + 60;
-      // S-curve: alternates between going down and up diagonally
-      const phase = (index % 4); // 4-node cycle for S-curve
-      let y;
-
-      if (phase === 0) {
-        y = 80; // Top position (moved down)
-      } else if (phase === 1) {
-        y = 200; // Going down
-      } else if (phase === 2) {
-        y = 320; // Bottom position
-      } else {
-        y = 200; // Going back up
-      }
-
-      return { x, y };
-    };
+    // Use shared position function
+    const getPosition = getPlanetPosition;
 
     // Offset for planet center within wrapper
     const wrapperOffset = 20 + PLANET_SIZE / 2;
 
+    // Windowed rendering - only render planets within ±4 of centered index to save memory
+    const RENDER_WINDOW = 4;
+    const minIndex = Math.max(0, centeredPlanetIndex - RENDER_WINDOW);
+    const maxIndex = Math.min(setsToRender.length - 1, centeredPlanetIndex + RENDER_WINDOW);
+
     return (
       <View style={[styles.planetPathContainerH, { width: totalWidth, height: pathHeight }]}>
-        {/* Render connectors first (behind planets) */}
+        {/* Render connectors only for visible planets */}
         {setsToRender.map((set, index) => {
+          // Only render connectors within the visible window (extend by 1 for connectors)
+          if (index < minIndex - 1 || index > maxIndex) return null;
           if (index >= setsToRender.length - 1) return null;
           const current = getPosition(index);
           const next = getPosition(index + 1);
@@ -1246,8 +1411,10 @@ export default function LearnScreen() {
             </View>
           );
         })}
-        {/* Planet nodes */}
+        {/* Planet nodes - only render within visible window */}
         {setsToRender.map((set, index) => {
+          // Skip planets outside the render window
+          if (index < minIndex || index > maxIndex) return null;
           const pos = getPosition(index);
           return (
             <View
@@ -1267,14 +1434,15 @@ export default function LearnScreen() {
     );
   };
 
-  // Find the current set for the Start/Practice Again button
-  const currentSet = currentLevel?.sets.find(s => !s.completed && !s.locked);
+  // Get the centered set for the Start button
+  const centeredSet = currentLevel?.sets[centeredPlanetIndex];
   const allCompleted = currentLevel && currentLevel.sets.every(s => s.completed);
+  const isCenteredSetLocked = centeredSet?.locked && !((centeredSet as any).type === 'quiz' && canQuizSkipAhead(centeredSet as any, currentLevel?.sets || []));
 
   return (
     <View style={[styles.container, { backgroundColor: SPACE_BG }]}>
-      {/* Space background with stars */}
-      <StarField />
+      {/* Space background with stars - temporarily disabled for debugging */}
+      {/* <StarField /> */}
 
       {/* Top status panel */}
       <TopStatusPanel floating includeTopInset />
@@ -1295,20 +1463,39 @@ export default function LearnScreen() {
         {buildCurrentLevelPath()}
       </ScrollView>
 
+      {/* Spacecraft flying animation overlay */}
+      {renderSpacecraftAnimation()}
+
       {/* Start / Practice Again button at bottom */}
-      {currentLevel && (
+      {currentLevel && centeredSet && (
         <View style={styles.bottomButtonContainer}>
+          {/* Show centered set title */}
+          <Text style={styles.centeredSetTitle} numberOfLines={1}>
+            {(centeredSet as any).type === 'quiz'
+              ? `Quiz ${centeredSet.title.replace('Quiz ', '')}`
+              : cleanTitle(centeredSet.title)}
+          </Text>
           <TouchableOpacity
-            style={styles.startButton}
+            style={[
+              styles.startButton,
+              (isCenteredSetLocked || (!isPremium && centeredPlanetIndex > 0)) && styles.startButtonLocked
+            ]}
             onPress={() => {
-              if (currentSet) {
-                handleSetPress(currentSet as any, currentLevel.sets);
+              // Free users can only access the first set
+              if (!isPremium && centeredPlanetIndex > 0) {
+                setShowPaywall(true);
+                return;
+              }
+              if (isCenteredSetLocked) {
+                setShowLockedPopup(true);
+              } else {
+                handleSetPress(centeredSet as any, currentLevel.sets);
               }
             }}
             activeOpacity={0.9}
           >
             <Text style={styles.startButtonText}>
-              {allCompleted ? 'Practice Again' : 'Start'}
+              {!isPremium && centeredPlanetIndex > 0 ? 'Unlock' : (centeredSet.completed ? 'Practice Again' : 'Start')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1402,6 +1589,45 @@ export default function LearnScreen() {
             </TouchableOpacity>
           </View>
         </View>
+      </Modal>
+
+      {/* Locked Set Popup Modal */}
+      <Modal
+        visible={showLockedPopup}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowLockedPopup(false)}
+      >
+        <TouchableOpacity
+          style={styles.lockedPopupOverlay}
+          activeOpacity={1}
+          onPress={() => setShowLockedPopup(false)}
+        >
+          <View style={[styles.lockedPopupCard, isLight && styles.lockedPopupCardLight]}>
+            {/* Lock icon */}
+            <View style={styles.lockedPopupIconContainer}>
+              <Text style={styles.lockedPopupIcon}>🔒</Text>
+            </View>
+
+            {/* Title */}
+            <Text style={[styles.lockedPopupTitle, isLight && styles.lockedPopupTitleLight]}>
+              Set Locked
+            </Text>
+
+            {/* Message */}
+            <Text style={[styles.lockedPopupMessage, isLight && styles.lockedPopupMessageLight]}>
+              Complete the previous set to unlock this one
+            </Text>
+
+            {/* OK Button */}
+            <TouchableOpacity
+              style={styles.lockedPopupButton}
+              onPress={() => setShowLockedPopup(false)}
+            >
+              <Text style={styles.lockedPopupButtonText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -1717,6 +1943,108 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1A1A1A',
     fontFamily: 'Feather-Bold',
+  },
+  startButtonLocked: {
+    backgroundColor: '#4A5568',
+    shadowColor: '#4A5568',
+  },
+  centeredSetTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 12,
+    textAlign: 'center',
+    fontFamily: 'Ubuntu-Medium',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  // Locked popup styles
+  lockedPopupOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  lockedPopupCard: {
+    backgroundColor: '#1F2937',
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 320,
+    borderWidth: 1,
+    borderColor: 'rgba(78,217,203,0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  lockedPopupCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(78,217,203,0.3)',
+  },
+  lockedPopupIconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(78,217,203,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  lockedPopupIcon: {
+    fontSize: 32,
+  },
+  lockedPopupTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 12,
+    fontFamily: 'Feather-Bold',
+  },
+  lockedPopupTitleLight: {
+    color: '#1F2937',
+  },
+  lockedPopupMessage: {
+    fontSize: 16,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+    fontFamily: 'Ubuntu-Regular',
+  },
+  lockedPopupMessageLight: {
+    color: '#6B7280',
+  },
+  lockedPopupButton: {
+    backgroundColor: '#4ED9CB',
+    paddingVertical: 14,
+    paddingHorizontal: 48,
+    borderRadius: 25,
+  },
+  lockedPopupButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    fontFamily: 'Feather-Bold',
+  },
+  // Spacecraft animation styles
+  spacecraftAnimContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  spacecraftEmoji: {
+    fontSize: 40,
+    transform: [{ rotate: '45deg' }], // Point rocket diagonally
   },
   alienFab: {
     position: 'absolute',

@@ -26,6 +26,7 @@ interface WordIntroProps {
   setId: string;
   levelId: string;
   onComplete: () => void;
+  wordsOverride?: any[]; // Words passed directly from parent (already user-ordered)
 }
 
 interface Word {
@@ -213,7 +214,7 @@ function ResultScreen({
   );
 }
 
-export default function WordIntroComponent({ setId, levelId, onComplete }: WordIntroProps) {
+export default function WordIntroComponent({ setId, levelId, onComplete, wordsOverride }: WordIntroProps) {
   const router = useRouter();
   const { addWord } = useAppStore();
   const themeName = useAppStore(s => s.theme);
@@ -280,6 +281,20 @@ export default function WordIntroComponent({ setId, levelId, onComplete }: WordI
   }, []);
 
   const loadWords = () => {
+    // Use wordsOverride if provided (already correctly ordered by user preference)
+    if (wordsOverride && wordsOverride.length > 0) {
+      const wordData: Word[] = wordsOverride.map(wordObj => ({
+        word: wordObj.word,
+        definition: wordObj.definition,
+        example: wordObj.example,
+        phonetic: wordObj.phonetic,
+        synonyms: wordObj.synonyms || []
+      }));
+      setWords(wordData);
+      return;
+    }
+
+    // Fallback to levels lookup (for backwards compatibility)
     const level = levels.find(l => l.id === levelId);
     if (!level) return;
 

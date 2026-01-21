@@ -14,13 +14,16 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { X } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import WordIntroComponent from './components/word-intro';
 import MCQComponent from './components/mcq';
 import SynonymComponent from './components/synonym';
 import OddOneOutComponent from './components/odd-one-out';
 import MissingLetters from './components/missing-letters';
-import { levels } from './data/levels';
+import { levels, getOrderedSetsForLevel, SetCategory } from './data/levels';
 import { useAppStore } from '../../lib/store';
+
+const USER_FOCUS_KEY = '@engniter.onboarding.focus';
 import { getTheme } from '../../lib/theme';
 import { analyticsService } from '../../services/AnalyticsService';
 import { SetProgressService } from '../../services/SetProgressService';
@@ -45,9 +48,32 @@ export default function AtlasPracticeIntegrated() {
   const recordResult = useAppStore(s => s.recordExerciseResult);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
-  
-  // Check if this is a quiz type
-  const level = useMemo(() => levels.find(l => l.id === levelId), [levelId]);
+
+  // Load user focus preference for correct set ordering
+  const [userFocus, setUserFocus] = useState<SetCategory | null>(null);
+  const [focusLoaded, setFocusLoaded] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(USER_FOCUS_KEY).then(stored => {
+      if (stored) setUserFocus(stored as SetCategory);
+      setFocusLoaded(true);
+    }).catch(() => setFocusLoaded(true));
+  }, []);
+
+  // Get level with sets ordered by user preference (same as learn screen)
+  const level = useMemo(() => {
+    const baseLevel = levels.find(l => l.id === levelId);
+    if (!baseLevel || !focusLoaded) return baseLevel;
+
+    // For levels with category-based sets, use ordered sets
+    const categoryLevels = ['beginner', 'intermediate', 'upper-intermediate', 'advanced'];
+    if (categoryLevels.includes(baseLevel.id)) {
+      const orderedSets = getOrderedSetsForLevel(baseLevel.id, userFocus);
+      return { ...baseLevel, sets: orderedSets };
+    }
+    return baseLevel;
+  }, [levelId, userFocus, focusLoaded]);
+
   const set = useMemo(() => level?.sets.find(s => s.id.toString() === setId), [level, setId]);
 
   // Compute dynamic quiz words for any level when set is not found
@@ -324,8 +350,8 @@ export default function AtlasPracticeIntegrated() {
         // Force immediate save to ensure data persists before navigation
         await SetProgressService.flushSave();
 
-        // Emit event so Learn screen refreshes immediately
-        DeviceEventEmitter.emit('SET_COMPLETED');
+        // Emit event so Learn screen refreshes immediately (with setId for animation)
+        DeviceEventEmitter.emit('SET_COMPLETED', { setId: Number(setId) });
       }
     } catch {}
 
@@ -457,22 +483,23 @@ export default function AtlasPracticeIntegrated() {
     
     // Handle Word Intro component differently
     if (phase.id === 'intro') {
+      // Pass words from user-ordered set (or computed quiz words)
+      const introWords = computedQuizWords || set?.words || [];
       return (
         <Component
           setId={setId || ''}
           levelId={levelId || ''}
           onComplete={() => handlePhaseComplete(0, 0)}
           wordRange={wordRange}
-          wordsOverride={computedQuizWords || undefined}
+          wordsOverride={introWords.length > 0 ? introWords : undefined}
         />
       );
     }
     
     // Special wiring for Missing Letters (new API: single-word component)
     if (phase.id === 'letters') {
-      const levelObj = levels.find(l => l.id === (levelId || ''));
-      const currentSet = levelObj?.sets.find(s => s.id.toString() === String(setId));
-      let words = computedQuizWords || currentSet?.words || [];
+      // Use the already computed level and set which respect user's focus ordering
+      let words = computedQuizWords || set?.words || [];
       
       // Apply word range if specified
       if (wordRange) {
@@ -532,6 +559,8 @@ export default function AtlasPracticeIntegrated() {
         />
       );
     }
+    // Pass words from user-ordered set (or computed quiz words)
+    const componentWords = computedQuizWords || set?.words || [];
     return (
       <Component
         setId={setId || ''}
@@ -542,7 +571,7 @@ export default function AtlasPracticeIntegrated() {
         onCorrectAnswer={handleCorrectAnswer}
         onIncorrectAnswer={handleIncorrectAnswer}
         wordRange={wordRange}
-        wordsOverride={computedQuizWords || undefined}
+        wordsOverride={componentWords.length > 0 ? componentWords : undefined}
         showUfoAnimation={showUfoAnimation}
         ufoAnimationKey={ufoAnimationKey}
       />
@@ -605,6 +634,15 @@ export default function AtlasPracticeIntegrated() {
 
   // Check if we should show intro (not for word-intro phase)
   const shouldShowExerciseIntro = showingIntro && phases[currentPhase]?.id !== 'intro';
+
+  // Wait for user focus to load to ensure correct set ordering
+  if (!focusLoaded) {
+    return (
+      <View style={[styles.wrapper, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <StatusBar barStyle={isLight ? 'dark-content' : 'light-content'} backgroundColor={colors.background} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.wrapper, { backgroundColor: colors.background }]}>
