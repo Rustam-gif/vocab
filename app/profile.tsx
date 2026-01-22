@@ -324,6 +324,13 @@ export default function ProfileScreen() {
         ProgressService.saveProgress().catch(() => {});
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
+        // Clear progress data and Learn screen caches on sign-out
+        try {
+          const { SetProgressService } = require('../services/SetProgressService');
+          const { clearLearnScreenCache } = require('./quiz/learn');
+          SetProgressService.clearAll().catch(() => {});
+          clearLearnScreenCache();
+        } catch {}
       }
       setIsSigningIn(false);
     });
@@ -432,6 +439,13 @@ export default function ProfileScreen() {
           try { await loadProgress(); } catch {}
           // Clear user locally regardless, so the UI updates immediately
           setUser(null);
+          // Clear progress data and Learn screen caches on sign-out
+          try {
+            const { SetProgressService } = require('../services/SetProgressService');
+            const { clearLearnScreenCache } = require('./quiz/learn');
+            await SetProgressService.clearAll();
+            clearLearnScreenCache();
+          } catch {}
         },
       },
     ]);
@@ -473,6 +487,13 @@ export default function ProfileScreen() {
             try { await ProgressService.refreshFromRemote(); } catch {}
             try { await loadProgress(); } catch {}
             setUser(null);
+            // Clear progress data and Learn screen caches on account deletion
+            try {
+              const { SetProgressService } = require('../services/SetProgressService');
+              const { clearLearnScreenCache } = require('./quiz/learn');
+              await SetProgressService.clearAll();
+              clearLearnScreenCache();
+            } catch {}
             Alert.alert('Account Deleted', 'Your account and data have been removed.');
           },
         },

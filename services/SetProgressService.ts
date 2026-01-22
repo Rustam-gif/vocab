@@ -140,6 +140,12 @@ class SetProgressServiceClass {
       score: p?.score,
     };
   }
+
+  // Clear all progress data (for sign-out)
+  async clearAll(): Promise<void> {
+    this.db = {};
+    await this.save();
+  }
 }
 
 export const SetProgressService = new SetProgressServiceClass();

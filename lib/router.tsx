@@ -488,6 +488,10 @@ export function RouteRenderer() {
   const currentEl = getScreenEl(top);
   const homeRoute: Route = { pathname: '/' };
   const homeEl = getScreenEl(homeRoute);
+
+  // Create stable Learn element using same pattern as Home to prevent remounting
+  const learnRoute: Route = { pathname: '/quiz/learn' };
+  const learnEl = getScreenEl(learnRoute);
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
 
@@ -797,6 +801,12 @@ export function RouteRenderer() {
     top.pathname === '/' ||
     (!!sheetRoute && prevRoute?.pathname === '/');
 
+  // Keep Learn screen always mounted (like Home) to preserve scroll position and state
+  // Only control visibility with display property, never unmount with conditional rendering
+  const showLearnBase =
+    basePath === '/quiz/learn' ||
+    (!!sheetRoute && prevRoute?.pathname === '/quiz/learn');
+
   // Horizontal dock (bottom) – no edge swipe; we animate in/out with translateY
   const dockPan = React.useRef(
     PanResponder.create({
@@ -828,9 +838,24 @@ export function RouteRenderer() {
       <View style={{ flex: 1, display: showHomeBase ? 'flex' : 'none' }}>
         {homeEl}
       </View>
-      <View style={{ flex: 1, display: showHomeBase ? 'none' : 'flex' }}>
-        {/* When showing overlay, keep previous screen as base (unless it's Home, which is shown above) */}
-        {isSheetOverlay && prevRoute ? (prevRoute.pathname === '/' ? null : getClonedEl(prevRoute, 'base-prev')) : currentEl}
+
+      {/* Keep Learn screen ALWAYS mounted (never null) to preserve scroll position and state */}
+      {/* Control visibility ONLY with display property - never unmount with conditional */}
+      <View style={{ flex: 1, display: showLearnBase ? 'flex' : 'none' }}>
+        {learnEl}
+      </View>
+
+      {/* Main content area - show current route unless it's Home or Learn */}
+      <View style={{ flex: 1, display: (showHomeBase || showLearnBase) ? 'none' : 'flex' }}>
+        {/* When showing overlay, keep previous screen as base (unless it's Home or Learn, which are shown above) */}
+        {isSheetOverlay && prevRoute ? (
+          prevRoute.pathname === '/' || prevRoute.pathname === '/quiz/learn'
+            ? null
+            : getClonedEl(prevRoute, 'base-prev')
+        ) : (
+          // Don't render Learn here - it has its own persistent View above
+          top.pathname === '/quiz/learn' ? null : currentEl
+        )}
       </View>
 
       {/* Outgoing (previous) screen sliding left when applicable */}

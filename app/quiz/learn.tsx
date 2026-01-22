@@ -44,8 +44,42 @@ const animatedSetIds = new Set<string>();
 // Cache currentLevel at module level to show instantly when switching tabs
 let cachedCurrentLevel: Level | null = null;
 let cachedLevelId: string | null = null;
+let cachedUserFocus: string | null = null; // Track which userFocus the cache was built with
 // Cache the current planet index to avoid flash on tab switch
 let cachedCurrentPlanetIndex: number = 0;
+// Track if we've loaded the cached index from storage
+let hasLoadedCachedIndex: boolean = false;
+
+// Cache premium status and user focus for instant access on mount (prevents flickering)
+let cachedIsPremium: boolean = false;
+let hasLoadedPremiumCache: boolean = false;
+
+// ========== MODULE-LEVEL SCROLL CONTROL FLAGS ==========
+// These MUST be at module level because Learn unmounts on tab switch!
+// If these were component refs, they'd reset on every mount.
+let moduleLayoutReady: boolean = false;
+let moduleInitialScrollDone: boolean = false;
+let moduleScrollLocked: boolean = false;
+// Track the last mounted instance ID to detect remounts
+let lastMountId: number = 0;
+
+// Key for persisting current planet index
+const CURRENT_PLANET_INDEX_KEY = '@engniter.currentPlanetIndex';
+
+// Function to clear all module-level caches (called on sign-out)
+export function clearLearnScreenCache() {
+  cachedCurrentLevel = null;
+  cachedLevelId = null;
+  cachedUserFocus = null;
+  cachedCurrentPlanetIndex = 0;
+  cachedIsPremium = false;
+  hasLoadedCachedIndex = false;
+  hasLoadedPremiumCache = false;
+  moduleLayoutReady = false;
+  moduleInitialScrollDone = false;
+  moduleScrollLocked = false;
+  animatedSetIds.clear();
+}
 
 // Space theme colors
 const SPACE_BG = '#1A2744';
@@ -224,9 +258,8 @@ export default function LearnScreen() {
   const [showSignupModal, setShowSignupModal] = useState(false);
   const [panelHeight, setPanelHeight] = useState<number>(insets.top + 48);
   const { level: levelId, completedSetId } = useLocalSearchParams<{ level: string; completedSetId: string }>();
-  // Use cached level for instant display when switching tabs
+  // Use cached level for instant display on mount
   const [currentLevel, setCurrentLevel] = useState<Level | null>(() => {
-    // Use cache if level matches or no specific level requested
     if (cachedCurrentLevel && (!levelId || cachedLevelId === levelId)) {
       return cachedCurrentLevel;
     }
@@ -242,32 +275,49 @@ export default function LearnScreen() {
   const [activeLevelId, setActiveLevelId] = useState<string | null>(levelId ?? cachedLevelId ?? null);
   const [highestLevel, setHighestLevel] = useState<string | null>(null);
   const [placementLevel, setPlacementLevel] = useState<string | null>(null);
-  const nodeAnims = useRef<Animated.Value[]>([]);
   const levelNodeAnims = useRef<Animated.Value[]>([]);
   const levelPulseAnim = useRef(new Animated.Value(1)).current;
   const levelPulseOpacity = useRef(new Animated.Value(0.4)).current;
+  // ========== SCROLL LOGIC STATE (REBUILT) ==========
+  // Debug logging helper with timestamp
+  const logScroll = useCallback((tag: string, message: string, data?: any) => {
+    const ts = new Date().toISOString().substr(11, 12); // HH:MM:SS.mmm
+    const dataStr = data !== undefined ? JSON.stringify(data) : '';
+    console.log(`[${ts}] [${tag}] ${message} ${dataStr}`);
+  }, []);
+
   // Initialize indices from cached values for instant display
   const [currentSetIndex, setCurrentSetIndex] = useState<number>(() => cachedCurrentPlanetIndex);
-  const hasAnimatedEntrance = useRef(false);
+  const [centeredPlanetIndex, setCenteredPlanetIndex] = useState<number>(() => cachedCurrentPlanetIndex);
   const passedStageGates = useRef<Set<number>>(new Set());
   const scrollViewRef = useRef<ScrollView>(null);
-  const isScrollingRef = useRef(false);
-  const scrollEndTimer = useRef<NodeJS.Timeout | null>(null);
   const lastCenteredPlanet = useRef<number>(cachedCurrentPlanetIndex);
-  const [centeredPlanetIndex, setCenteredPlanetIndex] = useState<number>(() => cachedCurrentPlanetIndex);
   const planetScaleAnims = useRef<Animated.Value[]>([]);
 
-  // Track if initial scroll has been done - SINGLE SOURCE OF TRUTH for visibility
-  const hasInitialScrolled = useRef(false);
-  const [isLayoutReady, setIsLayoutReady] = useState(false);
+  // ========== SCROLL CONTROL (using module-level flags) ==========
+  // These flags are at module level because Learn unmounts on tab switch!
+  // We use a mountId to detect actual app restarts vs tab switch remounts.
+  const mountId = useRef(++lastMountId);
+  // Track scroll end for haptic
+  const scrollEndTimer = useRef<NodeJS.Timeout | null>(null);
+  const isScrollingRef = useRef(false);
 
-  // Premium status for gating content
-  const [isPremium, setIsPremium] = useState<boolean>(false);
+  // Helper to access module-level scroll flags
+  const getLayoutReady = () => moduleLayoutReady;
+  const setLayoutReady = (v: boolean) => { moduleLayoutReady = v; };
+  const getInitialScrollDone = () => moduleInitialScrollDone;
+  const setInitialScrollDone = (v: boolean) => { moduleInitialScrollDone = v; };
+  const getScrollLocked = () => moduleScrollLocked;
+  const setScrollLocked = (v: boolean) => { moduleScrollLocked = v; };
+
+  // Premium status for gating content - initialize from cache to prevent flickering
+  const [isPremium, setIsPremium] = useState<boolean>(() => cachedIsPremium);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
   const [showLockedPopup, setShowLockedPopup] = useState<boolean>(false);
 
   // User's focus preference from onboarding (business, travel, exams, general)
-  const [userFocus, setUserFocus] = useState<SetCategory | null>(null);
+  // Initialize from cache to prevent set reordering on remount
+  const [userFocus, setUserFocus] = useState<SetCategory | null>(() => cachedUserFocus as SetCategory | null);
 
   // Spacecraft animation state
   const [spacecraftAnimating, setSpacecraftAnimating] = useState(false);
@@ -275,9 +325,79 @@ export default function LearnScreen() {
   const [spacecraftToIndex, setSpacecraftToIndex] = useState(0);
   const spacecraftAnim = useRef(new Animated.Value(0)).current;
 
-  // Ensure nav bar is visible when this screen is shown
+  // ========== MOUNT/UNMOUNT LOGGING ==========
   useEffect(() => {
+    const ts = new Date().toISOString().substr(11, 12);
+    const isRemount = cachedCurrentLevel !== null;
+    const cachedCompleted = cachedCurrentLevel ? cachedCurrentLevel.sets.filter(s => s.completed).length : 0;
+    const cachedTotal = cachedCurrentLevel ? cachedCurrentLevel.sets.length : 0;
+    console.log(`\n[${ts}] ========== LEARN MOUNT ========== mountId=${mountId.current}`);
+    console.log(`[${ts}] [LEARN] ${isRemount ? '🔄 TAB SWITCH (should preserve state)' : '🆕 FRESH START'}`);
+    console.log(`[${ts}] [LEARN] cached level: ${cachedCompleted}/${cachedTotal} completed, cachedUserFocus=${cachedUserFocus}`);
+    console.log(`[${ts}] [LEARN] initial state: activeLevelId=${activeLevelId}, isPremium=${isPremium}, userFocus=${userFocus}`);
+    console.log(`[${ts}] [LEARN] flags: layoutReady=${getLayoutReady()}, initialScrollDone=${getInitialScrollDone()}, scrollLocked=${getScrollLocked()}`);
+
+    // On FRESH app start (no cached level), reset module-level flags
+    // On tab switch remount, keep the flags as-is to preserve scroll position
+    if (!isRemount) {
+      console.log(`[${ts}] [LEARN] fresh start - resetting module flags`);
+      setLayoutReady(false);
+      setInitialScrollDone(false);
+      setScrollLocked(false);
+    }
+
+    // Safety check: if scroll is locked for more than 3 seconds, unlock it
+    // This prevents permanent lock if animation callback fails
+    const unlockTimer = setTimeout(() => {
+      if (getScrollLocked()) {
+        console.log(`[${ts}] [LEARN] SAFETY: unlocking scroll after 3s`);
+        setScrollLocked(false);
+      }
+    }, 3000);
+
     DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
+
+    // Listen for manual reset signal (escape hatch for debugging)
+    const resetListener = DeviceEventEmitter.addListener('LEARN_RESET', () => {
+      console.log(`[${ts}] [LEARN] manual reset triggered`);
+      clearLearnScreenCache();
+      // Force refresh
+      refreshLevel();
+    });
+
+    return () => {
+      const ts2 = new Date().toISOString().substr(11, 12);
+      console.log(`\n[${ts2}] ========== LEARN UNMOUNT ========== mountId=${mountId.current}`);
+      console.log(`[${ts2}] [LEARN] ⚠️  UNMOUNTING - This should NOT happen on tab switch!`);
+      clearTimeout(unlockTimer);
+      resetListener.remove();
+    };
+  }, [refreshLevel]);
+
+  // Load persisted planet index on mount (for app restarts)
+  useEffect(() => {
+    if (hasLoadedCachedIndex) return;
+    hasLoadedCachedIndex = true;
+
+    AsyncStorage.getItem(CURRENT_PLANET_INDEX_KEY).then(stored => {
+      if (stored) {
+        const index = parseInt(stored, 10);
+        if (!isNaN(index) && index >= 0) {
+          cachedCurrentPlanetIndex = index;
+          // Update state if component is mounted
+          setCurrentSetIndex(index);
+          setCenteredPlanetIndex(index);
+        }
+      }
+    }).catch(() => {});
+  }, []);
+
+  // ========== DERIVED VALUE: currentPlanetIndex ==========
+  // The first incomplete/unlocked set index based on progress
+  const getCurrentPlanetIndex = useCallback((level: Level | null): number => {
+    if (!level) return cachedCurrentPlanetIndex;
+    const idx = level.sets.findIndex(s => !s.completed && !s.locked);
+    return idx === -1 ? 0 : idx;
   }, []);
 
   // Calculate scroll X position for a given planet index
@@ -285,46 +405,87 @@ export default function LearnScreen() {
     return Math.max(0, index * HORIZONTAL_SPACING + 60 + PLANET_SIZE / 2 + 20 - SCREEN_WIDTH / 2);
   }, []);
 
-  // SINGLE scroll initialization handler - runs only once when layout is ready
-  // This is the ONLY place that handles initial scroll positioning
-  const performInitialScroll = useCallback((targetIndex: number, animated: boolean = false) => {
-    if (!scrollViewRef.current || hasInitialScrolled.current) return;
+  // ========== THE ONLY SCROLL FUNCTION ==========
+  // Rule: All scrolling MUST go through this function
+  const scrollToPlanet = useCallback((index: number, animated: boolean = true) => {
+    const scrollX = getScrollXForIndex(index);
 
-    hasInitialScrolled.current = true;
-    const scrollX = getScrollXForIndex(targetIndex);
+    // Check if scroll is locked (during spacecraft animation)
+    if (getScrollLocked()) {
+      logScroll('SCROLL', `BLOCKED (locked) index=${index}, x=${scrollX}, animated=${animated}`);
+      return;
+    }
+
+    if (!scrollViewRef.current) {
+      logScroll('SCROLL', `BLOCKED (no ref) index=${index}`);
+      return;
+    }
+
+    logScroll('SCROLL', `scrollToPlanet index=${index}, x=${scrollX}, animated=${animated}`);
     scrollViewRef.current.scrollTo({ x: scrollX, y: 0, animated });
-    setCenteredPlanetIndex(targetIndex);
-    lastCenteredPlanet.current = targetIndex;
 
-    // Update cache
-    cachedCurrentPlanetIndex = targetIndex;
-  }, [getScrollXForIndex]);
+    // Update state
+    setCenteredPlanetIndex(index);
+    lastCenteredPlanet.current = index;
+    cachedCurrentPlanetIndex = index;
 
-  // Handle ScrollView layout - this is when we know the ScrollView is ready
-  const handleScrollViewLayout = useCallback(() => {
-    if (isLayoutReady) return;
-    setIsLayoutReady(true);
+    // Persist for app restarts
+    AsyncStorage.setItem(CURRENT_PLANET_INDEX_KEY, String(index)).catch(() => {});
+  }, [getScrollXForIndex, logScroll]);
 
-    // Determine target index from cache or current level
-    const level = currentLevel || cachedCurrentLevel;
+  // ========== INITIAL SCROLL (contentOffset for instant positioning) ==========
+  // Calculate initial offset ONCE using cached data (no deps = runs once)
+  const initialScrollOffset = useMemo(() => {
+    const level = cachedCurrentLevel;
     let targetIndex = cachedCurrentPlanetIndex;
-
     if (level) {
       const idx = level.sets.findIndex(s => !s.completed && !s.locked);
       targetIndex = idx === -1 ? 0 : idx;
     }
+    const x = targetIndex * HORIZONTAL_SPACING + 60 + PLANET_SIZE / 2 + 20 - SCREEN_WIDTH / 2;
+    logScroll('SCROLL', `initialScrollOffset calculated index=${targetIndex}, x=${Math.max(0, x)}`);
+    return { x: Math.max(0, x), y: 0 };
+  }, []); // Empty deps - calculate ONCE on mount
 
-    // Scroll immediately (no animation) to correct position
-    performInitialScroll(targetIndex, false);
-  }, [isLayoutReady, currentLevel, performInitialScroll]);
+  // ========== LAYOUT HANDLER ==========
+  // Triggers initial scroll ONCE after layout is ready
+  // NOTE: Uses module-level flags to survive unmount/remount on tab switch
+  const handleScrollViewLayout = useCallback(() => {
+    if (getLayoutReady()) {
+      // Layout already processed (even across remounts), ignore
+      logScroll('LEARN', 'layout ready (already done, skipping scroll)');
+      return;
+    }
+    setLayoutReady(true);
+    logScroll('LEARN', 'layout ready');
+
+    // Perform initial scroll if not done yet and not locked
+    if (!getInitialScrollDone() && !getScrollLocked()) {
+      const level = currentLevel || cachedCurrentLevel;
+      const targetIndex = getCurrentPlanetIndex(level);
+      logScroll('SCROLL', `initial scroll (from layout) index=${targetIndex}`);
+      setInitialScrollDone(true);
+
+      // Use scrollToPlanet for consistency (but animated=false for instant)
+      scrollToPlanet(targetIndex, false);
+
+      // Also update currentSetIndex state
+      setCurrentSetIndex(targetIndex);
+      logScroll('STATE', `currentPlanetIndex=${targetIndex}`);
+    }
+  }, [currentLevel, getCurrentPlanetIndex, scrollToPlanet, logScroll]);
 
   // Check premium status on mount
   const checkPremiumStatus = useCallback(async () => {
     try {
       const status = await SubscriptionService.getStatus();
-      setIsPremium(status?.active ?? false);
+      const premium = status?.active ?? false;
+      setIsPremium(premium);
+      // Update module-level cache for next mount
+      cachedIsPremium = premium;
     } catch {
       setIsPremium(false);
+      cachedIsPremium = false;
     }
   }, []);
 
@@ -334,36 +495,44 @@ export default function LearnScreen() {
       const focus = await AsyncStorage.getItem(USER_FOCUS_KEY);
       if (focus && ['general', 'travel', 'business', 'exams'].includes(focus)) {
         setUserFocus(focus as SetCategory);
+        cachedUserFocus = focus;
       }
     } catch {
       // Keep default (null)
     }
   }, []);
 
+  // Load premium status and user focus on mount
+  // Run only once per app session (not on every tab switch)
   useEffect(() => {
-    checkPremiumStatus();
-    loadUserFocus();
+    if (!hasLoadedPremiumCache) {
+      hasLoadedPremiumCache = true;
+
+      // Load in parallel for speed
+      Promise.all([
+        checkPremiumStatus(),
+        loadUserFocus()
+      ]).catch(() => {});
+    }
   }, [checkPremiumStatus, loadUserFocus]);
 
+  // ========== FOCUS/BLUR LOGGING ==========
+  // IMPORTANT: Do NOT do anything on focus - preserve state and position
+  // Premium status is loaded once on mount, no need to reload on every tab focus
   useFocusEffect(
     useCallback(() => {
-      checkPremiumStatus();
+      const ts = new Date().toISOString().substr(11, 12);
+      console.log(`[${ts}] [LEARN] 👁️  FOCUS (tab visible)`);
 
-      // When tab gains focus, scroll to current planet if layout is ready
-      // This handles the case where component stays mounted but is hidden
-      if (isLayoutReady && scrollViewRef.current) {
-        const level = currentLevel || cachedCurrentLevel;
-        if (level) {
-          const idx = level.sets.findIndex(s => !s.completed && !s.locked);
-          const targetIndex = idx === -1 ? 0 : idx;
-          const scrollX = getScrollXForIndex(targetIndex);
-          scrollViewRef.current.scrollTo({ x: scrollX, y: 0, animated: false });
-          setCenteredPlanetIndex(targetIndex);
-          lastCenteredPlanet.current = targetIndex;
-          cachedCurrentPlanetIndex = targetIndex;
-        }
-      }
-    }, [checkPremiumStatus, isLayoutReady, currentLevel, getScrollXForIndex])
+      // NO checkPremiumStatus() here - already loaded on mount
+      // NO scroll here - preserve position from tab switch
+      // The component state is preserved, so we don't need to reload anything
+
+      return () => {
+        const ts2 = new Date().toISOString().substr(11, 12);
+        console.log(`[${ts2}] [LEARN] 🙈 BLUR (tab hidden)`);
+      };
+    }, [])
   );
 
   // Breathing animation for current level outer ring
@@ -490,7 +659,19 @@ export default function LearnScreen() {
   }, [loadStoredLevel]);
 
   const refreshLevel = useCallback(async () => {
+    const ts = new Date().toISOString().substr(11, 12);
+
+    // CRITICAL: Use cachedUserFocus if userFocus hasn't loaded yet
+    // This prevents set reordering on remount which breaks completion tracking
+    // (Set IDs are assigned based on order, so different order = different IDs!)
+    const effectiveUserFocus = userFocus ?? cachedUserFocus;
+    const caller = new Error().stack?.split('\n')[2]?.trim() || 'unknown';
+    console.log(`[${ts}] [DATA] 🔄 refreshLevel START`);
+    console.log(`[${ts}] [DATA] params: activeLevelId=${activeLevelId}, isPremium=${isPremium}, userFocus=${userFocus}, effectiveUserFocus=${effectiveUserFocus}`);
+    console.log(`[${ts}] [DATA] caller: ${caller}`);
+
     if (!activeLevelId) {
+      console.log(`[${ts}] [DATA] refreshLevel: no activeLevelId, clearing level`);
       setCurrentLevel(null);
       return;
     }
@@ -510,7 +691,8 @@ export default function LearnScreen() {
 
       if (categoryLevels.includes(level.id)) {
         // Use ordered sets based on user's focus preference
-        baseSets = getOrderedSetsForLevel(level.id, userFocus) as VocabSet[];
+        // IMPORTANT: Use effectiveUserFocus to maintain consistent set IDs across remounts
+        baseSets = getOrderedSetsForLevel(level.id, effectiveUserFocus) as VocabSet[];
       } else {
         // For other levels (advanced-plus, proficient), use default sets
         baseSets = level.sets;
@@ -631,54 +813,62 @@ export default function LearnScreen() {
 
       const levelWithProgress = { ...level, sets: setsWithProgress };
 
-      // Only create new animations if needed (first load or count changed)
-      const needsNewAnims = nodeAnims.current.length !== setsWithProgress.length;
-      if (needsNewAnims) {
-        nodeAnims.current = setsWithProgress.map(() => new Animated.Value(hasAnimatedEntrance.current ? 1 : 0));
-      }
+      // Log completion status for debugging
+      const completedCount = setsWithProgress.filter(s => s.completed).length;
+      const ts2 = new Date().toISOString().substr(11, 12);
+      console.log(`[${ts2}] [DATA] refreshLevel done: ${completedCount}/${setsWithProgress.length} sets completed`);
+      console.log(`[${ts2}] [DATA] First 5 sets completed status:`, setsWithProgress.slice(0, 5).map(s => ({ id: s.id, completed: s.completed })));
 
       setCurrentLevel(levelWithProgress);
-
-      // Update module-level cache for instant display when switching tabs
+      // Update module-level cache
       cachedCurrentLevel = levelWithProgress;
       cachedLevelId = level.id;
+      cachedUserFocus = effectiveUserFocus;
 
       // Set initial scroll index immediately with level to avoid flash
       const initialIndex = setsWithProgress.findIndex(s => !s.completed && !s.locked);
       const targetIndex = initialIndex === -1 ? 0 : initialIndex;
       setCurrentSetIndex(targetIndex);
       setCenteredPlanetIndex(targetIndex);
+      lastCenteredPlanet.current = targetIndex;
+
+      // Update module-level cache for instant positioning on next mount
+      cachedCurrentPlanetIndex = targetIndex;
+      AsyncStorage.setItem(CURRENT_PLANET_INDEX_KEY, String(targetIndex)).catch(() => {});
+
+      // NOTE: Initial scroll is handled by:
+      // 1. contentOffset prop (instant positioning on mount)
+      // 2. handleScrollViewLayout (scroll after layout ready)
+      // Do NOT add scroll calls here - it causes competing scroll effects
 
       const completed = setsWithProgress.filter(s => s.completed).length;
       setProgress({ completed, total: setsWithProgress.length });
-
-      // Only animate entrance on first load
-      if (!hasAnimatedEntrance.current && needsNewAnims) {
-        hasAnimatedEntrance.current = true;
-        setTimeout(() => {
-          const animations = nodeAnims.current.map((anim, i) =>
-            Animated.timing(anim, {
-              toValue: 1,
-              duration: 400,
-              delay: i * 80,
-              easing: Easing.out(Easing.back(1.2)),
-              useNativeDriver: true,
-            })
-          );
-          Animated.stagger(60, animations).start();
-        }, 100);
-      }
     }
   }, [activeLevelId, isPremium, userFocus]);
 
-  useEffect(() => { refreshLevel(); }, [refreshLevel]);
+  // Refresh level when dependencies change (activeLevelId, isPremium, userFocus)
+  // Debounced to prevent multiple rapid calls during initialization
+  const refreshTimer = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    // Clear any pending refresh
+    if (refreshTimer.current) {
+      clearTimeout(refreshTimer.current);
+    }
 
-  // Refresh on focus
-  useFocusEffect(
-    useCallback(() => {
+    // Debounce refresh by 100ms to batch rapid changes during initialization
+    refreshTimer.current = setTimeout(() => {
       refreshLevel();
-    }, [refreshLevel])
-  );
+    }, 100);
+
+    return () => {
+      if (refreshTimer.current) {
+        clearTimeout(refreshTimer.current);
+      }
+    };
+  }, [activeLevelId, isPremium, userFocus]);  // Don't include refreshLevel - it creates circular deps
+
+  // Note: Don't refresh on every tab focus - it causes title flashing
+  // The useEffect above already handles refreshing when dependencies change
 
   // Check if the previous level has at least one completed quiz
   // Skip ahead is only available if there's a previous level AND it's completed
@@ -785,140 +975,137 @@ export default function LearnScreen() {
     }
   };
 
-  // Scroll to a specific planet index
-  const scrollToPlanet = useCallback((index: number, animated: boolean = true) => {
-    if (!scrollViewRef.current) return;
-    // Calculate scroll position to center the planet
-    // Based on: planetIndex = Math.round((viewportCenter - 60 - PLANET_SIZE / 2 - 20) / HORIZONTAL_SPACING)
-    // Reverse: scrollX = index * HORIZONTAL_SPACING + 60 + PLANET_SIZE / 2 + 20 - SCREEN_WIDTH / 2
-    const scrollX = index * HORIZONTAL_SPACING + 60 + PLANET_SIZE / 2 + 20 - SCREEN_WIDTH / 2;
-    scrollViewRef.current.scrollTo({ x: Math.max(0, scrollX), animated });
-    setCenteredPlanetIndex(index);
-    lastCenteredPlanet.current = index;
-  }, []);
-
-  // Listen for set completion events to refresh and animate spacecraft
+  // ========== SET_COMPLETED EVENT HANDLER ==========
+  // Handles completion events while user stays on Learn screen
   useEffect(() => {
     const subscription = DeviceEventEmitter.addListener('SET_COMPLETED', (data?: { setId: number }) => {
+      logScroll('FLOW', 'SET_COMPLETED event received', data);
       refreshLevel();
 
       // Trigger spacecraft animation if we have the completed set info
       if (data?.setId && currentLevel) {
         const completedIndex = currentLevel.sets.findIndex(s => s.id === data.setId);
         if (completedIndex >= 0 && completedIndex < currentLevel.sets.length - 1) {
-          // Animate from completed planet to next planet
+          const nextIndex = completedIndex + 1;
+
+          // Lock scroll during animation
+          setScrollLocked(true);
+          logScroll('FLOW', `spacecraft start from=${completedIndex} to=${nextIndex}`);
+
+          // Setup animation
           setSpacecraftFromIndex(completedIndex);
-          setSpacecraftToIndex(completedIndex + 1);
+          setSpacecraftToIndex(nextIndex);
           setSpacecraftAnimating(true);
           spacecraftAnim.setValue(0);
 
-          // Run the animation
+          // Run animation
           Animated.timing(spacecraftAnim, {
             toValue: 1,
             duration: 1200,
             easing: Easing.bezier(0.25, 0.1, 0.25, 1),
             useNativeDriver: true,
           }).start(() => {
+            logScroll('FLOW', 'spacecraft end');
             setSpacecraftAnimating(false);
-            // Scroll to the next planet after animation
-            scrollToPlanet(completedIndex + 1, true);
+
+            // Unlock and scroll to next planet
+            setScrollLocked(false);
+            logScroll('FLOW', `scroll to next start index=${nextIndex}`);
+            scrollToPlanet(nextIndex, true);
+            setCurrentSetIndex(nextIndex);
+            logScroll('FLOW', 'scroll to next end');
           });
         }
       }
     });
     return () => subscription.remove();
-  }, [refreshLevel, currentLevel, spacecraftAnim, scrollToPlanet]);
+  }, [refreshLevel, currentLevel, spacecraftAnim, scrollToPlanet, logScroll]);
 
-  // Update current set index when level changes (state only, no scroll - scroll handled by layout)
+  // ========== LEVEL CHANGE STATE UPDATE (NO SCROLL) ==========
+  // Only updates state, does NOT scroll - scroll is handled by layout handler
   useEffect(() => {
     if (!currentLevel) return;
+    // Skip if scroll is locked (spacecraft animation in progress)
+    if (getScrollLocked()) return;
 
     const newIndex = currentLevel.sets.findIndex(s => !s.completed && !s.locked);
     const targetIndex = newIndex === -1 ? 0 : newIndex;
+
+    logScroll('STATE', `currentPlanetIndex=${targetIndex} (from level change)`);
     setCurrentSetIndex(targetIndex);
 
     // Update cache for next mount
     cachedCurrentPlanetIndex = targetIndex;
+  }, [currentLevel, logScroll]);
 
-    // If returning from completed set, spacecraft animation will handle positioning
-    // Otherwise, scroll to the new current planet
-    if (!completedSetId || animatedSetIds.has(String(completedSetId))) {
-      // Not returning from completion, scroll if layout is ready
-      if (isLayoutReady && scrollViewRef.current) {
-        const scrollX = getScrollXForIndex(targetIndex);
-        scrollViewRef.current.scrollTo({ x: scrollX, y: 0, animated: false });
-        setCenteredPlanetIndex(targetIndex);
-        lastCenteredPlanet.current = targetIndex;
-      }
-    }
-  }, [currentLevel, completedSetId, isLayoutReady, getScrollXForIndex]);
-
-  // Handle spacecraft animation when returning from completed set
+  // ========== CONTINUE FLOW (returning from completed set) ==========
+  // Handles spacecraft animation when returning from quiz screen
   useEffect(() => {
-    if (!currentLevel || !completedSetId || !isLayoutReady) return;
+    if (!currentLevel || !completedSetId) return;
 
     const setIdStr = String(completedSetId);
     // Skip if already animated this set
     if (animatedSetIds.has(setIdStr)) return;
 
+    logScroll('FLOW', `continue pressed, completedSetId=${setIdStr}`);
+
     // Find the completed set index
     const completedIndex = currentLevel.sets.findIndex(s => String(s.id) === setIdStr);
     if (completedIndex < 0 || completedIndex >= currentLevel.sets.length - 1) {
-      // Set not found or is last set, just scroll to current
-      const currentIndex = currentLevel.sets.findIndex(s => !s.completed && !s.locked);
-      const targetIndex = currentIndex === -1 ? 0 : currentIndex;
-      if (scrollViewRef.current) {
-        const scrollX = getScrollXForIndex(targetIndex);
-        scrollViewRef.current.scrollTo({ x: scrollX, y: 0, animated: false });
-        setCenteredPlanetIndex(targetIndex);
-        lastCenteredPlanet.current = targetIndex;
-        cachedCurrentPlanetIndex = targetIndex;
-      }
+      // Set not found or is last set, just scroll to current planet
+      logScroll('FLOW', 'set not found or is last, scrolling to current');
+      const targetIndex = getCurrentPlanetIndex(currentLevel);
+      scrollToPlanet(targetIndex, false);
       return;
     }
 
-    // Mark as animated before starting
+    // Mark as animated to prevent re-triggering
     animatedSetIds.add(setIdStr);
 
-    // First scroll to the completed planet (no animation)
+    // Lock scroll during animation sequence
+    setScrollLocked(true);
+    logScroll('FLOW', `spacecraft start from=${completedIndex} to=${completedIndex + 1}`);
+
+    // First, instantly scroll to the completed planet (so user sees it marked complete)
+    const scrollX = getScrollXForIndex(completedIndex);
     if (scrollViewRef.current) {
-      const scrollX = getScrollXForIndex(completedIndex);
       scrollViewRef.current.scrollTo({ x: scrollX, y: 0, animated: false });
       setCenteredPlanetIndex(completedIndex);
       lastCenteredPlanet.current = completedIndex;
     }
 
-    // Small delay for visual stability before starting spacecraft animation
+    // Small delay for visual stability, then start animation
     const animTimer = setTimeout(() => {
-      // Setup spacecraft animation from completed to next
       setSpacecraftFromIndex(completedIndex);
       setSpacecraftToIndex(completedIndex + 1);
       setSpacecraftAnimating(true);
       spacecraftAnim.setValue(0);
 
-      // Run the animation
+      // Run animation
       Animated.timing(spacecraftAnim, {
         toValue: 1,
         duration: 1200,
         easing: Easing.bezier(0.25, 0.1, 0.25, 1),
         useNativeDriver: true,
       }).start(() => {
+        logScroll('FLOW', 'spacecraft end');
         setSpacecraftAnimating(false);
-        // Scroll to the next planet after animation
+
+        // Unlock and scroll to next planet
         const nextIndex = completedIndex + 1;
-        if (scrollViewRef.current) {
-          const scrollX = getScrollXForIndex(nextIndex);
-          scrollViewRef.current.scrollTo({ x: scrollX, y: 0, animated: true });
-          setCenteredPlanetIndex(nextIndex);
-          setCurrentSetIndex(nextIndex);
-          lastCenteredPlanet.current = nextIndex;
-          cachedCurrentPlanetIndex = nextIndex;
-        }
+        setScrollLocked(false);
+        logScroll('FLOW', `scroll to next start index=${nextIndex}`);
+        scrollToPlanet(nextIndex, true);
+        setCurrentSetIndex(nextIndex);
+        logScroll('FLOW', 'scroll to next end');
       });
     }, 300);
 
-    return () => clearTimeout(animTimer);
-  }, [currentLevel, completedSetId, isLayoutReady, getScrollXForIndex, spacecraftAnim]);
+    return () => {
+      clearTimeout(animTimer);
+      setScrollLocked(false);
+    };
+  }, [currentLevel, completedSetId, getScrollXForIndex, spacecraftAnim, scrollToPlanet, getCurrentPlanetIndex, logScroll]);
 
   // Calculate stage gate positions and trigger haptic when scrolling past
   const stageGateIndices = useRef<number[]>([]);
@@ -1101,10 +1288,10 @@ export default function LearnScreen() {
     );
   }
 
-  // Use cached level if current level not yet loaded
+  // Use current level or cached for instant display
   const displayLevel = currentLevel || cachedCurrentLevel;
   if (!displayLevel) {
-    return null; // Should not happen, but safety check
+    return null;
   }
 
   const renderPlanetNode = (set: VocabSet & { locked?: boolean; premiumLocked?: boolean }, index: number, isCurrentLevel: boolean, allSets: VocabSet[]) => {
@@ -1114,10 +1301,6 @@ export default function LearnScreen() {
     const isCurrent = isCurrentLevel && index === currentSetIndex;
     const isCentered = index === centeredPlanetIndex; // Magnifying effect
     const quizCanSkipAhead = isPremium && isQuiz && isLocked && canQuizSkipAhead(set, allSets);
-
-    const anim = nodeAnims.current[index] || new Animated.Value(1);
-    const baseScale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
-    const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
 
     // Magnifying effect - subtle scale increase for centered planet
     const magnifyScale = isCentered ? 1.08 : 1;
@@ -1130,20 +1313,14 @@ export default function LearnScreen() {
     // Clean title for display
     const displayTitle = isQuiz ? `Quiz ${set.title.replace('Quiz ', '')}` : cleanTitle(set.title);
 
-    // Sparkle data is generated only for centered planet (optimization)
-
     const wrapperWidth = planetSize + 40;
 
     return (
-      <Animated.View
+      <View
         key={`planet-${set.id}-${index}`}
         style={[
           styles.planetWrapperH,
-          {
-            transform: [{ scale: baseScale }],
-            opacity,
-            width: wrapperWidth,
-          },
+          { width: wrapperWidth },
         ]}
       >
 
@@ -1294,7 +1471,7 @@ export default function LearnScreen() {
           />
 
         </TouchableOpacity>
-      </Animated.View>
+      </View>
     );
   };
 
@@ -1334,9 +1511,6 @@ export default function LearnScreen() {
     DeviceEventEmitter.emit('LEVEL_SELECTED', nextLevelId);
     setActiveLevelId(nextLevelId);
     setHighestLevel(nextLevelId);
-
-    // Reset animation flag for new level
-    hasAnimatedEntrance.current = false;
   };
 
   const renderStarNode = () => {
@@ -1634,10 +1808,10 @@ export default function LearnScreen() {
       {/* Top status panel */}
       <TopStatusPanel floating includeTopInset />
 
-      {/* Main HORIZONTAL scrollable content - hidden until positioned to prevent flash */}
+      {/* Main HORIZONTAL scrollable content */}
       <ScrollView
         ref={scrollViewRef}
-        style={[styles.horizontalScrollContainer, { opacity: isLayoutReady ? 1 : 0 }]}
+        style={styles.horizontalScrollContainer}
         contentContainerStyle={styles.horizontalScrollContent}
         horizontal={true}
         showsHorizontalScrollIndicator={false}
@@ -1647,6 +1821,7 @@ export default function LearnScreen() {
         removeClippedSubviews={true}
         decelerationRate="fast"
         disableIntervalMomentum={true}
+        contentOffset={initialScrollOffset}
       >
         {/* Planet path */}
         {buildCurrentLevelPath()}
