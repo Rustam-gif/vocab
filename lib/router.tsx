@@ -72,11 +72,11 @@ function normalize(input: string | Route): Route {
 
 // Helper to determine which tab a route belongs to
 function getTabForRoute(pathname: string): string {
-  if (pathname.startsWith('/quiz') || pathname.startsWith('/placement')) return 'quiz';
+  if (pathname.startsWith('/quiz') || pathname.startsWith('/placement') || pathname.startsWith('/stats')) return 'quiz';
   if (pathname.startsWith('/story')) return 'story';
   // Include all vault-related routes: /vault, /vault-folder, /vault-word, /flashcards, /word-sprint
   if (pathname.startsWith('/vault') || pathname === '/vault-folder' || pathname === '/vault-word' || pathname === '/flashcards' || pathname === '/word-sprint') return 'vault';
-  if (pathname.startsWith('/profile') || pathname.startsWith('/stats') || pathname.startsWith('/journal') || pathname.startsWith('/settings') || pathname.startsWith('/report')) return 'account';
+  if (pathname.startsWith('/profile') || pathname.startsWith('/journal') || pathname.startsWith('/settings') || pathname.startsWith('/report')) return 'account';
   return 'home';
 }
 
@@ -589,10 +589,10 @@ export function RouteRenderer() {
   const isActive = (key: string) => {
     if (key === 'home') return basePath === '/';
     if (key === 'vault') return basePath.startsWith('/vault');
-    if (key === 'quiz') return basePath.startsWith('/quiz');
+    if (key === 'quiz') return basePath.startsWith('/quiz') || basePath.startsWith('/stats');
     if (key === 'story') return basePath.startsWith('/story');
     if (key === 'ielts') return basePath.startsWith('/ielts');
-    if (key === 'account') return basePath.startsWith('/profile') || basePath.startsWith('/stats') || basePath.startsWith('/journal');
+    if (key === 'account') return basePath.startsWith('/profile') || basePath.startsWith('/journal');
     return false;
   };
   const openSignupGate = React.useCallback((feature: 'story' | 'learn', redirect: string) => {

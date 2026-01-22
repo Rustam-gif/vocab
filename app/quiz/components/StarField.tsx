@@ -19,8 +19,8 @@ interface StarFieldProps {
 }
 
 const StarField: React.FC<StarFieldProps> = ({
-  starCount = 30, // Reduced for memory optimization
-  height = SCREEN_HEIGHT * 2,
+  starCount = 15, // Reduced from 30 for memory optimization
+  height = SCREEN_HEIGHT, // Reduced from 2x to 1x screen height
   isLight = false
 }) => {
   // Generate stars only once

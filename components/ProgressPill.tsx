@@ -22,6 +22,7 @@ export default function ProgressPill({ style }: Props) {
   const [wordsToday, setWordsToday] = useState(0);
   const [dailyGoal, setDailyGoal] = useState(10);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -42,19 +43,26 @@ export default function ProgressPill({ style }: Props) {
         const today = new Date().toISOString().split('T')[0];
         const savedDate = dateResult[1];
 
+        let words = 0;
         // Reset if it's a new day
         if (savedDate !== today) {
-          setWordsToday(0);
           await AsyncStorage.multiSet([
             [TODAY_WORDS_KEY, '0'],
             [TODAY_DATE_KEY, today],
           ]);
         } else {
-          const words = wordsResult[1] ? parseInt(wordsResult[1], 10) : 0;
-          setWordsToday(words);
+          words = wordsResult[1] ? parseInt(wordsResult[1], 10) : 0;
         }
+
+        // Set initial progress immediately without animation
+        const initialProgress = Math.min(words / goal, 1);
+        progressAnim.setValue(initialProgress);
+        setWordsToday(words);
+        setIsCompleted(words >= goal);
+        setIsInitialLoad(false);
       } catch (e) {
         console.error('Failed to load progress:', e);
+        setIsInitialLoad(false);
       }
     };
 
@@ -86,27 +94,37 @@ export default function ProgressPill({ style }: Props) {
     return () => listener.remove();
   }, []);
 
-  // Update completion state and animate progress
+  // Update completion state and animate progress (only after initial load)
+  const prevWordsRef = useRef(wordsToday);
   useEffect(() => {
+    // Skip animation on initial load - it's already set
+    if (isInitialLoad) return;
+
     const completed = wordsToday >= dailyGoal;
     setIsCompleted(completed);
 
     const progress = Math.min(wordsToday / dailyGoal, 1);
-    Animated.spring(progressAnim, {
-      toValue: progress,
-      useNativeDriver: false,
-      friction: 8,
-      tension: 100,
-    }).start();
 
-    // Celebration animation when completed
-    if (completed && wordsToday === dailyGoal) {
-      Animated.sequence([
-        Animated.spring(scaleAnim, { toValue: 1.15, useNativeDriver: true, friction: 5 }),
-        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, friction: 6 }),
-      ]).start();
+    // Only animate if words actually changed (not on re-render)
+    if (prevWordsRef.current !== wordsToday) {
+      Animated.spring(progressAnim, {
+        toValue: progress,
+        useNativeDriver: false,
+        friction: 8,
+        tension: 100,
+      }).start();
+
+      // Celebration animation when just completed
+      if (completed && prevWordsRef.current < dailyGoal) {
+        Animated.sequence([
+          Animated.spring(scaleAnim, { toValue: 1.15, useNativeDriver: true, friction: 5 }),
+          Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, friction: 6 }),
+        ]).start();
+      }
+
+      prevWordsRef.current = wordsToday;
     }
-  }, [wordsToday, dailyGoal]);
+  }, [wordsToday, dailyGoal, isInitialLoad]);
 
   const handlePress = () => {
     router.push('/stats');
@@ -174,7 +192,7 @@ export default function ProgressPill({ style }: Props) {
         {/* Content */}
         <View style={styles.content}>
           <Text style={styles.emoji}>
-            {isCompleted ? '✓' : '📈'}
+            {isCompleted ? '✓' : '🚀'}
           </Text>
           <Text style={[styles.text, { color: textColor }]}>
             {wordsToday}/{dailyGoal}

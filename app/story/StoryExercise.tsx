@@ -38,7 +38,6 @@ import UsageLimitsService from '../../services/UsageLimitsService';
 import LimitModal from '../../lib/LimitModal';
 import { saveStory as saveStoryToRemote } from '../../services/dbClient';
 import { supabase } from '../../lib/supabase';
-import TopStatusPanel from '../components/TopStatusPanel';
 import { engagementTrackingService } from '../../services/EngagementTrackingService';
 import { soundService } from '../../services/SoundService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1252,13 +1251,7 @@ const buildStoryFromContent = (
   const topOffset = !isFullscreen ? Math.max(0, insets.top - 20) : 0;
 
   return (
-    <SafeAreaView edges={['bottom']} style={[styles.container, !isDarkMode && styles.containerLight]}>
-      {!isFullscreen && (
-        <TopStatusPanel
-          floating
-          style={{ marginBottom: 8, marginTop: 12 }}
-        />
-      )}
+    <SafeAreaView edges={['bottom']} style={[styles.container, !isDarkMode && styles.containerLight, { paddingTop: insets.top }]}>
       <View style={{ flex: 1 }}>
         {/* Mode Toggle - compact toggle only when user expands controls */}
         {!isFullscreen && hasStory && showControls && false && (

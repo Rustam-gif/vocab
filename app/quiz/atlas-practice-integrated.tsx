@@ -349,9 +349,7 @@ export default function AtlasPracticeIntegrated() {
 
         // Force immediate save to ensure data persists before navigation
         await SetProgressService.flushSave();
-
-        // Emit event so Learn screen refreshes immediately (with setId for animation)
-        DeviceEventEmitter.emit('SET_COMPLETED', { setId: Number(setId) });
+        // Note: SET_COMPLETED event is emitted from results screen when user clicks Continue
       }
     } catch {}
 

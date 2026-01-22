@@ -6,16 +6,11 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
-  Alert,
-  LayoutAnimation,
-  UIManager,
-  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, TrendingUp, CalendarDays, CheckCircle2, AlertTriangle, Clock3, ChevronDown } from 'lucide-react-native';
+import { ArrowLeft, Flame, Target, BookOpen, Trophy } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
-import { LinearGradient } from '../lib/LinearGradient';
 import { useAppStore } from '../lib/store';
 import { analyticsService } from '../services/AnalyticsService';
 import { vaultService } from '../services/VaultService';
@@ -24,345 +19,193 @@ const { width } = Dimensions.get('window');
 
 export default function StatsScreen() {
   const router = useRouter();
-  const { analytics, loadAnalytics } = useAppStore();
   const themeName = useAppStore(s => s.theme);
   const isLight = themeName === 'light';
-  const [stats, setStats] = useState<any>(null);
-  const [deepOpen, setDeepOpen] = useState(false);
+  const insets = useSafeAreaInsets();
+  const [stats, setStats] = useState<{
+    wordsLearned: number;
+    totalWords: number;
+    currentStreak: number;
+    recordStreak: number;
+    exercisesCompleted: number;
+    accuracy: number;
+  }>({
+    wordsLearned: 0,
+    totalWords: 0,
+    currentStreak: 0,
+    recordStreak: 0,
+    exercisesCompleted: 0,
+    accuracy: 0,
+  });
 
   useEffect(() => {
-    (async () => {
+    const loadStats = async () => {
       try {
+        // Initialize services
         await analyticsService.initialize();
-      } catch {}
-      await loadAnalytics();
-      const exerciseStats = analyticsService.getExerciseStats();
-      setStats(exerciseStats);
-    })();
+        await vaultService.initialize();
+
+        // Get analytics data
+        const analyticsData = analyticsService.getAnalyticsData();
+
+        // Get exercise counts
+        const counts = analyticsService.getTodayAndTotalCounts();
+        const recordStreak = analyticsService.getRecordStreak();
+
+        // Get words from vault
+        const words = vaultService.getAllWords();
+        const totalWords = words.length;
+
+        // Count words that have been answered correctly at least 3 times
+        const wordsLearned = words.filter(w => (w.correctCount ?? 0) >= 3).length;
+
+        // Get overall accuracy from analytics data
+        const accuracy = analyticsData?.overallAccuracy ?? 0;
+
+        // Current streak from analytics
+        const currentStreak = analyticsData?.streak ?? 0;
+
+        console.log('[Stats] Loaded:', {
+          totalWords,
+          wordsLearned,
+          exercisesCompleted: counts.total,
+          accuracy,
+          currentStreak,
+          recordStreak
+        });
+
+        setStats({
+          wordsLearned,
+          totalWords,
+          currentStreak,
+          recordStreak,
+          exercisesCompleted: counts.total,
+          accuracy,
+        });
+      } catch (error) {
+        console.error('[Stats] Failed to load stats:', error);
+      }
+    };
+
+    loadStats();
   }, []);
 
-  // Enable LayoutAnimation on Android
-  useEffect(() => {
-    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-      UIManager.setLayoutAnimationEnabledExperimental(true);
-    }
-  }, []);
-
-  const renderAccuracyChart = () => {
-    if (!analytics?.accuracyByType) return null;
-
-    const exerciseTypes = Object.keys(analytics.accuracyByType);
-    // Scale bars to absolute accuracy (0–100%), not relative to the current max,
-    // so a single non‑zero category does not fill the entire height.
-    const MAX_BAR_PX = 100;
-
-    return (
-      <View style={[styles.card, isLight && styles.cardLight]}>
-        <Text style={[styles.cardTitle, isLight && styles.cardTitleLight]}>Accuracy by Exercise</Text>
-        <View style={styles.barChart}>
-          {exerciseTypes.map((type, index) => {
-            const accuracy = analytics.accuracyByType[type];
-            const height = Math.max(6, (Number(accuracy) / 100) * MAX_BAR_PX);
-            const gradient = accuracy >= 80
-              ? ['#2e7d32', '#4CAF50']
-              : accuracy >= 60
-              ? ['#b36b00', '#F8B070']
-              : ['#c62828', '#F87171'];
-
-            return (
-              <View key={type} style={styles.barContainer}>
-                <View style={styles.barWrapper}>
-                  <LinearGradient colors={gradient} start={{x:0,y:0}} end={{x:0,y:1}} style={[styles.bar, { height }]} />
-                </View>
-                <Text style={[styles.barLabel, isLight && styles.barLabelLight]}>{type.toUpperCase()}</Text>
-                <Text style={[styles.barValue, isLight && styles.barValueLight]}>{accuracy}%</Text>
-              </View>
-            );
-          })}
-        </View>
+  const renderStatCard = (
+    icon: React.ReactNode,
+    title: string,
+    value: string | number,
+    subtitle?: string,
+    accentColor: string = '#4ED9CB'
+  ) => (
+    <View style={[styles.statCard, isLight && styles.statCardLight]}>
+      <View style={[styles.iconContainer, { backgroundColor: `${accentColor}20` }]}>
+        {icon}
       </View>
-    );
-  };
-
-  const renderRecommendations = () => {
-    if (!analytics?.recommendations || analytics.recommendations.length === 0) return null;
-    const items = analytics.recommendations.slice(0, 3);
-    const iconFor = (k: string) => k === 'srs' ? <Clock3 size={16} color="#FFFFFF" /> : k === 'weak' ? <AlertTriangle size={16} color="#FFFFFF" /> : <CheckCircle2 size={16} color="#FFFFFF" />;
-    const bgFor = (k: string) => k === 'srs' ? '#187486' : k === 'weak' ? '#F8B070' : '#4CAF50';
-    return (
-      <View style={[styles.card, isLight && styles.cardLight]}>
-        <Text style={[styles.cardTitle, isLight && styles.cardTitleLight]}>Recommendations</Text>
-        {items.map((r, idx) => (
-          <View key={`${r.kind}-${idx}`} style={styles.recoRow}>
-            <View style={[styles.recoIcon, { backgroundColor: bgFor(r.kind) }]}>
-              {iconFor(r.kind)}
-            </View>
-            <Text style={[styles.recoText, isLight && styles.recoTextLight]}>{r.text}</Text>
-          </View>
-        ))}
+      <View style={styles.statContent}>
+        <Text style={[styles.statValue, isLight && styles.statValueLight]}>{value}</Text>
+        <Text style={[styles.statTitle, isLight && styles.statTitleLight]}>{title}</Text>
+        {subtitle && (
+          <Text style={[styles.statSubtitle, isLight && styles.statSubtitleLight]}>{subtitle}</Text>
+        )}
       </View>
-    );
-  };
+    </View>
+  );
 
-  const renderTrendChart = () => {
-    if (!analytics?.timeTrend) return null;
-
-    const trendData = analytics.timeTrend;
-    const maxSeconds = Math.max(...trendData.map((d: any) => d.seconds), 1);
-
-    return (
-      <View style={[styles.chartContainer, isLight && styles.chartContainerLight]}>
-        <Text style={[styles.chartTitle, isLight && styles.chartTitleLight]}>Time Spent per Day (Last 7 Days)</Text>
-        <View style={styles.trendChart}>
-          <View style={styles.trendLine}>
-            {trendData.map((point: any, index: number) => {
-              const barHeight = (point.seconds / maxSeconds) * 100;
-              return (
-                <View key={index} style={styles.trendSegment}>
-                  <View
-                    style={[
-                      styles.trendBar,
-                      { height: barHeight },
-                    ]}
-                  />
-                </View>
-              );
-            })}
-          </View>
-          <View style={styles.trendLabels}>
-            {trendData.map((point: any, index: number) => (
-              <Text key={index} style={[styles.trendLabel, isLight && styles.trendLabelLight]}>
-                {new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-              </Text>
-            ))}
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  const renderSrsHealth = () => {
-    const srs = analytics?.srsHealth;
-    if (!srs) return null;
-    const ob = srs.overdueBuckets || ({} as any);
-    const overdueTotal = (ob.today || 0) + (ob['1-3d'] || 0) + (ob['4-7d'] || 0) + (ob['8+d'] || 0);
-    const hasData = overdueTotal > 0 || (srs.avgEaseFactor || 0) > 0 || (srs.avgInterval || 0) > 0 || (srs.topLapses?.length || 0) > 0;
-    if (!hasData) return null; // hide if everything is zero/empty
-
-    const overdueOther = (ob['1-3d'] || 0) + (ob['4-7d'] || 0) + (ob['8+d'] || 0);
-    return (
-      <View style={[styles.card, isLight && styles.cardLight]}>
-        <Text style={[styles.chartTitle, isLight && styles.chartTitleLight]}>SRS Health</Text>
-        <View style={styles.row}><Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>Due now</Text><Text style={[styles.rowRight, isLight && styles.rowRightLight]}>{ob.today || 0}</Text></View>
-        <View style={styles.row}><Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>Overdue</Text><Text style={[styles.rowRight, isLight && styles.rowRightLight, { color: overdueOther > 0 ? '#F8B070' : (isLight ? '#6B7280' : '#9CA3AF') }]}>{overdueOther}</Text></View>
-        <View style={styles.row}><Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>Avg EF</Text><Text style={[styles.rowRight, isLight && styles.rowRightLight]}>{srs.avgEaseFactor}</Text></View>
-        <View style={styles.row}><Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>Avg Interval</Text><Text style={[styles.rowRight, isLight && styles.rowRightLight]}>{srs.avgInterval} d</Text></View>
-        {srs.topLapses?.length ? (
-          <View style={[styles.row, { paddingTop: 8 }]}>
-            <Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>Most lapses</Text>
-            <Text style={[styles.rowRight, { color: '#F87171' }]}>
-              {srs.topLapses.slice(0, 3).map(w => w.word).join(', ')}
-            </Text>
-          </View>
-        ) : null}
-      </View>
-    );
-  };
-
-  const renderDonutChart = () => {
-    // Words Learned: a word counts as learned after 3 correct answers
-    // across any exercises (global), independent of SRS stage.
-    const words = vaultService.getAllWords();
-    const total = words.length;
-    const learned = words.filter(w => (w.correctCount ?? 0) >= 3).length;
-    const remaining = Math.max(0, total - learned);
-    const percent = total ? Math.round((learned / total) * 100) : 0;
-
-    return (
-      <View style={[styles.chartContainer, isLight && styles.chartContainerLight]}>
-        <Text style={[styles.chartTitle, isLight && styles.chartTitleLight]}>Words Learned</Text>
-        <View style={styles.donutChart}>
-          <View style={[styles.donutOuter, isLight && styles.donutOuterLight]}>
-            <View style={styles.donutInner}>
-              <Text style={[styles.donutValue, isLight && styles.donutValueLight]}>{learned}</Text>
-              <Text style={[styles.donutLabel, isLight && styles.donutLabelLight]}>of {total}</Text>
-              <Text style={[styles.donutLabel, isLight && styles.donutLabelLight, { marginTop: 2 }]}>{percent}%</Text>
-            </View>
-          </View>
-          <View style={styles.donutLegend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendColor, { backgroundColor: '#4CAF50' }]} />
-              <Text style={[styles.legendText, isLight && styles.legendTextLight]}>Learned ({learned})</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendColor, { backgroundColor: '#6B7280' }]} />
-              <Text style={[styles.legendText, isLight && styles.legendTextLight]}>Remaining ({remaining})</Text>
-            </View>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  const renderWeakWords = () => {
-    if (!analytics?.weakWords || analytics.weakWords.length === 0) return null;
-    return (
-      <View style={[styles.card, isLight && styles.cardLight]}>
-        <Text style={[styles.chartTitle, isLight && styles.chartTitleLight]}>Weakest Words</Text>
-        {analytics.weakWords.slice(0, 8).map((w: any, idx: number) => (
-          <View key={`${w.word}-${idx}`} style={styles.row}>
-            <Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>{w.word}</Text>
-            <Text style={[styles.rowRight, isLight && styles.rowRightLight, { color: w.accuracy < 50 ? '#F87171' : '#F8B070' }]}>{w.accuracy}% • {w.attempts}x</Text>
-          </View>
-        ))}
-      </View>
-    );
-  };
-
-  const renderTagBreakdown = () => {
-    if (!analytics?.tagStats || analytics.tagStats.length === 0) return null;
-    // Take top 5 weakest and top 5 strongest
-    const sorted = analytics.tagStats as any[];
-    const weakest = sorted.slice(0, 5);
-    const strongest = [...sorted].reverse().slice(0, 5);
-    return (
-      <View style={[styles.card, isLight && styles.cardLight]}>
-        <Text style={[styles.chartTitle, isLight && styles.chartTitleLight]}>Skill by Topic</Text>
-        <View style={styles.splitRow}>
-          <View style={styles.splitCol}>
-            <Text style={[styles.subheading, isLight && styles.subheadingLight]}>Weak</Text>
-            {weakest.map((t, idx) => (
-              <View key={`w-${t.tag}-${idx}`} style={styles.row}>
-                <Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>{t.tag}</Text>
-                <Text style={[styles.rowRight, isLight && styles.rowRightLight, { color: '#F87171' }]}>{t.accuracy}% • {t.attempts}x</Text>
-              </View>
-            ))}
-          </View>
-          <View style={styles.splitCol}>
-            <Text style={[styles.subheading, isLight && styles.subheadingLight]}>Strong</Text>
-            {strongest.map((t, idx) => (
-              <View key={`s-${t.tag}-${idx}`} style={styles.row}>
-                <Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>{t.tag}</Text>
-                <Text style={[styles.rowRight, isLight && styles.rowRightLight, { color: '#4CAF50' }]}>{t.accuracy}% • {t.attempts}x</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  const renderTimeBuckets = () => {
-    if (!analytics?.timeOfDayAccuracy) return null;
-    const items = Object.entries(analytics.timeOfDayAccuracy);
-    const sum = items.reduce((acc, [, v]) => acc + (v || 0), 0);
-    if (sum === 0) return null; // hide if no signal yet
-    return (
-      <View style={[styles.card, isLight && styles.cardLight]}>
-        <Text style={[styles.chartTitle, isLight && styles.chartTitleLight]}>Time of Day Performance</Text>
-        {items.map(([k, v]) => (
-          <View key={k} style={styles.row}>
-            <Text style={[styles.rowLeft, isLight && styles.rowLeftLight]}>{k[0].toUpperCase() + k.slice(1)}</Text>
-            <Text style={[styles.rowRight, isLight && styles.rowRightLight]}>{v}%</Text>
-          </View>
-        ))}
-      </View>
-    );
-  };
-
-  const renderSummaryCards = () => {
-    if (!analytics || !stats) return null;
-    const counts = analyticsService.getTodayAndTotalCounts();
-    const recordStreak = analyticsService.getRecordStreak();
-    return (
-      <View style={styles.summaryContainer}>
-        <View style={[styles.summaryCard, isLight && styles.summaryCardLight]}>
-          <View style={[styles.summaryIcon, isLight && styles.summaryIconLight]}>
-            <LottieView source={require('../assets/lottie/growth_progress.json')} autoPlay loop style={{ width: 40, height: 40 }} />
-          </View>
-          <View style={styles.summaryContent}>
-            <Text style={[styles.summaryValue, isLight && styles.summaryValueLight]}>{counts.total}</Text>
-            <Text style={[styles.summaryLabel, isLight && styles.summaryLabelLight]}>Exercises Overall</Text>
-          </View>
-        </View>
-
-        <View style={[styles.summaryCard, isLight && styles.summaryCardLight]}>
-          <View style={[styles.summaryIcon, isLight && styles.summaryIconLight]}>
-            <LottieView source={require('../assets/lottie/Bestseller.json')} autoPlay loop style={{ width: 40, height: 40 }} />
-          </View>
-          <View style={styles.summaryContent}>
-            <Text style={[styles.summaryValue, isLight && styles.summaryValueLight]}>{recordStreak}</Text>
-            <Text style={[styles.summaryLabel, isLight && styles.summaryLabelLight]}>Record Streak</Text>
-          </View>
-        </View>
-      </View>
-    );
-  };
+  const wordsPercent = stats.totalWords > 0
+    ? Math.round((stats.wordsLearned / stats.totalWords) * 100)
+    : 0;
 
   return (
-    <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
-      <View style={[styles.header, isLight && styles.headerLight]}>
+    <SafeAreaView edges={['bottom']} style={[styles.container, isLight && styles.containerLight, { paddingTop: insets.top }]}>
+      {/* Header */}
+      <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => router.replace('/quiz/learn')}
         >
           <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
         </TouchableOpacity>
-        <Text style={[styles.title, isLight && styles.titleLight]}>Analytics</Text>
-        <TouchableOpacity
-          style={styles.resetButton}
-          onPress={async () => {
-            Alert.alert('Reset analytics?', 'This will clear your local analytics history.', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Reset',
-                style: 'destructive',
-                onPress: async () => {
-                  try {
-                    await analyticsService.clearData();
-                    await loadAnalytics();
-                    const exerciseStats = analyticsService.getExerciseStats();
-                    setStats(exerciseStats);
-                  } catch (e) {
-                    console.error('Failed to reset analytics:', e);
-                  }
-                },
-              },
-            ]);
-          }}
-        >
-          <Text style={[styles.resetText, isLight && styles.resetTextLight]}>Reset</Text>
-        </TouchableOpacity>
+        <Text style={[styles.title, isLight && styles.titleLight]}>Your Progress</Text>
+        <View style={styles.placeholder} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {renderSummaryCards()}
-        {renderDonutChart()}
-        {renderRecommendations()}
-        {/* Deep analytics toggle */}
-        <View style={styles.deepToggleRow}>
-          <TouchableOpacity
-            style={styles.deepToggle}
-            onPress={() => {
-              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-              setDeepOpen(o => !o);
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.deepToggleText}>{deepOpen ? 'Hide Deep Analytics' : 'Show Deep Analytics'}</Text>
-            <View style={{ transform: [{ rotate: deepOpen ? '180deg' : '0deg' }] }}>
-              <ChevronDown size={16} color="#E5E7EB" />
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.contentContainer}
+      >
+        {/* Main Progress Card */}
+        <View style={[styles.mainCard, isLight && styles.mainCardLight]}>
+          <View style={styles.mainCardHeader}>
+            <LottieView
+              source={require('../assets/lottie/Bestseller.json')}
+              autoPlay
+              loop={false}
+              style={styles.mainAnimation}
+            />
+            <View style={styles.mainCardTitleContainer}>
+              <Text style={[styles.mainCardTitle, isLight && styles.mainCardTitleLight]}>
+                Words Mastered
+              </Text>
+              <Text style={[styles.mainCardSubtitle, isLight && styles.mainCardSubtitleLight]}>
+                Answer correctly 3 times to master
+              </Text>
             </View>
-          </TouchableOpacity>
+          </View>
+
+          <View style={styles.progressContainer}>
+            <View style={[styles.progressBar, isLight && styles.progressBarLight]}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${wordsPercent}%` }
+                ]}
+              />
+            </View>
+            <View style={styles.progressLabels}>
+              <Text style={[styles.progressValue, isLight && styles.progressValueLight]}>
+                {stats.wordsLearned}
+              </Text>
+              <Text style={[styles.progressTotal, isLight && styles.progressTotalLight]}>
+                of {stats.totalWords} words
+              </Text>
+            </View>
+          </View>
         </View>
 
-        <View style={[styles.deepContent, !deepOpen && styles.deepCollapsed]} pointerEvents={deepOpen ? 'auto' : 'none'}>
-          {renderAccuracyChart()}
-          {renderTrendChart()}
-          {renderSrsHealth()}
-          {renderWeakWords()}
-          {renderTagBreakdown()}
-          {renderTimeBuckets()}
+        {/* Stats Grid */}
+        <View style={styles.statsGrid}>
+          {renderStatCard(
+            <Flame size={24} color="#F59E0B" />,
+            'Current Streak',
+            stats.currentStreak,
+            `Record: ${stats.recordStreak} days`,
+            '#F59E0B'
+          )}
+
+          {renderStatCard(
+            <BookOpen size={24} color="#4ED9CB" />,
+            'Exercises Done',
+            stats.exercisesCompleted,
+            undefined,
+            '#4ED9CB'
+          )}
+
+          {renderStatCard(
+            <Target size={24} color="#F25E86" />,
+            'Accuracy',
+            `${stats.accuracy}%`,
+            undefined,
+            '#F25E86'
+          )}
+
+          {renderStatCard(
+            <Trophy size={24} color="#A78BFA" />,
+            'Mastery Rate',
+            `${wordsPercent}%`,
+            undefined,
+            '#A78BFA'
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -383,10 +226,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    // remove bottom divider
-  },
-  headerLight: {
-    // remove divider in light as well
   },
   backButton: {
     padding: 8,
@@ -394,268 +233,168 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     color: '#fff',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
   },
-  titleLight: { color: '#111827' },
+  titleLight: {
+    color: '#111827',
+  },
   placeholder: {
     width: 40,
   },
-  resetButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e05f2a',
-  },
-  resetText: {
-    color: '#e05f2a',
-    fontSize: 12,
-    fontFamily: 'Ubuntu-Medium',
-  },
-  resetTextLight: { color: '#c24d1f' },
   content: {
     flex: 1,
-    padding: 20,
   },
-  summaryContainer: {
+  contentContainer: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+
+  // Main Progress Card
+  mainCard: {
+    backgroundColor: '#0D1B2A',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
+  },
+  mainCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
+  },
+  mainCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  mainAnimation: {
+    width: 60,
+    height: 60,
+    marginRight: 16,
+  },
+  mainCardTitleContainer: {
+    flex: 1,
+  },
+  mainCardTitle: {
+    fontSize: 20,
+    color: '#fff',
+    fontFamily: 'Feather-Bold',
+  },
+  mainCardTitleLight: {
+    color: '#111827',
+  },
+  mainCardSubtitle: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontFamily: 'Feather-Regular',
+    marginTop: 4,
+  },
+  mainCardSubtitleLight: {
+    color: '#6B7280',
+  },
+  progressContainer: {
+    gap: 12,
+  },
+  progressBar: {
+    height: 12,
+    backgroundColor: '#2D4A66',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  progressBarLight: {
+    backgroundColor: '#E5E7EB',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#4ED9CB',
+    borderRadius: 6,
+  },
+  progressLabels: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+  },
+  progressValue: {
+    fontSize: 32,
+    color: '#4ED9CB',
+    fontFamily: 'Feather-Bold',
+  },
+  progressValueLight: {
+    color: '#0D9488',
+  },
+  progressTotal: {
+    fontSize: 16,
+    color: '#9CA3AF',
+    fontFamily: 'Feather-Regular',
+  },
+  progressTotalLight: {
+    color: '#6B7280',
+  },
+
+  // Stats Grid
+  statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-    marginBottom: 24,
   },
-  summaryCard: {
+  statCard: {
+    width: (width - 52) / 2,
     backgroundColor: '#0D1B2A',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    flex: 1,
-    minWidth: (width - 56) / 2,
-    flexDirection: 'row',
-    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.06)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.1)',
+    borderRightColor: 'rgba(78,217,203,0.08)',
   },
-  summaryCardLight: { backgroundColor: '#FFFFFF' },
-  summaryIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'transparent',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+  statCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
   },
-  summaryIconLight: { backgroundColor: 'transparent' },
-  summaryContent: {
-    flex: 1,
-  },
-  summaryValue: {
-    fontSize: 20,
-    color: '#fff',
-    fontFamily: 'Ubuntu-Bold',
-  },
-  summaryValueLight: { color: '#111827' },
-  summaryLabel: {
-    fontSize: 12,
-    color: '#a0a0a0',
-    marginTop: 2,
-    fontFamily: 'Ubuntu-Regular',
-  },
-  summaryLabelLight: { color: '#6B7280' },
-  chartContainer: {
-    backgroundColor: '#0D1B2A',
+  iconContainer: {
+    width: 48,
+    height: 48,
     borderRadius: 12,
-    padding: 20,
-    marginBottom: 20,
-  },
-  chartContainerLight: { backgroundColor: '#FFFFFF' },
-  deepToggleRow: {
-    marginTop: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 12,
   },
-  deepToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    alignSelf: 'center',
-    backgroundColor: '#1B263B',
-    borderWidth: 1,
-    borderColor: '#2D4A66',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
+  statContent: {
+    gap: 2,
   },
-  deepToggleText: {
-    color: '#E5E7EB',
-    fontSize: 13,
-    fontFamily: 'Ubuntu-Bold',
-  },
-  deepToggleTextLight: { color: '#2D4A66' },
-  deepContent: {
-    overflow: 'hidden',
-  },
-  deepCollapsed: {
-    height: 0,
-  },
-  card: { backgroundColor: '#243B53', borderRadius: 12, padding: 16, marginBottom: 20 },
-  cardLight: { backgroundColor: '#FFFFFF' },
-  cardTitle: { fontSize: 16, color: '#fff', marginBottom: 12, fontFamily: 'Ubuntu-Bold' },
-  cardTitleLight: { color: '#111827' },
-  recoRow: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 6 },
-  recoIcon: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  recoText: { color: '#E5E7EB', fontSize: 14, flex: 1, fontFamily: 'Ubuntu-Regular' },
-  recoTextLight: { color: '#2D4A66' },
-  card: {
-    backgroundColor: '#0D1B2A',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 6,
-  },
-  rowLeft: { color: '#E5E7EB', fontSize: 14, fontFamily: 'Ubuntu-Medium' },
-  rowRight: { color: '#9CA3AF', fontSize: 14, fontFamily: 'Ubuntu-Medium' },
-  splitRow: { flexDirection: 'row', gap: 16 },
-  splitCol: { flex: 1 },
-  subheading: { color: '#9CA3AF', fontSize: 13, marginBottom: 6, fontFamily: 'Ubuntu-Bold' },
-  chartTitle: {
-    fontSize: 18,
+  statValue: {
+    fontSize: 28,
     color: '#fff',
-    marginBottom: 16,
-    textAlign: 'center',
-    fontFamily: 'Ubuntu_700Bold',
+    fontFamily: 'Feather-Bold',
   },
-  chartTitleLight: {
+  statValueLight: {
     color: '#111827',
   },
-  barChart: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'flex-end',
-    height: 140,
-  },
-  barContainer: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  barWrapper: {
-    height: 100,
-    justifyContent: 'flex-end',
-    marginBottom: 8,
-  },
-  bar: {
-    width: 28,
-    borderRadius: 6,
-    minHeight: 4,
-  },
-  barLabel: {
-    fontSize: 10,
-    color: '#a0a0a0',
-    textAlign: 'center',
-    fontFamily: 'Ubuntu-Regular',
-  },
-  barLabelLight: { color: '#6B7280' },
-  barValue: {
-    fontSize: 12,
-    color: '#fff',
-    marginTop: 4,
-    fontFamily: 'Ubuntu-Bold',
-  },
-  barValueLight: { color: '#111827' },
-  trendChart: {
-    height: 120,
-  },
-  trendLine: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    position: 'relative',
-  },
-  trendSegment: {
-    flex: 1,
-    position: 'relative',
-  },
-  trendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#e28743',
-    position: 'absolute',
-  },
-  trendLineSegment: {
-    width: 2,
-    backgroundColor: '#e28743',
-    position: 'absolute',
-    left: 3,
-  },
-  trendBar: {
-    width: 10,
-    backgroundColor: '#e28743',
-    borderRadius: 3,
-    alignSelf: 'center',
-  },
-  trendLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  trendLabel: {
-    fontSize: 10,
-    color: '#a0a0a0',
-    textAlign: 'center',
-    fontFamily: 'Ubuntu-Regular',
-  },
-  trendLabelLight: { color: '#6B7280' },
-  donutChart: {
-    alignItems: 'center',
-  },
-  donutOuter: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#2D4A66',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  donutOuterLight: { backgroundColor: '#E9E6E0' },
-  donutInner: {
-    alignItems: 'center',
-  },
-  donutValue: {
-    fontSize: 24,
-    color: '#fff',
-    fontFamily: 'Ubuntu-Bold',
-  },
-  donutValueLight: { color: '#111827' },
-  donutLabel: {
-    fontSize: 12,
-    color: '#a0a0a0',
-    fontFamily: 'Ubuntu-Regular',
-  },
-  donutLabelLight: { color: '#6B7280' },
-  donutLegend: {
-    gap: 8,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  legendText: {
+  statTitle: {
     fontSize: 14,
-    color: '#e0e0e0',
-    fontFamily: 'Ubuntu-Regular',
+    color: '#E5E7EB',
+    fontFamily: 'Feather-Medium',
   },
-  legendTextLight: { color: '#2D4A66' },
-  rowLeftLight: { color: '#111827' },
-  rowRightLight: { color: '#6B7280' },
-  subheadingLight: { color: '#6B7280' },
+  statTitleLight: {
+    color: '#374151',
+  },
+  statSubtitle: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontFamily: 'Feather-Regular',
+    marginTop: 2,
+  },
+  statSubtitleLight: {
+    color: '#6B7280',
+  },
 });

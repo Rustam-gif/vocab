@@ -190,15 +190,13 @@ export default function OddOneOutComponent({
   const heartLostAnim = useRef(new Animated.Value(1)).current;
   const itemStartRef = useRef<number>(Date.now());
   const mountFadeAnim = useRef(new Animated.Value(0)).current;
-  const cardAnims = useRef<Animated.Value[]>([]).current;
-
-  // Initialize card animations
-  useEffect(() => {
-    cardAnims.length = 0;
-    for (let i = 0; i < 4; i++) {
-      cardAnims.push(new Animated.Value(0));
-    }
-  }, []);
+  // Initialize card animations with 0 from the start to prevent flash
+  const cardAnims = useRef<Animated.Value[]>([
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+  ]).current;
 
   // Fade in on mount
   useEffect(() => {
@@ -366,7 +364,7 @@ export default function OddOneOutComponent({
           {currentQuestion.options.slice(0, 2).map((word, idx) => {
             const isSelected = selected === idx;
             const isOdd = idx === currentQuestion.oddOneIndex;
-            const anim = cardAnims[idx] || new Animated.Value(1);
+            const anim = cardAnims[idx];
 
             let cardStyle: any[] = [styles.card, isLight && styles.cardLight];
             let textStyle: any[] = [styles.cardText, isLight && styles.cardTextLight];
@@ -409,7 +407,7 @@ export default function OddOneOutComponent({
             const idx = i + 2;
             const isSelected = selected === idx;
             const isOdd = idx === currentQuestion.oddOneIndex;
-            const anim = cardAnims[idx] || new Animated.Value(1);
+            const anim = cardAnims[idx];
 
             let cardStyle: any[] = [styles.card, isLight && styles.cardLight];
             let textStyle: any[] = [styles.cardText, isLight && styles.cardTextLight];
@@ -588,7 +586,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     color: '#FFFFFF',
-    fontFamily: 'Ubuntu-Bold',
+    fontFamily: 'Feather-Bold',
     textAlign: 'center',
     paddingHorizontal: 16,
   },

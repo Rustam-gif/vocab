@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Platform, DeviceEventEmitter } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ProgressService } from '../../services/ProgressService';
 import { useAppStore } from '../../lib/store';
@@ -151,7 +151,11 @@ export default function AtlasResults() {
     }
 
     if (levelId) {
-      router.replace(`/quiz/learn?level=${levelId}`);
+      // Pass completedSetId so learn screen can animate spacecraft
+      const params = setId
+        ? `/quiz/learn?level=${levelId}&completedSetId=${setId}`
+        : `/quiz/learn?level=${levelId}`;
+      router.replace(params);
     } else {
       router.replace('/');
     }
