@@ -166,6 +166,7 @@ export default function AtlasResults() {
       const params = setId
         ? `/quiz/learn?level=${levelId}&completedSetId=${setId}`
         : `/quiz/learn?level=${levelId}`;
+      console.log('[Results] 🚀 Navigating with params:', params, 'setId=', setId, 'levelId=', levelId);
       router.replace(params);
     } else {
       router.replace('/');

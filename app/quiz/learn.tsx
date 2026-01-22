@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Ima
 
 // Use local haptic feedback shim (no-op since native module not available)
 import ReactNativeHapticFeedback from '../../lib/haptics';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useRouteKey } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
 import LottieView from 'lottie-react-native';
 import { levels, getOrderedSetsForLevel } from './data/levels';
@@ -258,6 +258,11 @@ export default function LearnScreen() {
   const [showSignupModal, setShowSignupModal] = useState(false);
   const [panelHeight, setPanelHeight] = useState<number>(insets.top + 48);
   const { level: levelId, completedSetId } = useLocalSearchParams<{ level: string; completedSetId: string }>();
+  const routeKey = useRouteKey(); // Changes when route params change
+
+  // DEBUG: Log params on every render
+  console.log('[LEARN] 🔍 PARAMS:', { levelId, completedSetId, routeKey });
+
   // Use cached level for instant display on mount
   const [currentLevel, setCurrentLevel] = useState<Level | null>(() => {
     if (cachedCurrentLevel && (!levelId || cachedLevelId === levelId)) {
@@ -518,10 +523,24 @@ export default function LearnScreen() {
 
   // ========== FOCUS/BLUR - AUTO-SCROLL TO CURRENT PLANET ==========
   // When tab becomes visible, scroll to current planet so user doesn't have to hunt for it
+  // BUT skip if we just returned from completing a set (spacecraft animation will handle scroll)
   useFocusEffect(
     useCallback(() => {
       const ts = new Date().toISOString().substr(11, 12);
-      console.log(`[${ts}] [LEARN] 👁️  FOCUS (tab visible)`);
+      console.log(`[${ts}] [LEARN] 👁️  FOCUS (tab visible), completedSetId=${completedSetId}`);
+
+      // Skip auto-scroll if:
+      // 1. Scroll is locked (animation in progress)
+      // 2. We have completedSetId param (returning from completed set - let spacecraft animation handle it)
+      if (getScrollLocked()) {
+        logScroll('FOCUS', 'skip auto-scroll (scroll locked)');
+        return;
+      }
+
+      if (completedSetId) {
+        logScroll('FOCUS', 'skip auto-scroll (completedSetId present, spacecraft will handle)');
+        return;
+      }
 
       // Auto-scroll to current planet after a short delay (let layout settle)
       const scrollTimer = setTimeout(() => {
@@ -537,7 +556,7 @@ export default function LearnScreen() {
         const ts2 = new Date().toISOString().substr(11, 12);
         console.log(`[${ts2}] [LEARN] 🙈 BLUR (tab hidden)`);
       };
-    }, [currentLevel, getCurrentPlanetIndex, scrollToPlanet, logScroll])
+    }, [currentLevel, completedSetId, getCurrentPlanetIndex, scrollToPlanet, logScroll])
   );
 
   // Breathing animation for current level outer ring
@@ -854,16 +873,35 @@ export default function LearnScreen() {
   // Refresh level when dependencies change (activeLevelId, isPremium, userFocus)
   // Debounced to prevent multiple rapid calls during initialization
   const refreshTimer = useRef<NodeJS.Timeout | null>(null);
+  const lastRefreshParams = useRef<{levelId: string | null, premium: boolean, focus: string | null}>({
+    levelId: null,
+    premium: false,
+    focus: null
+  });
+
   useEffect(() => {
+    // Skip if params haven't actually changed (prevents redundant refreshes)
+    const currentParams = { levelId: activeLevelId, premium: isPremium, focus: userFocus };
+    const lastParams = lastRefreshParams.current;
+
+    if (lastParams.levelId === currentParams.levelId &&
+        lastParams.premium === currentParams.premium &&
+        lastParams.focus === currentParams.focus) {
+      console.log('[DATA] Skip refresh - params unchanged');
+      return;
+    }
+
     // Clear any pending refresh
     if (refreshTimer.current) {
       clearTimeout(refreshTimer.current);
     }
 
-    // Debounce refresh by 100ms to batch rapid changes during initialization
+    // Debounce refresh by 200ms to batch rapid changes during initialization
     refreshTimer.current = setTimeout(() => {
+      console.log('[DATA] Debounce timer fired - calling refreshLevel');
+      lastRefreshParams.current = currentParams;
       refreshLevel();
-    }, 100);
+    }, 200);
 
     return () => {
       if (refreshTimer.current) {
@@ -1006,31 +1044,71 @@ export default function LearnScreen() {
 
           // Lock scroll during animation
           setScrollLocked(true);
-          logScroll('FLOW', `spacecraft start from=${completedIndex} to=${nextIndex}`);
+          logScroll('FLOW', `🚀 Starting PARALLEL animations: spacecraft from=${completedIndex} to=${nextIndex}`);
 
-          // Setup animation
-          setSpacecraftFromIndex(completedIndex);
-          setSpacecraftToIndex(nextIndex);
-          setSpacecraftAnimating(true);
-          spacecraftAnim.setValue(0);
+          // First, instantly scroll to the completed planet (so user sees it marked complete)
+          const scrollX = getScrollXForIndex(completedIndex);
+          if (scrollViewRef.current) {
+            scrollViewRef.current.scrollTo({ x: scrollX, y: 0, animated: false });
+            setCenteredPlanetIndex(completedIndex);
+            lastCenteredPlanet.current = completedIndex;
+          }
 
-          // Run animation
-          Animated.timing(spacecraftAnim, {
-            toValue: 1,
-            duration: 1200,
-            easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-            useNativeDriver: true,
-          }).start(() => {
-            logScroll('FLOW', 'spacecraft end');
-            setSpacecraftAnimating(false);
+          // Smooth animation: spacecraft flies from completed planet to next planet
+          // Screen follows the spacecraft to keep it in view
+          setTimeout(() => {
+            logScroll('FLOW', `🚀 Animating spacecraft from ${completedIndex} to ${nextIndex}`);
 
-            // Unlock and scroll to next planet
-            setScrollLocked(false);
-            logScroll('FLOW', `scroll to next start index=${nextIndex}`);
-            scrollToPlanet(nextIndex, true);
-            setCurrentSetIndex(nextIndex);
-            logScroll('FLOW', 'scroll to next end');
-          });
+            // Setup animated spacecraft overlay
+            setSpacecraftFromIndex(completedIndex);
+            setSpacecraftToIndex(nextIndex);
+            setSpacecraftAnimating(true);
+            spacecraftAnim.setValue(0);
+
+            // Update centered state for scroll target
+            setCenteredPlanetIndex(nextIndex);
+            lastCenteredPlanet.current = nextIndex;
+
+            // Calculate scroll positions for smooth camera follow
+            const startScrollX = getScrollXForIndex(completedIndex);
+            const endScrollX = getScrollXForIndex(nextIndex);
+            const scrollDistance = endScrollX - startScrollX;
+
+            // Animate BOTH spacecraft AND screen together smoothly
+            const scrollProgress = new Animated.Value(0);
+
+            Animated.parallel([
+              // Spacecraft animation
+              Animated.timing(spacecraftAnim, {
+                toValue: 1,
+                duration: 1500, // Smooth 1.5 second flight
+                easing: Easing.inOut(Easing.ease),
+                useNativeDriver: true,
+              }),
+              // Screen scroll follows spacecraft smoothly
+              Animated.timing(scrollProgress, {
+                toValue: 1,
+                duration: 1500,
+                easing: Easing.inOut(Easing.ease),
+                useNativeDriver: false,
+              }),
+            ]).start(() => {
+              logScroll('FLOW', '✅ Spacecraft animation complete');
+              // Update currentSetIndex now so static spacecraft appears at destination
+              setCurrentSetIndex(nextIndex);
+              setSpacecraftAnimating(false);
+              setScrollLocked(false);
+              scrollProgress.removeAllListeners();
+            });
+
+            // Listen to scroll progress and update ScrollView position
+            scrollProgress.addListener(({ value }) => {
+              const currentScrollX = startScrollX + (scrollDistance * value);
+              if (scrollViewRef.current) {
+                scrollViewRef.current.scrollTo({ x: currentScrollX, y: 0, animated: false });
+              }
+            });
+          }, 300);
         }
       }
     });
@@ -1057,13 +1135,20 @@ export default function LearnScreen() {
   // ========== CONTINUE FLOW (returning from completed set) ==========
   // Handles spacecraft animation when returning from quiz screen
   useEffect(() => {
-    if (!completedSetId) return;
+    logScroll('FLOW', `🔍 CONTINUE useEffect triggered, completedSetId=${completedSetId}`);
+    if (!completedSetId) {
+      logScroll('FLOW', '❌ No completedSetId, skipping animation');
+      return;
+    }
 
     const setIdStr = String(completedSetId);
     // Skip if already animated this set
-    if (animatedSetIds.has(setIdStr)) return;
+    if (animatedSetIds.has(setIdStr)) {
+      logScroll('FLOW', `skip animation - already animated setId=${setIdStr}`);
+      return;
+    }
 
-    logScroll('FLOW', `continue pressed, completedSetId=${setIdStr}`);
+    logScroll('FLOW', `🎬 continue pressed, completedSetId=${setIdStr}`);
 
     // CRITICAL: Refresh level data first to get updated completion status
     // Otherwise we'll animate based on stale data
@@ -1104,30 +1189,61 @@ export default function LearnScreen() {
         lastCenteredPlanet.current = completedIndex;
       }
 
-      // Small delay for visual stability, then start animation
+      // Smooth animation: spacecraft flies from completed planet to next planet
+      // Screen follows the spacecraft to keep it in view
       setTimeout(() => {
+        const nextIndex = completedIndex + 1;
+
+        logScroll('FLOW', `🚀 Animating spacecraft from ${completedIndex} to ${nextIndex}`);
+
+        // Setup animated spacecraft overlay
         setSpacecraftFromIndex(completedIndex);
-        setSpacecraftToIndex(completedIndex + 1);
+        setSpacecraftToIndex(nextIndex);
         setSpacecraftAnimating(true);
         spacecraftAnim.setValue(0);
 
-        // Run animation
-        Animated.timing(spacecraftAnim, {
-          toValue: 1,
-          duration: 1200,
-          easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-          useNativeDriver: true,
-        }).start(() => {
-          logScroll('FLOW', 'spacecraft end');
-          setSpacecraftAnimating(false);
+        // Update centered state for scroll target
+        setCenteredPlanetIndex(nextIndex);
+        lastCenteredPlanet.current = nextIndex;
 
-          // Unlock and scroll to next planet
-          const nextIndex = completedIndex + 1;
-          setScrollLocked(false);
-          logScroll('FLOW', `scroll to next start index=${nextIndex}`);
-          scrollToPlanet(nextIndex, true);
+        // Calculate scroll positions for smooth camera follow
+        const startScrollX = getScrollXForIndex(completedIndex);
+        const endScrollX = getScrollXForIndex(nextIndex);
+        const scrollDistance = endScrollX - startScrollX;
+
+        // Animate BOTH spacecraft AND screen together smoothly
+        const scrollProgress = new Animated.Value(0);
+
+        Animated.parallel([
+          // Spacecraft animation
+          Animated.timing(spacecraftAnim, {
+            toValue: 1,
+            duration: 1500, // Smooth 1.5 second flight
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          // Screen scroll follows spacecraft smoothly
+          Animated.timing(scrollProgress, {
+            toValue: 1,
+            duration: 1500,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: false,
+          }),
+        ]).start(() => {
+          logScroll('FLOW', '✅ Spacecraft animation complete');
+          // Update currentSetIndex now so static spacecraft appears at destination
           setCurrentSetIndex(nextIndex);
-          logScroll('FLOW', 'scroll to next end');
+          setSpacecraftAnimating(false);
+          setScrollLocked(false);
+          scrollProgress.removeAllListeners();
+        });
+
+        // Listen to scroll progress and update ScrollView position
+        scrollProgress.addListener(({ value }) => {
+          const currentScrollX = startScrollX + (scrollDistance * value);
+          if (scrollViewRef.current) {
+            scrollViewRef.current.scrollTo({ x: currentScrollX, y: 0, animated: false });
+          }
         });
       }, 300);
     };
@@ -1137,7 +1253,7 @@ export default function LearnScreen() {
       console.error('[FLOW] refreshAndAnimate failed:', err);
       setScrollLocked(false);
     });
-  }, [completedSetId, refreshLevel, getCurrentPlanetIndex, getScrollXForIndex, spacecraftAnim, scrollToPlanet, logScroll]);
+  }, [completedSetId, routeKey, refreshLevel, getCurrentPlanetIndex, getScrollXForIndex, spacecraftAnim, scrollToPlanet, logScroll]);
 
   // Calculate stage gate positions and trigger haptic when scrolling past
   const stageGateIndices = useRef<number[]>([]);
@@ -1368,7 +1484,7 @@ export default function LearnScreen() {
         </View>
 
         {/* UFO/Spacecraft for current node */}
-        {isCurrent && !isCompleted && (
+        {isCurrent && !isCompleted && getInitialScrollDone() && !spacecraftAnimating && (
           <View style={[styles.spacecraftContainerH, { left: wrapperWidth / 2 - 35 }]}>
             <LottieView
               source={SPACECRAFT_SOURCE}
@@ -1701,20 +1817,34 @@ export default function LearnScreen() {
     const fromPos = getPlanetPosition(spacecraftFromIndex);
     const toPos = getPlanetPosition(spacecraftToIndex);
 
-    // Calculate center positions (account for planet size and label offset)
-    const fromX = fromPos.x + 20 + PLANET_SIZE / 2;
-    const fromY = fromPos.y + PLANET_SIZE / 2 + 100; // +100 for top margin
-    const toX = toPos.x + 20 + PLANET_SIZE / 2;
-    const toY = toPos.y + PLANET_SIZE / 2 + 100;
+    // Match static spacecraft position exactly
+    // Static spacecraft is positioned relative to planet wrapper:
+    // Planet wrapper: position absolute at (pos.x, pos.y) within planetPathContainerH
+    // planetPathContainerH flows normally with paddingHorizontal: 20
+    // Static spacecraft: inline style has left: wrapperWidth / 2 - 35, top: -30
+    // wrapperWidth = planetSize + 40 = PLANET_SIZE + 40 = 110 + 40 = 150
+    // So spacecraft left = 150/2 - 35 = 75 - 35 = 40
+    const planetSize = PLANET_SIZE;
+    const wrapperWidth = planetSize + 40; // 150
+    const spacecraftLeft = wrapperWidth / 2 - 35; // 40
+    const spacecraftTop = -30;
+
+    // Absolute position within ScrollView content
+    const fromX = fromPos.x + spacecraftLeft;
+    const fromY = fromPos.y + spacecraftTop;
+    const toX = toPos.x + spacecraftLeft;
+    const toY = toPos.y + spacecraftTop;
+
+    console.log('[ANIM] Spacecraft positions:', { fromX, fromY, toX, toY, fromPosX: fromPos.x, fromPosY: fromPos.y });
 
     // Interpolate position
     const translateX = spacecraftAnim.interpolate({
       inputRange: [0, 1],
-      outputRange: [fromX - 30, toX - 30], // Center the 60px spacecraft
+      outputRange: [fromX, toX],
     });
     const translateY = spacecraftAnim.interpolate({
       inputRange: [0, 1],
-      outputRange: [fromY - 30, toY - 30],
+      outputRange: [fromY, toY],
     });
 
     // Add a slight arc to the path
@@ -1750,7 +1880,13 @@ export default function LearnScreen() {
         ]}
         pointerEvents="none"
       >
-        <Text style={styles.spacecraftEmoji}>🚀</Text>
+        <LottieView
+          source={SPACECRAFT_SOURCE}
+          autoPlay
+          loop
+          cacheComposition={false}
+          style={{ width: 80, height: 80 }}
+        />
       </Animated.View>
     );
   };
@@ -1857,10 +1993,10 @@ export default function LearnScreen() {
       >
         {/* Planet path */}
         {buildCurrentLevelPath()}
-      </ScrollView>
 
-      {/* Spacecraft flying animation overlay */}
-      {renderSpacecraftAnimation()}
+        {/* Spacecraft flying animation - INSIDE ScrollView so it moves with content */}
+        {renderSpacecraftAnimation()}
+      </ScrollView>
 
       {/* Start / Practice Again button at bottom */}
       {displayLevel && centeredSet && (
@@ -2526,8 +2662,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-    width: 60,
-    height: 60,
+    width: 80,
+    height: 80,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
