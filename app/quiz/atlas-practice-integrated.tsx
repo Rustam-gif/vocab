@@ -304,7 +304,9 @@ export default function AtlasPracticeIntegrated() {
     const points = hearts * 20;
     try {
       if (levelId && setId) {
+        console.log(`[Practice] 💾 Saving completion: levelId=${levelId}, setId=${setId}, score=${points}`);
         await SetProgressService.markCompleted(String(levelId), String(setId), points);
+        console.log(`[Practice] ✅ Completion saved successfully`);
 
         // If this is a quiz (skip ahead), mark all previous sets as completed
         if (isQuiz && level) {

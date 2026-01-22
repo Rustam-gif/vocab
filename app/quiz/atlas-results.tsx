@@ -130,6 +130,8 @@ export default function AtlasResults() {
   }, [fadeAnim, scaleAnim]);
 
   const handleDone = async () => {
+    console.log('[Results] 🎯 handleDone called with levelId:', levelId, 'setId:', setId);
+
     try {
       const correct = parseInt(score || '0', 10);
       const total = parseInt(totalQuestions || '0', 10);
@@ -143,11 +145,20 @@ export default function AtlasResults() {
           0
         );
 
-        console.log(`[Quiz Results] XP Awarded: +${result.xpGained} XP (Level ${result.newLevel})`);
+        console.log(`[Results] XP Awarded: +${result.xpGained} XP (Level ${result.newLevel})`);
         await loadProgress();
       }
     } catch (error) {
-      console.error('Failed to award XP:', error);
+      console.error('[Results] Failed to award XP:', error);
+    }
+
+    // Emit SET_COMPLETED event so Learn screen can refresh progress and animate
+    if (setId) {
+      const { DeviceEventEmitter } = require('react-native');
+      DeviceEventEmitter.emit('SET_COMPLETED', { setId });
+      console.log('[Results] ✅ Emitted SET_COMPLETED event for setId:', setId);
+    } else {
+      console.warn('[Results] ⚠️  No setId available, cannot emit SET_COMPLETED event');
     }
 
     if (levelId) {
