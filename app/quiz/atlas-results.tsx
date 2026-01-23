@@ -63,7 +63,16 @@ export default function AtlasResults() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
 
+  // Heart animations - one animated value per heart
+  const heartAnims = useRef(
+    Array(5).fill(0).map(() => ({
+      opacity: new Animated.Value(0),
+      scale: new Animated.Value(0),
+    }))
+  ).current;
+
   useEffect(() => {
+    // Main screen fade-in
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -77,6 +86,28 @@ export default function AtlasResults() {
         useNativeDriver: true,
       }),
     ]).start();
+
+    // Staggered heart animations - pop in one after another
+    const heartAnimations = heartAnims.slice(0, heartsRemaining).map((anim, index) =>
+      Animated.sequence([
+        Animated.delay(800 + index * 200), // Start after screen appears, 200ms between each heart
+        Animated.parallel([
+          Animated.timing(anim.opacity, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.spring(anim.scale, {
+            toValue: 1,
+            friction: 6,
+            tension: 60,
+            useNativeDriver: true,
+          }),
+        ]),
+      ])
+    );
+
+    Animated.parallel(heartAnimations).start();
 
     // Celebration haptic pattern - victory sequence!
     // Extended and intense celebration for completing the quiz
@@ -127,7 +158,7 @@ export default function AtlasResults() {
     );
 
     return () => timeouts.forEach(t => clearTimeout(t));
-  }, [fadeAnim, scaleAnim]);
+  }, [fadeAnim, scaleAnim, heartsRemaining, heartAnims]);
 
   const handleDone = async () => {
     console.log('[Results] 🎯 handleDone called with levelId:', levelId, 'setId:', setId);
@@ -172,17 +203,24 @@ export default function AtlasResults() {
   };
 
   const renderHearts = () => {
-    // Show exactly heartsRemaining number of hearts
+    // Show exactly heartsRemaining number of hearts with staggered animation
     const hearts = [];
     for (let i = 0; i < heartsRemaining; i++) {
       hearts.push(
-        <LottieView
+        <Animated.View
           key={i}
-          source={require('../../assets/lottie/learn/heart_away.lottie')}
-          autoPlay
-          loop={false}
-          style={{ width: 180, height: 180, marginHorizontal: -55 }}
-        />
+          style={{
+            opacity: heartAnims[i].opacity,
+            transform: [{ scale: heartAnims[i].scale }],
+          }}
+        >
+          <LottieView
+            source={require('../../assets/lottie/learn/hearts_result.json')}
+            autoPlay
+            loop={false}
+            style={{ width: 180, height: 180, marginHorizontal: -55 }}
+          />
+        </Animated.View>
       );
     }
     return hearts;
@@ -225,14 +263,21 @@ export default function AtlasResults() {
             {getSuccessMessage()}
           </Text>
 
-          {/* Hearts display */}
-          <View style={[styles.heartsCard, isLight && styles.heartsCardLight]}>
+          {/* Words Mastered - redesigned */}
+          <View style={styles.wordsMasteredContainer}>
+            <Text style={[styles.wordsMasteredNumber, isLight && styles.wordsMasteredNumberLight]}>
+              5
+            </Text>
+            <Text style={[styles.wordsMasteredLabel, isLight && styles.wordsMasteredLabelLight]}>
+              New Words Mastered
+            </Text>
+          </View>
+
+          {/* Hearts display - no background card */}
+          <View style={styles.heartsContainer}>
             <View style={styles.heartsRow}>
               {renderHearts()}
             </View>
-            <Text style={[styles.heartsLabel, isLight && styles.heartsLabelLight]}>
-              {heartsRemaining} of {TOTAL_HEARTS} hearts remaining
-            </Text>
           </View>
 
           {/* Buttons */}
@@ -284,7 +329,7 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 32,
+    marginBottom: 16,
     textAlign: 'center',
     fontFamily: 'Ubuntu-Bold',
   },
@@ -292,22 +337,35 @@ const styles = StyleSheet.create({
     color: '#1B263B',
   },
 
-  // Hearts card - matching exercise card style
-  heartsCard: {
-    backgroundColor: 'rgba(30, 30, 30, 0.6)',
-    paddingVertical: 20,
-    paddingHorizontal: 32,
-    borderRadius: 16,
+  // Words Mastered - redesigned
+  wordsMasteredContainer: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  wordsMasteredNumber: {
+    fontSize: 56,
+    fontWeight: '700',
+    color: '#4ED9CB',
+    fontFamily: 'Ubuntu-Bold',
+    marginBottom: 4,
+  },
+  wordsMasteredNumberLight: {
+    color: '#437F76',
+  },
+  wordsMasteredLabel: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontFamily: 'Ubuntu-Medium',
+  },
+  wordsMasteredLabelLight: {
+    color: '#1B263B',
+  },
+
+  // Hearts container - no background
+  heartsContainer: {
     alignItems: 'center',
     marginBottom: 48,
-  },
-  heartsCardLight: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
   },
   heartsRow: {
     flexDirection: 'row',
