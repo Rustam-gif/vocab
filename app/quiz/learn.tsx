@@ -14,6 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { ProgressService } from '../../services/ProgressService';
 import { SetProgressService } from '../../services/SetProgressService';
 import { SubscriptionService } from '../../services/SubscriptionService';
+import { soundService } from '../../services/SoundService';
 import { useAppStore } from '../../lib/store';
 import { getTheme } from '../../lib/theme';
 import TopStatusPanel from '../components/TopStatusPanel';
@@ -532,6 +533,9 @@ export default function LearnScreen() {
     useCallback(() => {
       const ts = new Date().toISOString().substr(11, 12);
       console.log(`[${ts}] [LEARN] 👁️  FOCUS (tab visible), completedSetId=${completedSetId}`);
+
+      // Play tab switch sound
+      soundService.playTabSwitch();
 
       // Skip auto-scroll if:
       // 1. Scroll is locked (animation in progress)
@@ -1107,6 +1111,9 @@ export default function LearnScreen() {
 
       const scrollProgress = new Animated.Value(0);
 
+      // Play spacecraft sound
+      soundService.playSpacecraft();
+
         Animated.parallel([
           Animated.timing(spacecraftAnim, {
             toValue: 1,
@@ -1465,7 +1472,7 @@ export default function LearnScreen() {
         isCompleted: set?.completed,
       };
     });
-  }, [currentLevel?.sets?.length, currentLevel?.sets?.map(s => s.completed).join(',')]);
+  }, [currentLevel]);
 
   // Only show loading on very first app launch when no cache exists
   if (!currentLevel && !cachedCurrentLevel) {
@@ -1491,6 +1498,7 @@ export default function LearnScreen() {
   if (!displayLevel) {
     return null;
   }
+
 
   const renderPlanetNode = (set: VocabSet & { locked?: boolean; premiumLocked?: boolean }, index: number, isCurrentLevel: boolean, allSets: VocabSet[]) => {
     const isLocked = set.locked;
@@ -2793,11 +2801,11 @@ const styles = StyleSheet.create({
   },
   alienFab: {
     position: 'absolute',
-    bottom: 110,
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    bottom: 180,
+    right: 32,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#1A2744',
     borderWidth: 2,
     borderColor: 'rgba(78,217,203,0.5)',
@@ -2810,19 +2818,19 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   alienFabInner: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#243B5C',
     justifyContent: 'center',
     alignItems: 'center',
   },
   alienFabEmoji: {
-    fontSize: 24,
+    fontSize: 20,
   },
   rocketFabAnimation: {
-    width: 70,
-    height: 70,
+    width: 60,
+    height: 60,
   },
   // Keep old styles for compatibility
   nodeWrapper: {

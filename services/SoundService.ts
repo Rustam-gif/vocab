@@ -11,7 +11,7 @@ import Sound from '../lib/rnsound';
 
 const SOUND_ENABLED_KEY = '@engniter.soundEnabled';
 
-type SoundName = 'correct_answer' | 'incorrect_answer' | 'intro_for_exercises' | 'one_set_completion' | 'story_generated';
+type SoundName = 'correct_answer' | 'incorrect_answer' | 'intro_for_exercises' | 'one_set_completion' | 'story_generated' | 'tabs_switch' | 'spacecraft';
 
 // Map sound names to their file extensions
 const soundFileExtensions: Record<SoundName, string> = {
@@ -20,6 +20,8 @@ const soundFileExtensions: Record<SoundName, string> = {
   intro_for_exercises: 'wav',
   one_set_completion: 'wav',
   story_generated: 'mp3',
+  tabs_switch: 'mp3',
+  spacecraft: 'mp3',
 };
 
 class SoundServiceClass {
@@ -52,7 +54,7 @@ class SoundServiceClass {
     }
 
     // Preload sounds
-    const soundFiles: SoundName[] = ['correct_answer', 'incorrect_answer', 'intro_for_exercises', 'one_set_completion', 'story_generated'];
+    const soundFiles: SoundName[] = ['correct_answer', 'incorrect_answer', 'intro_for_exercises', 'one_set_completion', 'story_generated', 'tabs_switch', 'spacecraft'];
 
     for (const name of soundFiles) {
       try {
@@ -88,7 +90,7 @@ class SoundServiceClass {
   /**
    * Play a sound effect
    */
-  play(name: SoundName): void {
+  play(name: SoundName, volume: number = 1.0): void {
     // Check if sounds are enabled
     if (!this.soundEnabled) {
       return;
@@ -100,21 +102,28 @@ class SoundServiceClass {
       return;
     }
 
-    // Ensure audio session is set for playback (ignores mute switch)
-    if (Platform.OS === 'ios') {
-      try {
-        Sound.setCategory('Playback', true);
-      } catch {}
-    }
+    try {
+      // Ensure audio session is set for playback (ignores mute switch)
+      if (Platform.OS === 'ios') {
+        try {
+          Sound.setCategory('Playback', true);
+        } catch {}
+      }
 
-    // Stop and rewind before playing (allows rapid replays)
-    sound.stop(() => {
-      sound.play((success) => {
-        if (!success) {
-          console.warn(`[SoundService] Playback failed for ${name}`);
-        }
+      // Set volume (0.0 to 1.0)
+      sound.setVolume(Math.max(0, Math.min(1, volume)));
+
+      // Stop and rewind before playing (allows rapid replays)
+      sound.stop(() => {
+        sound.play((success) => {
+          if (!success) {
+            console.warn(`[SoundService] Playback failed for ${name}`);
+          }
+        });
       });
-    });
+    } catch (error) {
+      console.warn(`[SoundService] Error playing ${name}:`, error);
+    }
   }
 
   /**
@@ -165,6 +174,20 @@ class SoundServiceClass {
    */
   playStoryGenerated(): void {
     this.play('story_generated');
+  }
+
+  /**
+   * Play tab switch sound (at 7% volume)
+   */
+  playTabSwitch(): void {
+    this.play('tabs_switch', 0.07);
+  }
+
+  /**
+   * Play spacecraft sound
+   */
+  playSpacecraft(): void {
+    this.play('spacecraft');
   }
 
   /**

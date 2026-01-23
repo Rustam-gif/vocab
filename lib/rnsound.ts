@@ -88,6 +88,15 @@ class Sound {
     return this;
   }
 
+  setVolume(volume: number) {
+    try {
+      RNSound.setVolume(this._key, Math.max(0, Math.min(1, volume)));
+    } catch (e) {
+      console.warn('[Sound] setVolume not supported:', e);
+    }
+    return this;
+  }
+
   release() {
     try { RNSound.release(this._key); } catch {}
     try { this._onPlaySub?.remove?.(); } catch {}
