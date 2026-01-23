@@ -152,25 +152,14 @@ export default function AtlasResults() {
       console.error('[Results] Failed to award XP:', error);
     }
 
-    // Emit SET_COMPLETED event so Learn screen can refresh progress and animate
+    // Emit event to trigger spacecraft animation on Learn screen
     if (setId) {
-      const { DeviceEventEmitter } = require('react-native');
-      DeviceEventEmitter.emit('SET_COMPLETED', { setId });
-      console.log('[Results] ✅ Emitted SET_COMPLETED event for setId:', setId);
-    } else {
-      console.warn('[Results] ⚠️  No setId available, cannot emit SET_COMPLETED event');
+      DeviceEventEmitter.emit('SPACECRAFT_ANIMATE', { setId: String(setId) });
+      console.log('[Results] ✅ Emitted SPACECRAFT_ANIMATE event for setId:', setId);
     }
 
-    if (levelId) {
-      // Pass completedSetId so learn screen can animate spacecraft
-      const params = setId
-        ? `/quiz/learn?level=${levelId}&completedSetId=${setId}`
-        : `/quiz/learn?level=${levelId}`;
-      console.log('[Results] 🚀 Navigating with params:', params, 'setId=', setId, 'levelId=', levelId);
-      router.replace(params);
-    } else {
-      router.replace('/');
-    }
+    // Navigate back to existing Learn screen (avoid unmounting)
+    router.back();
   };
 
   const getSuccessMessage = () => {

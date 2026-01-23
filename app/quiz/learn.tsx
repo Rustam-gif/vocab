@@ -260,9 +260,6 @@ export default function LearnScreen() {
   const { level: levelId, completedSetId } = useLocalSearchParams<{ level: string; completedSetId: string }>();
   const routeKey = useRouteKey(); // Changes when route params change
 
-  // DEBUG: Log params on every render
-  console.log('[LEARN] 🔍 PARAMS:', { levelId, completedSetId, routeKey });
-
   // Use cached level for instant display on mount
   const [currentLevel, setCurrentLevel] = useState<Level | null>(() => {
     if (cachedCurrentLevel && (!levelId || cachedLevelId === levelId)) {
@@ -312,8 +309,14 @@ export default function LearnScreen() {
   const setLayoutReady = (v: boolean) => { moduleLayoutReady = v; };
   const getInitialScrollDone = () => moduleInitialScrollDone;
   const setInitialScrollDone = (v: boolean) => { moduleInitialScrollDone = v; };
+
+  // Scroll locked state - use both module variable (for function checks) AND React state (for re-renders)
+  const [scrollLockedState, setScrollLockedState] = useState(false);
   const getScrollLocked = () => moduleScrollLocked;
-  const setScrollLocked = (v: boolean) => { moduleScrollLocked = v; };
+  const setScrollLocked = (v: boolean) => {
+    moduleScrollLocked = v;
+    setScrollLockedState(v); // Trigger re-render
+  };
 
   // Premium status for gating content - initialize from cache to prevent flickering
   const [isPremium, setIsPremium] = useState<boolean>(() => cachedIsPremium);
@@ -328,6 +331,7 @@ export default function LearnScreen() {
   const [spacecraftAnimating, setSpacecraftAnimating] = useState(false);
   const [spacecraftFromIndex, setSpacecraftFromIndex] = useState(0);
   const [spacecraftToIndex, setSpacecraftToIndex] = useState(0);
+  const [hideStaticSpacecraft, setHideStaticSpacecraft] = useState(false); // Hide during animation setup
   const spacecraftAnim = useRef(new Animated.Value(0)).current;
 
   // ========== MOUNT/UNMOUNT LOGGING ==========
@@ -850,15 +854,18 @@ export default function LearnScreen() {
       cachedUserFocus = effectiveUserFocus;
 
       // Set initial scroll index immediately with level to avoid flash
-      const initialIndex = setsWithProgress.findIndex(s => !s.completed && !s.locked);
-      const targetIndex = initialIndex === -1 ? 0 : initialIndex;
-      setCurrentSetIndex(targetIndex);
-      setCenteredPlanetIndex(targetIndex);
-      lastCenteredPlanet.current = targetIndex;
+      // BUT skip if scroll is locked (animation in progress) to prevent jumping
+      if (!getScrollLocked()) {
+        const initialIndex = setsWithProgress.findIndex(s => !s.completed && !s.locked);
+        const targetIndex = initialIndex === -1 ? 0 : initialIndex;
+        setCurrentSetIndex(targetIndex);
+        setCenteredPlanetIndex(targetIndex);
+        lastCenteredPlanet.current = targetIndex;
 
-      // Update module-level cache for instant positioning on next mount
-      cachedCurrentPlanetIndex = targetIndex;
-      AsyncStorage.setItem(CURRENT_PLANET_INDEX_KEY, String(targetIndex)).catch(() => {});
+        // Update module-level cache for instant positioning on next mount
+        cachedCurrentPlanetIndex = targetIndex;
+        AsyncStorage.setItem(CURRENT_PLANET_INDEX_KEY, String(targetIndex)).catch(() => {});
+      }
 
       // NOTE: Initial scroll is handled by:
       // 1. contentOffset prop (instant positioning on mount)
@@ -1018,102 +1025,111 @@ export default function LearnScreen() {
     }
   };
 
-  // ========== SET_COMPLETED EVENT HANDLER ==========
-  // Handles completion events while user stays on Learn screen
+  // ========== SET_COMPLETED EVENT for Test Complete button ==========
   useEffect(() => {
-    const subscription = DeviceEventEmitter.addListener('SET_COMPLETED', async (data?: { setId: number }) => {
-      logScroll('FLOW', '🎉 SET_COMPLETED event received', data);
+    const subscription = DeviceEventEmitter.addListener('SPACECRAFT_ANIMATE', async (data?: { setId: string }) => {
+      if (!data?.setId) return;
 
-      // CRITICAL: Refresh level data first to get updated completion status
+      const setIdStr = String(data.setId);
+      logScroll('FLOW', `🎉 SPACECRAFT_ANIMATE event received for setId=${setIdStr}`);
+
+      // Check if already animated
+      if (animatedSetIds.has(setIdStr)) {
+        logScroll('FLOW', `skip animation - already animated setId=${setIdStr}`);
+        return;
+      }
+
+      logScroll('FLOW', `🎬 Starting spacecraft animation for setId=${setIdStr}`);
+
+      // Lock scroll only (keep static spacecraft visible during data refresh)
+      setScrollLocked(true);
+
+      // Get current level to find completed index BEFORE marking as completed changes state
+      const levelBefore = currentLevel || cachedCurrentLevel;
+      if (!levelBefore) {
+        logScroll('FLOW', 'no level data before refresh, aborting');
+        setScrollLocked(false);
+        return;
+      }
+
+      // Find the completed set index using current data
+      const completedIndex = levelBefore.sets.findIndex(s => String(s.id) === setIdStr);
+      if (completedIndex < 0 || completedIndex >= levelBefore.sets.length - 1) {
+        logScroll('FLOW', 'set not found or is last, aborting animation');
+        setScrollLocked(false);
+        return;
+      }
+
+      const nextIndex = completedIndex + 1;
+
+      // CRITICAL: Set animation state IMMEDIATELY to keep static spacecraft mounted
+      // and show animated spacecraft - this prevents any disappearance
+      setSpacecraftFromIndex(completedIndex);
+      setSpacecraftToIndex(nextIndex);
+      spacecraftAnim.setValue(0);
+      setSpacecraftAnimating(true);
+      // Note: static spacecraft auto-hides when spacecraftAnimating=true
+
+      // Mark as animated
+      animatedSetIds.add(setIdStr);
+
+      logScroll('FLOW', `🚀 EVENT: Animating spacecraft from ${completedIndex} to ${nextIndex}`);
+
+      // Now refresh level data in the background (animation state keeps spacecraft visible)
       await refreshLevel();
 
-      // Wait a tick for state to update
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Start animation immediately - no setTimeout delay needed since we already have state set
+      const startScrollX = getScrollXForIndex(completedIndex);
+      const endScrollX = getScrollXForIndex(nextIndex);
+      const scrollDistance = endScrollX - startScrollX;
 
-      // Trigger spacecraft animation if we have the completed set info
-      if (data?.setId) {
-        const level = currentLevel || cachedCurrentLevel;
-        if (!level) {
-          logScroll('FLOW', 'no level data, skipping animation');
-          return;
-        }
+      const scrollProgress = new Animated.Value(0);
 
-        const completedIndex = level.sets.findIndex(s => s.id === data.setId);
-        if (completedIndex >= 0 && completedIndex < level.sets.length - 1) {
-          const nextIndex = completedIndex + 1;
+        Animated.parallel([
+          Animated.timing(spacecraftAnim, {
+            toValue: 1,
+            duration: 1500,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(scrollProgress, {
+            toValue: 1,
+            duration: 1500,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: false,
+          }),
+        ]).start(() => {
+          logScroll('FLOW', '✅ Spacecraft animation complete');
 
-          // Lock scroll during animation
-          setScrollLocked(true);
-          logScroll('FLOW', `🚀 Starting PARALLEL animations: spacecraft from=${completedIndex} to=${nextIndex}`);
+          // Clean up scroll listener immediately
+          scrollProgress.removeAllListeners();
 
-          // First, instantly scroll to the completed planet (so user sees it marked complete)
-          const scrollX = getScrollXForIndex(completedIndex);
+          // Force scroll to exact final position
           if (scrollViewRef.current) {
-            scrollViewRef.current.scrollTo({ x: scrollX, y: 0, animated: false });
-            setCenteredPlanetIndex(completedIndex);
-            lastCenteredPlanet.current = completedIndex;
+            scrollViewRef.current.scrollTo({ x: endScrollX, y: 0, animated: false });
           }
 
-          // Smooth animation: spacecraft flies from completed planet to next planet
-          // Screen follows the spacecraft to keep it in view
-          setTimeout(() => {
-            logScroll('FLOW', `🚀 Animating spacecraft from ${completedIndex} to ${nextIndex}`);
+          // Update indices immediately
+          setCurrentSetIndex(nextIndex);
+          setCenteredPlanetIndex(nextIndex);
+          lastCenteredPlanet.current = nextIndex;
 
-            // Setup animated spacecraft overlay
-            setSpacecraftFromIndex(completedIndex);
-            setSpacecraftToIndex(nextIndex);
-            setSpacecraftAnimating(true);
-            spacecraftAnim.setValue(0);
+          // KEEP animated spacecraft visible at final position - don't switch to static
+          // This prevents any position adjustment/snapping
+          // spacecraftAnimating stays TRUE, animated spacecraft frozen at value=1.0
+          setScrollLocked(false);
+        });
 
-            // Update centered state for scroll target
-            setCenteredPlanetIndex(nextIndex);
-            lastCenteredPlanet.current = nextIndex;
-
-            // Calculate scroll positions for smooth camera follow
-            const startScrollX = getScrollXForIndex(completedIndex);
-            const endScrollX = getScrollXForIndex(nextIndex);
-            const scrollDistance = endScrollX - startScrollX;
-
-            // Animate BOTH spacecraft AND screen together smoothly
-            const scrollProgress = new Animated.Value(0);
-
-            Animated.parallel([
-              // Spacecraft animation
-              Animated.timing(spacecraftAnim, {
-                toValue: 1,
-                duration: 1500, // Smooth 1.5 second flight
-                easing: Easing.inOut(Easing.ease),
-                useNativeDriver: true,
-              }),
-              // Screen scroll follows spacecraft smoothly
-              Animated.timing(scrollProgress, {
-                toValue: 1,
-                duration: 1500,
-                easing: Easing.inOut(Easing.ease),
-                useNativeDriver: false,
-              }),
-            ]).start(() => {
-              logScroll('FLOW', '✅ Spacecraft animation complete');
-              // Update currentSetIndex now so static spacecraft appears at destination
-              setCurrentSetIndex(nextIndex);
-              setSpacecraftAnimating(false);
-              setScrollLocked(false);
-              scrollProgress.removeAllListeners();
-            });
-
-            // Listen to scroll progress and update ScrollView position
-            scrollProgress.addListener(({ value }) => {
-              const currentScrollX = startScrollX + (scrollDistance * value);
-              if (scrollViewRef.current) {
-                scrollViewRef.current.scrollTo({ x: currentScrollX, y: 0, animated: false });
-              }
-            });
-          }, 300);
+      scrollProgress.addListener(({ value }) => {
+        const currentScrollX = startScrollX + (scrollDistance * value);
+        if (scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({ x: currentScrollX, y: 0, animated: false });
         }
-      }
+      });
     });
+
     return () => subscription.remove();
-  }, [refreshLevel, spacecraftAnim, scrollToPlanet, logScroll]);
+  }, [refreshLevel, getCurrentPlanetIndex, getScrollXForIndex, spacecraftAnim, scrollToPlanet, logScroll]);
 
   // ========== LEVEL CHANGE STATE UPDATE (NO SCROLL) ==========
   // Only updates state, does NOT scroll - scroll is handled by layout handler
@@ -1150,17 +1166,19 @@ export default function LearnScreen() {
 
     logScroll('FLOW', `🎬 continue pressed, completedSetId=${setIdStr}`);
 
+    // CRITICAL: Lock scroll only (keep static spacecraft visible during data refresh)
+    setScrollLocked(true);
+
     // CRITICAL: Refresh level data first to get updated completion status
     // Otherwise we'll animate based on stale data
     const refreshAndAnimate = async () => {
       await refreshLevel();
 
-      // Wait a tick for state to update
-      await new Promise(resolve => setTimeout(resolve, 50));
-
       const level = currentLevel || cachedCurrentLevel;
       if (!level) {
         logScroll('FLOW', 'no level data after refresh, aborting animation');
+        // Unlock UI since animation won't happen
+        setScrollLocked(false);
         return;
       }
 
@@ -1171,40 +1189,28 @@ export default function LearnScreen() {
         logScroll('FLOW', 'set not found or is last, scrolling to current');
         const targetIndex = getCurrentPlanetIndex(level);
         scrollToPlanet(targetIndex, false);
+        setScrollLocked(false);
         return;
       }
 
-      // Mark as animated to prevent re-triggering
+      // Mark as animated ONLY when we're actually going to animate (after all early returns)
       animatedSetIds.add(setIdStr);
-
-      // Lock scroll during animation sequence
-      setScrollLocked(true);
-      logScroll('FLOW', `spacecraft start from=${completedIndex} to=${completedIndex + 1}`);
-
-      // First, instantly scroll to the completed planet (so user sees it marked complete)
-      const scrollX = getScrollXForIndex(completedIndex);
-      if (scrollViewRef.current) {
-        scrollViewRef.current.scrollTo({ x: scrollX, y: 0, animated: false });
-        setCenteredPlanetIndex(completedIndex);
-        lastCenteredPlanet.current = completedIndex;
-      }
 
       // Smooth animation: spacecraft flies from completed planet to next planet
       // Screen follows the spacecraft to keep it in view
       setTimeout(() => {
         const nextIndex = completedIndex + 1;
 
-        logScroll('FLOW', `🚀 Animating spacecraft from ${completedIndex} to ${nextIndex}`);
+        logScroll('FLOW', `🚀 COMPLETED_PARAM: Animating spacecraft from ${completedIndex} to ${nextIndex}`);
+
+        // Hide static spacecraft NOW (right before animated one appears)
+        setHideStaticSpacecraft(true);
 
         // Setup animated spacecraft overlay
         setSpacecraftFromIndex(completedIndex);
         setSpacecraftToIndex(nextIndex);
         setSpacecraftAnimating(true);
         spacecraftAnim.setValue(0);
-
-        // Update centered state for scroll target
-        setCenteredPlanetIndex(nextIndex);
-        lastCenteredPlanet.current = nextIndex;
 
         // Calculate scroll positions for smooth camera follow
         const startScrollX = getScrollXForIndex(completedIndex);
@@ -1231,11 +1237,24 @@ export default function LearnScreen() {
           }),
         ]).start(() => {
           logScroll('FLOW', '✅ Spacecraft animation complete');
-          // Update currentSetIndex now so static spacecraft appears at destination
-          setCurrentSetIndex(nextIndex);
-          setSpacecraftAnimating(false);
-          setScrollLocked(false);
+
+          // Clean up scroll listener immediately
           scrollProgress.removeAllListeners();
+
+          // Force scroll to exact final position
+          if (scrollViewRef.current) {
+            scrollViewRef.current.scrollTo({ x: endScrollX, y: 0, animated: false });
+          }
+
+          // Update indices immediately
+          setCurrentSetIndex(nextIndex);
+          setCenteredPlanetIndex(nextIndex);
+          lastCenteredPlanet.current = nextIndex;
+
+          // KEEP animated spacecraft visible at final position - don't switch to static
+          // This prevents any position adjustment/snapping
+          // spacecraftAnimating stays TRUE, animated spacecraft frozen at value=1.0
+          setScrollLocked(false);
         });
 
         // Listen to scroll progress and update ScrollView position
@@ -1252,6 +1271,8 @@ export default function LearnScreen() {
     refreshAndAnimate().catch(err => {
       console.error('[FLOW] refreshAndAnimate failed:', err);
       setScrollLocked(false);
+      setHideStaticSpacecraft(false);
+      setSpacecraftAnimating(false);
     });
   }, [completedSetId, routeKey, refreshLevel, getCurrentPlanetIndex, getScrollXForIndex, spacecraftAnim, scrollToPlanet, logScroll]);
 
@@ -1483,9 +1504,15 @@ export default function LearnScreen() {
           </Text>
         </View>
 
-        {/* UFO/Spacecraft for current node */}
-        {isCurrent && !isCompleted && getInitialScrollDone() && !spacecraftAnimating && (
-          <View style={[styles.spacecraftContainerH, { left: wrapperWidth / 2 - 35 }]}>
+        {/* UFO/Spacecraft for current node - always rendered on relevant planets to prevent unmount/remount flicker */}
+        {((isCurrent && !isCompleted) || (spacecraftAnimating && (index === spacecraftFromIndex || index === spacecraftToIndex))) && (
+          <View style={[
+            styles.spacecraftContainerH,
+            {
+              left: wrapperWidth / 2 - 35,
+              opacity: (spacecraftAnimating || hideStaticSpacecraft) ? 0 : 1
+            }
+          ]}>
             <LottieView
               source={SPACECRAFT_SOURCE}
               autoPlay
@@ -1812,7 +1839,7 @@ export default function LearnScreen() {
 
   // Render spacecraft animation overlay
   const renderSpacecraftAnimation = () => {
-    if (!spacecraftAnimating) return null;
+    // Always render (pre-loaded), just control visibility with opacity
 
     const fromPos = getPlanetPosition(spacecraftFromIndex);
     const toPos = getPlanetPosition(spacecraftToIndex);
@@ -1834,8 +1861,6 @@ export default function LearnScreen() {
     const fromY = fromPos.y + spacecraftTop;
     const toX = toPos.x + spacecraftLeft;
     const toY = toPos.y + spacecraftTop;
-
-    console.log('[ANIM] Spacecraft positions:', { fromX, fromY, toX, toY, fromPosX: fromPos.x, fromPosY: fromPos.y });
 
     // Interpolate position
     const translateX = spacecraftAnim.interpolate({
@@ -1870,6 +1895,7 @@ export default function LearnScreen() {
         style={[
           styles.spacecraftAnimContainer,
           {
+            opacity: spacecraftAnimating ? 1 : 0,
             transform: [
               { translateX },
               { translateY: Animated.add(translateY, arcOffset) },
@@ -1999,7 +2025,7 @@ export default function LearnScreen() {
       </ScrollView>
 
       {/* Start / Practice Again button at bottom */}
-      {displayLevel && centeredSet && (
+      {displayLevel && centeredSet && !scrollLockedState && (
         <View style={styles.bottomButtonContainer}>
           <TouchableOpacity
             style={[
@@ -2046,6 +2072,49 @@ export default function LearnScreen() {
               style={styles.rocketFabAnimation}
             />
           </View>
+        </TouchableOpacity>
+      )}
+
+      {/* DEV: Test complete set button */}
+      {displayLevel && centeredSet && !centeredSet.completed && !scrollLockedState && (
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            right: 16,
+            top: insets.top + 60,
+            backgroundColor: '#8B5CF6',
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 12,
+            zIndex: 9999,
+            elevation: 9999,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.3,
+            shadowRadius: 4,
+          }}
+          onPress={async () => {
+            const setIdToComplete = centeredSet.id;
+            const points = 100;
+
+            console.log(`[TEST] 🎯 Completing set ${setIdToComplete} from Learn screen`);
+
+            // Mark set as completed
+            if (activeLevelId && setIdToComplete) {
+              await SetProgressService.markCompleted(String(activeLevelId), String(setIdToComplete), points);
+              await SetProgressService.flushSave();
+              console.log(`[TEST] ✅ Set ${setIdToComplete} marked as completed`);
+
+              // Emit event to trigger spacecraft animation
+              DeviceEventEmitter.emit('SPACECRAFT_ANIMATE', { setId: String(setIdToComplete) });
+              console.log(`[TEST] 🚀 Emitted SPACECRAFT_ANIMATE event for setId=${setIdToComplete}`);
+            }
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 11, fontFamily: 'Ubuntu-Bold' }}>
+            Test Complete
+          </Text>
         </TouchableOpacity>
       )}
 

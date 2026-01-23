@@ -694,24 +694,6 @@ export default function AtlasPracticeIntegrated() {
 
       </SafeAreaView>
 
-      {/* DEV: Skip exercises test button */}
-      <TouchableOpacity
-        style={{
-          position: 'absolute',
-          right: 16,
-          top: 60,
-          backgroundColor: '#10B981',
-          paddingHorizontal: 12,
-          paddingVertical: 6,
-          borderRadius: 12,
-          zIndex: 9999,
-          elevation: 9999,
-        }}
-        onPress={() => navigateToResults(5, 5)}
-      >
-        <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 12 }}>Skip</Text>
-      </TouchableOpacity>
-
       {/* Fire Combo Animation - Minimalist */}
       {showFireAnimation && (
         <Animated.View
