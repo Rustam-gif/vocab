@@ -1062,12 +1062,33 @@ export default function LearnScreen() {
 
       const nextIndex = completedIndex + 1;
 
+      // If this is a quiz, mark all previous non-quiz sets as completed (skip-ahead logic)
+      const completedSet = levelBefore.sets[completedIndex];
+      const isQuiz = completedSet && (completedSet as any).type === 'quiz';
+      if (isQuiz && activeLevelId) {
+        logScroll('FLOW', `📝 Quiz completed, marking previous sets as completed`);
+
+        // Mark all previous non-quiz sets as completed
+        for (let i = 0; i < completedIndex; i++) {
+          const prevSet = levelBefore.sets[i];
+          if (prevSet && (prevSet as any).type !== 'quiz') {
+            const prevProgress = SetProgressService.get(String(activeLevelId), String(prevSet.id));
+            if (!prevProgress || prevProgress.status !== 'completed') {
+              await SetProgressService.markCompleted(String(activeLevelId), String(prevSet.id), 80);
+              logScroll('FLOW', `✅ Marked previous set ${prevSet.id} as completed`);
+            }
+          }
+        }
+        await SetProgressService.flushSave();
+      }
+
       // CRITICAL: Set animation state IMMEDIATELY to keep static spacecraft mounted
       // and show animated spacecraft - this prevents any disappearance
       setSpacecraftFromIndex(completedIndex);
       setSpacecraftToIndex(nextIndex);
       spacecraftAnim.setValue(0);
       setSpacecraftAnimating(true);
+      setHideStaticSpacecraft(false); // Reset this so static is only hidden by spacecraftAnimating
       // Note: static spacecraft auto-hides when spacecraftAnimating=true
 
       // Mark as animated
@@ -1076,6 +1097,7 @@ export default function LearnScreen() {
       logScroll('FLOW', `🚀 EVENT: Animating spacecraft from ${completedIndex} to ${nextIndex}`);
 
       // Now refresh level data in the background (animation state keeps spacecraft visible)
+      // This will pick up all the newly completed sets from the quiz skip-ahead
       await refreshLevel();
 
       // Start animation immediately - no setTimeout delay needed since we already have state set
@@ -1109,15 +1131,16 @@ export default function LearnScreen() {
             scrollViewRef.current.scrollTo({ x: endScrollX, y: 0, animated: false });
           }
 
-          // Update indices immediately
+          // Update indices immediately - animation is complete so no stutter
           setCurrentSetIndex(nextIndex);
           setCenteredPlanetIndex(nextIndex);
           lastCenteredPlanet.current = nextIndex;
 
-          // KEEP animated spacecraft visible at final position - don't switch to static
-          // This prevents any position adjustment/snapping
-          // spacecraftAnimating stays TRUE, animated spacecraft frozen at value=1.0
+          // Unlock scroll
           setScrollLocked(false);
+
+          // Keep spacecraftAnimating TRUE - never switch back to static spacecraft
+          // This prevents position adjustment
         });
 
       scrollProgress.addListener(({ value }) => {
@@ -1246,15 +1269,16 @@ export default function LearnScreen() {
             scrollViewRef.current.scrollTo({ x: endScrollX, y: 0, animated: false });
           }
 
-          // Update indices immediately
+          // Update indices immediately - animation is complete so no stutter
           setCurrentSetIndex(nextIndex);
           setCenteredPlanetIndex(nextIndex);
           lastCenteredPlanet.current = nextIndex;
 
-          // KEEP animated spacecraft visible at final position - don't switch to static
-          // This prevents any position adjustment/snapping
-          // spacecraftAnimating stays TRUE, animated spacecraft frozen at value=1.0
+          // Unlock scroll
           setScrollLocked(false);
+
+          // Keep spacecraftAnimating TRUE - never switch back to static spacecraft
+          // This prevents position adjustment
         });
 
         // Listen to scroll progress and update ScrollView position
@@ -1343,12 +1367,17 @@ export default function LearnScreen() {
 
     // Update ref and state immediately to keep render window in sync with scroll
     if (clampedIndex !== lastCenteredPlanet.current) {
+      // Don't update centered planet during ACTIVE animation (scroll locked)
+      if (getScrollLocked()) {
+        return;
+      }
+
       lastCenteredPlanet.current = clampedIndex;
       triggerHaptic('light');
       // Update state immediately - no debounce to prevent planets disappearing during fast scroll
       setCenteredPlanetIndex(clampedIndex);
     }
-  }, [triggerHaptic, currentLevel?.sets.length]);
+  }, [triggerHaptic, currentLevel?.sets.length, spacecraftAnimating, getScrollLocked]);
 
   // Cleanup timeouts on unmount to prevent memory leaks
   useEffect(() => {
@@ -1644,6 +1673,26 @@ export default function LearnScreen() {
               (isLocked && !quizCanSkipAhead) && styles.planetLocked,
             ]}
           />
+
+          {/* Completed flag animation on top of completed planets */}
+          {isCompleted && (
+            <View style={{
+              position: 'absolute',
+              top: -planetSize * 0.2,
+              right: -planetSize * 0.15,
+              width: planetSize * 0.5,
+              height: planetSize * 0.5,
+              zIndex: 10,
+            }}>
+              <LottieView
+                source={require('../../assets/lottie/learn/flag_completed.json')}
+                autoPlay
+                loop
+                cacheComposition={false}
+                style={{ width: '100%', height: '100%' }}
+              />
+            </View>
+          )}
 
         </TouchableOpacity>
       </View>
@@ -2106,6 +2155,7 @@ export default function LearnScreen() {
               console.log(`[TEST] ✅ Set ${setIdToComplete} marked as completed`);
 
               // Emit event to trigger spacecraft animation
+              // (quiz skip-ahead logic is handled in the event handler)
               DeviceEventEmitter.emit('SPACECRAFT_ANIMATE', { setId: String(setIdToComplete) });
               console.log(`[TEST] 🚀 Emitted SPACECRAFT_ANIMATE event for setId=${setIdToComplete}`);
             }
