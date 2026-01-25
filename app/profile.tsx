@@ -12,6 +12,7 @@ import {
   Linking,
   InteractionManager,
   Keyboard,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -72,6 +73,20 @@ const Text = (props: React.ComponentProps<typeof RNText>) => (
   <RNText {...props} style={[{ fontFamily: 'Feather-Bold' }, props.style]} />
 );
 
+// Module-level cache for subscription status to prevent flickering on mount
+let cachedSubStatus: { active: boolean; productId?: string } | null = null;
+
+// Initialize cache synchronously from AsyncStorage
+(async () => {
+  try {
+    const active = (await AsyncStorage.getItem('@engniter.premium.active')) === '1';
+    const productId = (await AsyncStorage.getItem('@engniter.premium.product')) || undefined;
+    cachedSubStatus = { active, productId };
+  } catch {
+    cachedSubStatus = { active: false };
+  }
+})();
+
 const mapSupabaseUser = (user: any, progress?: any) => {
   const displayName = user?.user_metadata?.full_name ?? user?.email ?? 'Vocabulary Learner';
   
@@ -114,7 +129,7 @@ export default function ProfileScreen() {
   const [fullName, setFullName] = useState('');
   const [isSignUp, setIsSignUp] = useState(true);
   const [selectedAvatar, setSelectedAvatar] = useState<number>(1);
-  const [subStatus, setSubStatus] = useState<{ active: boolean; productId?: string } | null>(null);
+  const [subStatus, setSubStatus] = useState<{ active: boolean; productId?: string } | null>(() => cachedSubStatus);
   const [products, setProducts] = useState<SubscriptionProduct[]>([]);
   const [selectedSku, setSelectedSku] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
@@ -181,7 +196,10 @@ export default function ProfileScreen() {
     const task = (InteractionManager as any).runAfterInteractions?.(() => {
       loadProgress();
       SubscriptionService.getStatus()
-        .then(s => setSubStatus(s))
+        .then(s => {
+          setSubStatus(s);
+          cachedSubStatus = s; // Update cache
+        })
         .catch(() => {});
     }) || { cancel: () => {} };
     return () => (task as any).cancel?.();
@@ -210,7 +228,10 @@ export default function ProfileScreen() {
   // Refresh subscription status whenever the screen regains focus (e.g., after sign-in/purchase)
   useFocusEffect(
     useCallback(() => {
-      SubscriptionService.getStatus().then(s => setSubStatus(s)).catch(() => {});
+      SubscriptionService.getStatus().then(s => {
+        setSubStatus(s);
+        cachedSubStatus = s; // Update cache
+      }).catch(() => {});
     }, [])
   );
 
@@ -268,8 +289,11 @@ export default function ProfileScreen() {
 
       const next: any = await Promise.race([purchasePromise, timeoutPromise]);
       setSubStatus(next);
+      cachedSubStatus = next; // Update cache
 
       if (next?.active) {
+        // Notify Learn screen that premium status changed
+        DeviceEventEmitter.emit('PREMIUM_STATUS_CHANGED', true);
         setShowPurchaseSuccess(true);
         setTimeout(() => {
           setShowPurchaseSuccess(false);
@@ -872,7 +896,7 @@ export default function ProfileScreen() {
               )}
             </TouchableOpacity>
             <View style={styles.paywallFooterRow}>
-              <TouchableOpacity onPress={async () => { const restored = await SubscriptionService.restore(); setSubStatus(restored); }}>
+              <TouchableOpacity onPress={async () => { const restored = await SubscriptionService.restore(); setSubStatus(restored); cachedSubStatus = restored; if (restored?.active) DeviceEventEmitter.emit('PREMIUM_STATUS_CHANGED', true); }}>
                 <Text style={[styles.paywallLink, isLight && styles.paywallLinkLight]}>Restore</Text>
               </TouchableOpacity>
               <Text style={[styles.paywallDot, isLight && styles.paywallLinkLight]}>•</Text>
@@ -1183,7 +1207,7 @@ export default function ProfileScreen() {
             )}
           </TouchableOpacity>
           <View style={styles.paywallFooterRow}>
-            <TouchableOpacity onPress={async () => { const restored = await SubscriptionService.restore(); setSubStatus(restored); }}>
+            <TouchableOpacity onPress={async () => { const restored = await SubscriptionService.restore(); setSubStatus(restored); cachedSubStatus = restored; }}>
               <Text style={[styles.paywallLink, isLight && styles.paywallLinkLight]}>Restore</Text>
             </TouchableOpacity>
             <Text style={[styles.paywallDot, isLight && styles.paywallLinkLight]}>•</Text>

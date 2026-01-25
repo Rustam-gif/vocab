@@ -12,7 +12,10 @@ import { engagementTrackingService } from '../services/EngagementTrackingService
 // This ensures any active keyboard session is properly released before components unmount
 const dismissKeyboardBeforeNavigation = () => {
   if (Platform.OS === 'ios') {
-    Keyboard.dismiss();
+    // Use requestAnimationFrame to defer keyboard dismissal and avoid blocking the tab switch
+    requestAnimationFrame(() => {
+      Keyboard.dismiss();
+    });
   }
 };
 
@@ -81,7 +84,7 @@ function getTabForRoute(pathname: string): string {
 }
 
 export function RouterProvider({ children }: { children: React.ReactNode }) {
-  const [stack, setStack] = React.useState<Route[]>([{ pathname: '/' }]);
+  const [stack, setStack] = React.useState<Route[]>([{ pathname: '/quiz/learn' }]);
   const [tabStacks, setTabStacks] = React.useState<Record<string, Route[]>>({
     home: [{ pathname: '/' }],
     story: [{ pathname: '/story/StoryExercise' }],
@@ -89,20 +92,27 @@ export function RouterProvider({ children }: { children: React.ReactNode }) {
     vault: [{ pathname: '/vault' }],
     account: [{ pathname: '/profile' }],
   });
-  const [currentTab, setCurrentTab] = React.useState<string>('home');
+  const [currentTab, setCurrentTab] = React.useState<string>('quiz');
 
   // Keep tab stack in sync when navigating within a tab
+  const prevStackLengthRef = React.useRef(stack.length);
   React.useEffect(() => {
     const top = stack[stack.length - 1];
     if (!top) return;
     const tab = getTabForRoute(top.pathname);
-    // Update currentTab if navigating to a different tab via push/replace
+
+    // Only update if tab changed (to avoid redundant updates during tab switch)
     if (tab !== currentTab) {
       setCurrentTab(tab);
     }
-    // Always update the current tab's stack
-    setTabStacks(prev => ({ ...prev, [tab]: [...stack] }));
-  }, [stack]);
+
+    // Only update tab stack if stack length changed (actual navigation happened)
+    // Skip if just switching tabs (length stays 1)
+    if (stack.length !== prevStackLengthRef.current) {
+      setTabStacks(prev => ({ ...prev, [tab]: [...stack] }));
+      prevStackLengthRef.current = stack.length;
+    }
+  }, [stack, currentTab]);
 
   // Expose current params to hooks used inside screens
   const top = stack[stack.length - 1];
@@ -723,9 +733,11 @@ export function RouteRenderer() {
     const to = top;
     const toIsOverlay = overlayPaths.has(to.pathname);
     const fromIsOverlay = overlayPaths.has(from?.pathname || '');
+    // Check if sheet is already showing this exact route (to prevent re-animation on tab switch)
+    const isAlreadyOpen = sheetRoute?.pathname === to.pathname;
     // Always open overlay when navigating to an overlay route (Translate or Story sheet),
     // even if coming from another overlay.
-    const open = toIsOverlay;
+    const open = toIsOverlay && !isAlreadyOpen;
     // Close overlay when leaving an overlay path to ANY other route
     const close = fromIsOverlay && !toIsOverlay;
     if (open) {
@@ -742,8 +754,14 @@ export function RouteRenderer() {
         sheetAnim.setValue(1);
         Animated.timing(sheetAnim, { toValue: 0, duration: 260, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => setSheetRoute(null));
       } catch { setSheetRoute(null); }
+    } else if (toIsOverlay && isAlreadyOpen && !sheetRoute) {
+      // Sheet route was cleared but we're still on overlay - restore it
+      setSheetRoute(to);
+      try {
+        sheetAnim.setValue(1);
+      } catch {}
     }
-  }, [key]);
+  }, [key, sheetRoute]);
 
   React.useEffect(() => {
     const sub = DeviceEventEmitter.addListener('OPEN_TRANSLATE_OVERLAY', () => {

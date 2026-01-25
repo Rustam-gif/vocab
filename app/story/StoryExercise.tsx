@@ -249,8 +249,8 @@ export default function StoryExerciseScreen() {
   const iconRefs = useRef<{ [key: string]: Text | null }>({});
   const [showControls, setShowControls] = useState(true); // show panels initially; hide after generation
   const chevronAnim = useRef(new Animated.Value(1)).current; // 1=open, 0=closed
-  // Magical reveal for newly generated text
-  const revealAnim = useRef(new Animated.Value(0)).current; // 0 -> 1
+  // Magical reveal for newly generated text (start at 1 to avoid glitch on tab switch)
+  const revealAnim = useRef(new Animated.Value(1)).current; // 0 -> 1
   // Sparkles overlay for reveal (fallback stars only)
   const [showSparkles, setShowSparkles] = useState(false);
   const sparklesProgress = useRef(new Animated.Value(0)).current; // stars timeline
@@ -293,8 +293,6 @@ export default function StoryExerciseScreen() {
   const [showSrsBanner, setShowSrsBanner] = useState(false);
   const srsBannerAnim = useRef(new Animated.Value(0)).current;
   const selectedSkuRef = useRef<string | null>(null);
-  // Use a stable initial height to prevent layout jump when measured
-  const [panelHeight, setPanelHeight] = useState(insets.top + 48);
 
   // Ensure words are loaded, but defer heavy work so the sheet animation feels instant
   useEffect(() => {
@@ -350,16 +348,12 @@ export default function StoryExerciseScreen() {
     refreshStoryAccess();
   }, [refreshStoryAccess]);
 
-  // Avoid initial pop-in when opening this tab with no story loaded
-  useEffect(() => {
-    if (!story) {
-      try { revealAnim.setValue(1); } catch {}
-    }
-  }, [story, revealAnim]);
-
   useFocusEffect(
     useCallback(() => {
-      refreshStoryAccess();
+      // Defer subscription check to avoid blocking tab switch animation
+      requestAnimationFrame(() => {
+        refreshStoryAccess();
+      });
     }, [refreshStoryAccess])
   );
 
@@ -1236,7 +1230,7 @@ const buildStoryFromContent = (
       <SafeAreaView edges={['bottom']} style={[styles.container, !isDarkMode && styles.containerLight]}>
         <View style={styles.loadingContainer}>
           <LottieView
-            source={require('./Poetry.json')}
+            source={require('../../assets/lottie/learn/loading_inlearn.json')}
             autoPlay
             loop
             style={{ width: 200, height: 200 }}
@@ -1247,12 +1241,9 @@ const buildStoryFromContent = (
     );
   }
 
-  // Use fixed offset based on insets to prevent layout jump
-  const topOffset = !isFullscreen ? Math.max(0, insets.top - 20) : 0;
-
   return (
-    <SafeAreaView edges={['bottom']} style={[styles.container, !isDarkMode && styles.containerLight, { paddingTop: insets.top }]}>
-      <View style={{ flex: 1 }}>
+    <View style={[styles.container, !isDarkMode && styles.containerLight]}>
+      <View style={{ flex: 1, paddingTop: Platform.OS === 'ios' ? 60 : 20 }}>
         {/* Mode Toggle - compact toggle only when user expands controls */}
         {!isFullscreen && hasStory && showControls && false && (
           <View style={styles.toggleContainer}>
@@ -2039,7 +2030,7 @@ const buildStoryFromContent = (
         </View>
       </Modal>
 
-    </SafeAreaView>
+    </View>
   );
 }
 

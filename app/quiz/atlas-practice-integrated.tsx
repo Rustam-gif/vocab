@@ -3,13 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   Animated,
   Easing,
   StatusBar,
   DeviceEventEmitter,
   Modal,
+  Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { X } from 'lucide-react-native';
@@ -580,24 +580,24 @@ export default function AtlasPracticeIntegrated() {
 
   if (!setId || !levelId) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 50 : 20 }]}>
         <View style={styles.errorContainer}>
           <Text style={[styles.errorText, isLight && { color: '#6B7280' }]}>Missing set or level information</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   // Game Over screen - animated and motivational
   if (gameOver) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: Platform.OS === 'ios' ? 50 : 20 }]}>
         <GameOverScreen
           isLight={isLight}
           onTryAgain={handleRestart}
           onBackToLearn={() => router.back()}
         />
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -665,7 +665,7 @@ export default function AtlasPracticeIntegrated() {
         ))}
       </View>
 
-      <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]}>
+      <View style={[styles.container, { backgroundColor: 'transparent', paddingTop: Platform.OS === 'ios' ? 50 : 20 }]}>
         {/* Minimal Header - just back button */}
         <View style={styles.headerMinimal}>
         <TouchableOpacity
@@ -692,7 +692,7 @@ export default function AtlasPracticeIntegrated() {
         )}
         </View>
 
-      </SafeAreaView>
+      </View>
 
       {/* Fire Combo Animation - Minimalist */}
       {showFireAnimation && (

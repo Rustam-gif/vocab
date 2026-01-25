@@ -17,8 +17,9 @@ import { soundService } from '../../../services/SoundService';
 import { levels } from '../data/levels';
 import AnimatedNextButton from './AnimatedNextButton';
 import { Volume2 } from 'lucide-react-native';
-import { speak } from '../../../lib/speech';
+import { speak, setWebViewAudioPlayer } from '../../../lib/speech';
 import LottieView from 'lottie-react-native';
+import AudioPlayer, { AudioPlayerRef } from '../../../components/AudioPlayer';
 
 const ACCENT_COLOR = '#F25E86';
 const CORRECT_COLOR = '#4ED9CB';
@@ -1583,6 +1584,17 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
   const heartLostAnim = useRef(new Animated.Value(1)).current;
   const itemStartRef = useRef<number>(Date.now());
   const mountFadeAnim = useRef(new Animated.Value(0)).current;
+  const audioPlayerRef = useRef<AudioPlayerRef>(null);
+
+  // Register AudioPlayer with speech module
+  useEffect(() => {
+    if (audioPlayerRef.current) {
+      setWebViewAudioPlayer(audioPlayerRef.current);
+    }
+    return () => {
+      setWebViewAudioPlayer(null);
+    };
+  }, []);
 
   // Fade in on mount
   useEffect(() => {
@@ -1672,6 +1684,8 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
 
   return (
     <Animated.View style={[styles.container, isLight && { backgroundColor: colors.background }, { opacity: mountFadeAnim }]}>
+      <AudioPlayer ref={audioPlayerRef} />
+
       <View style={{ flex: 1 }}>
         <View style={styles.topHeaderRow}>
           <View style={[styles.progressBarPill, isLight && { backgroundColor: '#E5E7EB' }]}>
@@ -1722,7 +1736,13 @@ export default function SentenceUsageComponent({ setId, levelId, onPhaseComplete
           <View style={styles.wordHeader}>
             <TouchableOpacity
               style={[styles.speakButtonCorner, isLight && styles.speakButtonCornerLight]}
-              onPress={() => speak(item.word)}
+              onPress={() => {
+                // Ensure AudioPlayer is registered before speaking
+                if (audioPlayerRef.current) {
+                  setWebViewAudioPlayer(audioPlayerRef.current);
+                }
+                speak(item.word);
+              }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Volume2 size={20} color={isLight ? '#0D3B4A' : '#B6E0E2'} />

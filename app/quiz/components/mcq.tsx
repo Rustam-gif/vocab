@@ -10,8 +10,9 @@ import {
   ScrollView
 } from 'react-native';
 import { ChevronRight, Volume2 } from 'lucide-react-native';
-import { speak } from '../../../lib/speech';
+import { speak, setWebViewAudioPlayer } from '../../../lib/speech';
 import LottieView from 'lottie-react-native';
+import AudioPlayer, { AudioPlayerRef } from '../../../components/AudioPlayer';
 import { useAppStore } from '../../../lib/store';
 import { getTheme } from '../../../lib/theme';
 import { levels } from '../data/levels';
@@ -1958,6 +1959,17 @@ export default function MCQComponent({ setId, levelId, onPhaseComplete, hearts, 
   const progressAnim = useRef(new Animated.Value(0)).current;
   const questionStartRef = useRef<number>(Date.now());
   const mountFadeAnim = useRef(new Animated.Value(0)).current;
+  const audioPlayerRef = useRef<AudioPlayerRef>(null);
+
+  // Register AudioPlayer with speech module
+  useEffect(() => {
+    if (audioPlayerRef.current) {
+      setWebViewAudioPlayer(audioPlayerRef.current);
+    }
+    return () => {
+      setWebViewAudioPlayer(null);
+    };
+  }, []);
 
   // Fade in on mount
   useEffect(() => {
@@ -3419,6 +3431,8 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
 
   return (
     <Animated.View style={[styles.container, isLight && { backgroundColor: colors.background }, { opacity: mountFadeAnim }]}>
+      <AudioPlayer ref={audioPlayerRef} />
+
       {/* Compact Header with Progress and Hearts */}
       <View style={styles.topHeaderRow}>
         <View style={[styles.progressBarPill, isLight && { backgroundColor: '#E5E7EB' }]}>
@@ -3484,7 +3498,13 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
               <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{currentQuestion.word}</Text>
               <TouchableOpacity
                 style={[styles.speakButtonInline, isLight && styles.speakButtonInlineLight]}
-                onPress={() => speak(currentQuestion.word)}
+                onPress={() => {
+                  // Ensure AudioPlayer is registered before speaking
+                  if (audioPlayerRef.current) {
+                    setWebViewAudioPlayer(audioPlayerRef.current);
+                  }
+                  speak(currentQuestion.word);
+                }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Volume2 size={20} color={isLight ? '#0D3B4A' : '#B6E0E2'} />

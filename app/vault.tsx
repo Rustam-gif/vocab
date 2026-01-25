@@ -221,7 +221,12 @@ export default function VaultScreen() {
     return (
       <SafeAreaView edges={['bottom']} style={[styles.container, isLight && { backgroundColor: colors.background }, { paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#F25E86" />
+          <LottieView
+            source={require('../assets/lottie/learn/loading_inlearn.json')}
+            autoPlay
+            loop
+            style={{ width: 140, height: 140 }}
+          />
           <Text style={[styles.loadingText, isLight && { color: '#2D4A66' }]}>Loading your vocabulary...</Text>
         </View>
       </SafeAreaView>

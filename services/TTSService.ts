@@ -4,13 +4,15 @@
 import { OPENAI_API_KEY, AI_PROXY_URL } from '../lib/appConfig';
 
 export type TTSVoice =
+  | 'nova'
+  | 'shimmer'
+  | 'echo'
+  | 'onyx'
+  | 'fable'
   | 'alloy'
-  | 'verse'
-  | 'aria'
+  | 'ash'
   | 'sage'
-  | 'ballad'
-  | 'vibrant'
-  | 'calypso';
+  | 'coral';
 
 export interface TTSOptions {
   voice?: TTSVoice;
@@ -20,7 +22,7 @@ export interface TTSOptions {
   format?: 'mp3' | 'wav' | 'ogg' | 'flac';
 }
 
-const DEFAULT_VOICE: TTSVoice = 'verse';
+const DEFAULT_VOICE: TTSVoice = 'shimmer';
 const DEFAULT_FORMAT: TTSOptions['format'] = 'mp3';
 const TTS_ENDPOINT = 'https://api.openai.com/v1/audio/speech';
 
@@ -51,9 +53,16 @@ export class TTSService {
       const timeoutId = setTimeout(() => controller.abort(), 15000);
 
       try {
+        // Import Supabase anon key for authorization
+        const { SUPABASE_ANON_KEY } = require('../lib/supabase');
+
         const res = await fetch(proxyUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'apikey': SUPABASE_ANON_KEY
+          },
           body: JSON.stringify({
             kind: 'tts',
             voice,

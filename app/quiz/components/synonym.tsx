@@ -18,9 +18,10 @@ import { analyticsService } from '../../../services/AnalyticsService';
 import { soundService } from '../../../services/SoundService';
 import AnimatedNextButton from './AnimatedNextButton';
 import { Volume2 } from 'lucide-react-native';
-import { speak } from '../../../lib/speech';
+import { speak, setWebViewAudioPlayer } from '../../../lib/speech';
 import { levels } from '../data/levels';
 import LottieView from 'lottie-react-native';
+import AudioPlayer, { AudioPlayerRef } from '../../../components/AudioPlayer';
 
 interface SynonymProps {
   setId: string;
@@ -932,6 +933,17 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
   const itemStartRef = useRef<number>(Date.now());
   const optionAnims = useRef<Animated.Value[]>([]);
   const mountFadeAnim = useRef(new Animated.Value(0)).current;
+  const audioPlayerRef = useRef<AudioPlayerRef>(null);
+
+  // Register AudioPlayer with speech module
+  useEffect(() => {
+    if (audioPlayerRef.current) {
+      setWebViewAudioPlayer(audioPlayerRef.current);
+    }
+    return () => {
+      setWebViewAudioPlayer(null);
+    };
+  }, []);
 
   // Fade in on mount
   useEffect(() => {
@@ -1087,6 +1099,8 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
 
   return (
     <Animated.View style={[styles.container, isLight && { backgroundColor: colors.background }, { opacity: mountFadeAnim }]}>
+      <AudioPlayer ref={audioPlayerRef} />
+
       <View style={styles.topHeaderRow}>
         <View style={[styles.progressBarPill, isLight && { backgroundColor: '#E5E7EB' }]}>
           <Animated.View style={[styles.progressFillPill, { width: `${progress * 100}%` }]} />
@@ -1131,7 +1145,13 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
 
           <TouchableOpacity
             style={[styles.speakButtonCorner, isLight && styles.speakButtonCornerLight]}
-            onPress={() => speak(currentWord.word)}
+            onPress={() => {
+              // Ensure AudioPlayer is registered before speaking
+              if (audioPlayerRef.current) {
+                setWebViewAudioPlayer(audioPlayerRef.current);
+              }
+              speak(currentWord.word);
+            }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Volume2 size={20} color={isLight ? '#0D3B4A' : '#B6E0E2'} />

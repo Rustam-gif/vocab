@@ -241,7 +241,12 @@ export default function MissionScreen() {
             )}
             {!currentQuestion ? (
               <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                <ActivityIndicator color={isLight ? '#0D3B4A' : '#F8B070'} />
+                <LottieView
+                  source={require('../assets/lottie/learn/loading_inlearn.json')}
+                  autoPlay
+                  loop
+                  style={{ width: 80, height: 80 }}
+                />
               </View>
             ) : (
               <Animated.View

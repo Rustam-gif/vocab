@@ -14,13 +14,13 @@ import {
 } from 'react-native';
 import { Volume2, Bookmark, Check, Globe, ChevronRight } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
-import Speech from '../../../lib/speech';
 import { useRouter } from 'expo-router';
 import { useAppStore } from '../../../lib/store';
 import { getTheme } from '../../../lib/theme';
 import { levels } from '../data/levels';
 import AnimatedNextButton from './AnimatedNextButton';
 import { TranslationService } from '../../../services/TranslationService';
+import { cachedAudioPlayer } from '../../../lib/CachedAudioPlayer';
 
 interface WordIntroProps {
   setId: string;
@@ -236,7 +236,6 @@ export default function WordIntroComponent({ setId, levelId, onComplete, wordsOv
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollerRef = useRef<any>(null);
   const [speakingWord, setSpeakingWord] = useState<string | null>(null);
-  const voiceIdRef = useRef<string | undefined>(undefined);
 
   // Animations
   const cardScale = useRef(new Animated.Value(1)).current;
@@ -266,20 +265,7 @@ export default function WordIntroComponent({ setId, levelId, onComplete, wordsOv
     loadWords();
   }, [setId, levelId]);
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const voices = await Speech.getAvailableVoicesAsync();
-        const us = voices?.find(v => (v as any)?.language?.toLowerCase?.().startsWith('en-us'));
-        if (mounted && us?.identifier) {
-          voiceIdRef.current = us.identifier;
-        }
-      } catch {}
-    })();
-    return () => { mounted = false; };
-  }, []);
-
+  // Register AudioPlayer with speech module on mount
   const loadWords = () => {
     // Use wordsOverride if provided (already correctly ordered by user preference)
     if (wordsOverride && wordsOverride.length > 0) {
@@ -375,25 +361,47 @@ export default function WordIntroComponent({ setId, levelId, onComplete, wordsOv
     }
   };
 
-  const speakWord = (word: Word) => {
+  const speakWord = async (word: Word) => {
     try {
       if (speakingWord === word.word) {
-        Speech?.stop?.();
+        cachedAudioPlayer.stop();
         setSpeakingWord(null);
         return;
       }
-      Speech?.stop?.();
+
       setSpeakingWord(word.word);
-      Speech?.speak?.(word.word, {
-        language: 'en-US',
-        voice: voiceIdRef.current,
-        rate: 0.98,
-        pitch: 1.0,
-        onDone: () => setSpeakingWord(prev => (prev === word.word ? null : prev)),
-        onStopped: () => setSpeakingWord(prev => (prev === word.word ? null : prev)),
-        onError: () => setSpeakingWord(prev => (prev === word.word ? null : prev)),
+
+      const { SUPABASE_ANON_KEY } = require('../../../lib/supabase');
+      const response = await fetch('https://auirkjgyattnvqaygmfo.supabase.co/functions/v1/tts-cached', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'apikey': SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({
+          text: word.word,
+          voice: 'alloy',
+          rate: 0.85
+        })
       });
-    } catch {}
+
+      const data = await response.json();
+
+      if (data.url) {
+        cachedAudioPlayer.play(data.url, () => {
+          console.log('[word-intro] Audio playback completed');
+          setSpeakingWord(null);
+        });
+        console.log('[word-intro] Playing TTS (cached:', data.cached + ')');
+      } else {
+        console.error('[word-intro] No URL in TTS response');
+        setSpeakingWord(null);
+      }
+    } catch (err) {
+      console.error('[word-intro] TTS error:', err);
+      setSpeakingWord(null);
+    }
   };
 
   const currentWord = words[Math.min(currentIndex, words.length - 1)];

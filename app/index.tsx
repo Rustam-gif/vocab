@@ -1,15 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Pressable, Animated, Platform, Linking, Modal, PanResponder, Dimensions, Alert, DeviceEventEmitter } from 'react-native';
+import AudioPlayer, { AudioPlayerRef } from '../components/AudioPlayer';
 import { InteractionManager } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop, Pattern, Circle } from 'react-native-svg';
 import { LinearGradient } from '../lib/LinearGradient';
-import { Plus, Camera, Type, Flame, Clock, MessageSquare, XCircle, Search, Users, ShieldCheck, BookOpenCheck, Lightbulb, Globe, HeartPulse, Sparkles, Check, X, Lock, Crown } from 'lucide-react-native';
+import { Plus, Camera, Type, Flame, Clock, MessageSquare, XCircle, Search, Users, ShieldCheck, BookOpenCheck, Lightbulb, Globe, HeartPulse, Sparkles, Check, X, Lock, Crown, Volume2, Bookmark, ChevronDown, ChevronUp } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
 import { getTodayMissionForUser, getMissionWordsByIds } from '../services/dailyMission';
 import TranslationService from '../services/TranslationService';
+import Speech from '../lib/speech';
 // Lightweight entrance animation only — navigation slides handled by RouteRenderer
 import OnboardingModal from './components/OnboardingModal';
 // No focus animation hook needed
@@ -393,8 +395,9 @@ const preloadProductivityArticles = async (): Promise<NewsItem[]> => {
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed?.articles) && parsed.articles.length > 0) {
-        _preloadedProductivityArticles = parsed.articles;
-        return parsed.articles;
+        const limited = parsed.articles.slice(0, 3); // Limit to 3 productivity articles
+        _preloadedProductivityArticles = limited;
+        return limited;
       }
     }
   } catch {}
@@ -934,7 +937,7 @@ const buildNewsExcludeQuery = () =>
     'gossip',
   ].join(' OR ');
 
-const NEWS_DESIRED_COUNT = 10;
+const NEWS_DESIRED_COUNT = 9;
 
 type NewsFilterStats = {
   fetched: number;
@@ -1642,6 +1645,78 @@ const buildHighlightParts = (
   return result.length ? result : [{ key: 'p-0', text, highlighted: false }];
 };
 
+// Animated News Card Component for smooth interactions
+const AnimatedNewsCard: React.FC<{
+  onPress: () => void;
+  delay?: number;
+  style?: any;
+  children: React.ReactNode;
+}> = ({ onPress, delay = 0, style, children }) => {
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const pressScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Entrance animation
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        delay,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        delay,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const handlePressIn = () => {
+    Animated.spring(pressScale, {
+      toValue: 0.96,
+      tension: 100,
+      friction: 7,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(pressScale, {
+      toValue: 1,
+      tension: 100,
+      friction: 7,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  return (
+    <Animated.View
+      style={[
+        style,
+        {
+          opacity: opacityAnim,
+          transform: [
+            { scale: Animated.multiply(scaleAnim, pressScale) },
+          ],
+        },
+      ]}
+    >
+      <Pressable
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={{ flex: 1 }}
+      >
+        {children}
+      </Pressable>
+    </Animated.View>
+  );
+};
+
 export default function HomeScreen(props?: { preview?: boolean }) {
   const isPreview = !!(props as any)?.preview;
   const router = useRouter();
@@ -1673,6 +1748,7 @@ export default function HomeScreen(props?: { preview?: boolean }) {
   const [storyWords, setStoryWords] = useState<MissionWord[]>([]);
   const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
   const storyDetailAnim = useRef(new Animated.Value(0)).current;
+  const audioPlayerRef = useRef<AudioPlayerRef>(null);
   const [storyViewedMap, setStoryViewedMap] = useState<Record<string, boolean>>({});
   const storyViewedCount = useMemo(
     () => storyWords.reduce((acc, w) => acc + (w?.id && storyViewedMap[w.id] ? 1 : 0), 0),
@@ -2153,6 +2229,194 @@ export default function HomeScreen(props?: { preview?: boolean }) {
       default: return theme === 'light' ? '#2D4A66' : '#D1D5DB';
     }
   };
+
+  // Vocabulary improvement functions
+  const toggleVocabExpanded = (index: number) => {
+    setExpandedVocabIndices(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
+
+  const playVocabAudio = async (word: string) => {
+    // If clicking the same word that's playing, stop it
+    if (playingAudio === word) {
+      audioPlayerRef.current?.stop();
+      setPlayingAudio(null);
+      audioLoadingRef.current = null;
+      return;
+    }
+
+    // If audio is already loading, skip
+    if (audioLoadingRef.current) {
+      console.log('[vocab] Audio already loading, skipping');
+      return;
+    }
+
+    audioLoadingRef.current = word;
+    setPlayingAudio(word);
+
+    try {
+      // Call cached TTS endpoint
+      const { SUPABASE_ANON_KEY } = require('../lib/supabase');
+      const response = await fetch('https://auirkjgyattnvqaygmfo.supabase.co/functions/v1/tts-cached', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'apikey': SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({
+          text: word,
+          voice: 'alloy',
+          rate: 0.85
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.url) {
+        // Play audio using hidden WebView player with callback
+        audioPlayerRef.current?.play(data.url, () => {
+          console.log('[vocab] Audio playback completed');
+          setPlayingAudio(null);
+        });
+        console.log('[vocab] Playing TTS (cached:', data.cached + ')');
+
+        // Reset loading ref after successful start
+        audioLoadingRef.current = null;
+      } else {
+        console.error('[vocab] No URL returned:', data);
+        setPlayingAudio(null);
+        audioLoadingRef.current = null;
+      }
+    } catch (err) {
+      console.error('[vocab] TTS error:', err);
+      setPlayingAudio(null);
+      audioLoadingRef.current = null;
+    }
+  };
+
+  const saveVocabWord = async (word: string, definition: string) => {
+    if (savedVocabWords.has(word)) return;
+
+    setSavingVocabWord(word);
+    try {
+      await addVaultWord?.({ word, definition });
+      setSavedVocabWords(prev => new Set([...prev, word]));
+
+      // Animation feedback
+      setTimeout(() => setSavingVocabWord(null), 1000);
+    } catch {
+      setSavingVocabWord(null);
+    }
+  };
+
+  const getWordDifficulty = (word: string): 'beginner' | 'intermediate' | 'advanced' => {
+    const length = word.length;
+    const commonWords = ['the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'it'];
+    if (commonWords.includes(word.toLowerCase()) || length <= 5) return 'beginner';
+    if (length <= 8) return 'intermediate';
+    return 'advanced';
+  };
+
+  const getDifficultyColor = (difficulty: 'beginner' | 'intermediate' | 'advanced') => {
+    switch (difficulty) {
+      case 'beginner': return '#10B981'; // green
+      case 'intermediate': return '#F8B070'; // orange
+      case 'advanced': return '#EF4444'; // red
+    }
+  };
+
+  const getPhonetic = (word: string): string => {
+    // Simple phonetic approximation - in production you'd use a real API
+    const phonetics: Record<string, string> = {
+      'withdrawal': '/wɪðˈdrɔːəl/',
+      'culmination': '/ˌkʌlmɪˈneɪʃən/',
+      'obligation': '/ˌɒblɪˈɡeɪʃən/',
+      'participation': '/pɑːˌtɪsɪˈpeɪʃən/',
+      'cooperation': '/koʊˌɒpəˈreɪʃən/',
+      'underscores': '/ˌʌndəˈskɔːrz/',
+      'governance': '/ˈɡʌvərnəns/',
+    };
+    return phonetics[word.toLowerCase()] || `/${word}/`;
+  };
+
+  const getWordType = (word: string): string => {
+    // Simple heuristic - in production you'd use NLP
+    if (word.endsWith('tion') || word.endsWith('ment') || word.endsWith('ance')) return 'noun';
+    if (word.endsWith('ly')) return 'adverb';
+    if (word.endsWith('ive') || word.endsWith('al')) return 'adjective';
+    return 'noun'; // default
+  };
+
+  const generateQuizOptions = (correctIdx: number, allVocab: any[]) => {
+    if (!allVocab || allVocab.length < 2) return [allVocab[correctIdx]?.definition || ''];
+
+    const correctDef = allVocab[correctIdx].definition;
+    const wrongDefs = allVocab
+      .map((v, i) => ({ def: v.definition, idx: i }))
+      .filter(item => item.idx !== correctIdx && item.def !== correctDef)
+      .map(item => item.def);
+
+    // Shuffle and pick 3 wrong answers
+    const shuffledWrong = wrongDefs.sort(() => Math.random() - 0.5).slice(0, 3);
+
+    // Combine correct + wrong, then shuffle
+    const options = [correctDef, ...shuffledWrong].sort(() => Math.random() - 0.5);
+
+    return options;
+  };
+
+  const startVocabQuiz = () => {
+    if (!sheetArticle?.vocab?.length) return;
+    setVocabQuizMode(true);
+    setVocabQuizIndex(0);
+    setVocabQuizScore(0);
+    setVocabQuizAnswered(false);
+    setVocabQuizSelectedOption(null);
+    setVocabQuizOptions(generateQuizOptions(0, sheetArticle.vocab));
+  };
+
+  const exitVocabQuiz = () => {
+    setVocabQuizMode(false);
+    setVocabQuizIndex(0);
+    setVocabQuizAnswered(false);
+    setVocabQuizSelectedOption(null);
+  };
+
+  const handleVocabQuizAnswer = (optionIdx: number) => {
+    if (vocabQuizAnswered || !sheetArticle?.vocab) return;
+
+    const correctDef = sheetArticle.vocab[vocabQuizIndex].definition;
+    const selectedDef = vocabQuizOptions[optionIdx];
+    const isCorrect = selectedDef === correctDef;
+
+    setVocabQuizSelectedOption(optionIdx);
+    setVocabQuizAnswered(true);
+
+    if (isCorrect) {
+      setVocabQuizScore(vocabQuizScore + 10);
+    }
+  };
+
+  const moveToNextQuizQuestion = () => {
+    const nextIdx = vocabQuizIndex + 1;
+    if (nextIdx < (sheetArticle?.vocab?.length || 0)) {
+      setVocabQuizIndex(nextIdx);
+      setVocabQuizAnswered(false);
+      setVocabQuizSelectedOption(null);
+      setVocabQuizOptions(generateQuizOptions(nextIdx, sheetArticle.vocab));
+    } else {
+      // Quiz complete - just increment index to show completion screen
+      setVocabQuizIndex(nextIdx);
+    }
+  };
   // Quiz state
   const [quizStarted, setQuizStarted] = useState(false);
   const [quizCurrentQ, setQuizCurrentQ] = useState(0);
@@ -2160,6 +2424,19 @@ export default function HomeScreen(props?: { preview?: boolean }) {
   const [quizShowResult, setQuizShowResult] = useState(false);
   // Vocab translations toggle in article
   const [showVocabTranslations, setShowVocabTranslations] = useState(true);
+  // New vocab improvements state
+  const [expandedVocabIndices, setExpandedVocabIndices] = useState<Set<number>>(new Set());
+  const [savedVocabWords, setSavedVocabWords] = useState<Set<string>>(new Set());
+  const [savingVocabWord, setSavingVocabWord] = useState<string | null>(null);
+  const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const audioLoadingRef = useRef<string | null>(null);
+  const [vocabViewMode, setVocabViewMode] = useState<'list' | 'cloud'>('list');
+  const [vocabQuizMode, setVocabQuizMode] = useState(false);
+  const [vocabQuizIndex, setVocabQuizIndex] = useState(0);
+  const [vocabQuizScore, setVocabQuizScore] = useState(0);
+  const [vocabQuizAnswered, setVocabQuizAnswered] = useState(false);
+  const [vocabQuizSelectedOption, setVocabQuizSelectedOption] = useState<number | null>(null);
+  const [vocabQuizOptions, setVocabQuizOptions] = useState<string[]>([]);
   const quizOptionAnims = useRef([new Animated.Value(0), new Animated.Value(0), new Animated.Value(0), new Animated.Value(0)]).current;
   const quizCorrectAnim = useRef(new Animated.Value(0)).current;
   const quizWrongAnim = useRef(new Animated.Value(0)).current;
@@ -2321,38 +2598,34 @@ export default function HomeScreen(props?: { preview?: boolean }) {
 
 	      usedImages.add(image);
 	      unique.push({ ...item, image });
-	      if (unique.length >= 12) break;
+	      if (unique.length >= 15) break; // Allow more news articles to ensure we get 9 good ones
 	    }
 
-      // Mix news and productivity articles (interleaved)
-      const prodArticles = [...productivityArticles];
+      // Mix news and productivity articles (9 news + 3 productivity)
+      const prodArticles = [...productivityArticles].slice(0, 3); // Limit to 3 productivity articles
       const apiArticles = [...unique]; // Save API/news articles
       const combinedTitles = new Set<string>();
       const combined: NewsItem[] = [];
 
-      // Interleave: alternate between news and productivity
+      // Add up to 9 news articles first
       let newsIdx = 0;
-      let prodIdx = 0;
-      while (combined.length < 12 && (newsIdx < apiArticles.length || prodIdx < prodArticles.length)) {
-        // Add a news article
-        while (newsIdx < apiArticles.length && combined.length < 12) {
-          const article = apiArticles[newsIdx++];
-          const title = (article.title || '').toLowerCase();
-          if (!combinedTitles.has(title)) {
-            combined.push(article);
-            combinedTitles.add(title);
-            break; // Move to productivity
-          }
+      while (newsIdx < apiArticles.length && combined.length < 9) {
+        const article = apiArticles[newsIdx++];
+        const title = (article.title || '').toLowerCase();
+        if (!combinedTitles.has(title)) {
+          combined.push(article);
+          combinedTitles.add(title);
         }
-        // Add a productivity article
-        while (prodIdx < prodArticles.length && combined.length < 12) {
-          const article = prodArticles[prodIdx++];
-          const title = (article.title || '').toLowerCase();
-          if (!combinedTitles.has(title)) {
-            combined.push(article);
-            combinedTitles.add(title);
-            break; // Move back to news
-          }
+      }
+
+      // Then add up to 3 productivity articles
+      let prodIdx = 0;
+      while (prodIdx < prodArticles.length && combined.length < 12) {
+        const article = prodArticles[prodIdx++];
+        const title = (article.title || '').toLowerCase();
+        if (!combinedTitles.has(title)) {
+          combined.push(article);
+          combinedTitles.add(title);
         }
       }
 
@@ -2924,7 +3197,7 @@ Avoid fiction and avoid specific unverifiable claims.
         if (Array.isArray(parsed?.articles) && parsed.articles.length > 0) {
           // Update state if not already set (module preload should have done this)
           if (productivityArticles.length === 0) {
-            setProductivityArticles(parsed.articles);
+            setProductivityArticles(parsed.articles.slice(0, 3)); // Limit to 3 productivity articles
           }
 
           // Check if cache is from today (UTC) and less than 12 hours old
@@ -2974,7 +3247,7 @@ Avoid fiction and avoid specific unverifiable claims.
       }
 
       const data = await response.json();
-      const articles = Array.isArray(data?.articles) ? data.articles : [];
+      const articles = Array.isArray(data?.articles) ? data.articles.slice(0, 3) : []; // Limit to 3 productivity articles
 
       if (articles.length > 0) {
         // Map to NewsItem format including quiz, takeaways, and challenge
@@ -4358,6 +4631,9 @@ EXAMPLE: [sentence in ${langName}]`
 
   return (
     <SafeAreaView edges={['left','right']} style={[styles.container, { backgroundColor: background }] }>
+      {/* Hidden audio player for TTS */}
+      <AudioPlayer ref={audioPlayerRef} />
+
       {/* Dotted background pattern */}
       <View style={styles.dotContainer} pointerEvents="none">
         {Array.from({ length: 40 }).map((_, rowIndex) => (
@@ -4402,55 +4678,6 @@ EXAMPLE: [sentence in ${langName}]`
       >
         {/* Header is fixed above — list starts below */}
 
-        {/* Synonym Match Exercise */}
-        {!synonymMatchDone && !synonymMatchLoading && synonymMatchWords.length > 0 && (
-          <View style={[styles.synonymMatchCard, theme === 'light' && styles.synonymMatchCardLight]}>
-            <View style={styles.synonymMatchHeader}>
-              <Text style={[styles.synonymMatchTitle, theme === 'light' && styles.synonymMatchTitleLight]}>
-                Match Synonyms
-              </Text>
-              <Text style={[styles.synonymMatchSubtitle, theme === 'light' && styles.synonymMatchSubtitleLight]}>
-                Tap cards to match words with their synonyms
-              </Text>
-            </View>
-            <SynonymMatch
-              words={synonymMatchWords}
-              isDarkMode={theme === 'dark'}
-              onComplete={async (score, total) => {
-                setSynonymMatchScore({ score, total });
-                setSynonymMatchDone(true);
-                try {
-                  await AsyncStorage.setItem(synonymMatchDoneKey, '1');
-                } catch {}
-              }}
-            />
-          </View>
-        )}
-
-        {/* Synonym Match Loading */}
-        {!synonymMatchDone && synonymMatchLoading && (
-          <View style={[styles.synonymMatchCard, theme === 'light' && styles.synonymMatchCardLight]}>
-            <View style={styles.synonymMatchHeader}>
-              <Text style={[styles.synonymMatchTitle, theme === 'light' && styles.synonymMatchTitleLight]}>
-                Match Synonyms
-              </Text>
-              <Text style={[styles.synonymMatchSubtitle, theme === 'light' && styles.synonymMatchSubtitleLight]}>
-                Loading words from your vault...
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* Synonym Match Completed */}
-        {synonymMatchDone && synonymMatchScore && (
-          <View style={[styles.synonymMatchDoneCard, theme === 'light' && styles.synonymMatchDoneCardLight]}>
-            <Check size={20} color="#10B981" />
-            <Text style={[styles.synonymMatchDoneText, theme === 'light' && styles.synonymMatchDoneTextLight]}>
-              Synonym Match Complete! Score: {synonymMatchScore.score}/{synonymMatchScore.total}
-            </Text>
-          </View>
-        )}
-
         {/* Daily News */}
         <View
           style={[styles.newsCard, theme === 'light' && styles.newsCardLight]}
@@ -4479,9 +4706,9 @@ EXAMPLE: [sentence in ${langName}]`
             <View style={{ marginTop: 12, paddingHorizontal: 8 }}>
               {/* Featured Hero Article - Compact overlay style */}
               {carouselNews[0] && (
-                <TouchableOpacity
-                  activeOpacity={0.9}
+                <AnimatedNewsCard
                   onPress={() => openNewsModal(carouselNews[0])}
+                  delay={0}
                   style={{ marginBottom: 12 }}
                 >
                   <View
@@ -4525,7 +4752,7 @@ EXAMPLE: [sentence in ${langName}]`
                       )}
                     </View>
                   </View>
-                </TouchableOpacity>
+                </AnimatedNewsCard>
               )}
 
               {/* Two Medium Cards Side by Side */}
@@ -4536,10 +4763,10 @@ EXAMPLE: [sentence in ${langName}]`
                     const accentColor = theme === 'light' ? palette.light.inner[0] : palette.dark.inner[0];
                     const isLocked = !isPremium; // Lock all except first article for free users
                     return (
-                      <TouchableOpacity
+                      <AnimatedNewsCard
                         key={`dual-${idx}`}
-                        activeOpacity={0.9}
                         onPress={() => isLocked ? setShowArticlePaywall(true) : openNewsModal(item)}
+                        delay={100 + idx * 50}
                         style={[styles.magazineDualCardWrap, {
                           shadowColor: '#000',
                           shadowOpacity: 0.08,
@@ -4596,7 +4823,7 @@ EXAMPLE: [sentence in ${langName}]`
                             )}
                           </View>
                         </View>
-                      </TouchableOpacity>
+                      </AnimatedNewsCard>
                     );
                   })}
                 </View>
@@ -4605,15 +4832,15 @@ EXAMPLE: [sentence in ${langName}]`
               {/* Compact List of Remaining Articles */}
               {carouselNews.length > 3 && (
                 <View style={{ marginTop: 12 }}>
-                  {carouselNews.slice(3, 8).map((item, idx) => {
+                  {carouselNews.slice(3, 12).map((item, idx) => {
                     const palette = getCardColors(item.tag, item.title, idx + 3);
                     const accentColor = theme === 'light' ? palette.light.inner[0] : palette.dark.inner[0];
                     const isLocked = !isPremium; // Lock all except first article for free users
                     return (
-                      <TouchableOpacity
+                      <AnimatedNewsCard
                         key={`list-${idx}`}
-                        activeOpacity={0.9}
                         onPress={() => isLocked ? setShowArticlePaywall(true) : openNewsModal(item)}
+                        delay={200 + idx * 30}
                         style={{
                           marginBottom: 10,
                           shadowColor: '#000',
@@ -4674,7 +4901,7 @@ EXAMPLE: [sentence in ${langName}]`
                             )}
                           </View>
                         </View>
-                      </TouchableOpacity>
+                      </AnimatedNewsCard>
                     );
                   })}
                 </View>
@@ -5588,8 +5815,9 @@ EXAMPLE: [sentence in ${langName}]`
                           <Text style={[
                             styles.vocabSectionTitle,
                             articleBgColor === 'sepia' && { color: '#5D4E37' },
-                            (articleBgColor === 'dark' || articleBgColor === 'black') && { color: '#F8B070' },
-                            theme === 'light' && articleBgColor !== 'sepia' && articleBgColor !== 'dark' && articleBgColor !== 'black' && { color: '#F8B070' },
+                            (articleBgColor === 'dark' || articleBgColor === 'black') && { color: '#4ED9CB' },
+                            theme === 'light' && articleBgColor !== 'sepia' && articleBgColor !== 'dark' && articleBgColor !== 'black' && { color: '#4ED9CB' },
+                            { fontWeight: '400', letterSpacing: 1.5 }
                           ]}>VOCABULARY</Text>
                         </View>
                         {sheetArticle.vocab.some(v => v.translation) && (
@@ -5597,45 +5825,342 @@ EXAMPLE: [sentence in ${langName}]`
                             onPress={() => setShowVocabTranslations(!showVocabTranslations)}
                             style={[
                               styles.vocabTranslationToggle,
-                              { backgroundColor: showVocabTranslations ? (articleBgColor === 'sepia' ? 'rgba(180,83,9,0.15)' : 'rgba(248,176,112,0.15)') : 'transparent' },
-                              { borderColor: articleBgColor === 'sepia' ? 'rgba(180,83,9,0.3)' : 'rgba(248,176,112,0.3)' }
+                              { backgroundColor: showVocabTranslations ? 'rgba(78,217,203,0.12)' : 'transparent' },
+                              { borderColor: 'rgba(78,217,203,0.3)' }
                             ]}
                             activeOpacity={0.7}
                           >
-                            <Text style={[styles.vocabTranslationToggleText, { color: articleBgColor === 'sepia' ? '#B45309' : '#F8B070' }]}>
+                            <Text style={[styles.vocabTranslationToggleText, { color: '#4ED9CB', fontWeight: '300' }]}>
                               {showVocabTranslations ? 'Hide' : 'Show'} translations
                             </Text>
                           </TouchableOpacity>
                         )}
                       </View>
-                      <View style={styles.vocabItemsContainer}>
-                        {sheetArticle.vocab.map((item, vocabIndex) => (
-                          <View
-                            key={`${item.word || 'word'}-${vocabIndex}`}
-                            style={[
-                              styles.vocabItem,
-                              articleBgColor === 'sepia' && styles.vocabItemSepia,
-                              (articleBgColor === 'dark' || articleBgColor === 'black') && styles.vocabItemDark,
-                              theme === 'light' && articleBgColor !== 'sepia' && articleBgColor !== 'dark' && articleBgColor !== 'black' && styles.vocabItemLight,
-                            ]}
+                      {!vocabQuizMode ? (
+                        <>
+                          <View style={styles.vocabItemsContainer}>
+                              {sheetArticle.vocab.map((item, vocabIndex) => {
+                                const isExpanded = expandedVocabIndices.has(vocabIndex);
+                                const isSaved = savedVocabWords.has(item.word);
+                                const difficulty = getWordDifficulty(item.word);
+                                const difficultyColor = getDifficultyColor(difficulty);
+                                const wordType = getWordType(item.word);
+                                const phonetic = getPhonetic(item.word);
+
+                                return (
+                                  <TouchableOpacity
+                                    key={`${item.word || 'word'}-${vocabIndex}`}
+                                    style={[
+                                      styles.vocabItem,
+                                      articleBgColor === 'sepia' && styles.vocabItemSepia,
+                                      (articleBgColor === 'dark' || articleBgColor === 'black') && styles.vocabItemDark,
+                                      theme === 'light' && articleBgColor !== 'sepia' && articleBgColor !== 'dark' && articleBgColor !== 'black' && styles.vocabItemLight,
+                                      {
+                                        borderLeftWidth: 2,
+                                        borderLeftColor: difficultyColor,
+                                        paddingVertical: 10,
+                                        paddingHorizontal: 12,
+                                        marginBottom: 8
+                                      }
+                                    ]}
+                                    onPress={() => toggleVocabExpanded(vocabIndex)}
+                                    activeOpacity={0.7}
+                                  >
+                                    {/* Header Row */}
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                        <Text style={[
+                                          styles.vocabWord,
+                                          articleBgColor === 'sepia' && { color: '#8B4513' },
+                                          (articleBgColor === 'dark' || articleBgColor === 'black') && { color: '#4ED9CB' },
+                                          theme === 'light' && articleBgColor !== 'sepia' && articleBgColor !== 'dark' && articleBgColor !== 'black' && { color: '#4ED9CB' },
+                                          { fontWeight: '400' }
+                                        ]}>
+                                          {item.word}
+                                        </Text>
+                                        {wordType && (
+                                          <View style={{
+                                            backgroundColor: 'rgba(78,217,203,0.12)',
+                                            paddingHorizontal: 6,
+                                            paddingVertical: 2,
+                                            borderRadius: 4,
+                                            marginLeft: 8
+                                          }}>
+                                            <Text style={{ color: '#4ED9CB', fontSize: 9, fontWeight: '300', letterSpacing: 0.3 }}>
+                                              {wordType}
+                                            </Text>
+                                          </View>
+                                        )}
+                                      </View>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                        {/* Audio Button */}
+                                        <TouchableOpacity
+                                          onPress={() => playVocabAudio(item.word)}
+                                          style={{ padding: 2 }}
+                                          activeOpacity={0.6}
+                                        >
+                                          <Volume2
+                                            size={16}
+                                            color={playingAudio === item.word ? '#4ED9CB' : '#9CA3AF'}
+                                            strokeWidth={1.5}
+                                          />
+                                        </TouchableOpacity>
+                                        {/* Save Button */}
+                                        <TouchableOpacity
+                                          onPress={() => saveVocabWord(item.word, item.definition)}
+                                          style={{ padding: 2 }}
+                                          activeOpacity={0.6}
+                                          disabled={savingVocabWord === item.word}
+                                        >
+                                          <Bookmark
+                                            size={16}
+                                            color={isSaved ? '#4ED9CB' : '#9CA3AF'}
+                                            fill={isSaved ? '#4ED9CB' : 'none'}
+                                            strokeWidth={1.5}
+                                          />
+                                        </TouchableOpacity>
+                                        {/* Expand Toggle */}
+                                        {isExpanded ? (
+                                          <ChevronUp size={16} color="#9CA3AF" strokeWidth={1.5} />
+                                        ) : (
+                                          <ChevronDown size={16} color="#9CA3AF" strokeWidth={1.5} />
+                                        )}
+                                      </View>
+                                    </View>
+
+                                    {/* Phonetic */}
+                                    {phonetic && (
+                                      <Text style={{ color: getArticleTextColor(), fontSize: 11, opacity: 0.5, marginBottom: 3, fontWeight: '300' }}>
+                                        {phonetic}
+                                      </Text>
+                                    )}
+
+                                    {/* Definition */}
+                                    <Text style={[styles.vocabDefinition, { color: getArticleTextColor(), fontWeight: '300', lineHeight: 18 }]}>
+                                      {item.definition}
+                                      {showVocabTranslations && !!item.translation && (
+                                        <Text style={{ color: '#4ED9CB', fontStyle: 'italic', fontWeight: '300' }}> ({item.translation})</Text>
+                                      )}
+                                    </Text>
+
+                                    {/* Expanded Content */}
+                                    {isExpanded && (
+                                      <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(78,217,203,0.1)' }}>
+                                        {/* Example Sentence */}
+                                        <View style={{ marginBottom: 8 }}>
+                                          <Text style={{ color: '#4ED9CB', fontSize: 10, fontWeight: '400', marginBottom: 3, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                                            Example
+                                          </Text>
+                                          <Text style={{ color: getArticleTextColor(), fontSize: 12, fontStyle: 'italic', opacity: 0.8, fontWeight: '300', lineHeight: 17 }}>
+                                            "{item.word}" appears in this article's context.
+                                          </Text>
+                                        </View>
+
+                                        {/* Difficulty Badge */}
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                          <View style={{
+                                            backgroundColor: `${difficultyColor}15`,
+                                            paddingHorizontal: 8,
+                                            paddingVertical: 3,
+                                            borderRadius: 6,
+                                            borderWidth: 1,
+                                            borderColor: `${difficultyColor}30`
+                                          }}>
+                                            <Text style={{ color: difficultyColor, fontSize: 9, fontWeight: '400', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                              {difficulty}
+                                            </Text>
+                                          </View>
+                                        </View>
+                                      </View>
+                                    )}
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+
+                          {/* Test Yourself Button */}
+                          <TouchableOpacity
+                            onPress={startVocabQuiz}
+                            style={{
+                              marginTop: 14,
+                              backgroundColor: '#4ED9CB',
+                              paddingVertical: 11,
+                              paddingHorizontal: 20,
+                              borderRadius: 10,
+                              alignItems: 'center',
+                              flexDirection: 'row',
+                              justifyContent: 'center',
+                              gap: 8
+                            }}
+                            activeOpacity={0.8}
                           >
-                            <Text style={[
-                              styles.vocabWord,
-                              articleBgColor === 'sepia' && { color: '#8B4513' },
-                              (articleBgColor === 'dark' || articleBgColor === 'black') && { color: '#F8B070' },
-                              theme === 'light' && articleBgColor !== 'sepia' && articleBgColor !== 'dark' && articleBgColor !== 'black' && { color: '#D97706' },
-                            ]}>
-                              {item.word}
+                            <Text style={{ color: '#1E1E1E', fontWeight: '400', fontSize: 14 }}>
+                              🧠 Test Yourself
                             </Text>
-                            <Text style={[styles.vocabDefinition, { color: getArticleTextColor() }]}>
-                              {item.definition}
-                              {showVocabTranslations && !!item.translation && (
-                                <Text style={{ color: articleBgColor === 'sepia' ? '#B45309' : '#F8B070', fontStyle: 'italic' }}> ({item.translation})</Text>
-                              )}
+                          </TouchableOpacity>
+                        </>
+                      ) : (
+                        /* Quiz Mode */
+                        <View style={{ padding: 12 }}>
+                          {/* Quiz Header */}
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                            <Text style={{ color: '#4ED9CB', fontSize: 15, fontWeight: '400' }}>
+                              Question {vocabQuizIndex + 1}/{sheetArticle.vocab.length}
                             </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                              <Text style={{ color: getArticleTextColor(), fontSize: 13, fontWeight: '300' }}>
+                                Score: {vocabQuizScore}
+                              </Text>
+                              <TouchableOpacity onPress={exitVocabQuiz} style={{ padding: 2 }}>
+                                <Text style={{ color: '#EF4444', fontWeight: '400', fontSize: 13 }}>Exit</Text>
+                              </TouchableOpacity>
+                            </View>
                           </View>
-                        ))}
-                      </View>
+
+                          {vocabQuizIndex < sheetArticle.vocab.length ? (
+                            <>
+                              {/* Question */}
+                              <View style={{
+                                backgroundColor: 'rgba(78,217,203,0.08)',
+                                padding: 14,
+                                borderRadius: 10,
+                                marginBottom: 16,
+                                borderWidth: 1,
+                                borderColor: 'rgba(78,217,203,0.15)'
+                              }}>
+                                <Text style={{ color: getArticleTextColor(), fontSize: 15, fontWeight: '400', marginBottom: 8 }}>
+                                  What does "{sheetArticle.vocab[vocabQuizIndex].word}" mean?
+                                </Text>
+                                <TouchableOpacity
+                                  onPress={() => playVocabAudio(sheetArticle.vocab[vocabQuizIndex].word)}
+                                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}
+                                  activeOpacity={0.6}
+                                >
+                                  <Volume2 size={14} color="#4ED9CB" strokeWidth={1.5} />
+                                  <Text style={{ color: '#4ED9CB', fontSize: 11, fontWeight: '300' }}>
+                                    Listen
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
+
+                              {/* Multiple Choice Options */}
+                              <View style={{ gap: 10 }}>
+                                {vocabQuizOptions.map((option, idx) => {
+                                  const correctDef = sheetArticle.vocab[vocabQuizIndex].definition;
+                                  const isCorrectOption = option === correctDef;
+                                  const isSelected = vocabQuizSelectedOption === idx;
+                                  const showFeedback = vocabQuizAnswered;
+
+                                  let bgColor = 'rgba(255,255,255,0.05)';
+                                  let borderColor = 'rgba(78,217,203,0.2)';
+                                  let textColor = getArticleTextColor();
+
+                                  if (showFeedback) {
+                                    if (isCorrectOption) {
+                                      bgColor = 'rgba(67,127,118,0.15)';
+                                      borderColor = '#437F76';
+                                      textColor = '#437F76';
+                                    } else if (isSelected && !isCorrectOption) {
+                                      bgColor = 'rgba(239,68,68,0.1)';
+                                      borderColor = '#EF4444';
+                                      textColor = '#EF4444';
+                                    }
+                                  }
+
+                                  return (
+                                    <TouchableOpacity
+                                      key={idx}
+                                      onPress={() => handleVocabQuizAnswer(idx)}
+                                      disabled={vocabQuizAnswered}
+                                      style={{
+                                        backgroundColor: bgColor,
+                                        borderWidth: 1.5,
+                                        borderColor: borderColor,
+                                        paddingVertical: 12,
+                                        paddingHorizontal: 16,
+                                        borderRadius: 10,
+                                        opacity: vocabQuizAnswered && !isSelected && !isCorrectOption ? 0.4 : 1
+                                      }}
+                                      activeOpacity={0.7}
+                                    >
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <Text style={{ color: textColor, fontSize: 14, flex: 1, fontWeight: '300', lineHeight: 20 }}>
+                                          {option}
+                                        </Text>
+                                        {showFeedback && isCorrectOption && (
+                                          <Check size={18} color="#437F76" strokeWidth={2} />
+                                        )}
+                                        {showFeedback && isSelected && !isCorrectOption && (
+                                          <X size={18} color="#EF4444" strokeWidth={2} />
+                                        )}
+                                      </View>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </View>
+
+                              {/* Next Button (shown after answering) */}
+                              {vocabQuizAnswered && (
+                                <TouchableOpacity
+                                  onPress={moveToNextQuizQuestion}
+                                  style={{
+                                    marginTop: 14,
+                                    backgroundColor: '#4ED9CB',
+                                    paddingVertical: 11,
+                                    paddingHorizontal: 20,
+                                    borderRadius: 10,
+                                    alignItems: 'center'
+                                  }}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={{ color: '#1E1E1E', fontWeight: '400', fontSize: 14 }}>
+                                    {vocabQuizIndex + 1 < sheetArticle.vocab.length ? 'Next Question →' : 'See Results'}
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+                            </>
+                          ) : (
+                            /* Quiz Complete */
+                            <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                              {(() => {
+                                const maxScore = sheetArticle.vocab.length * 10;
+                                const percentage = Math.round((vocabQuizScore / maxScore) * 100);
+                                const emoji = percentage >= 80 ? '🎉' : percentage >= 60 ? '👏' : percentage >= 40 ? '💪' : '📚';
+                                const message = percentage >= 80 ? 'Excellent!' : percentage >= 60 ? 'Great job!' : percentage >= 40 ? 'Keep practicing!' : 'Keep learning!';
+
+                                return (
+                                  <>
+                                    <Text style={{ fontSize: 56, marginBottom: 16 }}>{emoji}</Text>
+                                    <Text style={{ color: getArticleTextColor(), fontSize: 18, fontWeight: '400', marginBottom: 10 }}>
+                                      {message}
+                                    </Text>
+                                    <Text style={{ color: '#4ED9CB', fontSize: 36, fontWeight: '300', marginBottom: 4, letterSpacing: -1 }}>
+                                      {vocabQuizScore}/{maxScore}
+                                    </Text>
+                                    <Text style={{ color: getArticleTextColor(), fontSize: 14, opacity: 0.6, marginBottom: 24, fontWeight: '300' }}>
+                                      {percentage}% correct
+                                    </Text>
+                                  </>
+                                );
+                              })()}
+                              <TouchableOpacity
+                                onPress={exitVocabQuiz}
+                                style={{
+                                  backgroundColor: '#4ED9CB',
+                                  paddingVertical: 12,
+                                  paddingHorizontal: 28,
+                                  borderRadius: 10
+                                }}
+                                activeOpacity={0.8}
+                              >
+                                <Text style={{ color: '#1E1E1E', fontWeight: '400', fontSize: 14 }}>
+                                  Back to Article
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </View>
+                      )}
                     </View>
                   )}
 

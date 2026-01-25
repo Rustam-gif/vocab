@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Volume2 } from 'lucide-react-native';
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
-import Speech from '../lib/speech';
+import AudioPlayer, { AudioPlayerRef } from '../components/AudioPlayer';
 import { TranslationService } from '../services/TranslationService';
 
 export default function VaultWordScreen() {
@@ -19,6 +19,8 @@ export default function VaultWordScreen() {
   const [loading, setLoading] = useState(false);
   const [trLoading, setTrLoading] = useState(false);
   const [translation, setTranslation] = useState<any | null>(null);
+  const audioPlayerRef = useRef<AudioPlayerRef>(null);
+  const [playingAudio, setPlayingAudio] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -66,17 +68,51 @@ export default function VaultWordScreen() {
         </TouchableOpacity>
         <Text style={[styles.title, isLight && styles.titleLight]} numberOfLines={1} ellipsizeMode="tail">{item.word}</Text>
         <TouchableOpacity
-          style={[styles.speakBtn, isLight && styles.speakBtnLight]}
-          onPress={() => {
+          style={[styles.speakBtn, isLight && styles.speakBtnLight, playingAudio && styles.speakBtnActive]}
+          onPress={async () => {
+            if (playingAudio) {
+              audioPlayerRef.current?.stop();
+              setPlayingAudio(false);
+              return;
+            }
+
+            setPlayingAudio(true);
             try {
-              Speech.stop?.();
-              Speech.speak?.(item.word, { language: 'en-US', rate: 1.0 });
-            } catch {}
+              const { SUPABASE_ANON_KEY } = require('../lib/supabase');
+              const response = await fetch('https://auirkjgyattnvqaygmfo.supabase.co/functions/v1/tts-cached', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                  'apikey': SUPABASE_ANON_KEY
+                },
+                body: JSON.stringify({
+                  text: item.word,
+                  voice: 'alloy',
+                  rate: 0.85
+                })
+              });
+
+              const data = await response.json();
+
+              if (data.url) {
+                audioPlayerRef.current?.play(data.url, () => {
+                  console.log('[vault-word] Audio playback completed');
+                  setPlayingAudio(false);
+                });
+                console.log('[vault-word] Playing TTS (cached:', data.cached + ')');
+              }
+            } catch (err) {
+              console.error('[vault-word] TTS error:', err);
+              setPlayingAudio(false);
+            }
           }}
         >
-          <Volume2 size={18} color={isLight ? '#0F766E' : '#4ED9CB'} />
+          <Volume2 size={18} color={playingAudio ? '#fff' : (isLight ? '#0F766E' : '#4ED9CB')} />
         </TouchableOpacity>
       </View>
+
+      <AudioPlayer ref={audioPlayerRef} />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={[styles.card, isLight && styles.cardLight]}>
@@ -138,6 +174,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(78,217,203,0.25)',
   },
   speakBtnLight: { backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: 'rgba(78,217,203,0.3)' },
+  speakBtnActive: { backgroundColor: '#4ED9CB', borderColor: '#4ED9CB' },
   content: { flex: 1, padding: 16 },
   card: {
     backgroundColor: '#1B263B',

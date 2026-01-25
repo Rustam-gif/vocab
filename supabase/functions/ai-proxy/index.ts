@@ -68,7 +68,7 @@ serve(async (req) => {
         headers: corsHeaders,
       });
     }
-    const voice = (payload?.voice || 'verse').trim();
+    const voice = (payload?.voice || 'shimmer').trim();
     const format = (payload?.format || 'mp3').trim() as 'mp3' | 'wav' | 'ogg' | 'flac';
     const speed = typeof payload?.rate === 'number' ? Math.max(0.25, Math.min(4.0, payload.rate)) : 1.0;
 

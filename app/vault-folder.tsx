@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { ArrowLeft, Calendar, Star, Volume2 } from 'lucide-react-native';
 import { useAppStore } from '../lib/store';
-import Speech from '../lib/speech';
+import AudioPlayer, { AudioPlayerRef } from '../components/AudioPlayer';
 import { getTheme } from '../lib/theme';
 import { Word } from '../types';
 
@@ -17,6 +17,7 @@ export default function VaultFolderScreen() {
   const isLight = themeName === 'light';
   const [loading, setLoading] = useState(false);
   const [speakingFor, setSpeakingFor] = useState<string | null>(null);
+  const audioPlayerRef = useRef<AudioPlayerRef>(null);
 
   useEffect(() => {
     // Load only if not already in store to avoid flicker
@@ -42,6 +43,8 @@ export default function VaultFolderScreen() {
 
   return (
     <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
+      <AudioPlayer ref={audioPlayerRef} />
+
       <View style={[styles.header, isLight && styles.headerLight]}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.replace('/vault')}>
           <ArrowLeft size={24} color={isLight ? '#0F766E' : '#4ED9CB'} />
@@ -80,23 +83,46 @@ export default function VaultFolderScreen() {
                     <TouchableOpacity
                       accessibilityRole="button"
                       accessibilityLabel={`Play pronunciation for ${word.word}`}
-                      onPress={() => {
+                      onPress={async () => {
                         try {
                           if (speakingFor === word.id) {
-                            Speech.stop?.();
+                            audioPlayerRef.current?.stop();
                             setSpeakingFor(null);
                             return;
                           }
-                          Speech.stop?.();
+
                           setSpeakingFor(word.id);
-                          Speech.speak?.(word.word, {
-                            language: 'en-US',
-                            rate: 1.0,
-                            onDone: () => setSpeakingFor(prev => (prev === word.id ? null : prev)),
-                            onStopped: () => setSpeakingFor(prev => (prev === word.id ? null : prev)),
-                            onError: () => setSpeakingFor(prev => (prev === word.id ? null : prev)),
+
+                          const { SUPABASE_ANON_KEY } = require('../lib/supabase');
+                          const response = await fetch('https://auirkjgyattnvqaygmfo.supabase.co/functions/v1/tts-cached', {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                              'apikey': SUPABASE_ANON_KEY
+                            },
+                            body: JSON.stringify({
+                              text: word.word,
+                              voice: 'alloy',
+                              rate: 0.85
+                            })
                           });
-                        } catch {}
+
+                          const data = await response.json();
+
+                          if (data.url) {
+                            audioPlayerRef.current?.play(data.url, () => {
+                              console.log('[vault-folder] Audio playback completed');
+                              setSpeakingFor(prev => (prev === word.id ? null : prev));
+                            });
+                            console.log('[vault-folder] Playing TTS (cached:', data.cached + ')');
+                          } else {
+                            setSpeakingFor(null);
+                          }
+                        } catch (err) {
+                          console.error('[vault-folder] TTS error:', err);
+                          setSpeakingFor(null);
+                        }
                       }}
                       style={[styles.speakBtn, speakingFor === word.id && styles.speakBtnActive, isLight && styles.speakBtnLight]}
                     >

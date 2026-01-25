@@ -16,6 +16,9 @@ class Sound {
   private _key: number;
   private _loaded = false;
   private _onPlaySub: any = null;
+  private _duration: number = -1;
+
+  static MAIN_BUNDLE = '';
 
   constructor(filename: string, basePath?: string | OnError, onError?: OnError) {
     if (typeof basePath === 'function') {
@@ -23,20 +26,33 @@ class Sound {
       basePath = undefined;
     }
 
-    // For iOS, prepend main bundle path if no basePath provided
-    let fullPath = filename;
-    if (Platform.OS === 'ios') {
-      if (basePath) {
-        fullPath = `${basePath}/${filename}`;
-      } else if (MainBundlePath) {
-        fullPath = `${MainBundlePath}/${filename}`;
+    // Handle require() assets (numbers) vs string paths
+    let fullPath: any = filename;
+
+    // If filename is a number, it's a require() asset - use it directly
+    if (typeof filename === 'number') {
+      fullPath = filename;
+      console.log(`[Sound] Loading asset ID: ${filename}`);
+    } else {
+      // String path - check if it's already absolute
+      const isAbsolutePath = filename.startsWith('/');
+
+      if (isAbsolutePath) {
+        // Already absolute path (e.g., from RNFS) - use as-is
+        fullPath = filename;
+      } else if (Platform.OS === 'ios') {
+        // Relative path - prepend basePath if needed
+        if (basePath) {
+          fullPath = `${basePath}/${filename}`;
+        } else if (MainBundlePath) {
+          fullPath = `${MainBundlePath}/${filename}`;
+        }
       }
+      console.log(`[Sound] Loading path: ${fullPath}`);
     }
 
     this._filename = fullPath;
     this._key = nextKey++;
-
-    console.log(`[Sound] Loading: ${fullPath}`);
 
     const opts: any = { speed: 1, loadSync: false };
     try {
@@ -47,7 +63,9 @@ class Sound {
         (error: string | null, props?: { duration?: number; numberOfChannels?: number }) => {
           if (!error) {
             this._loaded = true;
-            console.log(`[Sound] Loaded successfully: ${filename}`);
+            this._duration = props?.duration || -1;
+            const loadType = typeof filename === 'number' ? `asset ${filename}` : filename;
+            console.log(`[Sound] Loaded successfully: ${loadType}, duration: ${this._duration.toFixed(2)}s`);
             if (eventEmitter) {
               this._onPlaySub = eventEmitter.addListener('onPlayChange', ({ isPlaying, playerKey }: any) => {
                 // no-op; kept for compatibility
@@ -90,7 +108,7 @@ class Sound {
 
   setVolume(volume: number) {
     try {
-      RNSound.setVolume(this._key, Math.max(0, Math.min(1, volume)));
+      RNSound.setVolume(this._key, Math.max(0, Math.min(1, volume)), () => {});
     } catch (e) {
       console.warn('[Sound] setVolume not supported:', e);
     }
@@ -101,6 +119,10 @@ class Sound {
     try { RNSound.release(this._key); } catch {}
     try { this._onPlaySub?.remove?.(); } catch {}
     return this;
+  }
+
+  getDuration(): number {
+    return this._duration;
   }
 
   static setCategory(_value: string, _mixWithOthers = false) {

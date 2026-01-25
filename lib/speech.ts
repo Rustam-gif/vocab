@@ -18,6 +18,12 @@ let currentAudio: InternalAudio | null = null;
 let currentNativeSound: NativeSound = null;
 let currentRNSound: any = null;
 
+// WebView audio player for in-app playback
+let webViewAudioPlayer: any = null;
+export function setWebViewAudioPlayer(player: any) {
+  webViewAudioPlayer = player;
+}
+
 function isBrowserAudioAvailable(): boolean {
   try {
     // @ts-ignore - Audio may not exist in RN native
@@ -28,125 +34,82 @@ function isBrowserAudioAvailable(): boolean {
 }
 
 function resolveOpenAIVoice(voice?: string): import('../services/TTSService').TTSVoice | undefined {
-  if (!voice) return undefined;
-  // Allow identifiers like 'openai:verse' or plain 'verse'
+  if (!voice) return 'shimmer'; // Default to shimmer
+  // Allow identifiers like 'openai:shimmer' or plain 'shimmer'
   const v = voice.replace(/^openai:/i, '').toLowerCase();
-  const allowed = new Set(['alloy', 'verse', 'aria', 'sage', 'ballad', 'vibrant', 'calypso']);
-  return (allowed.has(v) ? (v as any) : undefined);
+  const allowed = new Set(['nova', 'shimmer', 'echo', 'onyx', 'fable', 'alloy', 'ash', 'sage', 'coral']);
+  return (allowed.has(v) ? (v as any) : 'shimmer');
 }
 
 export async function speak(text: string, options: SpeakOptions = {}) {
   // Stop any current playback first
   stop();
 
-  const voice = resolveOpenAIVoice(options.voice) || 'verse';
+  const voice = resolveOpenAIVoice(options.voice) || 'shimmer';
   const rate = typeof options.rate === 'number' ? options.rate : 1.0;
 
-  // Prefer high-quality online TTS (OpenAI) with native file playback
+  // Use cached TTS endpoint with WebView playback
   try {
-    // @ts-ignore – Platform available in RN
-    const { Platform } = require('react-native');
-    const isWeb = Platform?.OS === 'web';
-    if (!isWeb) {
-      // Prefer react-native-sound + react-native-fs if available (pure RN projects)
-      try {
-        const RNFS = require('react-native-fs');
-        // Use local shim to avoid react-native-sound static getDirectories crash
-        const Sound = require('./rnsound').default || require('./rnsound');
-        if (RNFS?.CachesDirectoryPath && Sound) {
-          // Enable playback even when silent switch is on
-          try {
-            if (typeof Sound.enableInSilenceMode === 'function') {
-              Sound.enableInSilenceMode(true);
-            }
-          } catch {}
-          console.log('[speech] Starting TTS synthesis for:', text);
-          const { data } = await ttsService.synthesizeToArrayBuffer(text, { voice, rate, format: 'mp3' });
-          console.log('[speech] TTS synthesis complete, data size:', data.byteLength);
-          const base64 = arrayBufferToBase64(data);
-          const filePath = `${RNFS.CachesDirectoryPath}/tts_${Date.now()}.mp3`;
-          await RNFS.writeFile(filePath, base64, 'base64');
-          console.log('[speech] Audio file written to:', filePath);
-          await new Promise<void>((resolve, reject) => {
-            const s = new Sound(filePath, '', (error: any) => {
-              if (error) {
-                console.error('[speech] Sound load error:', error);
-                reject(error);
-                return;
-              }
-              currentRNSound = s;
-              console.log('[speech] backend: react-native-sound, playing...');
-              s.play((success: boolean) => {
-                console.log('[speech] Playback finished, success:', success);
-                if (success) options.onDone?.();
-                s.release();
-                if (currentRNSound === s) currentRNSound = null;
-                // Best-effort cleanup file
-                RNFS.unlink(filePath).catch(() => {});
-                resolve();
-              });
-            });
-          });
-          return; // handled by RN Sound
-        }
-      } catch (e) {
-        console.warn('[speech] OpenAI TTS failed, trying native fallback:', (e as any)?.message || e);
-        // Don't call onError yet - try fallbacks first
+    const { SUPABASE_ANON_KEY } = require('../lib/supabase');
+
+    console.log('[speech] Fetching cached TTS for:', text.substring(0, 30) + '...');
+    const response = await fetch('https://auirkjgyattnvqaygmfo.supabase.co/functions/v1/tts-cached', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'apikey': SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({
+        text,
+        voice,
+        rate
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`TTS request failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.url) {
+      console.log('[speech] Playing cached TTS (cached:', data.cached + ')');
+
+      // Use WebView player if available
+      if (webViewAudioPlayer) {
+        webViewAudioPlayer.play(data.url, () => {
+          console.log('[speech] Audio playback completed');
+          options.onDone?.();
+        });
+        return;
       }
 
-      // Fallback to expo-speech (iOS native) if OpenAI TTS fails
-      const usedExpoSpeech = await tryExpoSpeech(text, options);
-      if (usedExpoSpeech) return;
+      // Fallback: Try HTMLAudio for web
+      if (isBrowserAudioAvailable()) {
+        // @ts-ignore
+        const audio: InternalAudio = new Audio(data.url);
+        audio.addEventListener('ended', () => {
+          options.onDone?.();
+          cleanupAudio(audio);
+        });
+        audio.addEventListener('error', (e) => {
+          console.error('[speech] Audio playback error:', e);
+          options.onError?.(e);
+          cleanupAudio(audio);
+        });
+        currentAudio = audio;
+        await audio.play();
+        return;
+      }
 
-      // Fallback to react-native-tts if expo-speech is unavailable
-      const usedNativeTts = await tryNativeTTS(text, options);
-      if (usedNativeTts) return;
-
-      // No native audio libs available; signal error explicitly
-      console.error('[speech] All TTS backends failed');
-      options.onError?.(new Error('No TTS backend available.'));
-      return;
+      console.warn('[speech] No audio player available');
+      options.onError?.(new Error('No audio player available'));
+    } else {
+      throw new Error('No URL in TTS response');
     }
-  } catch (e) {
-    // Fall through to web path
-  }
-
-  // Web/browser fallback using HTMLAudio
-  if (!isBrowserAudioAvailable()) {
-    console.warn('[speech] backend: none (no HTMLAudio). Install react-native-sound + react-native-fs for native playback.');
-    options.onError?.(new Error('Audio playback not available'));
-    return;
-  }
-
-  try {
-    const { data, contentType } = await ttsService.synthesizeToArrayBuffer(text, {
-      voice,
-      rate,
-      format: 'mp3',
-    });
-
-    const blob = new Blob([new Uint8Array(data)], { type: contentType || 'audio/mpeg' });
-    // @ts-ignore - URL is available in browsers
-    const url = URL.createObjectURL(blob);
-    // @ts-ignore - Audio is available in browsers
-    const audio: InternalAudio = new Audio(url);
-    audio.__ttsUrl = url;
-    try { console.log('[speech] backend: web HTMLAudio'); } catch {}
-    audio.addEventListener('ended', () => {
-      options.onDone?.();
-      cleanupAudio(audio);
-    });
-    audio.addEventListener('error', (e) => {
-      options.onError?.(e);
-      cleanupAudio(audio);
-    });
-    currentAudio = audio;
-    await audio.play().catch((err: any) => {
-      options.onError?.(err);
-      cleanupAudio(audio);
-    });
   } catch (err) {
-    console.warn('[speech] TTS synthesis failed:', err);
+    console.error('[speech] TTS error:', err);
     options.onError?.(err);
   }
 }
@@ -189,112 +152,15 @@ export function stop() {
 // Minimal voice list to satisfy callers that probe for en-US
 export async function getAvailableVoicesAsync(): Promise<Array<{ identifier: string; name: string; language: string }>> {
   return [
-    { identifier: 'openai:verse', name: 'OpenAI Verse (en-US)', language: 'en-US' },
+    { identifier: 'openai:shimmer', name: 'OpenAI Shimmer (en-US)', language: 'en-US' },
     { identifier: 'openai:alloy', name: 'OpenAI Alloy (en-US)', language: 'en-US' },
+    { identifier: 'openai:nova', name: 'OpenAI Nova (en-US)', language: 'en-US' },
   ];
 }
 
 export default { speak, stop, getAvailableVoicesAsync };
 
 // ---- helpers ----
-async function tryExpoSpeech(text: string, options: SpeakOptions): Promise<boolean> {
-  try {
-    const Speech = require('expo-speech');
-    if (!Speech || typeof Speech.speak !== 'function') {
-      return false;
-    }
-    console.log('[speech] backend: expo-speech');
-    await Speech.speak(text, {
-      language: options.language || 'en-US',
-      rate: options.rate || 1.0,
-      pitch: options.pitch || 1.0,
-      onDone: options.onDone,
-      onStopped: options.onStopped,
-      onError: options.onError,
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function tryNativeTTS(text: string, options: SpeakOptions): Promise<boolean> {
-  try {
-    // Dynamically require to avoid crashes if not installed on web
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const TTS = require('react-native-tts').default || require('react-native-tts');
-
-    // Check if TTS module is available
-    if (!TTS || typeof TTS.speak !== 'function') {
-      console.log('[speech] react-native-tts not available');
-      return false;
-    }
-
-    // Initialize TTS settings on iOS
-    try {
-      // Ignore silent switch so TTS plays even in silent mode
-      if (typeof TTS.setIgnoreSilentSwitch === 'function') {
-        await TTS.setIgnoreSilentSwitch('ignore');
-      }
-      // Set default engine for iOS
-      if (typeof TTS.setDefaultVoice === 'function') {
-        // Use default system voice
-      }
-    } catch (initErr) {
-      console.warn('[speech] TTS init warning:', initErr);
-    }
-
-    try { await TTS.stop(); } catch {}
-    if (options.language) {
-      try { await TTS.setDefaultLanguage(options.language); } catch {}
-    }
-    // react-native-tts uses 0.0-1.0 scale on iOS where 0.5 is normal
-    // OpenAI uses 0.25-4.0 where 1.0 is normal
-    // Convert: if input rate is ~1.0 (normal), use 0.5 for iOS
-    const iosRate = typeof options.rate === 'number' ? options.rate * 0.5 : 0.5;
-    const clampedRate = Math.max(0.3, Math.min(0.75, iosRate));
-    try { await TTS.setDefaultRate(clampedRate); } catch {}
-
-    if (typeof options.pitch === 'number') {
-      const clamped = Math.max(0.5, Math.min(2.0, options.pitch));
-      try { await TTS.setDefaultPitch(clamped); } catch {}
-    }
-
-    // Use event listeners for completion tracking
-    // Supported events: tts-start, tts-finish, tts-pause, tts-resume, tts-progress, tts-cancel
-    if (typeof TTS.addEventListener === 'function') {
-      console.log('[speech] backend: react-native-tts');
-      await new Promise<void>((resolve) => {
-        const cleanup = (subs: Array<{ remove?: () => void }>) => {
-          subs.forEach(sub => {
-            try { sub?.remove?.(); } catch {}
-          });
-        };
-        const finishSub = TTS.addEventListener('tts-finish', () => {
-          options.onDone?.();
-          cleanup([finishSub, cancelSub]);
-          resolve();
-        });
-        const cancelSub = TTS.addEventListener('tts-cancel', () => {
-          options.onStopped?.();
-          cleanup([finishSub, cancelSub]);
-          resolve();
-        });
-        TTS.speak(text);
-      });
-      return true;
-    }
-
-    // Simple mode without event listeners
-    console.log('[speech] backend: react-native-tts (simple mode)');
-    await TTS.speak(text);
-    options.onDone?.();
-    return true;
-  } catch (err) {
-    console.error('[speech] react-native-tts error:', err);
-    return false;
-  }
-}
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   // Manual base64 encoder (no dependency on btoa/Buffer)

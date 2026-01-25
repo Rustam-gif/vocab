@@ -15,6 +15,8 @@ import { Check } from 'lucide-react-native';
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
 import { LANGUAGES_WITH_FLAGS, Language } from '../lib/languages';
+import { soundService } from '../services/SoundService';
+import { DeviceEventEmitter } from 'react-native';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -25,11 +27,11 @@ interface Props {
   onComplete: () => void;
 }
 
-const FOCUS_OPTIONS: { id: FocusType; emoji: string; title: string; subtitle: string }[] = [
-  { id: 'business', emoji: '💼', title: 'Business & Professional', subtitle: 'Meetings, emails, presentations' },
-  { id: 'travel', emoji: '✈️', title: 'Travel & Conversation', subtitle: 'Daily life, culture, social' },
-  { id: 'exams', emoji: '📚', title: 'Exams (IELTS/TOEFL)', subtitle: 'Academic, formal writing' },
-  { id: 'general', emoji: '🎯', title: 'General Vocabulary', subtitle: 'Balanced mix of everything' },
+const FOCUS_OPTIONS: { id: FocusType; animation: any; title: string; subtitle: string }[] = [
+  { id: 'business', animation: require('../assets/lottie/Onboarding/business.json'), title: 'Business & Professional', subtitle: 'Meetings, emails, presentations' },
+  { id: 'travel', animation: require('../assets/lottie/Onboarding/travel.json'), title: 'Travel & Conversation', subtitle: 'Daily life, culture, social' },
+  { id: 'exams', animation: require('../assets/lottie/Onboarding/ielts.json'), title: 'Exams (IELTS/TOEFL)', subtitle: 'Academic, formal writing' },
+  { id: 'general', animation: require('../assets/lottie/Onboarding/general.json'), title: 'General Vocabulary', subtitle: 'Balanced mix of everything' },
 ];
 
 const GOAL_OPTIONS: { value: DailyGoal; label: string; time: string; recommended?: boolean }[] = [
@@ -78,8 +80,8 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
     const intermediateKnown = wordKnowledgeData.intermediate.filter(w => selectedWords.has(w)).length;
     const advancedKnown = wordKnowledgeData.advanced.filter(w => selectedWords.has(w)).length;
 
-    if (advancedKnown >= 3) return 'Advanced';
-    if (intermediateKnown >= 3) return 'Intermediate';
+    if (advancedKnown >= 2) return 'Advanced';
+    if (intermediateKnown >= 1) return 'Intermediate';
     return 'Beginner';
   }, [selectedWords]);
 
@@ -203,13 +205,28 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
 
   const handleComplete = async () => {
     try {
+      // Map determined level to level IDs used in the app
+      const levelIdMap: Record<string, string> = {
+        'Beginner': 'beginner',
+        'Intermediate': 'intermediate',
+        'Advanced': 'advanced',
+      };
+      const selectedLevelId = levelIdMap[determinedLevel] || 'beginner';
+
       await AsyncStorage.multiSet([
         ['@engniter.onboarding.completed', 'true'],
         ['@engniter.onboarding.focus', selectedFocus || 'general'],
         ['@engniter.onboarding.dailyGoal', String(selectedGoal)],
+        ['@engniter.onboarding.level', determinedLevel],
+        ['@engniter.selectedLevel', selectedLevelId], // Set the Learn screen level
+        ['@engniter.highestLevel', selectedLevelId], // Set highest level unlocked
         ['@engniter.onboarding.completedAt', new Date().toISOString()],
       ]);
-      console.log('=== ONBOARDING SAVED ===', { focus: selectedFocus, goal: selectedGoal, language: selectedLanguage });
+      console.log('=== ONBOARDING SAVED ===', { focus: selectedFocus, goal: selectedGoal, language: selectedLanguage, level: determinedLevel, selectedLevelId });
+
+      // Emit events to notify Learn screen to reload level and focus
+      DeviceEventEmitter.emit('LEVEL_SELECTED', selectedLevelId);
+      DeviceEventEmitter.emit('USER_FOCUS_CHANGED', selectedFocus || 'general');
     } catch (e) {
       console.error('Failed to save onboarding:', e);
     }
@@ -219,6 +236,7 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
   const canContinue = () => {
     if (step === 1) return !!selectedLanguage;
     if (step === 2) return !!selectedFocus;
+    if (step === 4) return selectedWords.size > 0; // Require at least 1 word selected
     return true;
   };
 
@@ -353,7 +371,14 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
             onPress={() => setSelectedFocus(option.id)}
             activeOpacity={0.8}
           >
-            <Text style={styles.focusEmoji}>{option.emoji}</Text>
+            <View style={styles.focusAnimationContainer}>
+              <LottieView
+                source={option.animation}
+                autoPlay
+                loop
+                style={styles.focusAnimation}
+              />
+            </View>
             <View style={styles.focusTextContainer}>
               <Text style={[
                 styles.focusTitle,
@@ -541,6 +566,7 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
             !canContinue() && styles.continueButtonDisabled,
           ]}
           onPress={() => {
+            soundService.playTabSwitch();
             if (step < 5) {
               animateToNextStep(step + 1);
             } else {
@@ -744,9 +770,16 @@ const styles = StyleSheet.create({
     borderColor: '#F8B070',
     backgroundColor: 'rgba(248,176,112,0.12)',
   },
-  focusEmoji: {
-    fontSize: 28,
+  focusAnimationContainer: {
+    width: 60,
+    height: 60,
     marginRight: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  focusAnimation: {
+    width: 60,
+    height: 60,
   },
   focusTextContainer: {
     flex: 1,
@@ -918,28 +951,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Feather-Bold',
   },
   // Word Knowledge styles
-  levelIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(78, 217, 203, 0.15)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(78, 217, 203, 0.3)',
-  },
-  levelLabel: {
-    color: '#9CA3AF',
-    fontSize: 15,
-    fontFamily: 'Feather-Bold',
-  },
-  levelValue: {
-    color: '#4ED9CB',
-    fontSize: 15,
-    fontWeight: '700',
-    fontFamily: 'Feather-Bold',
-  },
   wordSectionTitle: {
     alignSelf: 'flex-start',
     color: '#FFFFFF',
