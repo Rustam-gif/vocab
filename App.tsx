@@ -9,10 +9,13 @@ import { getTheme, ThemeName } from './lib/theme';
 import { Launch } from './lib/launch';
 import NotificationService from './services/NotificationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { debouncedStorage } from './lib/debouncedStorage';
 import { engagementTrackingService } from './services/EngagementTrackingService';
 import { AppReadyProvider } from './lib/AppReadyContext';
 import { TextInputGateProvider } from './lib/TextInputGate';
 import { soundService } from './services/SoundService';
+import { newsPrefetchService } from './services/NewsPrefetchService';
+import { premiumStatusService } from './services/PremiumStatusService';
 import PersonalizedOnboarding from './components/PersonalizedOnboarding';
 
 // CRITICAL: Workaround for iOS UIEmojiSearchOperations deadlock
@@ -113,6 +116,21 @@ export default function App() {
     // Initialize engagement tracking and track app_open
     engagementTrackingService.initialize().then(() => {
       engagementTrackingService.trackEvent('app_open');
+
+      // Prefetch news in background on app launch
+      newsPrefetchService.prefetchIfNeeded().catch((e) => {
+        console.log('[App] News prefetch error:', e);
+      });
+
+      // Prefetch premium status in background on app launch
+      premiumStatusService.prefetchIfNeeded().then((status) => {
+        // Update store with refreshed status
+        if (status !== undefined) {
+          useAppStore.getState().loadPremiumStatus();
+        }
+      }).catch((e) => {
+        console.log('[App] Premium status prefetch error:', e);
+      });
     });
   }, []);
 
@@ -131,6 +149,10 @@ export default function App() {
         const { theme, languagePreferences } = useAppStore.getState();
         console.log('=== SAVING ON BACKGROUND ===', { theme, languagePreferences });
         try {
+          // Flush all pending debounced writes first
+          await debouncedStorage.flush();
+          console.log('=== DEBOUNCED STORAGE FLUSHED ===');
+
           // Save settings
           await AsyncStorage.multiSet([
             ['@engniter.theme', theme],

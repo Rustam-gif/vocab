@@ -3489,7 +3489,7 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
       >
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 40, paddingBottom: 120 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 80, paddingBottom: 140 }}
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
@@ -3529,7 +3529,7 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
               return (
                 <Animated.View
                   key={index}
-                  style={{ width: '100%', marginBottom: 12, transform: [{ translateY }, { scale }], opacity }}
+                  style={{ width: '100%', marginBottom: 10, transform: [{ translateY }, { scale }], opacity }}
                 >
                   <TouchableOpacity
                     style={[
@@ -3574,13 +3574,13 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1B263B',
+    backgroundColor: 'transparent',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1B263B',
+    backgroundColor: 'transparent',
   },
   loadingText: {
     fontSize: 16,
@@ -3591,8 +3591,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    marginTop: -4,
-    marginBottom: 12,
+    marginTop: 60,
+    marginBottom: 8,
     gap: 12,
     paddingLeft: 56,
     paddingRight: 24,
@@ -3685,7 +3685,7 @@ const styles = StyleSheet.create({
   },
   wordHeader: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 20,
   },
   wordRow: {
     flexDirection: 'row',
@@ -3722,13 +3722,18 @@ const styles = StyleSheet.create({
     fontFamily: 'Feather-Bold',
   },
   optionsContainer: {
-    marginBottom: 20,
+    marginBottom: 12,
   },
   nextButtonContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: 20,
     paddingBottom: 50,
-    paddingTop: 24,
+    paddingTop: 16,
     alignItems: 'center',
+    backgroundColor: 'transparent',
   },
   optionButton: {
     backgroundColor: '#1B263B',

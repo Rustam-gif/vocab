@@ -326,8 +326,18 @@ export default function StoryExerciseScreen() {
   // Check premium status on mount and when returning to this screen
   const refreshStoryAccess = useCallback(async () => {
     try {
-      const status = await SubscriptionService.getStatus();
-      if (status?.active) {
+      // Use cached status from store (fast)
+      const storePremium = useAppStore.getState().isPremium;
+      if (storePremium) {
+        setLocked(false);
+        setFreeStoryRemaining(null);
+        return;
+      }
+
+      // Refresh if needed (no-op if <20 min old)
+      await useAppStore.getState().loadPremiumStatus();
+      const refreshedPremium = useAppStore.getState().isPremium;
+      if (refreshedPremium) {
         setLocked(false);
         setFreeStoryRemaining(null);
         return;
@@ -383,6 +393,13 @@ export default function StoryExerciseScreen() {
       });
       const next: any = await Promise.race([purchasePromise, timeoutPromise]);
       if (next?.active) {
+        // Refresh premium status cache in store
+        try {
+          await useAppStore.getState().refreshPremiumStatus();
+        } catch (e) {
+          console.warn('StoryExercise: Failed to refresh premium cache:', e);
+        }
+
         setLocked(false);
         setShowPurchaseSuccess(true);
         setTimeout(() => { setShowPurchaseSuccess(false); setShowPaywall(false); }, 1400);

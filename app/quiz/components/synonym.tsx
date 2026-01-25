@@ -1223,7 +1223,7 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1B263B',
+    backgroundColor: 'transparent',
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 12,

@@ -189,8 +189,15 @@ export default function AtlasResults() {
       console.log('[Results] ✅ Emitted SPACECRAFT_ANIMATE event for setId:', setId);
     }
 
-    // Navigate back to existing Learn screen (avoid unmounting)
-    router.back();
+    // Navigate directly to Learn screen with completedSetId to trigger spacecraft animation
+    // Use replace to avoid showing loading screen during transition
+    router.replace({
+      pathname: '/quiz/learn',
+      params: {
+        level: levelId || '',
+        completedSetId: setId || '',
+      },
+    });
   };
 
   const getSuccessMessage = () => {
@@ -248,16 +255,6 @@ export default function AtlasResults() {
             { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
           ]}
         >
-          {/* Finish animation */}
-          <View style={styles.checkSection}>
-            <LottieView
-              source={require('../../assets/lottie/learn/finish.lottie')}
-              autoPlay
-              loop={false}
-              style={{ width: 220, height: 220 }}
-            />
-          </View>
-
           {/* Success message */}
           <Text style={[styles.successMessage, isLight && styles.successMessageLight]}>
             {getSuccessMessage()}
@@ -313,15 +310,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
-  },
-
-  // Finish animation section
-  checkSection: {
-    width: 220,
-    height: 220,
-    marginBottom: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 
   // Success message

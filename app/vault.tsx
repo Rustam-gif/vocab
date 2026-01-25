@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Animated,
   InteractionManager,
   Image,
 } from 'react-native';
@@ -55,45 +54,6 @@ export default function VaultScreen() {
   const foldersToShow = searchQuery
     ? baseFiltered.filter(f => f.title.toLowerCase().includes(searchQuery.toLowerCase()))
     : baseFiltered;
-
-  // Bubble entrance animation for rows (New Folder + each folder)
-  const [animRowCount, setAnimRowCount] = React.useState(1);
-  const animsRef = React.useRef<Animated.Value[]>([]);
-
-  const ensureAnimCount = React.useCallback((count: number) => {
-    // Keep exactly `count` Animated.Values
-    if (animsRef.current.length !== count) {
-      const next: Animated.Value[] = Array.from({ length: count }, (_, i) => animsRef.current[i] ?? new Animated.Value(0));
-      // @ts-ignore
-      animsRef.current = next;
-    }
-    setAnimRowCount(count);
-  }, []);
-
-  const playEntrance = React.useCallback(() => {
-    const values = animsRef.current;
-    try {
-      values.forEach(v => v.setValue(0));
-      Animated.stagger(
-        60,
-        values.map(v =>
-          Animated.spring(v, {
-            toValue: 1,
-            useNativeDriver: true,
-            friction: 6,
-            tension: 120,
-          })
-        )
-      ).start();
-    } catch {}
-  }, []);
-
-  // Update anim rows and run animation when data changes
-  useEffect(() => {
-    const count = (Array.isArray(foldersToShow) ? foldersToShow.length : 0);
-    ensureAnimCount(count);
-    playEntrance();
-  }, [foldersToShow.length, ensureAnimCount, playEntrance]);
 
   // Refresh folders when screen regains focus (don't replay entrance animation)
   useFocusEffect(() => {
@@ -321,19 +281,7 @@ export default function VaultScreen() {
               );
               
               return (
-                <Animated.View
-                  key={f.id}
-                  style={{
-                    transform: [
-                      {
-                        scale: animsRef.current[idx]?.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) ?? 1,
-                      },
-                      {
-                        translateY: animsRef.current[idx]?.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) ?? 0,
-                      },
-                    ],
-                  }}
-                >
+                <View key={f.id}>
                   <TouchableOpacity style={[styles.folderRow, isLight && styles.surfaceCard]} onPress={() => router.push({ pathname: '/vault-folder', params: { id: f.id, title: f.title } })}>
                     <Image
                       source={require('../assets/foldericons/folder_icon.png')}
@@ -358,7 +306,7 @@ export default function VaultScreen() {
                       </TouchableOpacity>
                     )}
                   </TouchableOpacity>
-                </Animated.View>
+                </View>
               );
             })}
           </View>

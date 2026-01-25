@@ -7,6 +7,8 @@ import { vaultService } from '../services/VaultService';
 import { analyticsService } from '../services/AnalyticsService';
 import { ProgressService } from '../services/ProgressService';
 import { engagementTrackingService } from '../services/EngagementTrackingService';
+import { premiumStatusService } from '../services/PremiumStatusService';
+import type { SubscriptionStatus } from '../services/SubscriptionService';
 
 interface AppState {
   // User state
@@ -60,7 +62,13 @@ interface AppState {
   theme: ThemeName;
   setTheme: (t: ThemeName) => Promise<void>;
   toggleTheme: () => Promise<void>;
-  
+
+  // Premium Status
+  premiumStatus: SubscriptionStatus | null;
+  isPremium: boolean;
+  loadPremiumStatus: () => Promise<void>;
+  refreshPremiumStatus: () => Promise<void>;
+
   // Initialize app
   initialize: () => Promise<void>;
 }
@@ -362,6 +370,38 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.error('[Store] Failed to save theme:', e);
     }
   },
+
+  // Premium Status
+  premiumStatus: null,
+  isPremium: false,
+  loadPremiumStatus: async () => {
+    try {
+      const status = await premiumStatusService.getStatus();
+      set({
+        premiumStatus: status,
+        isPremium: status.active
+      });
+    } catch (error) {
+      console.error('[Store] Failed to load premium status:', error);
+      set({
+        premiumStatus: { active: false, renews: false, expiryDate: null },
+        isPremium: false
+      });
+    }
+  },
+  refreshPremiumStatus: async () => {
+    try {
+      console.log('[Store] Refreshing premium status...');
+      const status = await premiumStatusService.refresh();
+      set({
+        premiumStatus: status,
+        isPremium: status.active
+      });
+      console.log('[Store] Premium status refreshed:', status.active ? 'Premium' : 'Free');
+    } catch (error) {
+      console.error('[Store] Failed to refresh premium status:', error);
+    }
+  },
   
   // Initialize app
   initialize: async () => {
@@ -438,6 +478,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     let words: Word[] = [];
     let analytics: any = null;
     let userProgress: any = null;
+    let premiumStatus: SubscriptionStatus = { active: false, renews: false, expiryDate: null };
 
     try {
       await vaultService.initialize();
@@ -462,11 +503,23 @@ export const useAppStore = create<AppState>((set, get) => ({
       userProgress = get().userProgress || userProgress;
     }
 
-    console.log('[Store] Setting state - theme:', themePref, 'langs:', langs);
+    // Load cached premium status (fast, doesn't call IAP)
+    try {
+      const cached = await premiumStatusService.loadCachedStatus();
+      if (cached) {
+        premiumStatus = cached;
+      }
+    } catch (err) {
+      console.error('[Store] premium status cache load failed', err);
+    }
+
+    console.log('[Store] Setting state - theme:', themePref, 'langs:', langs, 'premium:', premiumStatus.active);
     set({
       words,
       analytics,
       userProgress,
+      premiumStatus,
+      isPremium: premiumStatus.active,
       theme: themePref ?? get().theme,
       languagePreferences: langs ?? get().languagePreferences,
     });

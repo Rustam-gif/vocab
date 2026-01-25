@@ -10,6 +10,7 @@ import { levels, getOrderedSetsForLevel } from './data/levels';
 import type { Level, Set as VocabSet, SetCategory } from './data/levels';
 import ErrorBoundary from './components/ErrorBoundary';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { debouncedStorage } from '../../lib/debouncedStorage';
 import { useFocusEffect } from '@react-navigation/native';
 import { ProgressService } from '../../services/ProgressService';
 import { SetProgressService } from '../../services/SetProgressService';
@@ -278,7 +279,8 @@ export default function LearnScreen() {
   const [activeLevelId, setActiveLevelId] = useState<string | null>(levelId ?? cachedLevelId ?? null);
   const [highestLevel, setHighestLevel] = useState<string | null>(null);
   const [placementLevel, setPlacementLevel] = useState<string | null>(null);
-  const [isLoadingLevel, setIsLoadingLevel] = useState(false);
+  // Always show loading initially on every mount/tab switch
+  const [isLoadingLevel, setIsLoadingLevel] = useState(true);
   const levelNodeAnims = useRef<Animated.Value[]>([]);
   const levelPulseAnim = useRef(new Animated.Value(1)).current;
   const levelPulseOpacity = useRef(new Animated.Value(0.4)).current;
@@ -347,6 +349,9 @@ export default function LearnScreen() {
     console.log(`[${ts}] [LEARN] cached level: ${cachedCompleted}/${cachedTotal} completed, cachedUserFocus=${cachedUserFocus}`);
     console.log(`[${ts}] [LEARN] initial state: activeLevelId=${activeLevelId}, isPremium=${isPremium}, userFocus=${userFocus}`);
     console.log(`[${ts}] [LEARN] flags: layoutReady=${getLayoutReady()}, initialScrollDone=${getInitialScrollDone()}, scrollLocked=${getScrollLocked()}`);
+
+    // Reset loading start time on every mount (for minimum display time calculation)
+    loadingStartTimeRef.current = Date.now();
 
     // On FRESH app start (no cached level), reset module-level flags
     // On tab switch remount, keep the flags as-is to preserve scroll position
@@ -441,7 +446,7 @@ export default function LearnScreen() {
     cachedCurrentPlanetIndex = index;
 
     // Persist for app restarts
-    AsyncStorage.setItem(CURRENT_PLANET_INDEX_KEY, String(index)).catch(() => {});
+    debouncedStorage.setItem(CURRENT_PLANET_INDEX_KEY, String(index)).catch(() => {});
   }, [getScrollXForIndex, logScroll]);
 
   // ========== INITIAL SCROLL (contentOffset for instant positioning) ==========
@@ -486,20 +491,27 @@ export default function LearnScreen() {
     }
   }, [currentLevel, getCurrentPlanetIndex, scrollToPlanet, logScroll]);
 
-  // Check premium status on mount
+  // Check premium status on mount - use cached status from store
   const checkPremiumStatus = useCallback(async () => {
     try {
-      // Debug: check AsyncStorage directly
-      const rawSubKey = await AsyncStorage.getItem('@engniter.premium.active');
-      const rawProductKey = await AsyncStorage.getItem('@engniter.premium.product');
-      console.log(`[LEARN] 💎 AsyncStorage raw: SUB_KEY="${rawSubKey}", PRODUCT="${rawProductKey}"`);
+      // Use cached status from store (already loaded on app launch)
+      const storePremium = useAppStore.getState().isPremium;
+      const storePremiumStatus = useAppStore.getState().premiumStatus;
 
-      const status = await SubscriptionService.getStatus();
-      const premium = status?.active ?? false;
-      console.log(`[LEARN] 💎 Premium status check: active=${premium}, productId=${status?.productId}`);
-      setIsPremium(premium);
-      // Update module-level cache for next mount
-      cachedIsPremium = premium;
+      console.log(`[LEARN] 💎 Premium status from store cache: active=${storePremium}`);
+      setIsPremium(storePremium);
+      cachedIsPremium = storePremium;
+
+      // Only refresh if cache is stale (handled by premiumStatusService internally)
+      // This will be a no-op if cache is <20 min old
+      const status = await useAppStore.getState().loadPremiumStatus();
+      const refreshedPremium = useAppStore.getState().isPremium;
+
+      if (refreshedPremium !== storePremium) {
+        console.log(`[LEARN] 💎 Premium status changed after refresh: ${storePremium} → ${refreshedPremium}`);
+        setIsPremium(refreshedPremium);
+        cachedIsPremium = refreshedPremium;
+      }
     } catch (err) {
       console.error('[LEARN] ❌ Failed to check premium status:', err);
       setIsPremium(false);
@@ -538,6 +550,8 @@ export default function LearnScreen() {
   // When tab becomes visible, scroll to current planet so user doesn't have to hunt for it
   // BUT skip if we just returned from completing a set (spacecraft animation will handle scroll)
   const lastFocusTimeRef = useRef(0);
+  const hasInitialScrolledRef = useRef(false);
+  const loadingStartTimeRef = useRef<number>(Date.now());
   useFocusEffect(
     useCallback(() => {
       // Debounce: ignore rapid focus events (caused by router state changes)
@@ -548,10 +562,9 @@ export default function LearnScreen() {
       lastFocusTimeRef.current = now;
 
       const ts = new Date().toISOString().substr(11, 12);
-      console.log(`[${ts}] [LEARN] 👁️  FOCUS (tab visible), completedSetId=${completedSetId}`);
+      console.log(`[${ts}] [LEARN] 👁️  FOCUS (tab visible)${completedSetId ? `, completedSetId=${completedSetId}` : ''}`);
 
       // Refresh premium status on focus (in case user just subscribed)
-      console.log(`[${ts}] [LEARN] Checking premium status on focus...`);
       checkPremiumStatus();
 
       // Play tab switch sound asynchronously to avoid blocking UI
@@ -570,12 +583,19 @@ export default function LearnScreen() {
         return;
       }
 
+      // Skip auto-scroll if already scrolled once (only scroll on initial launch)
+      if (hasInitialScrolledRef.current) {
+        logScroll('FOCUS', 'skip auto-scroll (already scrolled on launch)');
+        return;
+      }
+
       // Auto-scroll to current planet after a short delay (let layout settle)
       const scrollTimer = setTimeout(() => {
         if (currentLevel && !getScrollLocked()) {
           const targetIndex = getCurrentPlanetIndex(currentLevel);
           logScroll('FOCUS', `auto-scroll to current planet index=${targetIndex}`);
           scrollToPlanet(targetIndex, true); // animated=true for smooth scroll
+          hasInitialScrolledRef.current = true; // Mark as scrolled
         }
       }, 150);
 
@@ -662,7 +682,7 @@ export default function LearnScreen() {
     if (placement) setPlacementLevel(placement);
 
     if (levelId) {
-      await AsyncStorage.setItem(SELECTED_LEVEL_KEY, levelId);
+      await debouncedStorage.setItem(SELECTED_LEVEL_KEY, levelId);
       setActiveLevelId(levelId);
       return;
     }
@@ -672,17 +692,15 @@ export default function LearnScreen() {
     } else if (levels && levels.length > 0) {
       const fallback = levels[0]?.id;
       if (fallback) {
-        await AsyncStorage.setItem(SELECTED_LEVEL_KEY, fallback);
+        await debouncedStorage.setItem(SELECTED_LEVEL_KEY, fallback);
         setActiveLevelId(fallback);
       }
     }
   }, [levelId]);
 
   const handleLevelSelect = async (id: string) => {
-    console.log('[Learn] handleLevelSelect: setting isLoadingLevel = true for level:', id);
-    setIsLoadingLevel(true);
     setActiveLevelId(id);
-    await AsyncStorage.setItem(SELECTED_LEVEL_KEY, id);
+    await debouncedStorage.setItem(SELECTED_LEVEL_KEY, id);
     DeviceEventEmitter.emit('LEVEL_SELECTED', id);
   };
 
@@ -713,31 +731,27 @@ export default function LearnScreen() {
   }, [loadStoredLevel]);
 
   const refreshLevel = useCallback(async () => {
+    const perfStart = performance.now();
     const ts = new Date().toISOString().substr(11, 12);
 
     // CRITICAL: Use cachedUserFocus if userFocus hasn't loaded yet
     // This prevents set reordering on remount which breaks completion tracking
     // (Set IDs are assigned based on order, so different order = different IDs!)
     const effectiveUserFocus = userFocus ?? cachedUserFocus;
-    const caller = new Error().stack?.split('\n')[2]?.trim() || 'unknown';
-    console.log(`[${ts}] [DATA] 🔄 refreshLevel START`);
-    console.log(`[${ts}] [DATA] params: activeLevelId=${activeLevelId}, isPremium=${isPremium}, userFocus=${userFocus}, effectiveUserFocus=${effectiveUserFocus}`);
-    console.log(`[${ts}] [DATA] caller: ${caller}`);
 
     if (!activeLevelId) {
-      console.log(`[${ts}] [DATA] refreshLevel: no activeLevelId, clearing level`);
       setCurrentLevel(null);
       setIsLoadingLevel(false);
       return;
     }
 
-    // Show loading indicator
-    setIsLoadingLevel(true);
+    // Never show loading indicator - we always have cached data or show empty view
+    // Loading only shows on very first app launch (set in initial state)
 
     let level = levels.find(l => l.id === activeLevelId);
     if (!level && levels.length > 0) {
       level = levels[0];
-      try { await AsyncStorage.setItem(SELECTED_LEVEL_KEY, level.id); } catch {}
+      try { await debouncedStorage.setItem(SELECTED_LEVEL_KEY, level.id); } catch {}
     }
     if (level) {
       await Promise.all([ProgressService.initialize(), SetProgressService.initialize()]);
@@ -880,12 +894,6 @@ export default function LearnScreen() {
 
       const levelWithProgress = { ...level, sets: setsWithProgress };
 
-      // Log completion status for debugging
-      const completedCount = setsWithProgress.filter(s => s.completed).length;
-      const ts2 = new Date().toISOString().substr(11, 12);
-      console.log(`[${ts2}] [DATA] refreshLevel done: ${completedCount}/${setsWithProgress.length} sets completed`);
-      console.log(`[${ts2}] [DATA] First 5 sets completed status:`, setsWithProgress.slice(0, 5).map(s => ({ id: s.id, completed: s.completed })));
-
       setCurrentLevel(levelWithProgress);
       // Update module-level cache
       cachedCurrentLevel = levelWithProgress;
@@ -903,7 +911,7 @@ export default function LearnScreen() {
 
         // Update module-level cache for instant positioning on next mount
         cachedCurrentPlanetIndex = targetIndex;
-        AsyncStorage.setItem(CURRENT_PLANET_INDEX_KEY, String(targetIndex)).catch(() => {});
+        debouncedStorage.setItem(CURRENT_PLANET_INDEX_KEY, String(targetIndex)).catch(() => {});
       }
 
       // NOTE: Initial scroll is handled by:
@@ -914,8 +922,21 @@ export default function LearnScreen() {
       const completed = setsWithProgress.filter(s => s.completed).length;
       setProgress({ completed, total: setsWithProgress.length });
 
-      // Hide loading indicator
-      setIsLoadingLevel(false);
+      // Hide loading indicator with minimum display time (800ms)
+      const elapsedTime = Date.now() - loadingStartTimeRef.current;
+      const minDisplayTime = 800;
+      const remainingTime = Math.max(0, minDisplayTime - elapsedTime);
+
+      setTimeout(() => {
+        setIsLoadingLevel(false);
+      }, remainingTime);
+
+      // Performance logging - only warn if slow
+      const perfEnd = performance.now();
+      const duration = perfEnd - perfStart;
+      if (duration > 200) {
+        console.warn(`[PERF] ⚠️ refreshLevel took ${duration.toFixed(2)}ms (>200ms threshold)`);
+      }
     }
   }, [activeLevelId, isPremium, userFocus]);
 
@@ -936,19 +957,7 @@ export default function LearnScreen() {
     if (lastParams.levelId === currentParams.levelId &&
         lastParams.premium === currentParams.premium &&
         lastParams.focus === currentParams.focus) {
-      console.log('[DATA] Skip refresh - params unchanged');
       return;
-    }
-
-    // Log what changed
-    if (lastParams.premium !== currentParams.premium) {
-      console.log(`[DATA] 💎 Premium status changed: ${lastParams.premium} → ${currentParams.premium}`);
-    }
-    if (lastParams.levelId !== currentParams.levelId) {
-      console.log(`[DATA] Level changed: ${lastParams.levelId} → ${currentParams.levelId}`);
-    }
-    if (lastParams.focus !== currentParams.focus) {
-      console.log(`[DATA] Focus changed: ${lastParams.focus} → ${currentParams.focus}`);
     }
 
     // Clear any pending refresh
@@ -956,14 +965,8 @@ export default function LearnScreen() {
       clearTimeout(refreshTimer.current);
     }
 
-    // Show loading immediately when level changes
-    if (lastParams.levelId !== currentParams.levelId) {
-      setIsLoadingLevel(true);
-    }
-
     // Debounce refresh by 200ms to batch rapid changes during initialization
     refreshTimer.current = setTimeout(() => {
-      console.log('[DATA] Debounce timer fired - calling refreshLevel');
       lastRefreshParams.current = currentParams;
       refreshLevel();
     }, 200);
@@ -1235,11 +1238,10 @@ export default function LearnScreen() {
   // ========== CONTINUE FLOW (returning from completed set) ==========
   // Handles spacecraft animation when returning from quiz screen
   useEffect(() => {
-    logScroll('FLOW', `🔍 CONTINUE useEffect triggered, completedSetId=${completedSetId}`);
     if (!completedSetId) {
-      logScroll('FLOW', '❌ No completedSetId, skipping animation');
       return;
     }
+    logScroll('FLOW', `🔍 CONTINUE useEffect triggered, completedSetId=${completedSetId}`);
 
     const setIdStr = String(completedSetId);
     // Skip if already animated this set
@@ -1561,23 +1563,8 @@ export default function LearnScreen() {
     });
   }, [currentLevel]);
 
-  // Show loading when:
-  // 1. No cache exists at all (first launch)
-  // 2. Currently loading a level
-  // 3. Current level doesn't match active level (switching levels)
-  const isLevelMismatch = currentLevel && activeLevelId && currentLevel.id !== activeLevelId;
-  const shouldShowLoading = (!currentLevel && !cachedCurrentLevel) || isLoadingLevel || isLevelMismatch;
-
-  console.log('[Learn] Render check:', {
-    currentLevel: currentLevel?.id,
-    activeLevelId,
-    isLoadingLevel,
-    isLevelMismatch,
-    shouldShowLoading
-  });
-
-  if (shouldShowLoading) {
-    console.log('[Learn] Showing loading screen');
+  // Show loading animation when loading level
+  if (isLoadingLevel) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <TopStatusPanel floating includeTopInset />
@@ -1586,7 +1573,7 @@ export default function LearnScreen() {
             source={require('../../assets/lottie/learn/loading_inlearn.json')}
             autoPlay
             loop
-            cacheComposition={false}
+            cacheComposition={true}
             style={{ width: 140, height: 140 }}
           />
           <Text style={[styles.loadingText, isLight && { color: '#6B7280' }]}>Loading...</Text>
@@ -1598,7 +1585,12 @@ export default function LearnScreen() {
   // Use current level or cached for instant display
   const displayLevel = currentLevel || cachedCurrentLevel;
   if (!displayLevel) {
-    return null;
+    // No data at all - show empty view
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <TopStatusPanel floating includeTopInset />
+      </SafeAreaView>
+    );
   }
 
 
@@ -1654,9 +1646,9 @@ export default function LearnScreen() {
           ]}>
             <LottieView
               source={SPACECRAFT_SOURCE}
-              autoPlay
-              loop
-              cacheComposition={false}
+              autoPlay={isCurrent && !isCompleted}
+              loop={isCurrent && !isCompleted}
+              cacheComposition={true}
               style={styles.spacecraft}
             />
           </View>
@@ -1772,12 +1764,12 @@ export default function LearnScreen() {
             </View>
           )}
 
-          {/* Planet Lottie animation */}
+          {/* Planet Lottie animation - only animate when centered (selected) */}
           <LottieView
             source={planetSource}
-            autoPlay
-            loop
-            cacheComposition={false}
+            autoPlay={isCentered}
+            loop={isCentered}
+            cacheComposition={true}
             style={[
               { width: planetSize, height: planetSize },
               (isLocked && !quizCanSkipAhead) && styles.planetLocked,
@@ -1798,7 +1790,7 @@ export default function LearnScreen() {
                 source={require('../../assets/lottie/learn/flag_completed.json')}
                 autoPlay
                 loop
-                cacheComposition={false}
+                cacheComposition={true}
                 style={{ width: '100%', height: '100%' }}
               />
             </View>
@@ -1838,8 +1830,8 @@ export default function LearnScreen() {
     if (!nextLevelId) return;
 
     // Update stored level
-    await AsyncStorage.setItem(SELECTED_LEVEL_KEY, nextLevelId);
-    await AsyncStorage.setItem(HIGHEST_LEVEL_KEY, nextLevelId);
+    await debouncedStorage.setItem(SELECTED_LEVEL_KEY, nextLevelId);
+    await debouncedStorage.setItem(HIGHEST_LEVEL_KEY, nextLevelId);
 
     // Emit event and update state
     DeviceEventEmitter.emit('LEVEL_SELECTED', nextLevelId);
@@ -1938,7 +1930,7 @@ export default function LearnScreen() {
           source={getCharacterSource()}
           autoPlay={isActive}
           loop={isActive}
-          cacheComposition={false}
+          cacheComposition={true}
           style={{ width: charSize, height: charSize, transform: [{ scaleX: flipScale }] }}
         />
         {/* Ground shadow */}
@@ -2067,9 +2059,9 @@ export default function LearnScreen() {
       >
         <LottieView
           source={SPACECRAFT_SOURCE}
-          autoPlay
-          loop
-          cacheComposition={false}
+          autoPlay={spacecraftAnimating}
+          loop={spacecraftAnimating}
+          cacheComposition={true}
           style={{ width: 80, height: 80 }}
         />
       </Animated.View>
@@ -2227,7 +2219,7 @@ export default function LearnScreen() {
               source={require('../../assets/lottie/learn/current_planet.json')}
               autoPlay
               loop
-              cacheComposition={false}
+              cacheComposition={true}
               style={styles.rocketFabAnimation}
             />
           </View>
@@ -2421,8 +2413,9 @@ export default function LearnScreen() {
             <View style={styles.signupIconContainer}>
               <LottieView
                 source={require('../../assets/lottie/learn/planets/astronaut_complete.json')}
-                autoPlay
-                loop
+                autoPlay={showSignupModal}
+                loop={showSignupModal}
+                cacheComposition={true}
                 style={styles.signupAstronaut}
               />
             </View>
@@ -3122,6 +3115,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: '#fff',
+    marginTop: 16,
   },
   // Level Node Styles
   levelNodeWrapper: {

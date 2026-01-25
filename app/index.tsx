@@ -1646,12 +1646,13 @@ const buildHighlightParts = (
 };
 
 // Animated News Card Component for smooth interactions
+// Memoized to prevent re-renders when props haven't changed
 const AnimatedNewsCard: React.FC<{
   onPress: () => void;
   delay?: number;
   style?: any;
   children: React.ReactNode;
-}> = ({ onPress, delay = 0, style, children }) => {
+}> = React.memo(({ onPress, delay = 0, style, children }) => {
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const pressScale = useRef(new Animated.Value(1)).current;
@@ -1715,7 +1716,7 @@ const AnimatedNewsCard: React.FC<{
       </Pressable>
     </Animated.View>
   );
-};
+});
 
 export default function HomeScreen(props?: { preview?: boolean }) {
   const isPreview = !!(props as any)?.preview;
@@ -1798,12 +1799,21 @@ export default function HomeScreen(props?: { preview?: boolean }) {
   const [isPremium, setIsPremium] = useState<boolean>(false);
   const [showArticlePaywall, setShowArticlePaywall] = useState<boolean>(false);
 
-  // Check premium status on mount
+  // Check premium status on mount - use cached status from store
   useEffect(() => {
     const checkPremium = async () => {
       try {
-        const status = await SubscriptionService.getStatus();
-        setIsPremium(status?.active ?? false);
+        // Use cached status from store (already loaded on app launch)
+        const storePremium = useAppStore.getState().isPremium;
+        setIsPremium(storePremium);
+
+        // Refresh if stale (no-op if <20 min old)
+        await useAppStore.getState().loadPremiumStatus();
+        const refreshedPremium = useAppStore.getState().isPremium;
+
+        if (refreshedPremium !== storePremium) {
+          setIsPremium(refreshedPremium);
+        }
       } catch {
         setIsPremium(false);
       }
@@ -2307,12 +2317,37 @@ export default function HomeScreen(props?: { preview?: boolean }) {
 
     setSavingVocabWord(word);
     try {
-      await addVaultWord?.({ word, definition });
+      // Get or create News Vocabulary folder
+      const folders = getVaultFolders?.() || [];
+      const NEWS_FOLDER_TITLE = 'News Vocabulary';
+      const existing = folders.find(f => /news\s+vocab/i.test(f.title));
+      let folderId = existing?.id;
+
+      if (!folderId) {
+        try {
+          const created = await createVaultFolder?.(NEWS_FOLDER_TITLE);
+          folderId = created?.id || folders[0]?.id;
+        } catch (e) {
+          console.warn('Failed to create News Vocabulary folder:', e);
+          folderId = folders[0]?.id;
+        }
+      }
+
+      // Save word to News Vocabulary folder
+      await addVaultWord?.({
+        word,
+        definition,
+        example: definition,
+        folderId,
+        source: 'news',
+      } as any);
+
       setSavedVocabWords(prev => new Set([...prev, word]));
 
       // Animation feedback
       setTimeout(() => setSavingVocabWord(null), 1000);
-    } catch {
+    } catch (error) {
+      console.error('saveVocabWord failed:', error);
       setSavingVocabWord(null);
     }
   };
@@ -2443,6 +2478,7 @@ export default function HomeScreen(props?: { preview?: boolean }) {
   const quizProgressAnim = useRef(new Animated.Value(0)).current;
   const quizConfettiAnim = useRef(new Animated.Value(0)).current;
   const newsFetchStarted = useRef(false);
+  const lastNewsFetchTime = useRef<number>(0); // Timestamp of last API fetch
   const initRanRef = useRef(false);
   const missionFetchKeyRef = useRef<string | null>(null);
   const NEWS_CACHE_VERSION = 'v12-24h-refresh';
@@ -3567,37 +3603,51 @@ Avoid fiction and avoid specific unverifiable claims.
 	  }, [newsPrefs, newsConfigured, refreshNewsFromApi]);
 
   useEffect(() => {
-    if (newsFetchStarted.current) {
-      console.log('[news] Skipping fetch - already started');
+    // Check if we recently fetched (within last hour) BEFORE starting any work
+    const now = Date.now();
+    const ONE_HOUR = 60 * 60 * 1000;
+    const timeSinceLastFetch = now - lastNewsFetchTime.current;
+
+    if (timeSinceLastFetch < ONE_HOUR && lastNewsFetchTime.current > 0) {
+      // Already have fresh news, skip entirely
       return;
     }
-    newsFetchStarted.current = true;
-    console.log('[news] Starting initial news fetch...');
 
     // Use InteractionManager to defer heavy operations until after render
     const task = InteractionManager.runAfterInteractions(async () => {
       // 1) Show any cached payload immediately so the UI is never empty
+      let shouldFetchFromAPI = true;
       try {
         const cached = await loadCachedNews();
-        console.log('[news] Local cache result:', cached ? `${cached.articles.length} articles` : 'null');
         if (cached) {
           setNewsOverrideList(cached.articles);
           setNewsList(cached.articles);
           setNewsStatus(cached.status || 'Live feed (cached)');
           scheduleNewsHookPrefetch(cached.articles);
+
+          // Check if cache is fresh (less than 1 hour old) to skip API call
+          const lastFetched = await AsyncStorage.getItem('@engniter.news.lastFetchedAt');
+          if (lastFetched) {
+            const fetchedTime = new Date(lastFetched).getTime();
+            const cacheAge = now - fetchedTime;
+            if (cacheAge < ONE_HOUR) {
+              shouldFetchFromAPI = false;
+              lastNewsFetchTime.current = fetchedTime; // Update ref to prevent re-fetch on next focus
+            }
+          }
         }
       } catch (e) {
-        console.log('[news] Cache load error:', e);
+        console.error('[news] Cache load error:', e);
       }
-      // 2) Always ask the backend for the latest feed; if it has fresher
-      //    data than the cache, it will be returned and replace the list.
-      // Use a shorter timeout for initial fetch to prevent long freezes
-      try {
-        console.log('[news] Fetching from API...');
-        await refreshNewsFromApi();
-        console.log('[news] API fetch completed');
-      } catch (e) {
-        console.log('[news] API fetch error:', e);
+
+      // 2) Only fetch from API if cache is stale or missing
+      if (shouldFetchFromAPI) {
+        try {
+          await refreshNewsFromApi();
+          lastNewsFetchTime.current = Date.now(); // Update timestamp after successful fetch
+        } catch (e) {
+          console.error('[news] API fetch error:', e);
+        }
       }
     });
 
@@ -5848,7 +5898,7 @@ EXAMPLE: [sentence in ${langName}]`
                                 const phonetic = getPhonetic(item.word);
 
                                 return (
-                                  <TouchableOpacity
+                                  <View
                                     key={`${item.word || 'word'}-${vocabIndex}`}
                                     style={[
                                       styles.vocabItem,
@@ -5863,12 +5913,10 @@ EXAMPLE: [sentence in ${langName}]`
                                         marginBottom: 8
                                       }
                                     ]}
-                                    onPress={() => toggleVocabExpanded(vocabIndex)}
-                                    activeOpacity={0.7}
                                   >
                                     {/* Header Row */}
                                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
-                                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, flexWrap: 'wrap', gap: 6 }}>
                                         <Text style={[
                                           styles.vocabWord,
                                           articleBgColor === 'sepia' && { color: '#8B4513' },
@@ -5884,13 +5932,25 @@ EXAMPLE: [sentence in ${langName}]`
                                             paddingHorizontal: 6,
                                             paddingVertical: 2,
                                             borderRadius: 4,
-                                            marginLeft: 8
                                           }}>
                                             <Text style={{ color: '#4ED9CB', fontSize: 9, fontWeight: '300', letterSpacing: 0.3 }}>
                                               {wordType}
                                             </Text>
                                           </View>
                                         )}
+                                        {/* Difficulty Badge inline */}
+                                        <View style={{
+                                          backgroundColor: `${difficultyColor}15`,
+                                          paddingHorizontal: 6,
+                                          paddingVertical: 2,
+                                          borderRadius: 4,
+                                          borderWidth: 1,
+                                          borderColor: `${difficultyColor}30`
+                                        }}>
+                                          <Text style={{ color: difficultyColor, fontSize: 9, fontWeight: '400', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                                            {difficulty}
+                                          </Text>
+                                        </View>
                                       </View>
                                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                         {/* Audio Button */}
@@ -5919,12 +5979,6 @@ EXAMPLE: [sentence in ${langName}]`
                                             strokeWidth={1.5}
                                           />
                                         </TouchableOpacity>
-                                        {/* Expand Toggle */}
-                                        {isExpanded ? (
-                                          <ChevronUp size={16} color="#9CA3AF" strokeWidth={1.5} />
-                                        ) : (
-                                          <ChevronDown size={16} color="#9CA3AF" strokeWidth={1.5} />
-                                        )}
                                       </View>
                                     </View>
 
@@ -5942,38 +5996,7 @@ EXAMPLE: [sentence in ${langName}]`
                                         <Text style={{ color: '#4ED9CB', fontStyle: 'italic', fontWeight: '300' }}> ({item.translation})</Text>
                                       )}
                                     </Text>
-
-                                    {/* Expanded Content */}
-                                    {isExpanded && (
-                                      <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(78,217,203,0.1)' }}>
-                                        {/* Example Sentence */}
-                                        <View style={{ marginBottom: 8 }}>
-                                          <Text style={{ color: '#4ED9CB', fontSize: 10, fontWeight: '400', marginBottom: 3, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                                            Example
-                                          </Text>
-                                          <Text style={{ color: getArticleTextColor(), fontSize: 12, fontStyle: 'italic', opacity: 0.8, fontWeight: '300', lineHeight: 17 }}>
-                                            "{item.word}" appears in this article's context.
-                                          </Text>
-                                        </View>
-
-                                        {/* Difficulty Badge */}
-                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                          <View style={{
-                                            backgroundColor: `${difficultyColor}15`,
-                                            paddingHorizontal: 8,
-                                            paddingVertical: 3,
-                                            borderRadius: 6,
-                                            borderWidth: 1,
-                                            borderColor: `${difficultyColor}30`
-                                          }}>
-                                            <Text style={{ color: difficultyColor, fontSize: 9, fontWeight: '400', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                                              {difficulty}
-                                            </Text>
-                                          </View>
-                                        </View>
-                                      </View>
-                                    )}
-                                  </TouchableOpacity>
+                                  </View>
                                 );
                               })}
                             </View>
@@ -5984,17 +6007,22 @@ EXAMPLE: [sentence in ${langName}]`
                             style={{
                               marginTop: 14,
                               backgroundColor: '#4ED9CB',
-                              paddingVertical: 11,
-                              paddingHorizontal: 20,
-                              borderRadius: 10,
+                              paddingVertical: 14,
+                              paddingHorizontal: 24,
+                              borderRadius: 12,
                               alignItems: 'center',
                               flexDirection: 'row',
                               justifyContent: 'center',
-                              gap: 8
+                              gap: 8,
+                              shadowColor: '#000',
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: 0.15,
+                              shadowRadius: 4,
+                              elevation: 3,
                             }}
                             activeOpacity={0.8}
                           >
-                            <Text style={{ color: '#1E1E1E', fontWeight: '400', fontSize: 14 }}>
+                            <Text style={{ color: '#0D1B2A', fontWeight: '700', fontSize: 15, fontFamily: 'Feather-Bold', letterSpacing: 0.5 }}>
                               🧠 Test Yourself
                             </Text>
                           </TouchableOpacity>
@@ -7425,21 +7453,21 @@ const styles = StyleSheet.create({
   vocabItem: {
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: '#1F2937',
     borderRadius: 12,
     borderLeftWidth: 3,
     borderLeftColor: '#F8B070',
   },
   vocabItemLight: {
-    backgroundColor: 'rgba(248,176,112,0.08)',
+    backgroundColor: '#F3F4F6',
     borderLeftColor: '#F8B070',
   },
   vocabItemSepia: {
-    backgroundColor: 'rgba(180,83,9,0.1)',
+    backgroundColor: 'rgba(180,83,9,0.15)',
     borderLeftColor: '#B45309',
   },
   vocabItemDark: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#1F2937',
     borderLeftColor: '#F8B070',
   },
   vocabWord: {

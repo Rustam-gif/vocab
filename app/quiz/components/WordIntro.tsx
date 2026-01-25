@@ -107,6 +107,18 @@ export default function WordIntro({
   // Animated progress bar
   const progressAnim = useRef(new Animated.Value(0)).current;
 
+  // Fade-in animation
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Trigger fade-in animation on mount
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, [fadeAnim]);
+
   useEffect(() => {
     const existing = new Set(savedWords.map(w => w.word.toLowerCase()));
     const nextMap: Record<string, boolean> = {};
@@ -297,12 +309,27 @@ export default function WordIntro({
 
   if (wordsData.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
+      <Animated.View
+        style={[
+          styles.emptyContainer,
+          {
+            opacity: fadeAnim,
+            transform: [
+              {
+                translateY: fadeAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [20, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
         <Text style={styles.emptyText}>No words to review.</Text>
         <TouchableOpacity style={styles.continueBtn} onPress={() => onPhaseComplete(0, 0)}>
           <Text style={styles.continueBtnText}>Continue</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     );
   }
 
@@ -310,7 +337,22 @@ export default function WordIntro({
   const isFirstWord = currentIndex === 0;
 
   return (
-    <View style={styles.container}>
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          opacity: fadeAnim,
+          transform: [
+            {
+              translateY: fadeAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [20, 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
       {/* Top section with progress */}
       <View style={styles.topSection}>
         <View style={styles.topBar}>
@@ -390,7 +432,7 @@ export default function WordIntro({
           <ChevronRight size={24} color="#FFF" />
         </TouchableOpacity>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

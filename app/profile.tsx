@@ -292,6 +292,14 @@ export default function ProfileScreen() {
       cachedSubStatus = next; // Update cache
 
       if (next?.active) {
+        // Refresh premium status cache in store
+        try {
+          await useAppStore.getState().refreshPremiumStatus();
+          console.log('[Profile] Premium status cache refreshed after purchase');
+        } catch (e) {
+          console.warn('[Profile] Failed to refresh premium cache:', e);
+        }
+
         // Notify Learn screen that premium status changed
         DeviceEventEmitter.emit('PREMIUM_STATUS_CHANGED', true);
         setShowPurchaseSuccess(true);
@@ -896,7 +904,15 @@ export default function ProfileScreen() {
               )}
             </TouchableOpacity>
             <View style={styles.paywallFooterRow}>
-              <TouchableOpacity onPress={async () => { const restored = await SubscriptionService.restore(); setSubStatus(restored); cachedSubStatus = restored; if (restored?.active) DeviceEventEmitter.emit('PREMIUM_STATUS_CHANGED', true); }}>
+              <TouchableOpacity onPress={async () => {
+                const restored = await SubscriptionService.restore();
+                setSubStatus(restored);
+                cachedSubStatus = restored;
+                if (restored?.active) {
+                  await useAppStore.getState().refreshPremiumStatus();
+                  DeviceEventEmitter.emit('PREMIUM_STATUS_CHANGED', true);
+                }
+              }}>
                 <Text style={[styles.paywallLink, isLight && styles.paywallLinkLight]}>Restore</Text>
               </TouchableOpacity>
               <Text style={[styles.paywallDot, isLight && styles.paywallLinkLight]}>•</Text>
@@ -1207,7 +1223,14 @@ export default function ProfileScreen() {
             )}
           </TouchableOpacity>
           <View style={styles.paywallFooterRow}>
-            <TouchableOpacity onPress={async () => { const restored = await SubscriptionService.restore(); setSubStatus(restored); cachedSubStatus = restored; }}>
+            <TouchableOpacity onPress={async () => {
+              const restored = await SubscriptionService.restore();
+              setSubStatus(restored);
+              cachedSubStatus = restored;
+              if (restored?.active) {
+                await useAppStore.getState().refreshPremiumStatus();
+              }
+            }}>
               <Text style={[styles.paywallLink, isLight && styles.paywallLinkLight]}>Restore</Text>
             </TouchableOpacity>
             <Text style={[styles.paywallDot, isLight && styles.paywallLinkLight]}>•</Text>

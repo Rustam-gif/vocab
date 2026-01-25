@@ -240,6 +240,16 @@ export default function WordIntroComponent({ setId, levelId, onComplete, wordsOv
   // Animations
   const cardScale = useRef(new Animated.Value(1)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Fade-in animation on mount
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, [fadeAnim]);
 
   // Pulse animation for current indicator
   useEffect(() => {
@@ -549,7 +559,23 @@ export default function WordIntroComponent({ setId, levelId, onComplete, wordsOv
 
   if (words.length === 0) {
     return (
-      <View style={[styles.container, styles.loadingContainer]}>
+      <Animated.View
+        style={[
+          styles.container,
+          styles.loadingContainer,
+          {
+            opacity: fadeAnim,
+            transform: [
+              {
+                translateY: fadeAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [30, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
         <LottieView
           source={require('../../../assets/lottie/loading.json')}
           autoPlay
@@ -557,7 +583,7 @@ export default function WordIntroComponent({ setId, levelId, onComplete, wordsOv
           style={{ width: 120, height: 120 }}
         />
         <Text style={styles.loadingText}>Loading words...</Text>
-      </View>
+      </Animated.View>
     );
   }
 
@@ -573,7 +599,23 @@ export default function WordIntroComponent({ setId, levelId, onComplete, wordsOv
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: 'transparent' }]}>
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          backgroundColor: 'transparent',
+          opacity: fadeAnim,
+          transform: [
+            {
+              translateY: fadeAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [30, 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
       {/* Navigation dots - above cards */}
       <View style={styles.dotsContainer}>
         {words.map((_, idx) => (
@@ -657,7 +699,7 @@ export default function WordIntroComponent({ setId, levelId, onComplete, wordsOv
           </Animated.View>
         </View>
       </Modal>
-    </View>
+    </Animated.View>
   );
 }
 
