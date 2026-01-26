@@ -209,6 +209,19 @@ function ResultScreen({
         <Text style={[styles.resultSubtitle, isLight && { color: '#6B7280' }]}>
           {wordsCount} new words mastered!{'\n'}Time to show what you've got!
         </Text>
+        <TouchableOpacity
+          style={styles.skipButton}
+          onPress={() => {
+            if (hasTransitioned.current) return;
+            hasTransitioned.current = true;
+            onComplete();
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.skipButtonText, isLight && { color: '#6B7280' }]}>
+            Skip
+          </Text>
+        </TouchableOpacity>
       </View>
     </Animated.View>
   );
@@ -1139,7 +1152,19 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     textAlign: 'center',
     lineHeight: 26,
-    marginBottom: 40,
+    marginBottom: 12,
     fontFamily: 'Ubuntu-Medium',
+  },
+  skipButton: {
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  skipButtonText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    fontFamily: 'Ubuntu-Medium',
+    textDecorationLine: 'underline',
   },
 });

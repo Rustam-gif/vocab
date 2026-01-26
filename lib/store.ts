@@ -76,7 +76,29 @@ interface AppState {
 export const useAppStore = create<AppState>((set, get) => ({
   // User state
   user: null,
-  setUser: (user) => set({ user }),
+  setUser: (user) => {
+    const current = get().user;
+
+    // Prevent unnecessary updates if user data hasn't actually changed
+    if (current && user) {
+      const same =
+        current.id === user.id &&
+        current.email === user.email &&
+        current.name === user.name &&
+        current.avatar === user.avatar &&
+        current.xp === user.xp &&
+        current.streak === user.streak &&
+        current.exercisesCompleted === user.exercisesCompleted;
+
+      if (same) {
+        console.log('[STORE] setUser skipped - user data unchanged');
+        return;
+      }
+    }
+
+    console.log('[STORE] setUser applied:', user?.id, user?.email);
+    set({ user });
+  },
   
   // Vault state
   words: [],
@@ -314,6 +336,25 @@ export const useAppStore = create<AppState>((set, get) => ({
   loadProgress: async () => {
     try {
       const progress = await ProgressService.getProgress();
+      const current = get().userProgress;
+
+      // Prevent unnecessary updates if progress data hasn't actually changed
+      if (current && progress) {
+        const same =
+          current.xp === progress.xp &&
+          current.level === progress.level &&
+          current.streak === progress.streak &&
+          current.exercisesCompleted === progress.exercisesCompleted &&
+          current.totalWordsLearned === progress.totalWordsLearned &&
+          current.lastActiveDate === progress.lastActiveDate;
+
+        if (same) {
+          console.log('[STORE] loadProgress skipped - progress data unchanged');
+          return;
+        }
+      }
+
+      console.log('[STORE] loadProgress applied - progress changed');
       set({ userProgress: progress });
     } catch (error) {
       console.error('Failed to load progress:', error);
@@ -341,6 +382,26 @@ export const useAppStore = create<AppState>((set, get) => ({
       progress.xp = xp;
       progress.level = Math.floor(xp / 1000) + 1;
       await ProgressService.saveProgress();
+
+      const current = get().userProgress;
+
+      // Prevent unnecessary updates if progress data hasn't actually changed
+      if (current && progress) {
+        const same =
+          current.xp === progress.xp &&
+          current.level === progress.level &&
+          current.streak === progress.streak &&
+          current.exercisesCompleted === progress.exercisesCompleted &&
+          current.totalWordsLearned === progress.totalWordsLearned &&
+          current.lastActiveDate === progress.lastActiveDate;
+
+        if (same) {
+          console.log('[STORE] updateProgress skipped - progress data unchanged');
+          return;
+        }
+      }
+
+      console.log('[STORE] updateProgress applied - progress changed');
       set({ userProgress: progress });
     } catch (error) {
       console.error('Failed to update progress:', error);

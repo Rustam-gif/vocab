@@ -7,6 +7,7 @@ import LimitModal from './LimitModal';
 import { supabase } from './supabase';
 import { User } from 'lucide-react-native';
 import { engagementTrackingService } from '../services/EngagementTrackingService';
+import soundService from '../services/SoundService';
 
 // CRITICAL: Dismiss keyboard before route changes to prevent iOS UIEmojiSearchOperations deadlock
 // This ensures any active keyboard session is properly released before components unmount
@@ -430,7 +431,11 @@ export function RouteRenderer() {
       checkSession();
 
       // Listen for auth state changes globally
+      let authChangeCount = 0;
       const result = supabase.auth.onAuthStateChange(async (event, session) => {
+        authChangeCount++;
+        console.log('[ROUTER] Auth state change #' + authChangeCount, event, session?.user?.id);
+
         if (session?.user) {
           const progress = useAppStore.getState().userProgress;
           setUser(mapSupabaseUser(session.user, progress));
@@ -590,10 +595,11 @@ export function RouteRenderer() {
     PreloadService.preloadForRoute(top.pathname).catch(() => {});
   }, [top.pathname]);
 
-  // Track screen views for engagement analytics
-  React.useEffect(() => {
-    engagementTrackingService.trackScreenView(top.pathname);
-  }, [top.pathname]);
+  // Screen tracking disabled to reduce events and prevent lag
+  // Only important events (quiz, story completion) are tracked individually
+  // React.useEffect(() => {
+  //   engagementTrackingService.trackScreenView(top.pathname);
+  // }, [top.pathname]);
 
   // Interactive back-swipe disabled to ensure stability. Use header back/taps.
 
@@ -632,6 +638,7 @@ export function RouteRenderer() {
     // Home tab should always reset to home screen, never restore saved stack
     if (tabKey === 'home') {
       if (currentTabKey !== 'home') {
+        soundService.playTabSwitch();
         ctx.setTabStacks(prev => ({ ...prev, [currentTabKey]: [...currentStack] }));
       }
       ctx.setCurrentTab('home');
@@ -642,6 +649,7 @@ export function RouteRenderer() {
     // Account tab should always reset to clean profile route (no stale redirect params)
     if (tabKey === 'account') {
       if (currentTabKey !== 'account') {
+        soundService.playTabSwitch();
         ctx.setTabStacks(prev => ({ ...prev, [currentTabKey]: [...currentStack] }));
       }
       ctx.setCurrentTab('account');
@@ -654,6 +662,9 @@ export function RouteRenderer() {
       ctx.setStack([defaultRoute]);
       return;
     }
+
+    // Play tab switch sound when switching to a different tab
+    soundService.playTabSwitch();
 
     // Save current stack to current tab before switching
     ctx.setTabStacks(prev => ({ ...prev, [currentTabKey]: [...currentStack] }));

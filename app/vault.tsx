@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,10 @@ import { useAppReady } from '../lib/AppReadyContext';
 import { useCanMountTextInput } from '../lib/TextInputGate';
 
 export default function VaultScreen() {
+  const renderCount = useRef(0);
+  renderCount.current++;
+  console.log('[VAULT] RENDER', renderCount.current);
+
   const router = useRouter();
   const params = useLocalSearchParams<{ add?: string; create?: string }>();
   const { words, loading, loadWords, addWord, searchWords, getFolders, createFolder, moveWordToFolder, deleteFolder } = useAppStore();
@@ -54,6 +58,15 @@ export default function VaultScreen() {
   const foldersToShow = searchQuery
     ? baseFiltered.filter(f => f.title.toLowerCase().includes(searchQuery.toLowerCase()))
     : baseFiltered;
+
+  // Memoized word counts to prevent re-filtering on every render
+  const folderWordCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    foldersToShow.forEach(f => {
+      counts[f.id] = words.filter(w => w.folderId === f.id).length;
+    });
+    return counts;
+  }, [words, foldersToShow]);
 
   // Refresh folders when screen regains focus (don't replay entrance animation)
   useFocusEffect(() => {
@@ -219,8 +232,9 @@ export default function VaultScreen() {
         <View style={{ width: 36, height: 36, marginRight: 10 }}>
           <LottieView
             source={require('../assets/foldericons/add_folder.json')}
-            autoPlay
+            autoPlay={false}
             loop={false}
+            progress={0}
             __stableKey="folder-icon:add-folder"
             style={{ width: 36, height: 36 }}
           />
@@ -266,7 +280,7 @@ export default function VaultScreen() {
         ) : (
           <View style={styles.wordsList}>
             {foldersToShow.map((f, idx) => {
-              const count = words.filter(w => w.folderId === f.id).length;
+              const count = folderWordCounts[f.id] || 0;
               // Check if this is a default folder (don't allow deletion)
               const isDefaultFolder = (
                 [

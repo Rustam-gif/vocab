@@ -249,6 +249,10 @@ const StaticPlanet = memo(({
 ));
 
 export default function LearnScreen() {
+  const renderCount = useRef(0);
+  renderCount.current++;
+  console.log('[LEARN] RENDER', renderCount.current);
+
   const router = useRouter();
   const navigation = useNavigation<any>();
   const theme = useAppStore(s => s.theme);
@@ -337,6 +341,7 @@ export default function LearnScreen() {
   const [spacecraftToIndex, setSpacecraftToIndex] = useState(0);
   const [hideStaticSpacecraft, setHideStaticSpacecraft] = useState(false); // Hide during animation setup
   const spacecraftAnim = useRef(new Animated.Value(0)).current;
+  const scrollProgressRef = useRef<Animated.Value | null>(null);
 
   // ========== MOUNT/UNMOUNT LOGGING ==========
   useEffect(() => {
@@ -556,13 +561,16 @@ export default function LearnScreen() {
     useCallback(() => {
       // Debounce: ignore rapid focus events (caused by router state changes)
       const now = Date.now();
-      if (now - lastFocusTimeRef.current < 200) {
-        return; // Skip if focused less than 200ms ago
+      if (now - lastFocusTimeRef.current < 3000) {
+        return; // Skip if focused less than 3 seconds ago
       }
       lastFocusTimeRef.current = now;
 
       const ts = new Date().toISOString().substr(11, 12);
       console.log(`[${ts}] [LEARN] 👁️  FOCUS (tab visible)${completedSetId ? `, completedSetId=${completedSetId}` : ''}`);
+
+      // Enable animations when screen is focused
+      setIsScreenFocused(true);
 
       // Refresh premium status on focus (in case user just subscribed)
       checkPremiumStatus();
@@ -603,48 +611,100 @@ export default function LearnScreen() {
         clearTimeout(scrollTimer);
         const ts2 = new Date().toISOString().substr(11, 12);
         console.log(`[${ts2}] [LEARN] 🙈 BLUR (tab hidden)`);
+        // Disable animations to save CPU when tab is hidden
+        setIsScreenFocused(false);
       };
     }, [currentLevel, completedSetId, getCurrentPlanetIndex, scrollToPlanet, logScroll, checkPremiumStatus])
   );
 
-  // Breathing animation for current level outer ring
-  // Using longer duration to reduce CPU usage
+  // Track if screen is focused to control animations
+  const [isScreenFocused, setIsScreenFocused] = useState(true);
+
+  // Start/stop breathing animation based on screen focus to save CPU
+  const breathingAnimRef = useRef<any>(null);
+
+  // Stop all animations when screen loses focus to prevent background CPU usage
   useEffect(() => {
-    const breathing = Animated.loop(
-      Animated.sequence([
-        Animated.parallel([
-          Animated.timing(levelPulseAnim, {
-            toValue: 1.08,
-            duration: 2500,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(levelPulseOpacity, {
-            toValue: 0.2,
-            duration: 2500,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ]),
-        Animated.parallel([
-          Animated.timing(levelPulseAnim, {
-            toValue: 1,
-            duration: 2500,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(levelPulseOpacity, {
-            toValue: 0.5,
-            duration: 2500,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ]),
-      ])
-    );
-    breathing.start();
-    return () => breathing.stop();
-  }, [levelPulseAnim, levelPulseOpacity]);
+    if (!isScreenFocused) {
+      // Stop spacecraft animation
+      spacecraftAnim.stopAnimation();
+      spacecraftAnim.removeAllListeners();
+      spacecraftAnim.setValue(0);
+
+      // Stop pulse animations
+      levelPulseAnim.stopAnimation();
+      levelPulseAnim.setValue(1);
+      levelPulseOpacity.stopAnimation();
+      levelPulseOpacity.setValue(0.4);
+
+      // Stop scroll progress animation
+      if (scrollProgressRef.current) {
+        scrollProgressRef.current.stopAnimation();
+        scrollProgressRef.current.removeAllListeners();
+        scrollProgressRef.current.setValue(0);
+      }
+
+      // Disable spacecraft rendering
+      setSpacecraftAnimating(false);
+
+      console.log('[LEARN] Stopped all animations (screen unfocused)');
+    }
+  }, [isScreenFocused, spacecraftAnim, levelPulseAnim, levelPulseOpacity]);
+
+  // BREATHING ANIMATION REMOVED FOR PERFORMANCE
+  // useEffect(() => {
+  //   if (!isScreenFocused) {
+  //     // Stop animation when screen not visible
+  //     if (breathingAnimRef.current) {
+  //       breathingAnimRef.current.stop();
+  //       breathingAnimRef.current = null;
+  //     }
+  //     return;
+  //   }
+
+  //   // Start breathing animation only when screen is focused
+  //   const breathing = Animated.loop(
+  //     Animated.sequence([
+  //       Animated.parallel([
+  //         Animated.timing(levelPulseAnim, {
+  //           toValue: 1.08,
+  //           duration: 2500,
+  //           easing: Easing.inOut(Easing.ease),
+  //           useNativeDriver: true,
+  //         }),
+  //         Animated.timing(levelPulseOpacity, {
+  //           toValue: 0.2,
+  //           duration: 2500,
+  //           easing: Easing.inOut(Easing.ease),
+  //           useNativeDriver: true,
+  //         }),
+  //       ]),
+  //       Animated.parallel([
+  //         Animated.timing(levelPulseAnim, {
+  //           toValue: 1,
+  //           duration: 2500,
+  //           easing: Easing.inOut(Easing.ease),
+  //           useNativeDriver: true,
+  //         }),
+  //         Animated.timing(levelPulseOpacity, {
+  //           toValue: 0.5,
+  //           duration: 2500,
+  //           easing: Easing.inOut(Easing.ease),
+  //           useNativeDriver: true,
+  //         }),
+  //       ]),
+  //     ])
+  //   );
+  //   breathing.start();
+  //   breathingAnimRef.current = breathing;
+
+  //   return () => {
+  //     if (breathingAnimRef.current) {
+  //       breathingAnimRef.current.stop();
+  //       breathingAnimRef.current = null;
+  //     }
+  //   };
+  // }, [isScreenFocused, levelPulseAnim, levelPulseOpacity]);
 
   // Available levels (excluding Advanced Plus and levels below placement)
   const availableLevels = levels.filter(l => {
@@ -1167,6 +1227,7 @@ export default function LearnScreen() {
       const scrollDistance = endScrollX - startScrollX;
 
       const scrollProgress = new Animated.Value(0);
+      scrollProgressRef.current = scrollProgress;
 
       // Play spacecraft sound
       soundService.playSpacecraft();
@@ -1215,7 +1276,9 @@ export default function LearnScreen() {
       });
     });
 
-    return () => subscription.remove();
+    return () => {
+      subscription.remove();
+    };
   }, [refreshLevel, getCurrentPlanetIndex, getScrollXForIndex, spacecraftAnim, scrollToPlanet, logScroll]);
 
   // ========== LEVEL CHANGE STATE UPDATE (NO SCROLL) ==========
@@ -1305,6 +1368,7 @@ export default function LearnScreen() {
 
         // Animate BOTH spacecraft AND screen together smoothly
         const scrollProgress = new Animated.Value(0);
+        scrollProgressRef.current = scrollProgress;
 
         Animated.parallel([
           // Spacecraft animation
@@ -1361,6 +1425,14 @@ export default function LearnScreen() {
       setHideStaticSpacecraft(false);
       setSpacecraftAnimating(false);
     });
+
+    // Cleanup: remove listeners if component unmounts during animation
+    return () => {
+      if (scrollProgressRef.current) {
+        scrollProgressRef.current.removeAllListeners();
+        scrollProgressRef.current = null;
+      }
+    };
   }, [completedSetId, routeKey, refreshLevel, getCurrentPlanetIndex, getScrollXForIndex, spacecraftAnim, scrollToPlanet, logScroll]);
 
   // Listen for level changes from onboarding or settings
@@ -1563,24 +1635,24 @@ export default function LearnScreen() {
     });
   }, [currentLevel]);
 
-  // Show loading animation when loading level
-  if (isLoadingLevel) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <TopStatusPanel floating includeTopInset />
-        <View style={[styles.loadingContainer, { paddingTop: contentTop }]}>
-          <LottieView
-            source={require('../../assets/lottie/learn/loading_inlearn.json')}
-            autoPlay
-            loop
-            cacheComposition={true}
-            style={{ width: 140, height: 140 }}
-          />
-          <Text style={[styles.loadingText, isLight && { color: '#6B7280' }]}>Loading...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  // Loading removed - show cached data immediately
+  // if (isLoadingLevel) {
+  //   return (
+  //     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+  //       <TopStatusPanel floating includeTopInset />
+  //       <View style={[styles.loadingContainer, { paddingTop: contentTop }]}>
+  //         <LottieView
+  //           source={require('../../assets/lottie/learn/loading_inlearn.json')}
+  //           autoPlay
+  //           loop
+  //           cacheComposition={true}
+  //           style={{ width: 140, height: 140 }}
+  //         />
+  //         <Text style={[styles.loadingText, isLight && { color: '#6B7280' }]}>Loading...</Text>
+  //       </View>
+  //     </SafeAreaView>
+  //   );
+  // }
 
   // Use current level or cached for instant display
   const displayLevel = currentLevel || cachedCurrentLevel;
@@ -1594,7 +1666,7 @@ export default function LearnScreen() {
   }
 
 
-  const renderPlanetNode = (set: VocabSet & { locked?: boolean; premiumLocked?: boolean }, index: number, isCurrentLevel: boolean, allSets: VocabSet[]) => {
+  const renderPlanetNode = (set: VocabSet & { locked?: boolean; premiumLocked?: boolean }, index: number, isCurrentLevel: boolean, allSets: VocabSet[], screenFocused: boolean) => {
     const isLocked = set.locked;
     const isCompleted = set.completed;
     const isQuiz = (set as any).type === 'quiz';
@@ -1646,9 +1718,10 @@ export default function LearnScreen() {
           ]}>
             <LottieView
               source={SPACECRAFT_SOURCE}
-              autoPlay={isCurrent && !isCompleted}
-              loop={isCurrent && !isCompleted}
+              autoPlay={isCurrent && !isCompleted && screenFocused}
+              loop={isCurrent && !isCompleted && screenFocused}
               cacheComposition={true}
+              progress={isCurrent ? undefined : 0}
               style={styles.spacecraft}
             />
           </View>
@@ -1667,116 +1740,23 @@ export default function LearnScreen() {
             overflow: 'visible',
           }]}
         >
-          {/* Sparkling stars around centered planet - positioned relative to planet */}
-          {isCentered && (
-            <View style={{ position: 'absolute', top: 0, left: 0, width: planetSize, height: planetSize, zIndex: 100, overflow: 'visible' }} pointerEvents="none">
-              {SPARKLE_DATA.map((sparkle, i) => {
-                const animatedOpacity = levelPulseOpacity.interpolate({
-                  inputRange: [0.2, 0.5],
-                  outputRange: i % 2 === 0 ? [0.3, 1] : [1, 0.3],
-                });
-                const animatedScale = levelPulseAnim.interpolate({
-                  inputRange: [1, 1.08],
-                  outputRange: i % 3 === 0 ? [0.8, 1.2] : [1, 0.9],
-                });
+          {/* SPARKLE EFFECTS REMOVED FOR PERFORMANCE */}
 
-                if (sparkle.type === 'star') {
-                  // 4-pointed star using two crossing rectangles
-                  return (
-                    <Animated.View
-                      key={`sparkle-${i}`}
-                      style={{
-                        position: 'absolute',
-                        left: sparkle.x,
-                        top: sparkle.y,
-                        width: sparkle.size,
-                        height: sparkle.size,
-                        opacity: animatedOpacity,
-                        transform: [{ scale: animatedScale }],
-                      }}
-                    >
-                      {/* Vertical bar */}
-                      <View style={{
-                        position: 'absolute',
-                        left: sparkle.size / 2 - 1.5,
-                        top: 0,
-                        width: 3,
-                        height: sparkle.size,
-                        backgroundColor: sparkle.color,
-                        borderRadius: 1.5,
-                      }} />
-                      {/* Horizontal bar */}
-                      <View style={{
-                        position: 'absolute',
-                        left: 0,
-                        top: sparkle.size / 2 - 1.5,
-                        width: sparkle.size,
-                        height: 3,
-                        backgroundColor: sparkle.color,
-                        borderRadius: 1.5,
-                      }} />
-                      {/* Diagonal bar 1 */}
-                      <View style={{
-                        position: 'absolute',
-                        left: sparkle.size / 2 - 1,
-                        top: sparkle.size * 0.15,
-                        width: 2,
-                        height: sparkle.size * 0.7,
-                        backgroundColor: sparkle.color,
-                        borderRadius: 1,
-                        transform: [{ rotate: '45deg' }],
-                      }} />
-                      {/* Diagonal bar 2 */}
-                      <View style={{
-                        position: 'absolute',
-                        left: sparkle.size / 2 - 1,
-                        top: sparkle.size * 0.15,
-                        width: 2,
-                        height: sparkle.size * 0.7,
-                        backgroundColor: sparkle.color,
-                        borderRadius: 1,
-                        transform: [{ rotate: '-45deg' }],
-                      }} />
-                    </Animated.View>
-                  );
-                } else {
-                  // Small circular dot
-                  return (
-                    <Animated.View
-                      key={`sparkle-${i}`}
-                      style={[
-                        styles.sparkle,
-                        {
-                          left: sparkle.x,
-                          top: sparkle.y,
-                          width: sparkle.size,
-                          height: sparkle.size,
-                          borderRadius: sparkle.size / 2,
-                          backgroundColor: sparkle.color,
-                          opacity: animatedOpacity,
-                          transform: [{ scale: animatedScale }],
-                        },
-                      ]}
-                    />
-                  );
-                }
-              })}
-            </View>
-          )}
-
-          {/* Planet Lottie animation - only animate when centered (selected) */}
+          {/* Planet Lottie animation - only animates when centered and screen focused */}
           <LottieView
+            key={`planet-${set.id}-${isCentered ? 'centered' : 'static'}`}
             source={planetSource}
-            autoPlay={isCentered}
-            loop={isCentered}
+            autoPlay={isCentered && screenFocused}
+            loop={isCentered && screenFocused}
             cacheComposition={true}
+            progress={isCentered ? undefined : 0}
             style={[
               { width: planetSize, height: planetSize },
               (isLocked && !quizCanSkipAhead) && styles.planetLocked,
             ]}
           />
 
-          {/* Completed flag animation on top of completed planets */}
+          {/* Completed flag - paused at first frame for performance */}
           {isCompleted && (
             <View style={{
               position: 'absolute',
@@ -1788,9 +1768,10 @@ export default function LearnScreen() {
             }}>
               <LottieView
                 source={require('../../assets/lottie/learn/flag_completed.json')}
-                autoPlay
-                loop
+                autoPlay={false}
+                loop={false}
                 cacheComposition={true}
+                progress={0}
                 style={{ width: '100%', height: '100%' }}
               />
             </View>
@@ -2075,7 +2056,8 @@ export default function LearnScreen() {
 
     const setsToRender = level.sets;
     const spacing = HORIZONTAL_SPACING; // Use constant from scroll handler
-    const totalWidth = setsToRender.length * spacing + 200;
+    // Add extra space for the black hole exam node
+    const totalWidth = (setsToRender.length + 1) * spacing + 200;
     const pathHeight = SCREEN_HEIGHT - 200;
 
     // Use shared position function
@@ -2086,6 +2068,7 @@ export default function LearnScreen() {
 
     // Collect all connector paths for single SVG (memory optimization)
     const connectorPathsData: string[] = [];
+    // Connect planets to each other
     for (let index = 0; index < setsToRender.length - 1; index++) {
       const current = getPosition(index);
       const next = getPosition(index + 1);
@@ -2094,6 +2077,17 @@ export default function LearnScreen() {
       const currentY = current.y + PLANET_SIZE / 2 + 55;
       const nextY = next.y + PLANET_SIZE / 2 + 55;
       connectorPathsData.push(getConnectorPath(currentX, currentY, nextX, nextY));
+    }
+    // Connect last planet to black hole
+    if (setsToRender.length > 0) {
+      const lastIndex = setsToRender.length - 1;
+      const last = getPosition(lastIndex);
+      const blackHole = getPosition(setsToRender.length);
+      const lastX = last.x + wrapperOffset;
+      const blackHoleX = blackHole.x + 120; // Center of black hole (240px / 2)
+      const lastY = last.y + PLANET_SIZE / 2 + 55;
+      const blackHoleY = blackHole.y + 120; // Center of black hole
+      connectorPathsData.push(getConnectorPath(lastX, lastY, blackHoleX, blackHoleY));
     }
 
     return (
@@ -2132,10 +2126,74 @@ export default function LearnScreen() {
                 zIndex: 10,
               }}
             >
-              {renderPlanetNode(set as any, index, true, setsToRender)}
+              {renderPlanetNode(set as any, index, true, setsToRender, isScreenFocused)}
             </View>
           );
         })}
+
+        {/* Black Hole - Exam node at the end */}
+        {(() => {
+          const blackHoleIndex = setsToRender.length;
+          const pos = getPosition(blackHoleIndex);
+          const blackHoleSize = 240; // Much bigger than regular planets
+
+          return (
+            <View
+              key="black-hole-exam"
+              style={{
+                position: 'absolute',
+                top: pos.y - 70, // Center it better with larger size
+                left: pos.x - 55,
+                zIndex: 10,
+                alignItems: 'center',
+              }}
+            >
+              {/* Title above black hole */}
+              <View style={{
+                position: 'absolute',
+                top: -60,
+                left: blackHoleSize / 2 - 40,
+                zIndex: 11,
+              }}>
+                <Text style={{
+                  fontSize: 26,
+                  fontWeight: '700',
+                  color: '#4ED9CB',
+                  fontFamily: 'Ubuntu-Bold',
+                  textAlign: 'center',
+                  textShadowColor: 'rgba(78, 217, 203, 0.5)',
+                  textShadowOffset: { width: 0, height: 0 },
+                  textShadowRadius: 10,
+                }}>
+                  Exam
+                </Text>
+              </View>
+
+              {/* Black hole animation */}
+              <TouchableOpacity
+                onPress={() => {
+                  // TODO: Navigate to exam when ready
+                  console.log('Exam pressed - coming soon!');
+                }}
+                activeOpacity={0.9}
+                style={{
+                  width: blackHoleSize,
+                  height: blackHoleSize,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <LottieView
+                  source={require('../../assets/lottie/learn/planets/black_hole.json')}
+                  autoPlay
+                  loop
+                  cacheComposition={true}
+                  style={{ width: blackHoleSize, height: blackHoleSize }}
+                />
+              </TouchableOpacity>
+            </View>
+          );
+        })()}
       </View>
     );
   };

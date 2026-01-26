@@ -11,10 +11,13 @@ const USER_ID_KEY = '@engniter.engagement.userId';
 const SESSION_TIMEOUT_MS = 60 * 1000;
 
 // Max local storage (keep small to prevent lag)
-const MAX_LOCAL_EVENTS = 50;
+const MAX_LOCAL_EVENTS = 100;
 
 // Sync every N events while app is active (in addition to background sync)
-const SYNC_EVERY_N_EVENTS = 10;
+const SYNC_EVERY_N_EVENTS = 50;
+
+// Time-based batching: sync every 60 seconds
+const SYNC_INTERVAL_MS = 60 * 1000;
 
 export interface EngagementEvent {
   event_id: string;
@@ -56,6 +59,8 @@ class EngagementTrackingService {
   private initialized = false;
   private isSyncing = false;
   private eventsSinceLastSync = 0;
+  private syncTimer: NodeJS.Timeout | null = null;
+  private lastSyncTime = 0;
 
   /* ---------------- INIT ---------------- */
 
@@ -85,8 +90,34 @@ class EngagementTrackingService {
 
       this.initialized = true;
       console.log('[Engagement] Initialized with user_id:', this.userId);
+
+      // Start time-based sync timer if we have pending events
+      if (this.events.length > 0) {
+        this.startSyncTimer();
+      }
     } catch (e) {
       console.warn('[Engagement] Init failed:', e);
+    }
+  }
+
+  /* ---------------- TIMER ---------------- */
+
+  private startSyncTimer() {
+    // Don't start a new timer if one is already running
+    if (this.syncTimer) return;
+
+    this.syncTimer = setTimeout(() => {
+      this.syncTimer = null;
+      if (this.events.length > 0) {
+        this.syncToRemote();
+      }
+    }, SYNC_INTERVAL_MS);
+  }
+
+  private stopSyncTimer() {
+    if (this.syncTimer) {
+      clearTimeout(this.syncTimer);
+      this.syncTimer = null;
     }
   }
 
@@ -154,13 +185,19 @@ class EngagementTrackingService {
     // Don't await - save in background to prevent lag
     AsyncStorage.setItem(EVENTS_KEY, JSON.stringify(this.events)).catch(() => {});
 
-    // Sync on background/close OR every N events while app is active
-    const shouldSync =
+    // Start timer for time-based batching (if not already running)
+    if (this.events.length === 1) {
+      this.startSyncTimer();
+    }
+
+    // Sync immediately on background/close OR when reaching batch size
+    const shouldSyncNow =
       eventName === 'app_background' ||
       eventName === 'app_close' ||
       this.eventsSinceLastSync >= SYNC_EVERY_N_EVENTS;
 
-    if (shouldSync) {
+    if (shouldSyncNow) {
+      this.stopSyncTimer(); // Cancel timer since we're syncing now
       this.syncToRemote();
       if (eventName === 'app_background' || eventName === 'app_close') {
         this.endSession();
@@ -178,6 +215,7 @@ class EngagementTrackingService {
     if (this.events.length === 0 || this.isSyncing) return;
 
     this.isSyncing = true;
+    console.log('[Engagement] Starting batch sync of', this.events.length, 'events');
 
     // Normalize events - ensure all have same keys for Supabase bulk insert
     const eventsToSync = this.events.map(e => ({
@@ -218,6 +256,7 @@ class EngagementTrackingService {
       // Clear synced events to prevent duplicates and reduce storage
       this.events = [];
       this.eventsSinceLastSync = 0;
+      this.lastSyncTime = Date.now();
       AsyncStorage.setItem(EVENTS_KEY, '[]').catch(() => {});
 
       console.log('[Engagement] Synced', eventsToSync.length, 'events (cleared local)');
@@ -228,6 +267,10 @@ class EngagementTrackingService {
         console.warn('[Engagement] Sync error:', e);
       }
       // Keep events on failure - will retry next time
+      // Restart timer to retry later
+      if (this.events.length > 0) {
+        this.startSyncTimer();
+      }
     } finally {
       this.isSyncing = false;
     }

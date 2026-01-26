@@ -33,6 +33,7 @@ export interface Word {
   incorrectCount: number;
   exerciseStats: ExerciseStats;
   isWeak?: boolean;
+  isMastered?: boolean; // true when all 4 exercises completed with max 1 mistake each
   folderId?: string; // optional grouping
   srs?: SrsState; // spaced repetition metadata
 }

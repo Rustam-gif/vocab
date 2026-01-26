@@ -407,6 +407,94 @@ const preloadProductivityArticles = async (): Promise<NewsItem[]> => {
 // Start preload immediately
 _productivityPreloadPromise = preloadProductivityArticles();
 
+// Fallback news articles when API returns too few
+const FALLBACK_NEWS_ARTICLES: NewsItem[] = [
+  {
+    title: 'AI Breakthrough: New Model Achieves Human-Level Understanding',
+    summary: 'Researchers have developed a groundbreaking AI system that demonstrates unprecedented language comprehension. The model can understand context, nuance, and even detect sarcasm with 95% accuracy. This advancement marks a significant milestone in natural language processing and could revolutionize how we interact with technology. Experts predict widespread applications in education, healthcare, and customer service within the next two years.',
+    vocab: [
+      { word: 'unprecedented', definition: 'never done or seen before' },
+      { word: 'nuance', definition: 'a subtle difference in meaning or expression' },
+      { word: 'revolutionize', definition: 'to completely change something in a dramatic way' },
+    ],
+    image: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=1600&q=80',
+    tag: 'Technology',
+    category: 'technology',
+  },
+  {
+    title: 'Global Climate Summit Reaches Historic Agreement',
+    summary: 'World leaders from 195 countries have signed a landmark climate accord committing to achieve net-zero emissions by 2050. The agreement includes binding targets for renewable energy adoption and substantial financial support for developing nations. Environmental scientists call this a crucial step in combating climate change, though activists argue more aggressive action is needed. Implementation begins immediately with quarterly progress reviews.',
+    vocab: [
+      { word: 'landmark', definition: 'very important and likely to be remembered' },
+      { word: 'binding', definition: 'legally or officially required to be followed' },
+      { word: 'substantial', definition: 'large in amount or importance' },
+    ],
+    image: 'https://images.unsplash.com/photo-1569163139394-de4798aa62b4?auto=format&fit=crop&w=1600&q=80',
+    tag: 'World',
+    category: 'environment',
+  },
+  {
+    title: 'Breakthrough in Cancer Treatment Shows Promising Results',
+    summary: 'A revolutionary immunotherapy treatment has shown remarkable success in early clinical trials, with 80% of patients experiencing complete remission. The therapy works by reprogramming the immune system to target cancer cells more effectively. Medical experts are cautiously optimistic, noting that larger trials are needed. If successful, this treatment could transform cancer care and offer hope to millions of patients worldwide.',
+    vocab: [
+      { word: 'immunotherapy', definition: 'treatment that uses the body\'s immune system to fight disease' },
+      { word: 'remission', definition: 'a period when symptoms of a disease disappear' },
+      { word: 'cautiously', definition: 'carefully, to avoid problems or risks' },
+    ],
+    image: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1600&q=80',
+    tag: 'Health',
+    category: 'health',
+  },
+  {
+    title: 'Electric Vehicle Sales Surge as Prices Drop',
+    summary: 'Electric vehicle adoption is accelerating rapidly, with sales up 65% year-over-year. New battery technology and increased competition have driven prices down by 30%, making EVs more accessible to average consumers. Major automakers are committing billions to expand production capacity. Industry analysts predict electric vehicles will comprise 50% of new car sales within five years, fundamentally reshaping the automotive landscape.',
+    vocab: [
+      { word: 'accelerating', definition: 'speeding up or increasing in rate' },
+      { word: 'accessible', definition: 'able to be reached or obtained easily' },
+      { word: 'comprise', definition: 'to make up or form something' },
+    ],
+    image: 'https://images.unsplash.com/photo-1593941707882-a5bba14938c7?auto=format&fit=crop&w=1600&q=80',
+    tag: 'Business',
+    category: 'business',
+  },
+  {
+    title: 'Space Agency Announces Plans for Lunar Base',
+    summary: 'International space agencies have unveiled ambitious plans to establish a permanent human presence on the Moon by 2030. The lunar base will serve as a testing ground for deep space exploration and support scientific research. Advanced robotics and 3D printing technology will be used to construct habitats using local materials. This initiative represents humanity\'s most significant step toward becoming a multi-planetary species.',
+    vocab: [
+      { word: 'unveiled', definition: 'showed or announced something publicly for the first time' },
+      { word: 'habitats', definition: 'places where people or animals live' },
+      { word: 'initiative', definition: 'a new plan or process to achieve something' },
+    ],
+    image: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=1600&q=80',
+    tag: 'Science',
+    category: 'science',
+  },
+  {
+    title: 'Global Economy Shows Strong Recovery Signs',
+    summary: 'Economic indicators point to robust growth across major markets, with GDP projections exceeding expectations. Employment rates are rising, inflation is moderating, and consumer confidence has reached its highest level in years. Economists attribute the recovery to coordinated fiscal policies and technological innovation. However, concerns about regional disparities and potential disruptions remain. Central banks are carefully monitoring the situation.',
+    vocab: [
+      { word: 'robust', definition: 'strong and healthy' },
+      { word: 'moderating', definition: 'becoming less extreme or intense' },
+      { word: 'disparities', definition: 'differences, especially unfair ones' },
+    ],
+    image: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?auto=format&fit=crop&w=1600&q=80',
+    tag: 'Economy',
+    category: 'business',
+  },
+  {
+    title: 'New Language Learning Method Doubles Retention Rates',
+    summary: 'Researchers have developed an innovative approach to language acquisition that combines spaced repetition, contextual learning, and immersive practice. Studies show learners using this method retain twice as much vocabulary and achieve fluency 40% faster than traditional methods. The technique emphasizes practical communication over grammar memorization and adapts to individual learning styles. Educational institutions worldwide are adopting this methodology.',
+    vocab: [
+      { word: 'acquisition', definition: 'the process of learning or gaining something' },
+      { word: 'immersive', definition: 'providing complete involvement in something' },
+      { word: 'methodology', definition: 'a system of methods used in a particular area' },
+    ],
+    image: 'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&w=1600&q=80',
+    tag: 'Education',
+    category: 'education',
+  },
+];
+
 // Fallback productivity/lifestyle articles when API doesn't return suitable content
 const FALLBACK_PRODUCTIVITY_ARTICLES: NewsItem[] = [
   {
@@ -430,7 +518,7 @@ const FALLBACK_PRODUCTIVITY_ARTICLES: NewsItem[] = [
       { word: 'momentum', definition: 'the force that keeps something moving forward' },
     ],
     image: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1600&q=80',
-    tag: 'Lifestyle',
+    tag: 'Productivity',
     category: 'lifestyle',
   },
   {
@@ -442,7 +530,7 @@ const FALLBACK_PRODUCTIVITY_ARTICLES: NewsItem[] = [
       { word: 'fragments', definition: 'breaks into small, disconnected pieces' },
     ],
     image: 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=1600&q=80',
-    tag: 'Focus',
+    tag: 'Productivity',
     category: 'productivity',
   },
   {
@@ -454,7 +542,7 @@ const FALLBACK_PRODUCTIVITY_ARTICLES: NewsItem[] = [
       { word: 'availability', definition: 'the state of being free to do something' },
     ],
     image: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=1600&q=80',
-    tag: 'Life Tips',
+    tag: 'Productivity',
     category: 'lifestyle',
   },
   {
@@ -466,7 +554,7 @@ const FALLBACK_PRODUCTIVITY_ARTICLES: NewsItem[] = [
       { word: 'memorized', definition: 'learned something so you can remember it exactly' },
     ],
     image: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=1600&q=80',
-    tag: 'Learning',
+    tag: 'Productivity',
     category: 'education',
   },
   {
@@ -478,7 +566,7 @@ const FALLBACK_PRODUCTIVITY_ARTICLES: NewsItem[] = [
       { word: 'purposefully', definition: 'with a clear intention or goal in mind' },
     ],
     image: 'https://images.unsplash.com/photo-1512486130939-2c4f79935e4f?auto=format&fit=crop&w=1600&q=80',
-    tag: 'Digital Life',
+    tag: 'Productivity',
     category: 'lifestyle',
   },
   {
@@ -502,7 +590,7 @@ const FALLBACK_PRODUCTIVITY_ARTICLES: NewsItem[] = [
       { word: 'disrupts', definition: 'interrupts the normal progress of something' },
     ],
     image: 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?auto=format&fit=crop&w=1600&q=80',
-    tag: 'Health',
+    tag: 'Productivity',
     category: 'health',
   },
 ];
@@ -1730,6 +1818,7 @@ export default function HomeScreen(props?: { preview?: boolean }) {
   const loadProgress = useAppStore(s => s.loadProgress);
   const words = useAppStore(s => s.words);
   const insets = useSafeAreaInsets();
+  const [initialLoading, setInitialLoading] = useState(true);
   const [missionLoading, setMissionLoading] = useState(false);
   const [missionSummary, setMissionSummary] = useState<null | {
     status: string;
@@ -1819,6 +1908,24 @@ export default function HomeScreen(props?: { preview?: boolean }) {
       }
     };
     checkPremium();
+  }, []);
+
+  // Listen for premium status changes from profile/purchase flow
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('PREMIUM_STATUS_CHANGED', (isPremiumNow: boolean) => {
+      console.log('[HOME] 💎 PREMIUM_STATUS_CHANGED event received:', isPremiumNow);
+      if (isPremiumNow) {
+        // Refresh premium status immediately
+        useAppStore.getState().loadPremiumStatus().then(() => {
+          const updatedPremium = useAppStore.getState().isPremium;
+          setIsPremium(updatedPremium);
+          console.log('[HOME] Premium status updated:', updatedPremium);
+        });
+      } else {
+        setIsPremium(false);
+      }
+    });
+    return () => subscription.remove();
   }, []);
 
   const markStoryWordsDoneForToday = useCallback(async () => {
@@ -2537,6 +2644,10 @@ export default function HomeScreen(props?: { preview?: boolean }) {
 	    const base = newsOverrideList || newsList;
 	    const effectiveTopics = newsPrefs.topics && newsPrefs.topics.length ? newsPrefs.topics : NEWS_DEFAULT_TOPICS;
 
+	    if (__DEV__) {
+	      console.log('[news] displayListMemo inputs: newsList=', newsList.length, 'productivityArticles=', productivityArticles.length);
+	    }
+
 	    const fetched = Array.isArray(base) ? base.length : 0;
 	    let removedByBlacklist = 0;
 	    const filtered = (Array.isArray(base) ? base : []).filter((item) => {
@@ -2563,6 +2674,10 @@ export default function HomeScreen(props?: { preview?: boolean }) {
     const topicMatched = scored.filter((s) => s.score > 0);
     const pool = topicMatched.length >= 6 ? topicMatched : scored;
     const afterTopic = topicMatched.length;
+
+	    if (__DEV__) {
+	      console.log('[news] After filtering: filtered=', filtered.length, 'afterSports=', afterSports, 'topicMatched=', afterTopic, 'poolSize=', pool.length);
+	    }
 
 	    const seenKeys = new Set<string>();
 	    const seenUrls = new Set<string>();
@@ -2639,9 +2754,23 @@ export default function HomeScreen(props?: { preview?: boolean }) {
 
       // Mix news and productivity articles (9 news + 3 productivity)
       const prodArticles = [...productivityArticles].slice(0, 3); // Limit to 3 productivity articles
-      const apiArticles = [...unique]; // Save API/news articles
+      let apiArticles = [...unique]; // Save API/news articles
       const combinedTitles = new Set<string>();
       const combined: NewsItem[] = [];
+
+      // If we don't have enough news articles from API, supplement with fallback news
+      if (apiArticles.length < 9) {
+        const needed = 9 - apiArticles.length;
+        const fallbackNews = FALLBACK_NEWS_ARTICLES.slice(0, needed);
+        apiArticles = [...apiArticles, ...fallbackNews];
+        if (__DEV__) {
+          console.log('[news] Supplementing with', fallbackNews.length, 'fallback news articles');
+        }
+      }
+
+      if (__DEV__) {
+        console.log('[news] Before mixing: news=', apiArticles.length, 'productivity=', prodArticles.length);
+      }
 
       // Add up to 9 news articles first
       let newsIdx = 0;
@@ -2663,6 +2792,14 @@ export default function HomeScreen(props?: { preview?: boolean }) {
           combined.push(article);
           combinedTitles.add(title);
         }
+      }
+
+      if (__DEV__) {
+        // Count by checking which source array the article came from
+        const prodTitles = new Set(prodArticles.map(a => (a.title || '').toLowerCase()));
+        const prodCount = combined.filter(a => prodTitles.has((a.title || '').toLowerCase())).length;
+        const newsCount = combined.length - prodCount;
+        console.log('[news] After mixing: combined=', combined.length, '(news:', newsCount, 'prod:', prodCount + ')');
       }
 
       // Replace unique with combined list
@@ -2723,7 +2860,7 @@ export default function HomeScreen(props?: { preview?: boolean }) {
 
   const displayList = displayListMemo.items;
 
-  const carouselNews = displayList && displayList.length ? displayList.slice(0, 10) : [];
+  const carouselNews = displayList && displayList.length ? displayList.slice(0, 12) : []; // Show all 12 articles (9 news + 3 productivity)
   const carouselPageWidth = newsCardWidth > 0 ? newsCardWidth : 0;
   const slideWidth = carouselPageWidth > 0
     ? Math.max(0, carouselPageWidth - NEWS_CAROUSEL_HORIZONTAL_PADDING * 2)
@@ -3724,7 +3861,11 @@ Avoid fiction and avoid specific unverifiable claims.
       } catch (e) {
         console.warn('load mission summary failed', e);
       } finally {
-        if (alive) setMissionLoading(false);
+        if (alive) {
+          setMissionLoading(false);
+          // Hide initial loading screen after mission loads (news loads in parallel)
+          setTimeout(() => setInitialLoading(false), 300);
+        }
       }
     });
 
@@ -4678,6 +4819,21 @@ EXAMPLE: [sentence in ${langName}]`
       setNewsModalArticle(primaryArticle);
     }
   }, [newsModalVisible, newsModalArticle, primaryArticle]);
+
+  // Show loading animation on initial mount
+  if (initialLoading) {
+    return (
+      <SafeAreaView edges={['left','right']} style={[styles.container, { backgroundColor: background }, styles.loadingContainer]}>
+        <LottieView
+          source={require('../assets/lottie/learn/loading_inlearn.json')}
+          autoPlay
+          loop
+          style={{ width: 140, height: 140 }}
+        />
+        <Text style={[styles.loadingText, theme === 'light' && { color: '#6B7280' }]}>Loading your daily content...</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView edges={['left','right']} style={[styles.container, { backgroundColor: background }] }>
@@ -6662,6 +6818,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1B263B',
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 15,
+    color: '#9CA3AF',
+    fontWeight: '500',
   },
   dotContainer: {
     position: 'absolute',

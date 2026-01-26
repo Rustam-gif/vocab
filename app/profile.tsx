@@ -114,13 +114,45 @@ const mapSupabaseUser = (user: any, progress?: any) => {
 };
 
 export default function ProfileScreen() {
+  const renderCount = useRef(0);
+  const prevUser = useRef<any>(null);
+  const prevProgress = useRef<any>(null);
+  renderCount.current++;
+
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { user, setUser, userProgress, loadProgress } = useAppStore();
+
+  // DON'T subscribe to user - it causes infinite renders
+  // Get it once without subscribing
+  const [user] = useState(() => useAppStore.getState().user);
+
+  const setUser = useAppStore(s => s.setUser);
+  const userProgress = useAppStore(s => s.userProgress);
+  const loadProgress = useAppStore(s => s.loadProgress);
   const themeName = useAppStore(s => s.theme);
   const isLight = themeName === 'light';
   const toggleTheme = useAppStore(s => s.toggleTheme);
   const insets = useSafeAreaInsets();
+
+  // Track what's changing
+  const prevUserProgress = useRef(userProgress);
+  const prevTheme = useRef(themeName);
+  const prevInsets = useRef(insets);
+
+  if (prevUserProgress.current !== userProgress) {
+    console.log('[PROFILE] userProgress CHANGED', prevUserProgress.current, '->', userProgress);
+    prevUserProgress.current = userProgress;
+  }
+  if (prevTheme.current !== themeName) {
+    console.log('[PROFILE] theme CHANGED', prevTheme.current, '->', themeName);
+    prevTheme.current = themeName;
+  }
+  if (prevInsets.current !== insets) {
+    console.log('[PROFILE] insets CHANGED', prevInsets.current, '->', insets);
+    prevInsets.current = insets;
+  }
+
+  console.log('[PROFILE] RENDER', renderCount.current);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [showEmailAuth, setShowEmailAuth] = useState(false);
   const [email, setEmail] = useState('');
@@ -190,11 +222,17 @@ export default function ProfileScreen() {
     } catch {}
   }, [showEmailAuth, isSignUp]);
 
+  const progressLoadedRef = useRef(false);
+
   useEffect(() => {
+    if (progressLoadedRef.current) return; // Prevent re-running
+    progressLoadedRef.current = true;
+
     // Defer progress + lightweight subscription status so typing into
     // the email/password fields feels instant on first open.
     const task = (InteractionManager as any).runAfterInteractions?.(() => {
-      loadProgress();
+      // DON'T call loadProgress - it causes infinite render loop
+      // loadProgress();
       SubscriptionService.getStatus()
         .then(s => {
           setSubStatus(s);
@@ -203,7 +241,7 @@ export default function ProfileScreen() {
         .catch(() => {});
     }) || { cancel: () => {} };
     return () => (task as any).cancel?.();
-  }, [loadProgress]);
+  }, []); // Run only once on mount
 
   // Load current notification settings
   useEffect(() => {
@@ -226,14 +264,16 @@ export default function ProfileScreen() {
   };
 
   // Refresh subscription status whenever the screen regains focus (e.g., after sign-in/purchase)
-  useFocusEffect(
-    useCallback(() => {
-      SubscriptionService.getStatus().then(s => {
-        setSubStatus(s);
-        cachedSubStatus = s; // Update cache
-      }).catch(() => {});
-    }, [])
-  );
+  // TEMPORARILY DISABLED to debug infinite render loop
+  // useFocusEffect(
+  //   useCallback(() => {
+  //     console.log('[PROFILE] useFocusEffect running');
+  //     SubscriptionService.getStatus().then(s => {
+  //       setSubStatus(s);
+  //       cachedSubStatus = s; // Update cache
+  //     }).catch(() => {});
+  //   }, [])
+  // );
 
   useEffect(() => {
     if (!paywallParamConsumed.current && (params as any)?.paywall === '1') {
@@ -637,19 +677,9 @@ export default function ProfileScreen() {
                             onPress={() => setSelectedAvatar(avatarOption.id)}
                           >
                             <Image
-                              // Resolve the local asset to an explicit URI to avoid any edge cases
-                              source={Image.resolveAssetSource(avatarOption.source as any)}
+                              source={avatarOption.source}
                               style={styles.avatarOptionImage}
-                              onError={(e) => {
-                                if (__DEV__) {
-                                  try {
-                                    const res = Image.resolveAssetSource(avatarOption.source as any);
-                                    console.warn('Avatar image failed to load:', { id: avatarOption.id, resolved: res });
-                                  } catch (err) {
-                                    console.warn('Avatar resolve failed:', avatarOption.id, err);
-                                  }
-                                }
-                              }}
+                              resizeMode="cover"
                             />
                             {selectedAvatar === avatarOption.id && (
                               <View style={styles.avatarCheckmark}>
@@ -816,12 +846,7 @@ export default function ProfileScreen() {
                 </View>
               </TouchableOpacity>
             ) : (
-              <LinearGradient
-                colors={isLight ? ['#F7C6D8', '#9FE6DE'] : ['#3A222C', '#0D3B4A']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.premiumActiveCard]}
-              >
+              <View style={[styles.premiumActiveCard, { backgroundColor: isLight ? '#F7C6D8' : '#3A222C' }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <View style={styles.premiumActiveIcon}><Star color="#FFD166" size={24} /></View>
                   <View style={{ flex: 1 }}>
@@ -829,7 +854,7 @@ export default function ProfileScreen() {
                     <Text style={styles.premiumActiveSubtitle}>All sets and features are available</Text>
                   </View>
                 </View>
-              </LinearGradient>
+              </View>
             )}
 
             {/* Removed duplicate in-page premium card; use banner + modal paywall */}
@@ -943,7 +968,7 @@ export default function ProfileScreen() {
             <View style={[styles.streakCard, isLight && styles.streakCardLight, { marginTop: 16 }]}>
               <View style={styles.streakHeaderRow}>
                 <View style={styles.streakFlameWrap}>
-                  <LottieView source={require('../assets/lottie/flame.json')} autoPlay loop style={{ width: 48, height: 48 }} />
+                  <LottieView source={require('../assets/lottie/flame.json')} autoPlay={false} loop={false} progress={0} style={{ width: 48, height: 48 }} />
                   <View style={styles.streakCountBadge}><Text style={styles.streakCountText}>{safeStreak}</Text></View>
                 </View>
                 <Text style={[styles.streakTitle, isLight && styles.streakTitleLight]}>Your streak</Text>
@@ -1068,12 +1093,7 @@ export default function ProfileScreen() {
             </View>
           </TouchableOpacity>
         ) : (
-          <LinearGradient
-            colors={isLight ? ['#F7C6D8', '#9FE6DE'] : ['#3A222C', '#0D3B4A']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.premiumActiveCard]}
-          >
+          <View style={[styles.premiumActiveCard, { backgroundColor: isLight ? '#F7C6D8' : '#3A222C' }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <View style={styles.premiumActiveIcon}><Star color="#FFD166" size={24} /></View>
               <View style={{ flex: 1 }}>
@@ -1081,7 +1101,42 @@ export default function ProfileScreen() {
                 <Text style={styles.premiumActiveSubtitle}>All sets and features are available</Text>
               </View>
             </View>
-          </LinearGradient>
+          </View>
+        )}
+
+        {/* Debug button to force premium refresh */}
+        {__DEV__ && (
+          <TouchableOpacity
+            onPress={async () => {
+              try {
+                console.log('[DEBUG] Forcing premium status refresh...');
+                await AsyncStorage.setItem('@engniter.premium.active', '1');
+                await AsyncStorage.setItem('@engniter.premium.product', 'com.royal.vocadoo.premium.monthly');
+                await useAppStore.getState().refreshPremiumStatus();
+                const status = await SubscriptionService.getStatus();
+                setSubStatus(status);
+                cachedSubStatus = status;
+                DeviceEventEmitter.emit('PREMIUM_STATUS_CHANGED', true);
+                Alert.alert('Success', 'Premium status forced to active. All features should now be available.');
+                console.log('[DEBUG] Premium status:', status);
+              } catch (e) {
+                console.error('[DEBUG] Failed to force premium:', e);
+                Alert.alert('Error', 'Failed to force premium status: ' + e);
+              }
+            }}
+            style={{
+              marginHorizontal: 20,
+              marginVertical: 10,
+              padding: 15,
+              backgroundColor: '#F59E0B',
+              borderRadius: 12,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>
+              🔧 DEV: Force Enable Premium
+            </Text>
+          </TouchableOpacity>
         )}
 
         {/* Practice reminders live in Settings */}
@@ -1131,7 +1186,7 @@ export default function ProfileScreen() {
         <View style={[styles.streakCard, isLight && styles.streakCardLight]}>
           <View style={styles.streakHeaderRow}>
             <View style={styles.streakFlameWrap}>
-              <LottieView source={require('../assets/lottie/flame.json')} autoPlay loop style={{ width: 48, height: 48 }} />
+              <LottieView source={require('../assets/lottie/flame.json')} autoPlay={false} loop={false} progress={0} style={{ width: 48, height: 48 }} />
               <View style={styles.streakCountBadge}><Text style={styles.streakCountText}>{safeStreak}</Text></View>
             </View>
             <Text style={[styles.streakTitle, isLight && styles.streakTitleLight]}>Your streak</Text>
@@ -1290,7 +1345,7 @@ export default function ProfileScreen() {
       {showSignUpSuccess && (
         <View style={styles.modalOverlay}>
           <View style={[styles.signupCard, isLight && styles.signupCardLight]}>
-            <LottieView source={require('../assets/lottie/Success.json')} autoPlay loop={false} style={{ width: 96, height: 96 }} />
+            <LottieView source={require('../assets/lottie/Success.json')} autoPlay={false} loop={false} progress={0} style={{ width: 96, height: 96 }} />
             <Text style={[styles.signupTitle, isLight && styles.signupTitleLight]}>Account created</Text>
             <Text style={[styles.signupText, isLight && styles.signupTextLight]}>Sign in using your email and password to continue.</Text>
             <TouchableOpacity

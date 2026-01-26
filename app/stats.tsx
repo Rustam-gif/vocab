@@ -56,8 +56,8 @@ export default function StatsScreen() {
         const words = vaultService.getAllWords();
         const totalWords = words.length;
 
-        // Count words that have been answered correctly at least 3 times
-        const wordsLearned = words.filter(w => (w.correctCount ?? 0) >= 3).length;
+        // Count words that have been mastered (completed all 4 exercises with max 1 mistake each)
+        const wordsLearned = words.filter(w => w.isMastered === true).length;
 
         // Get overall accuracy from analytics data
         const accuracy = analyticsData?.overallAccuracy ?? 0;
@@ -147,9 +147,6 @@ export default function StatsScreen() {
               <Text style={[styles.mainCardTitle, isLight && styles.mainCardTitleLight]}>
                 Words Mastered
               </Text>
-              <Text style={[styles.mainCardSubtitle, isLight && styles.mainCardSubtitleLight]}>
-                Answer correctly 3 times to master
-              </Text>
             </View>
           </View>
 
@@ -165,9 +162,6 @@ export default function StatsScreen() {
             <View style={styles.progressLabels}>
               <Text style={[styles.progressValue, isLight && styles.progressValueLight]}>
                 {stats.wordsLearned}
-              </Text>
-              <Text style={[styles.progressTotal, isLight && styles.progressTotalLight]}>
-                of {stats.totalWords} words
               </Text>
             </View>
           </View>

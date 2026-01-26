@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { ArrowLeft, Calendar, Star, Volume2 } from 'lucide-react-native';
 import { useAppStore } from '../lib/store';
@@ -25,6 +25,8 @@ export default function VaultFolderScreen() {
       if (!words || words.length === 0) {
         setLoading(true);
         try { await loadWords(); } finally { setLoading(false); }
+      } else {
+        setLoading(false);
       }
     })();
   }, [loadWords, words]);
@@ -40,6 +42,100 @@ export default function VaultFolderScreen() {
   };
 
   const formatDate = (date: Date) => new Date(date).toLocaleDateString();
+
+  // Fixed item height to prevent layout jumps
+  const ITEM_HEIGHT = 180; // Approximate height of each word card
+  const getItemLayout = (_data: any, index: number) => ({
+    length: ITEM_HEIGHT,
+    offset: ITEM_HEIGHT * index,
+    index,
+  });
+
+  const renderWordCard = ({ item: word }: { item: Word }) => (
+    <Link href={{ pathname: '/vault/word/[id]', params: { id: String(word.id) } }} asChild>
+      <TouchableOpacity style={[styles.wordCard, isLight && styles.wordCardLight]} activeOpacity={0.9}>
+        <View style={styles.wordHeader}>
+          <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{word.word}</Text>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={`Play pronunciation for ${word.word}`}
+              onPress={async () => {
+                try {
+                  if (speakingFor === word.id) {
+                    audioPlayerRef.current?.stop();
+                    setSpeakingFor(null);
+                    return;
+                  }
+
+                  setSpeakingFor(word.id);
+
+                  const { SUPABASE_ANON_KEY } = require('../lib/supabase');
+                  const response = await fetch('https://auirkjgyattnvqaygmfo.supabase.co/functions/v1/tts-cached', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                      'apikey': SUPABASE_ANON_KEY
+                    },
+                    body: JSON.stringify({
+                      text: word.word,
+                      voice: 'alloy',
+                      rate: 0.85
+                    })
+                  });
+
+                  const data = await response.json();
+
+                  if (data.url) {
+                    audioPlayerRef.current?.play(data.url, () => {
+                      console.log('[vault-folder] Audio playback completed');
+                      setSpeakingFor(prev => (prev === word.id ? null : prev));
+                    });
+                    console.log('[vault-folder] Playing TTS (cached:', data.cached + ')');
+                  } else {
+                    setSpeakingFor(null);
+                  }
+                } catch (err) {
+                  console.error('[vault-folder] TTS error:', err);
+                  setSpeakingFor(null);
+                }
+              }}
+              style={[styles.speakBtn, speakingFor === word.id && styles.speakBtnActive, isLight && styles.speakBtnLight]}
+            >
+              <Volume2 size={18} color={speakingFor === word.id ? '#4ED9CB' : (isLight ? '#0F766E' : '#E5E7EB')} />
+            </TouchableOpacity>
+            {(() => {
+              const sprintCorrect = (word as any)?.exerciseStats?.sprint?.correct || 0;
+              const starColor = sprintCorrect > 0 ? '#4ED9CB' : '#F25E86';
+              return (
+                <View style={styles.scoreContainer}>
+                  <Star size={16} color={starColor} fill={starColor} />
+                  <Text style={[styles.scoreText, { color: starColor }]}>{sprintCorrect}</Text>
+                </View>
+              );
+            })()}
+          </View>
+        </View>
+        <Text style={[styles.definitionText, isLight && { color: '#1F2937' }]}>{word.definition}</Text>
+        <Text style={[styles.exampleText, isLight && { color: '#6B7280' }]}>"{word.example}"</Text>
+        <View style={styles.wordFooter}>
+          <Text style={[styles.practiceMeta, isLight && { color: '#6B7280' }]}>Practiced {word.practiceCount} times</Text>
+          <View style={styles.dateInfo}>
+            <Calendar size={14} color={isLight ? '#0F766E' : '#4ED9CB'} />
+            <Text style={[styles.dateText, isLight && { color: '#6B7280' }]}>{formatDate(word.savedAt)}</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Link>
+  );
+
+  const renderEmptyState = () => (
+    <View style={styles.emptyState}>
+      <Text style={[styles.emptyTitle, isLight && { color: '#111827' }]}>No words here yet</Text>
+      <Text style={[styles.emptySubtitle, isLight && { color: '#2D4A66' }]}>Add or move words into this folder from your vault.</Text>
+    </View>
+  );
 
   return (
     <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
@@ -66,95 +162,27 @@ export default function VaultFolderScreen() {
         </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {items.length === 0 && !loading ? (
-          <View style={styles.emptyState}>
-            <Text style={[styles.emptyTitle, isLight && { color: '#111827' }]}>No words here yet</Text>
-            <Text style={[styles.emptySubtitle, isLight && { color: '#2D4A66' }]}>Add or move words into this folder from your vault.</Text>
-          </View>
-        ) : (
-          <View style={styles.wordsList}>
-            {items.map(word => (
-              <Link key={word.id} href={{ pathname: '/vault/word/[id]', params: { id: String(word.id) } }} asChild>
-                <TouchableOpacity style={[styles.wordCard, isLight && styles.wordCardLight]} activeOpacity={0.9}>
-                  <View style={styles.wordHeader}>
-                  <Text style={[styles.wordText, isLight && { color: '#111827' }]}>{word.word}</Text>
-                  <View style={styles.headerRight}>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel={`Play pronunciation for ${word.word}`}
-                      onPress={async () => {
-                        try {
-                          if (speakingFor === word.id) {
-                            audioPlayerRef.current?.stop();
-                            setSpeakingFor(null);
-                            return;
-                          }
-
-                          setSpeakingFor(word.id);
-
-                          const { SUPABASE_ANON_KEY } = require('../lib/supabase');
-                          const response = await fetch('https://auirkjgyattnvqaygmfo.supabase.co/functions/v1/tts-cached', {
-                            method: 'POST',
-                            headers: {
-                              'Content-Type': 'application/json',
-                              'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                              'apikey': SUPABASE_ANON_KEY
-                            },
-                            body: JSON.stringify({
-                              text: word.word,
-                              voice: 'alloy',
-                              rate: 0.85
-                            })
-                          });
-
-                          const data = await response.json();
-
-                          if (data.url) {
-                            audioPlayerRef.current?.play(data.url, () => {
-                              console.log('[vault-folder] Audio playback completed');
-                              setSpeakingFor(prev => (prev === word.id ? null : prev));
-                            });
-                            console.log('[vault-folder] Playing TTS (cached:', data.cached + ')');
-                          } else {
-                            setSpeakingFor(null);
-                          }
-                        } catch (err) {
-                          console.error('[vault-folder] TTS error:', err);
-                          setSpeakingFor(null);
-                        }
-                      }}
-                      style={[styles.speakBtn, speakingFor === word.id && styles.speakBtnActive, isLight && styles.speakBtnLight]}
-                    >
-                      <Volume2 size={18} color={speakingFor === word.id ? '#4ED9CB' : (isLight ? '#0F766E' : '#E5E7EB')} />
-                    </TouchableOpacity>
-                    {(() => {
-                      const sprintCorrect = (word as any)?.exerciseStats?.sprint?.correct || 0;
-                      const starColor = sprintCorrect > 0 ? '#4ED9CB' : '#F25E86';
-                      return (
-                        <View style={styles.scoreContainer}>
-                          <Star size={16} color={starColor} fill={starColor} />
-                          <Text style={[styles.scoreText, { color: starColor }]}>{sprintCorrect}</Text>
-                        </View>
-                      );
-                    })()}
-                  </View>
-                </View>
-                <Text style={[styles.definitionText, isLight && { color: '#1F2937' }]}>{word.definition}</Text>
-                <Text style={[styles.exampleText, isLight && { color: '#6B7280' }]}>"{word.example}"</Text>
-                <View style={styles.wordFooter}>
-                  <Text style={[styles.practiceMeta, isLight && { color: '#6B7280' }]}>Practiced {word.practiceCount} times</Text>
-                  <View style={styles.dateInfo}>
-                    <Calendar size={14} color={isLight ? '#0F766E' : '#4ED9CB'} />
-                    <Text style={[styles.dateText, isLight && { color: '#6B7280' }]}>{formatDate(word.savedAt)}</Text>
-                  </View>
-                </View>
-                </TouchableOpacity>
-              </Link>
-            ))}
-          </View>
-        )}
-      </ScrollView>
+      {loading ? (
+        <View style={styles.emptyState}>
+          <Text style={[styles.emptyTitle, isLight && { color: '#111827' }]}>Loading...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={items}
+          renderItem={renderWordCard}
+          keyExtractor={(word) => word.id}
+          getItemLayout={getItemLayout}
+          contentContainerStyle={styles.scrollContent}
+          style={styles.content}
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          updateCellsBatchingPeriod={50}
+          ListEmptyComponent={renderEmptyState}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -225,6 +253,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
   },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
+  },
   emptyState: {
     alignItems: 'center',
     paddingVertical: 60,
@@ -242,9 +274,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: 'Ubuntu-Medium',
   },
-  wordsList: {
-    paddingBottom: 20,
-  },
   wordCard: {
     backgroundColor: '#1B263B',
     borderRadius: 16,
@@ -256,6 +285,7 @@ const styles = StyleSheet.create({
     borderRightWidth: 4,
     borderBottomColor: 'rgba(78,217,203,0.1)',
     borderRightColor: 'rgba(78,217,203,0.08)',
+    minHeight: 168,
   },
   wordCardLight: {
     backgroundColor: '#FFFFFF',

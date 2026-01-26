@@ -128,17 +128,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 // Monitor auth state changes for oversized tokens (log once)
-let hasLoggedTokenWarning = false;
-supabase.auth.onAuthStateChange((event, session) => {
-  if (session?.access_token && isTokenOversized(session.access_token) && !hasLoggedTokenWarning) {
-    hasLoggedTokenWarning = true;
-    markTokenOversized();
-    console.warn(
-      `[Supabase] Token is ${session.access_token.length} chars (limit: ${MAX_SAFE_TOKEN_LENGTH}). ` +
-      'Reduce user_metadata in Supabase dashboard to fix.'
-    );
-  }
-});
+// DISABLED: Multiple auth listeners cause infinite loops. Token check moved to router.tsx
+// let hasLoggedTokenWarning = false;
+// supabase.auth.onAuthStateChange((event, session) => {
+//   if (session?.access_token && isTokenOversized(session.access_token) && !hasLoggedTokenWarning) {
+//     hasLoggedTokenWarning = true;
+//     markTokenOversized();
+//     console.warn(
+//       `[Supabase] Token is ${session.access_token.length} chars (limit: ${MAX_SAFE_TOKEN_LENGTH}). ` +
+//       'Reduce user_metadata in Supabase dashboard to fix.'
+//     );
+//   }
+// });
 
 // Hard local sign-out helper: clears any stored Supabase auth tokens from
 // AsyncStorage to ensure the session does not reappear on next launch.

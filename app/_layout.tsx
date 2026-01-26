@@ -198,7 +198,8 @@ export default function RootLayout() {
         </View>
       )}
 
-      {routeLoading && !showLaunch && (
+      {/* Route loading animation disabled - using launch screen in App.tsx instead */}
+      {false && routeLoading && !showLaunch && (
         <View
           style={[
             styles.routeOverlay,

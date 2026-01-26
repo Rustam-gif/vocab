@@ -130,6 +130,9 @@ class PremiumStatusServiceClass {
    */
   async refresh(): Promise<SubscriptionStatus> {
     console.log('[PremiumStatus] Force refresh requested');
+    // Clear cache to ensure fresh fetch
+    this.cachedStatus = null;
+    this.lastCheckTime = 0;
     return this.getStatus(true);
   }
 

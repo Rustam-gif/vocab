@@ -3,7 +3,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { RouterProvider, RouteRenderer } from './lib/router';
 import LottieView from 'lottie-react-native';
-import { View, StyleSheet, Platform, TextInput, AppState, AppStateStatus, InteractionManager, Keyboard, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Platform, TextInput, AppState, AppStateStatus, InteractionManager, Keyboard, Dimensions, Animated } from 'react-native';
 import { useAppStore } from './lib/store';
 import { getTheme, ThemeName } from './lib/theme';
 import { Launch } from './lib/launch';
@@ -47,6 +47,22 @@ export default function App() {
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingChecked, setOnboardingChecked] = useState(false);
+  const launchFadeAnim = useRef(new Animated.Value(0)).current;
+  const textBrightnessAnim = useRef(new Animated.Value(0)).current;
+
+  // Create animated values for stars (20 stars)
+  const starAnims = useRef(
+    Array.from({ length: 20 }, () => new Animated.Value(0))
+  ).current;
+
+  // Generate random star positions once
+  const stars = useRef(
+    Array.from({ length: 20 }, () => ({
+      size: 2 + Math.random() * 3,
+      top: Math.random() * Dimensions.get('window').height,
+      left: Math.random() * Dimensions.get('window').width,
+    }))
+  ).current;
 
   // Extra safety: dismiss any phantom keyboard session a few seconds after launch
   useEffect(() => {
@@ -181,33 +197,99 @@ export default function App() {
   }, []);
   const colors = getTheme(themeName);
   const [showLaunch, setShowLaunch] = useState(true);
+  const [appReady, setAppReady] = useState(false);
   const launchRef = useRef<LottieView>(null);
   const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const fastTimerRef = useRef<NodeJS.Timeout | null>(null);
   const finishedRef = useRef(false);
 
-  // Fast safety: hide overlay shortly after mount even if the animation never fires
+  // Delay app content rendering to prevent flash before launch animation
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAppReady(true);
+    }, 300); // Small delay to ensure launch overlay renders first
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Fade in the launch screen on mount
+  useEffect(() => {
+    Animated.timing(launchFadeAnim, {
+      toValue: 1,
+      duration: 400,
+      useNativeDriver: true,
+    }).start();
+  }, [launchFadeAnim]);
+
+  // Light up the Stellar text immediately
+  useEffect(() => {
+    Animated.timing(textBrightnessAnim, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: false,
+    }).start();
+  }, [textBrightnessAnim]);
+
+  // Animate stars with twinkling effect
+  useEffect(() => {
+    starAnims.forEach((anim) => {
+      const animate = () => {
+        Animated.sequence([
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 1000 + Math.random() * 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0.3,
+            duration: 1000 + Math.random() * 1000,
+            useNativeDriver: true,
+          }),
+        ]).start(() => animate());
+      };
+
+      // Start each star with a random delay
+      setTimeout(() => animate(), Math.random() * 2000);
+    });
+  }, [starAnims]);
+
+  // Auto-close launch screen after 2 seconds with fade-out
   useEffect(() => {
     fastTimerRef.current = setTimeout(() => {
       if (finishedRef.current) return;
       finishedRef.current = true;
-      setShowLaunch(false);
-      try { Launch.markDone(); } catch {}
-    }, 3000) as any;
-    return () => { if (fastTimerRef.current) clearTimeout(fastTimerRef.current); };
-  }, []);
 
-  // Fallback: hide overlay if animation never finishes (e.g., 8s)
+      // Fade out before closing
+      Animated.timing(launchFadeAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }).start(() => {
+        setShowLaunch(false);
+        try { Launch.markDone(); } catch {}
+      });
+    }, 2000) as any;
+    return () => { if (fastTimerRef.current) clearTimeout(fastTimerRef.current); };
+  }, [launchFadeAnim]);
+
+  // Fallback: hide overlay if animation never finishes (e.g., 4s)
   useEffect(() => {
     fallbackTimerRef.current = setTimeout(() => {
-      setShowLaunch(false);
       if (!finishedRef.current) {
         finishedRef.current = true;
-        try { Launch.markDone(); } catch {}
+
+        // Fade out before closing
+        Animated.timing(launchFadeAnim, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }).start(() => {
+          setShowLaunch(false);
+          try { Launch.markDone(); } catch {}
+        });
       }
-    }, 8000) as any;
+    }, 4000) as any;
     return () => { if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current); };
-  }, []);
+  }, [launchFadeAnim]);
 
   // Initialize notifications (2x daily by default: 10:00 and 19:00)
   useEffect(() => {
@@ -231,7 +313,12 @@ export default function App() {
         <TextInputGateProvider>
           <AppReadyProvider>
             <RouterProvider>
-              <RouteRenderer />
+              {/* Render app content only after small delay to prevent flash */}
+              {appReady ? (
+                <RouteRenderer />
+              ) : (
+                <View style={{ flex: 1, backgroundColor: colors.background }} />
+              )}
             {/* No custom keyboard accessory; use native keyboard UI */}
 
             {/* Personalized Onboarding overlay - shows after launch animation */}
@@ -243,34 +330,85 @@ export default function App() {
 
             {/* Launch animation overlay */}
             {showLaunch && (
-              <View
-                style={[styles.launchOverlay, themeName === 'light' && { backgroundColor: colors.background }]}
+              <Animated.View
+                style={[
+                  styles.launchOverlay,
+                  {
+                    opacity: launchFadeAnim,
+                    transform: [
+                      {
+                        translateY: launchFadeAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [20, 0],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
                 pointerEvents="none"
               >
+                {/* Animated stars background */}
+                {starAnims.map((anim, index) => {
+                  const star = stars[index];
+                  return (
+                    <Animated.View
+                      key={index}
+                      style={{
+                        position: 'absolute',
+                        top: star.top,
+                        left: star.left,
+                        width: star.size,
+                        height: star.size,
+                        borderRadius: star.size / 2,
+                        backgroundColor: '#FFFFFF',
+                        opacity: anim,
+                      }}
+                    />
+                  );
+                })}
+
+                {/* UFO Animation with moving lines */}
                 <LottieView
+                  key="launch-ufo-animation"
                   ref={launchRef}
-                  source={require('./assets/lottie/launch.json')}
-                  autoPlay
-                  loop={false}
-                  speed={0.7}
-                  onError={() => {
+                  source={require('./assets/lottie/Onboarding/race_ufo.json')}
+                  autoPlay={true}
+                  loop={true}
+                  speed={1}
+                  resizeMode="contain"
+                  __bypassGate={true}
+                  __gateMode="none"
+                  onError={(error) => {
+                    console.log('Lottie error:', error);
                     if (finishedRef.current) return;
                     finishedRef.current = true;
                     setShowLaunch(false);
                     try { Launch.markDone(); } catch {}
                   }}
-                  onAnimationFinish={() => {
-                    if (finishedRef.current) return;
-                    finishedRef.current = true;
-                    if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-                    setTimeout(() => {
-                      setShowLaunch(false);
-                      try { Launch.markDone(); } catch {}
-                    }, 2000);
-                  }}
-                  style={styles.launchLottie}
+                  style={styles.launchUfo}
                 />
-              </View>
+
+                {/* Stellar Text with glow effect - starts dark and lights up */}
+                <View style={styles.stellarTextContainer}>
+                  <Animated.Text
+                    style={[
+                      styles.stellarText,
+                      {
+                        color: textBrightnessAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ['#1A1A2E', '#FFFFFF'],
+                        }),
+                        textShadowColor: textBrightnessAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ['rgba(78, 217, 203, 0)', 'rgba(78, 217, 203, 0.25)'],
+                        }),
+                      },
+                    ]}
+                  >
+                    Stellar
+                  </Animated.Text>
+                </View>
+              </Animated.View>
             )}
 
             </RouterProvider>
@@ -293,9 +431,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 9999,
   },
-  launchLottie: {
-    width: 220,
-    height: 220,
+  launchUfo: {
+    width: 280,
+    height: 280,
+    marginBottom: -20,
+  },
+  stellarTextContainer: {
+    padding: 20,
+  },
+  stellarText: {
+    fontSize: 46,
+    fontWeight: '700',
+    fontFamily: 'Feather-Bold',
+    letterSpacing: 4,
+    textTransform: 'uppercase',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
   },
   onboardingOverlay: {
     position: 'absolute',

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Linking, Platform, Alert } from 'react-native';
+import { Linking, Platform, Alert, DeviceEventEmitter } from 'react-native';
 import {
   initConnection,
   endConnection,
@@ -63,6 +63,19 @@ class SubscriptionServiceClass {
             }
             // Always finish the transaction so the App Store/Play does not keep it pending
             await finishTransaction({ purchase });
+
+            // Immediately refresh premium status in the store to activate premium features
+            try {
+              const { useAppStore } = require('../lib/store');
+              await useAppStore.getState().refreshPremiumStatus();
+              console.log('[IAP] Premium status refreshed in store after purchase');
+
+              // Notify all screens that premium status changed
+              DeviceEventEmitter.emit('PREMIUM_STATUS_CHANGED', true);
+            } catch (e) {
+              console.warn('[IAP] Failed to refresh store premium status:', e);
+            }
+
             // Notify any pending waiters for this product
             try {
               const status = await this.getStatus();
@@ -218,6 +231,18 @@ class SubscriptionServiceClass {
       const best = purchases.find(p => !!p.productId);
       if (best?.productId) {
         await AsyncStorage.multiSet([[SUB_KEY, '1'], [SUB_PRODUCT, best.productId]]);
+
+        // Refresh premium status in the store after restore
+        try {
+          const { useAppStore } = require('../lib/store');
+          await useAppStore.getState().refreshPremiumStatus();
+          console.log('[IAP] Premium status refreshed in store after restore');
+
+          // Notify all screens that premium status changed
+          DeviceEventEmitter.emit('PREMIUM_STATUS_CHANGED', true);
+        } catch (e) {
+          console.warn('[IAP] Failed to refresh store premium status after restore:', e);
+        }
       }
     } catch {}
     return this.getStatus();

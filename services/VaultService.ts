@@ -361,6 +361,22 @@ class VaultService {
       incorrect: stat.incorrect + (update.correct ? 0 : 1),
     };
 
+    // Calculate mastery: word is mastered when all 4 exercises completed with max 1 mistake each
+    const requiredExercises = ['mcq', 'synonym', 'odd-one-out', 'letters'];
+    const allExercisesCompleted = requiredExercises.every(ex => stats[ex]);
+    const maxOneMistakePerExercise = requiredExercises.every(ex => {
+      const exStat = stats[ex];
+      return exStat && exStat.incorrect <= 1;
+    });
+    const isMastered = allExercisesCompleted && maxOneMistakePerExercise;
+
+    console.log('[VaultService] Mastery check for', word.word, {
+      exerciseStats: stats,
+      allExercisesCompleted,
+      maxOneMistakePerExercise,
+      isMastered
+    });
+
     const updatedWord: Word = {
       ...normalized,
       score: nextScore,
@@ -370,6 +386,7 @@ class VaultService {
       exerciseStats: stats,
       lastPracticed: new Date(),
       isWeak: nextScore < WEAK_WORD_THRESHOLD || nextIncorrectCount > nextCorrectCount,
+      isMastered,
     };
 
     const index = this.words.findIndex(item => item.id === id);
@@ -440,6 +457,7 @@ class VaultService {
       incorrectCount: word.incorrectCount ?? 0,
       exerciseStats: word.exerciseStats ?? {},
       isWeak: word.isWeak ?? word.score < WEAK_WORD_THRESHOLD,
+      isMastered: word.isMastered ?? false,
       practiceCount: word.practiceCount ?? 0,
       score: word.score ?? 0,
     };

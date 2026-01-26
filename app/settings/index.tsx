@@ -181,18 +181,6 @@ export default function SettingsScreen() {
             </View>
           </View>
         </View>
-        {/* Theme */}
-        <View style={[styles.card, isLight && styles.cardLight]}>
-          <View style={styles.rowBetween}>
-            <Text style={[styles.label, isLight && styles.labelLight]}>Theme</Text>
-            <TouchableOpacity
-              onPress={() => toggleTheme()}
-              style={[styles.toggle, isLight && styles.toggleLight, themeName === 'light' && styles.toggleActive]}
-            >
-              <Text style={[styles.toggleText, isLight && styles.toggleTextLight]}>{themeName === 'light' ? 'Light' : 'Dark'}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
         {/* Translations */}
         <View style={[styles.card, isLight && styles.cardLight]}>

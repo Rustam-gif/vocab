@@ -194,6 +194,10 @@ const InlineDotsOnce: React.FC<{ style?: any }> = ({ style }) => {
 };
 
 export default function StoryExerciseScreen() {
+  const renderCount = useRef(0);
+  renderCount.current++;
+  console.log('[STORY] RENDER', renderCount.current);
+
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ words?: string; from?: string }>();
@@ -228,6 +232,17 @@ export default function StoryExerciseScreen() {
   const [wordPickerOpen, setWordPickerOpen] = useState(false);
   const [tempSelection, setTempSelection] = useState<string[]>([]);
   const pickWordsAnim = useRef(new Animated.Value(1)).current;
+  const [isScreenFocused, setIsScreenFocused] = useState(false);
+
+  // Track screen focus
+  useFocusEffect(
+    useCallback(() => {
+      setIsScreenFocused(true);
+      return () => {
+        setIsScreenFocused(false);
+      };
+    }, [])
+  );
 
   // Pulse animation for Pick Words button
   useEffect(() => {
@@ -356,6 +371,15 @@ export default function StoryExerciseScreen() {
 
   useEffect(() => {
     refreshStoryAccess();
+  }, [refreshStoryAccess]);
+
+  // Listen for premium status changes from profile/purchase flow
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('PREMIUM_STATUS_CHANGED', (isPremiumNow: boolean) => {
+      console.log('[STORY] 💎 PREMIUM_STATUS_CHANGED event received:', isPremiumNow);
+      refreshStoryAccess();
+    });
+    return () => subscription.remove();
   }, [refreshStoryAccess]);
 
   useFocusEffect(
@@ -1299,7 +1323,7 @@ const buildStoryFromContent = (
               }}
               activeOpacity={0.85}
             >
-              <Search size={12} color={isDarkMode ? "#4ED9CB" : "#0F766E"} />
+              <Search size={10} color={isDarkMode ? "#4ED9CB" : "#0F766E"} />
               <Text style={[styles.dockText, !isDarkMode && styles.dockTextLight]}>Pick</Text>
             </TouchableOpacity>
 
@@ -1315,7 +1339,7 @@ const buildStoryFromContent = (
               }}
               activeOpacity={0.85}
             >
-              <Settings size={12} color={isDarkMode ? "#4ED9CB" : "#0F766E"} />
+              <Settings size={10} color={isDarkMode ? "#4ED9CB" : "#0F766E"} />
               <Text style={[styles.dockText, !isDarkMode && styles.dockTextLight]}>Customize</Text>
             </TouchableOpacity>
 
@@ -1326,7 +1350,7 @@ const buildStoryFromContent = (
               disabled={!hasStory}
               activeOpacity={0.85}
             >
-              <Bookmark size={12} color={isDarkMode ? "#4ED9CB" : "#0F766E"} />
+              <Bookmark size={10} color={isDarkMode ? "#4ED9CB" : "#0F766E"} />
               <Text style={[styles.dockText, !isDarkMode && styles.dockTextLight]}>Save</Text>
             </TouchableOpacity>
           </View>
@@ -1405,8 +1429,8 @@ const buildStoryFromContent = (
               ) : (
                 <View style={styles.storyPlaceholder}>
                   <LottieView
-                    source={require('../../assets/lottie/story_exercise/Cute_Fox.json')}
-                    autoPlay
+                    source={require('../../assets/lottie/learn/planets/astronaut_complete.json')}
+                    autoPlay={isScreenFocused}
                     loop
                     style={{ width: 220, height: 220, marginBottom: 8 }}
                   />
@@ -2318,7 +2342,7 @@ const styles = StyleSheet.create({
   panelContainer: {
     paddingHorizontal: 16,
     marginTop: 8,
-    marginBottom: 12,
+    marginBottom: 90,
     gap: 8,
   },
   modeSegment: {
@@ -2371,8 +2395,8 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(78,217,203,0.12)',
     borderRightColor: 'rgba(78,217,203,0.1)',
     borderRadius: 18,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -2391,13 +2415,13 @@ const styles = StyleSheet.create({
   dockItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    gap: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     borderRadius: 12,
   },
   dockItemDisabled: { opacity: 0.5 },
-  dockText: { color: '#E5E7EB', fontSize: 12, fontWeight: '700', fontFamily: 'Feather-Bold' },
+  dockText: { color: '#E5E7EB', fontSize: 11, fontWeight: '700', fontFamily: 'Feather-Bold' },
   dockTextLight: { color: '#2D4A66' },
   wordBank: {
     flexDirection: 'row',
