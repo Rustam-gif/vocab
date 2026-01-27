@@ -1284,7 +1284,7 @@ const buildStoryFromContent = (
 
   return (
     <View style={[styles.container, !isDarkMode && styles.containerLight]}>
-      <View style={{ flex: 1, paddingTop: Platform.OS === 'ios' ? 60 : 20 }}>
+      <View style={{ flex: 1, paddingTop: Platform.OS === 'ios' ? 10 : 10 }}>
         {/* Mode Toggle - compact toggle only when user expands controls */}
         {!isFullscreen && hasStory && showControls && false && (
           <View style={styles.toggleContainer}>
@@ -2341,8 +2341,8 @@ const styles = StyleSheet.create({
   },
   panelContainer: {
     paddingHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 90,
+    marginTop: 100,
+    marginBottom: 20,
     gap: 8,
   },
   modeSegment: {
@@ -2501,6 +2501,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingBottom: 280,
   },
   storyContainer: {
     flex: 1,
@@ -2533,7 +2534,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderRadius: 0,
     padding: 20,
-    paddingTop: 50,
+    paddingTop: 10,
     paddingBottom: 20,
     marginBottom: 16,
     position: 'relative',
@@ -2542,7 +2543,7 @@ const styles = StyleSheet.create({
   storyPaperCard: {
     backgroundColor: 'transparent',
     borderRadius: 0,
-    paddingTop: 24,
+    paddingTop: 10,
     paddingBottom: 28,
     paddingHorizontal: 18,
     borderWidth: 0,
@@ -2750,7 +2751,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: 20,
     paddingTop: 10,
-    paddingBottom: 48,
+    paddingBottom: 110,
     zIndex: 80,
   },
   footerOverlayLight: {

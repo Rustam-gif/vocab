@@ -17,6 +17,13 @@ import {
 // Local persistence keys for simple entitlement gating
 const SUB_KEY = '@engniter.premium.active';
 const SUB_PRODUCT = '@engniter.premium.product';
+const SIMULATOR_DETECTED_KEY = '@engniter.simulator.detected';
+
+// Valid subscription product IDs for this app
+const VALID_PRODUCT_IDS = [
+  'com.royal.vocadoo.premium.months',
+  'com.royal.vocadoo.premium.annually',
+];
 
 export type SubscriptionStatus = {
   active: boolean;
@@ -41,16 +48,33 @@ class SubscriptionServiceClass {
   private updateSub?: { remove(): void };
   private errorSub?: { remove(): void };
   private waiters: Array<{ productId?: string; resolve: (s: SubscriptionStatus) => void; reject: (e?: any) => void; timer?: any }> = [];
+  private isSimulatorDetected = false;
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
-    // In development builds, skip StoreKit/Play init to avoid noisy retries and callback floods.
-    if (__DEV__) {
+
+    // Check if simulator was detected in a previous session
+    try {
+      const persistedSimulator = await AsyncStorage.getItem(SIMULATOR_DETECTED_KEY);
+      if (persistedSimulator === '1') {
+        console.log('[IAP] Simulator detected - skipping StoreKit');
+        this.isSimulatorDetected = true;
+        this.initialized = true;
+        return;
+      }
+    } catch (e) {
+      console.warn('[IAP] Failed to check simulator flag:', e);
+    }
+
+    // Skip if already detected as simulator in this session
+    if (this.isSimulatorDetected) {
       this.initialized = true;
       return;
     }
+
     try {
       await initConnection();
+      console.log('[IAP] StoreKit connected');
       // Warm entitlement state from any available purchases
       await this.refreshEntitlementsFromStore();
 
@@ -58,7 +82,8 @@ class SubscriptionServiceClass {
       this.updateSub = purchaseUpdatedListener(async (purchase: Purchase) => {
         try {
           if (purchase.purchaseState === 'purchased' || purchase.purchaseState === 'restored') {
-            if (purchase.productId) {
+            // Only accept valid product IDs
+            if (purchase.productId && VALID_PRODUCT_IDS.includes(purchase.productId)) {
               await AsyncStorage.multiSet([[SUB_KEY, '1'], [SUB_PRODUCT, purchase.productId]]);
             }
             // Always finish the transaction so the App Store/Play does not keep it pending
@@ -67,8 +92,14 @@ class SubscriptionServiceClass {
             // Immediately refresh premium status in the store to activate premium features
             try {
               const { useAppStore } = require('../lib/store');
+              const { premiumStatusService } = require('./PremiumStatusService');
+
+              // Force refresh premium cache
+              await premiumStatusService.refresh();
+
+              // Refresh store
               await useAppStore.getState().refreshPremiumStatus();
-              console.log('[IAP] Premium status refreshed in store after purchase');
+              console.log('[IAP] Premium status refreshed after purchase');
 
               // Notify all screens that premium status changed
               DeviceEventEmitter.emit('PREMIUM_STATUS_CHANGED', true);
@@ -89,9 +120,13 @@ class SubscriptionServiceClass {
                   this.waiters.push(w);
                 }
               });
-            } catch {}
+            } catch (e) {
+              console.error('[IAP] Failed to notify waiters:', e);
+            }
           }
-        } catch {}
+        } catch (e) {
+          console.error('[IAP] Purchase listener error:', e);
+        }
       });
 
       this.errorSub = purchaseErrorListener((err) => {
@@ -103,12 +138,28 @@ class SubscriptionServiceClass {
       });
 
       this.initialized = true;
-    } catch (e) {
-      // Leave initialized=false so callers could retry later
-      this.initialized = false;
-      if (__DEV__) {
-        try { console.warn('[IAP] initConnection failed', e); } catch {}
+    } catch (e: any) {
+      // Check if error indicates simulator (SKErrorDomain error 2 = "The operation couldn't be completed")
+      const errorMsg = e?.message || e?.toString() || '';
+      const isSimulatorError = errorMsg.includes('SKErrorDomain error 2') ||
+                               errorMsg.includes("operation couldn't be completed") ||
+                               errorMsg.includes('not available');
+
+      if (isSimulatorError) {
+        console.log('[IAP] Simulator detected - IAP disabled');
+        this.isSimulatorDetected = true;
+        // Persist flag so we don't try again on next app launch
+        try {
+          await AsyncStorage.setItem(SIMULATOR_DETECTED_KEY, '1');
+        } catch (storageErr) {
+          console.warn('[IAP] Failed to persist simulator flag:', storageErr);
+        }
+      } else {
+        console.warn('[IAP] initConnection failed:', e);
       }
+
+      // Mark as initialized anyway to prevent retry loops
+      this.initialized = true;
     }
   }
 
@@ -118,25 +169,65 @@ class SubscriptionServiceClass {
     }
   }
 
-  private waitForPurchase(productId?: string, timeoutMs = 120000): Promise<SubscriptionStatus> {
+  private waitForPurchase(productId?: string, timeoutMs = 45000): Promise<SubscriptionStatus> {
     return new Promise<SubscriptionStatus>((resolve, reject) => {
       const timer = setTimeout(async () => {
-        // Timeout: resolve with current status, do not flip UI spuriously
-        try { resolve(await this.getStatus()); } catch (e) { reject(e); }
+        // Timeout: Check status one more time, then reject with timeout error
+        try {
+          const status = await this.getStatus();
+          if (status.active) {
+            resolve(status);
+          } else {
+            reject(new Error('Purchase timed out. Please check your App Store purchases and try Restore if needed.'));
+          }
+        } catch (e) {
+          reject(new Error('Purchase timed out'));
+        }
       }, timeoutMs);
       this.waiters.push({ productId, resolve, reject, timer });
     });
   }
 
   private async refreshEntitlementsFromStore() {
+    // Skip on simulator to avoid Apple Account prompts
+    if (this.isSimulatorDetected) {
+      return;
+    }
+
     try {
       const purchases = await getAvailablePurchases({ onlyIncludeActiveItemsIOS: true });
-      // Mark active if we can find any purchase resembling our premium sub
-      const match = purchases.find(p => !!p.productId);
+
+      // Mark active if we can find a matching purchase with our valid product IDs
+      const match = purchases.find(p => p.productId && VALID_PRODUCT_IDS.includes(p.productId));
       if (match?.productId) {
+        console.log('[IAP] Active subscription found:', match.productId);
         await AsyncStorage.multiSet([[SUB_KEY, '1'], [SUB_PRODUCT, match.productId]]);
+      } else {
+        // CRITICAL: Clear premium status if no active purchases found
+        console.log('[IAP] No active subscription - clearing premium status');
+        await AsyncStorage.multiRemove([SUB_KEY, SUB_PRODUCT]);
       }
-    } catch {}
+    } catch (e: any) {
+      const errorMsg = e?.message || e?.toString() || '';
+
+      // Check if this is a simulator error
+      const isSimulatorError = errorMsg.includes('SKErrorDomain error 2') ||
+                               errorMsg.includes("operation couldn't be completed") ||
+                               errorMsg.includes('not available');
+
+      if (isSimulatorError && !this.isSimulatorDetected) {
+        console.log('[IAP] Simulator detected - IAP disabled');
+        this.isSimulatorDetected = true;
+        // Persist flag so we don't try again
+        try {
+          await AsyncStorage.setItem(SIMULATOR_DETECTED_KEY, '1');
+        } catch (storageErr) {
+          console.warn('[IAP] Failed to persist simulator flag:', storageErr);
+        }
+      } else {
+        console.error('[IAP] Failed to refresh entitlements:', errorMsg);
+      }
+    }
   }
 
   /** Map react-native-iap product -> our lightweight SubscriptionProduct */
@@ -184,6 +275,36 @@ class SubscriptionServiceClass {
   }
 
   async getProducts(productIds: string[]): Promise<SubscriptionProduct[]> {
+    // Try to initialize first (this will detect simulator if needed)
+    await this.ensureReady();
+
+    // Skip StoreKit queries on simulator to avoid Apple Account prompts
+    if (this.isSimulatorDetected) {
+      // Return mock products for UI testing
+      return [
+        {
+          id: 'com.royal.vocadoo.premium.months',
+          title: 'Monthly Premium',
+          duration: 'monthly',
+          price: 4.99,
+          currency: 'USD',
+          localizedPrice: '$4.99',
+          introductoryPrice: 'Free for 7 days',
+          hasFreeTrial: true,
+        },
+        {
+          id: 'com.royal.vocadoo.premium.annually',
+          title: 'Annual Premium',
+          duration: 'yearly',
+          price: 39.99,
+          currency: 'USD',
+          localizedPrice: '$39.99',
+          introductoryPrice: 'Free for 7 days',
+          hasFreeTrial: true,
+        },
+      ];
+    }
+
     try {
       const res = await getSubscriptions({ skus: productIds });
       if (!res) return [] as SubscriptionProduct[];
@@ -204,14 +325,21 @@ class SubscriptionServiceClass {
   }
 
   async purchase(productId: string): Promise<SubscriptionStatus> {
+    // Mock successful purchase on simulator for UI testing
+    if (this.isSimulatorDetected) {
+      console.log('[IAP] Simulator - mocking successful purchase');
+      // Simulate purchase success
+      await AsyncStorage.multiSet([[SUB_KEY, '1'], [SUB_PRODUCT, productId]]);
+      return { active: true, productId, renews: true, expiryDate: null };
+    }
+
     // Ensure listeners are up
     await this.ensureReady();
     try {
       // Verify the product exists for this environment before attempting purchase
       const available = await getSubscriptions({ skus: [productId] }).catch(() => null);
       if (!available || (Array.isArray(available) && available.length === 0)) {
-        // Silent fallback; surface in logs only
-        try { console.warn('[IAP] product not available for this build'); } catch {}
+        console.warn('[IAP] Product not available');
         return this.getStatus();
       }
       const waiter = this.waitForPurchase(productId);
@@ -226,17 +354,31 @@ class SubscriptionServiceClass {
   }
 
   async restore(): Promise<SubscriptionStatus> {
+    // On simulator, just return current status (might have mock purchases)
+    if (this.isSimulatorDetected) {
+      console.log('[IAP] Simulator - checking mock subscription status');
+      return this.getStatus();
+    }
+
     try {
       const purchases = await getAvailablePurchases({ onlyIncludeActiveItemsIOS: true });
-      const best = purchases.find(p => !!p.productId);
+
+      // Only accept our current valid product IDs
+      const best = purchases.find(p => p.productId && VALID_PRODUCT_IDS.includes(p.productId));
       if (best?.productId) {
         await AsyncStorage.multiSet([[SUB_KEY, '1'], [SUB_PRODUCT, best.productId]]);
 
         // Refresh premium status in the store after restore
         try {
           const { useAppStore } = require('../lib/store');
+          const { premiumStatusService } = require('./PremiumStatusService');
+
+          // Force refresh premium cache
+          await premiumStatusService.refresh();
+
+          // Refresh store
           await useAppStore.getState().refreshPremiumStatus();
-          console.log('[IAP] Premium status refreshed in store after restore');
+          console.log('[IAP] Premium status refreshed after restore');
 
           // Notify all screens that premium status changed
           DeviceEventEmitter.emit('PREMIUM_STATUS_CHANGED', true);
@@ -269,6 +411,54 @@ class SubscriptionServiceClass {
       }
     } catch {}
   }
+
+  /**
+   * Verify subscription status with App Store/Play Store
+   * Call this when app comes to foreground to ensure expired subscriptions are detected
+   */
+  async verifySubscription(): Promise<SubscriptionStatus> {
+    // Try to initialize first (this will detect simulator if needed)
+    await this.ensureReady();
+
+    // Skip StoreKit verification on simulator
+    if (this.isSimulatorDetected) {
+      return this.getStatus();
+    }
+
+    await this.refreshEntitlementsFromStore();
+    return this.getStatus();
+  }
+
+  /**
+   * Clear simulator detection flag (for testing on real devices after simulator use)
+   * Call this manually if you test on a real device after using simulator
+   */
+  async clearSimulatorFlag(): Promise<void> {
+    try {
+      await AsyncStorage.removeItem(SIMULATOR_DETECTED_KEY);
+      this.isSimulatorDetected = false;
+      this.initialized = false;
+      console.log('[IAP] Simulator flag cleared');
+    } catch (e) {
+      console.error('[IAP] Failed to clear simulator flag:', e);
+    }
+  }
+
+  /**
+   * Clear mock subscription (for testing free tier on simulator)
+   * Only works on simulator - does nothing on real devices
+   */
+  async clearMockSubscription(): Promise<void> {
+    if (this.isSimulatorDetected) {
+      try {
+        await AsyncStorage.multiRemove([SUB_KEY, SUB_PRODUCT]);
+        console.log('[IAP] Simulator - mock subscription cleared');
+      } catch (e) {
+        console.error('[IAP] Failed to clear mock subscription:', e);
+      }
+    }
+  }
+
 }
 
 export const SubscriptionService = new SubscriptionServiceClass();

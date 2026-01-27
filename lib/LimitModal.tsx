@@ -49,9 +49,11 @@ export default function LimitModal({
         <Text style={[styles.title, isLight && styles.titleLight]}>{title}</Text>
         <Text style={[styles.message, isLight && styles.messageLight]}>{message}</Text>
         <View style={styles.row}>
-          <TouchableOpacity onPress={onClose} style={[styles.btn, isLight && styles.btnLight]}>
-            <Text style={[styles.btnText, isLight && styles.btnTextLight]}>{secondaryText}</Text>
-          </TouchableOpacity>
+          {secondaryText ? (
+            <TouchableOpacity onPress={onClose} style={[styles.btn, isLight && styles.btnLight]}>
+              <Text style={[styles.btnText, isLight && styles.btnTextLight]}>{secondaryText}</Text>
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity onPress={onSubscribe} style={styles.cta}>
             <Text style={styles.ctaText}>{primaryText}</Text>
           </TouchableOpacity>
@@ -94,17 +96,20 @@ const styles = StyleSheet.create({
     borderColor: '#E5DED3',
   },
   title: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
     color: '#E5E7EB',
     marginBottom: 8,
+    fontFamily: 'Feather-Bold',
   },
   titleLight: {
     color: '#111827',
   },
   message: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#C7D2FE',
+    fontFamily: 'Feather-Bold',
+    lineHeight: 22,
   },
   messageLight: {
     color: '#2D4A66',
@@ -117,11 +122,11 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   btn: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
     backgroundColor: '#1B263B',
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#2D4A66',
   },
   btnLight: {
@@ -131,18 +136,22 @@ const styles = StyleSheet.create({
   btnText: {
     color: '#E5E7EB',
     fontWeight: '700',
+    fontSize: 15,
+    fontFamily: 'Feather-Bold',
   },
   btnTextLight: {
     color: '#111827',
   },
   cta: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
     backgroundColor: '#F8B070',
   },
   ctaText: {
-    color: '#111827',
+    color: '#0D1B2A',
     fontWeight: '800',
+    fontSize: 15,
+    fontFamily: 'Feather-Bold',
   },
 });

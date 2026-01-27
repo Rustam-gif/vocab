@@ -9,7 +9,7 @@ import {
   Dimensions,
   ScrollView
 } from 'react-native';
-import { ChevronRight, Volume2 } from 'lucide-react-native';
+import { ChevronRight, Volume2, Lightbulb } from 'lucide-react-native';
 import { speak, setWebViewAudioPlayer } from '../../../lib/speech';
 import LottieView from 'lottie-react-native';
 import AudioPlayer, { AudioPlayerRef } from '../../../components/AudioPlayer';
@@ -33,6 +33,8 @@ interface MCQProps {
   wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
   showUfoAnimation?: boolean;
   ufoAnimationKey?: number;
+  hintsRemaining?: number;
+  onHintUsed?: () => void;
 }
 
 interface Question {
@@ -1938,12 +1940,13 @@ const typedFallbacks = (setTitle: string, pos: 'verb'|'noun'|'adjective'): strin
   return ['A general concept related to subject'];
 };
 
-export default function MCQComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, onCorrectAnswer, onIncorrectAnswer, wordRange, wordsOverride, showUfoAnimation, ufoAnimationKey = 0 }: MCQProps) {
+export default function MCQComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, onCorrectAnswer, onIncorrectAnswer, wordRange, wordsOverride, showUfoAnimation, ufoAnimationKey = 0, hintsRemaining = 0, onHintUsed }: MCQProps) {
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [hiddenOptions, setHiddenOptions] = useState<number[]>([]); // Indices of options to hide when hint used
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
@@ -3298,6 +3301,32 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
 };
 
   const recordResult = useAppStore(s => s.recordExerciseResult);
+
+  // Handle hint button - eliminate 2 wrong options
+  const handleHint = () => {
+    if (hintsRemaining <= 0 || isAnswered || hiddenOptions.length > 0) return;
+
+    const currentQ = questions[currentWordIndex];
+    if (!currentQ) return;
+
+    // Find all wrong option indices
+    const wrongIndices = currentQ.options
+      .map((_, idx) => idx)
+      .filter(idx => idx !== currentQ.correctAnswer);
+
+    // Randomly select 2 wrong options to hide
+    const shuffled = wrongIndices.sort(() => Math.random() - 0.5);
+    const toHide = shuffled.slice(0, 2);
+
+    setHiddenOptions(toHide);
+    onHintUsed?.();
+    try {
+      soundService.playCorrectAnswer();
+    } catch (e) {
+      console.warn('[MCQ] Failed to play hint sound:', e);
+    }
+  };
+
   const handleAnswerSelect = (answerIndex: number) => {
     if (isAnswered) return; // Prevent multiple selections
 
@@ -3369,6 +3398,7 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
     setSelectedAnswer(null);
     setShowFeedback(false);
     setIsAnswered(false);
+    setHiddenOptions([]); // Reset hidden options for next question
     questionStartRef.current = Date.now();
 
     Animated.timing(progressAnim, {
@@ -3516,8 +3546,24 @@ const generateDistractor = (correctDef: string, type: string, wordContext: strin
             </Text>
           </View>
 
+          {/* Hint Button */}
+          {hintsRemaining > 0 && !isAnswered && hiddenOptions.length === 0 && (
+            <TouchableOpacity
+              style={[styles.hintButton, isLight && styles.hintButtonLight]}
+              onPress={handleHint}
+              activeOpacity={0.7}
+            >
+              <Lightbulb size={16} color={isLight ? '#F59E0B' : '#FCD34D'} fill={isLight ? '#F59E0B' : '#FCD34D'} />
+            </TouchableOpacity>
+          )}
+
           <View style={styles.optionsContainer}>
             {currentQuestion.options.map((option, index) => {
+              // Skip rendering if this option is hidden by hint
+              if (hiddenOptions.includes(index)) {
+                return null;
+              }
+
               const isSelected = selectedAnswer === index;
               const isCorrectOption = index === currentQuestion.correctAnswer;
               // If an animated value hasn't been prepared yet, render visible (1) to avoid invisible options
@@ -3723,6 +3769,24 @@ const styles = StyleSheet.create({
   },
   optionsContainer: {
     marginBottom: 12,
+  },
+  hintButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(252, 211, 77, 0.4)',
+    zIndex: 10,
+  },
+  hintButtonLight: {
+    backgroundColor: 'rgba(251, 191, 36, 0.2)',
+    borderColor: 'rgba(245, 158, 11, 0.5)',
   },
   nextButtonContainer: {
     position: 'absolute',

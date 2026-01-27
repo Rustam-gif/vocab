@@ -20,6 +20,7 @@ import AnimatedNextButton from './AnimatedNextButton';
 import LottieView from 'lottie-react-native';
 import { useCanMountTextInput } from '../../../lib/TextInputGate';
 import { soundService } from '../../../services/SoundService';
+import { Lightbulb } from 'lucide-react-native';
 
 export type MissingLettersResult = {
   isCorrect: boolean;
@@ -39,6 +40,8 @@ export interface MissingLettersProps {
   hearts: number;
   showUfoAnimation?: boolean;
   ufoAnimationKey?: number;
+  hintsRemaining?: number;
+  onHintUsed?: () => void;
 }
 
 // Enable LayoutAnimation on Android
@@ -106,7 +109,7 @@ function pickHintPositions(letterIndices: number[]): number[] {
   return Array.from(new Set(result));
 }
 
-export default function MissingLetters({ word, ipa, clue, onResult, onNext, theme = 'dark', wordIndex, totalWords, hearts, showUfoAnimation, ufoAnimationKey = 0 }: MissingLettersProps) {
+export default function MissingLetters({ word, ipa, clue, onResult, onNext, theme = 'dark', wordIndex, totalWords, hearts, showUfoAnimation, ufoAnimationKey = 0, hintsRemaining = 0, onHintUsed }: MissingLettersProps) {
   const displayWord = useMemo(() => word, [word]);
   const lettersOnly = useMemo(() => normalize(word), [word]);
   const canMountTextInput = useCanMountTextInput();
@@ -142,6 +145,7 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
   const [mistakes, setMistakes] = useState(0);
   const [completed, setCompleted] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
+  const [hintUsed, setHintUsed] = useState(false);
   const inputRefs = useRef<Array<TextInputRef | null>>([]);
   const evaluationTimeout = useRef<NodeJS.Timeout | null>(null);
   const heartLostAnim = useRef(new Animated.Value(1)).current;
@@ -158,6 +162,7 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
     setCompleted(false);
     setFocused(null);
     setEvaluating(false);
+    setHintUsed(false);
 
     if (evaluationTimeout.current) {
       clearTimeout(evaluationTimeout.current);
@@ -243,6 +248,55 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
 
   // REMOVED: Automatic focus in useEffect causes iOS UI thread deadlock.
   // User must tap to focus. This is the safest pattern for iOS keyboard sessions.
+
+  const handleHint = useCallback(() => {
+    if (hintsRemaining <= 0 || completed || hintUsed) return;
+
+    // Find all empty letter slots that aren't hints
+    const emptySlots = slots
+      .map((slot, idx) => ({ slot, idx }))
+      .filter(({ slot }) => slot.isLetter && !slot.isHint && slot.value.trim().length === 0);
+
+    if (emptySlots.length === 0) return;
+
+    // Randomly select one to reveal
+    const randomIndex = Math.floor(Math.random() * emptySlots.length);
+    const { idx } = emptySlots[randomIndex];
+
+    // Get the target characters
+    const targetChars = Array.from(displayWord).filter(isLetter).map(c => c.toUpperCase());
+
+    // Find which letter index this slot corresponds to
+    let letterCount = 0;
+    let targetLetterIndex = 0;
+    for (let i = 0; i <= idx; i++) {
+      if (slots[i].isLetter) {
+        if (i === idx) {
+          targetLetterIndex = letterCount;
+        }
+        letterCount++;
+      }
+    }
+
+    const correctChar = targetChars[targetLetterIndex];
+
+    // Reveal this slot
+    setSlots(prev => prev.map((s, i) => {
+      if (i === idx) {
+        return {
+          ...s,
+          value: correctChar,
+          status: 'revealed',
+          isHint: true, // Mark as hint so it's locked
+        };
+      }
+      return s;
+    }));
+
+    setHintUsed(true);
+    onHintUsed?.();
+    soundService.playCorrectAnswer();
+  }, [slots, displayWord, hintsRemaining, completed, hintUsed, onHintUsed]);
 
   const evaluateSlots = useCallback(() => {
     if (evaluating || completed) {
@@ -361,10 +415,20 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
       <View style={themeStyles.progressBar}>
         <View style={[themeStyles.progressFill, { width: `${Math.min(100, progress * 100)}%` }]} />
       </View>
-      <View style={themeStyles.header}> 
+      <View style={themeStyles.header}>
         <Text style={themeStyles.clue} accessibilityLabel={`Clue: ${clue}`}>{clue}</Text>
         {ipa ? <Text style={themeStyles.ipa}>{ipa}</Text> : null}
       </View>
+
+      {hintsRemaining > 0 && !completed && !hintUsed && (
+        <TouchableOpacity
+          style={[themeStyles.hintButton, theme === 'light' && themeStyles.hintButtonLight]}
+          onPress={handleHint}
+          activeOpacity={0.7}
+        >
+          <Lightbulb size={16} color={theme === 'light' ? '#F59E0B' : '#FCD34D'} fill={theme === 'light' ? '#F59E0B' : '#FCD34D'} />
+        </TouchableOpacity>
+      )}
 
       <View style={themeStyles.slotsRow}>
         {slots.map((s, i) => {
@@ -515,6 +579,24 @@ const darkStyles = StyleSheet.create({
     fontFamily: 'Feather-Bold',
     fontStyle: 'italic',
   },
+  hintButton: {
+    position: 'absolute',
+    top: 180,
+    left: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(252, 211, 77, 0.4)',
+    zIndex: 10,
+  },
+  hintButtonLight: {
+    backgroundColor: 'rgba(251, 191, 36, 0.2)',
+    borderColor: 'rgba(245, 158, 11, 0.5)',
+  },
   slotsRow: {
     position: 'absolute',
     bottom: 360,
@@ -653,6 +735,24 @@ const lightStyles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Feather-Bold',
     fontStyle: 'italic',
+  },
+  hintButton: {
+    position: 'absolute',
+    top: 180,
+    left: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(252, 211, 77, 0.4)',
+    zIndex: 10,
+  },
+  hintButtonLight: {
+    backgroundColor: 'rgba(251, 191, 36, 0.2)',
+    borderColor: 'rgba(245, 158, 11, 0.5)',
   },
   slotsRow: {
     position: 'absolute',

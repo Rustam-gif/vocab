@@ -122,10 +122,8 @@ export default function ProfileScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
 
-  // DON'T subscribe to user - it causes infinite renders
-  // Get it once without subscribing
-  const [user] = useState(() => useAppStore.getState().user);
-
+  // Subscribe to user from store
+  const user = useAppStore(s => s.user);
   const setUser = useAppStore(s => s.setUser);
   const userProgress = useAppStore(s => s.userProgress);
   const loadProgress = useAppStore(s => s.loadProgress);
@@ -299,39 +297,43 @@ export default function ProfileScreen() {
 
   const handleContinuePurchase = async () => {
     setIsPurchasing(true);
-    try {
-      // Ensure products are loaded (some builds may not resolve on first mount)
-      let current = products;
-      if (!current || current.length === 0) {
-        try {
-          const refreshed = await SubscriptionService.getProducts(['com.royal.vocadoo.premium.months', 'com.royal.vocadoo.premium.annually']);
-          setProducts(refreshed);
-          if (!selectedSku) {
-            const monthly = refreshed.find(p => p.duration === 'monthly')?.id;
-            setSelectedSku(monthly || refreshed[0]?.id || null);
-          }
-          current = refreshed;
-        } catch {}
+
+    // Ensure products are loaded
+    let current = products;
+    if (!current || current.length === 0) {
+      try {
+        const refreshed = await SubscriptionService.getProducts(['com.royal.vocadoo.premium.months', 'com.royal.vocadoo.premium.annually']);
+        setProducts(refreshed);
+        if (!selectedSku) {
+          const monthly = refreshed.find(p => p.duration === 'monthly')?.id;
+          setSelectedSku(monthly || refreshed[0]?.id || null);
+        }
+        current = refreshed;
+      } catch (err) {
+        Alert.alert('Error', 'Unable to load subscription options. Please try again.');
+        setIsPurchasing(false);
+        return;
       }
+    }
 
-      const fallbackSku = (current.find(p => p.duration === 'monthly')?.id) || current[0]?.id || 'com.royal.vocadoo.premium.months';
-      const sku = selectedSku || fallbackSku;
+    const fallbackSku = (current.find(p => p.duration === 'monthly')?.id) || current[0]?.id || 'com.royal.vocadoo.premium.months';
+    const sku = selectedSku || fallbackSku;
 
-      // Start purchase but add a UI fail‑safe so the button doesn't appear stuck
+    try {
+      // Start purchase with safety timeout (50s max)
       const purchasePromise = SubscriptionService.purchase(sku);
-      const timeoutPromise = new Promise<any>(async (resolve) => {
-        // After 20s, resolve with whatever status we have so UI can recover
-        setTimeout(async () => {
-          try { resolve(await SubscriptionService.getStatus()); }
-          catch { resolve({ active: false }); }
-        }, 20000);
-      });
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Purchase timed out. Please check your App Store purchases and try Restore if needed.')), 50000)
+      );
 
-      const next: any = await Promise.race([purchasePromise, timeoutPromise]);
-      setSubStatus(next);
-      cachedSubStatus = next; // Update cache
+      await Promise.race([purchasePromise, timeoutPromise]);
 
-      if (next?.active) {
+      // Get fresh status after purchase completes
+      const freshStatus = await SubscriptionService.getStatus();
+      setSubStatus(freshStatus);
+      cachedSubStatus = freshStatus;
+
+      if (freshStatus?.active) {
         // Refresh premium status cache in store
         try {
           await useAppStore.getState().refreshPremiumStatus();
@@ -340,8 +342,10 @@ export default function ProfileScreen() {
           console.warn('[Profile] Failed to refresh premium cache:', e);
         }
 
-        // Notify Learn screen that premium status changed
+        // Notify all screens that premium status changed
         DeviceEventEmitter.emit('PREMIUM_STATUS_CHANGED', true);
+
+        // Show success animation
         setShowPurchaseSuccess(true);
         setTimeout(() => {
           setShowPurchaseSuccess(false);
@@ -350,9 +354,37 @@ export default function ProfileScreen() {
             try { router.replace('/profile'); } catch {}
           }
         }, 1400);
+      } else {
+        // Purchase didn't complete - show helpful message
+        Alert.alert(
+          'Purchase Status',
+          'If you completed the purchase, tap "Restore" to activate your subscription.',
+          [
+            { text: 'OK', style: 'cancel' },
+            {
+              text: 'Restore',
+              onPress: async () => {
+                const restored = await SubscriptionService.restore();
+                setSubStatus(restored);
+                cachedSubStatus = restored;
+                if (restored?.active) {
+                  await useAppStore.getState().refreshPremiumStatus();
+                  DeviceEventEmitter.emit('PREMIUM_STATUS_CHANGED', true);
+                  Alert.alert('Success', 'Your subscription has been restored!');
+                } else {
+                  Alert.alert('No Subscription', 'No active subscription found.');
+                }
+              }
+            }
+          ]
+        );
       }
-    } catch (e) {
-      // Swallow and fall through to finally; UI will recover
+    } catch (e: any) {
+      console.error('[Profile] Purchase error:', e);
+      const errorMsg = e?.message || 'Unable to complete purchase';
+      if (!/cancel/i.test(errorMsg)) {
+        Alert.alert('Purchase Error', errorMsg);
+      }
     } finally {
       setIsPurchasing(false);
     }
@@ -381,6 +413,7 @@ export default function ProfileScreen() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[PROFILE] Auth state change:', event, 'has session:', !!session);
       if (session?.user) {
         try {
           // Pull remote data after sign-in to restore analytics/progress
@@ -391,6 +424,8 @@ export default function ProfileScreen() {
           await loadProgress();
           const current = await supabase.auth.getUser();
           setUser(mapSupabaseUser(current.data.user, useAppStore.getState().userProgress));
+          // Close auth form when user is signed in
+          setShowEmailAuth(false);
         } catch {}
         // Try to flush any pending progress to Supabase (best-effort)
         ProgressService.saveProgress().catch(() => {});
@@ -444,7 +479,7 @@ export default function ProfileScreen() {
       if (isSignUp) {
         // Get the selected avatar source
         const selectedAvatarOption = AVATAR_OPTIONS.find(a => a.id === selectedAvatar);
-        const avatarUrl = selectedAvatarOption 
+        const avatarUrl = selectedAvatarOption
           ? `avatar_${selectedAvatar}` // Store avatar ID reference
           : undefined;
 
@@ -452,6 +487,7 @@ export default function ProfileScreen() {
           email,
           password,
           options: {
+            emailRedirectTo: undefined, // Disable email confirmation redirect
             data: {
               full_name: fullName,
               avatar_id: selectedAvatar, // Store the avatar ID
@@ -460,15 +496,69 @@ export default function ProfileScreen() {
           },
         });
 
+        console.log('[PROFILE] Sign up result:', { user: !!data?.user, session: !!data?.session, error: error?.message });
+
         if (error) {
           Alert.alert('Sign Up Error', error.message);
         } else if (data.user) {
-          // Improved in-app modal instead of system alert
-          setIsSignUp(false); // switch to sign-in mode
-          setPassword('');
-          setConfirmPassword('');
-          setShowEmailAuth(true); // keep auth form visible for immediate sign-in
-          setShowSignUpSuccess(true);
+          // Check if we have a session (auto-confirmed) or need confirmation
+          if (data.session) {
+            // User is automatically signed in
+            console.log('[PROFILE] Sign up successful with session - auto signing in');
+            try {
+              await Promise.all([
+                analyticsService.refreshFromRemote().catch(() => {}),
+                ProgressService.refreshFromRemote().catch(() => {}),
+              ]);
+              await loadProgress();
+            } catch {}
+            setUser(mapSupabaseUser(data.user, useAppStore.getState().userProgress));
+            setShowEmailAuth(false);
+            setIsSignUp(false);
+            // Clear form
+            setPassword('');
+            setConfirmPassword('');
+            setFullName('');
+            setEmail('');
+          } else {
+            // Email confirmation required - try to sign in anyway
+            console.log('[PROFILE] Sign up successful but no session - attempting sign in');
+            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+              email,
+              password,
+            });
+
+            if (!signInError && signInData.session) {
+              // Successfully signed in
+              console.log('[PROFILE] Auto sign-in successful');
+              try {
+                await Promise.all([
+                  analyticsService.refreshFromRemote().catch(() => {}),
+                  ProgressService.refreshFromRemote().catch(() => {}),
+                ]);
+                await loadProgress();
+              } catch {}
+              setUser(mapSupabaseUser(signInData.user, useAppStore.getState().userProgress));
+              setShowEmailAuth(false);
+              setIsSignUp(false);
+              // Clear form
+              setPassword('');
+              setConfirmPassword('');
+              setFullName('');
+              setEmail('');
+            } else {
+              // Could not auto sign in - show message
+              Alert.alert(
+                'Account Created',
+                'Your account has been created. Please check your email to confirm your account, then sign in.',
+                [{ text: 'OK', onPress: () => {
+                  setIsSignUp(false);
+                  setPassword('');
+                  setConfirmPassword('');
+                }}]
+              );
+            }
+          }
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -476,18 +566,32 @@ export default function ProfileScreen() {
           password,
         });
 
+        console.log('[PROFILE] Sign in result:', { user: !!data?.user, session: !!data?.session, error: error?.message });
+
         if (error) {
           Alert.alert('Sign In Error', error.message);
-        } else if (data.user) {
+        } else if (data.user && data.session) {
+          console.log('[PROFILE] Sign in successful, loading user data');
           try {
             await Promise.all([
               analyticsService.refreshFromRemote().catch(() => {}),
               ProgressService.refreshFromRemote().catch(() => {}),
             ]);
             await loadProgress();
-          } catch {}
-          setUser(mapSupabaseUser(data.user, useAppStore.getState().userProgress));
+          } catch (e) {
+            console.log('[PROFILE] Error loading remote data:', e);
+          }
+          const mappedUser = mapSupabaseUser(data.user, useAppStore.getState().userProgress);
+          console.log('[PROFILE] Setting user:', mappedUser?.email);
+          setUser(mappedUser);
+          // Clear form and close auth
+          setPassword('');
+          setEmail('');
           setShowEmailAuth(false);
+          console.log('[PROFILE] Sign in complete, auth form should be closed');
+        } else {
+          console.log('[PROFILE] Sign in failed - no user or session');
+          Alert.alert('Sign In Error', 'Failed to sign in. Please try again.');
         }
       }
     } catch (error) {
@@ -1103,42 +1207,6 @@ export default function ProfileScreen() {
             </View>
           </View>
         )}
-
-        {/* Debug button to force premium refresh */}
-        {__DEV__ && (
-          <TouchableOpacity
-            onPress={async () => {
-              try {
-                console.log('[DEBUG] Forcing premium status refresh...');
-                await AsyncStorage.setItem('@engniter.premium.active', '1');
-                await AsyncStorage.setItem('@engniter.premium.product', 'com.royal.vocadoo.premium.monthly');
-                await useAppStore.getState().refreshPremiumStatus();
-                const status = await SubscriptionService.getStatus();
-                setSubStatus(status);
-                cachedSubStatus = status;
-                DeviceEventEmitter.emit('PREMIUM_STATUS_CHANGED', true);
-                Alert.alert('Success', 'Premium status forced to active. All features should now be available.');
-                console.log('[DEBUG] Premium status:', status);
-              } catch (e) {
-                console.error('[DEBUG] Failed to force premium:', e);
-                Alert.alert('Error', 'Failed to force premium status: ' + e);
-              }
-            }}
-            style={{
-              marginHorizontal: 20,
-              marginVertical: 10,
-              padding: 15,
-              backgroundColor: '#F59E0B',
-              borderRadius: 12,
-              alignItems: 'center',
-            }}
-          >
-            <Text style={{ color: '#000', fontWeight: '700', fontSize: 14 }}>
-              🔧 DEV: Force Enable Premium
-            </Text>
-          </TouchableOpacity>
-        )}
-
         {/* Practice reminders live in Settings */}
 
         {/* Sound Effects Toggle */}

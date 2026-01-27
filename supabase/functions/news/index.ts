@@ -110,7 +110,7 @@ const clampArticle = (text: string) => {
   const clean = (text || "").replace(/\s+/g, " ").trim();
   if (!clean) return "";
   const words = clean.split(/\s+/).filter(Boolean);
-  return words.slice(0, 260).join(" ");
+  return words.slice(0, 320).join(" ");
 };
 
 const ensureArticleLength = (text: string) => {
@@ -333,7 +333,7 @@ Return a JSON array only. No extra text.`,
 
 async function expandWithAI(article: Article): Promise<Article> {
   const cleanedSummary = ensureArticleLength(article.summary || "");
-  const knownText = trimKnownText(cleanedSummary || "", 140);
+  const knownText = trimKnownText(cleanedSummary || "", 200);
 
   if (!AI_ENABLED) {
     const fallback = cleanedSummary || article.summary || knownText || article.title || "Daily update";
@@ -356,7 +356,7 @@ You are a news writer. Reconstruct concise, natural, journalistic articles using
 Paywall notices must be discarded.
 
 Rules:
-- Write 140–220 words.
+- Write 250–300 words.
 - Keep it factual and neutral.
 - Expand logically using world knowledge, without inventing specific fake facts.
 - Add context, background, reactions, and implications.
@@ -375,7 +375,7 @@ KNOWN TEXT:
 ${knownText}
 
 TASK:
-Write a concise news article (140–220 words). Ignore paywall/marketing boilerplate.
+Write a comprehensive news article (250–300 words). Ignore paywall/marketing boilerplate.
 Avoid fiction and avoid specific unverifiable claims.
         `.trim(),
       },
@@ -387,14 +387,14 @@ Avoid fiction and avoid specific unverifiable claims.
 
       let finalSummary = firstPass;
 
-      if (wordCount(firstPass) < 130) {
+      if (wordCount(firstPass) < 240) {
         const extendMessages = [
-          { role: "system", content: "Expand news articles. Extend to 150–230 words. Plain text only." },
-          { role: "user", content: `Extend this article to 150–230 words without changing facts:\n\n${firstPass}` },
+          { role: "system", content: "Expand news articles. Extend to 250–300 words. Plain text only." },
+          { role: "user", content: `Extend this article to 250–300 words without changing facts:\n\n${firstPass}` },
         ];
-        const secondResponse = await callAI(extendMessages, 900);
+        const secondResponse = await callAI(extendMessages, 1200);
         const secondTxt = ensureArticleLength(secondResponse.content || "");
-        if (wordCount(secondTxt) >= 130) finalSummary = secondTxt;
+        if (wordCount(secondTxt) >= 240) finalSummary = secondTxt;
       }
 
       const aiVocab = await extractVocabFromArticle(finalSummary);

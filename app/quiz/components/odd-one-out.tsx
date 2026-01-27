@@ -8,6 +8,7 @@ import {
   Easing,
   Dimensions,
 } from 'react-native';
+import { Lightbulb } from 'lucide-react-native';
 import { useAppStore } from '../../../lib/store';
 import { getTheme } from '../../../lib/theme';
 import { soundService } from '../../../services/SoundService';
@@ -32,6 +33,8 @@ interface OddOneOutProps {
   wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
   showUfoAnimation?: boolean;
   ufoAnimationKey?: number;
+  hintsRemaining?: number;
+  onHintUsed?: () => void;
 }
 
 interface QuestionData {
@@ -52,10 +55,13 @@ export default function OddOneOutComponent({
   wordsOverride,
   showUfoAnimation,
   ufoAnimationKey = 0,
+  hintsRemaining = 0,
+  onHintUsed,
 }: OddOneOutProps) {
   const recordResult = useAppStore(s => s.recordExerciseResult);
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
+  const [hintUsed, setHintUsed] = useState(false); // Track if hint was used for current question
   const isLight = themeName === 'light';
 
   // Stabilize wordsOverride to prevent unnecessary re-renders
@@ -288,7 +294,17 @@ export default function OddOneOutComponent({
       onPhaseComplete(correctCount, questions.length);
     } else {
       setCurrentIndex(prev => prev + 1);
+      setHintUsed(false); // Reset hint for next question
     }
+  };
+
+  // Handle hint button - highlight the correct answer
+  const handleHint = () => {
+    if (hintsRemaining <= 0 || revealed || hintUsed) return;
+
+    setHintUsed(true);
+    onHintUsed?.();
+    soundService.playCorrectAnswer();
   };
 
   const handlePrimary = () => {
@@ -357,6 +373,17 @@ export default function OddOneOutComponent({
         </Text>
       </View>
 
+      {/* Hint Button */}
+      {hintsRemaining > 0 && !revealed && !hintUsed && (
+        <TouchableOpacity
+          style={[styles.hintButton, isLight && styles.hintButtonLight]}
+          onPress={handleHint}
+          activeOpacity={0.7}
+        >
+          <Lightbulb size={16} color={isLight ? '#F59E0B' : '#FCD34D'} fill={isLight ? '#F59E0B' : '#FCD34D'} />
+        </TouchableOpacity>
+      )}
+
       {/* 2x2 Grid of cards */}
       <View style={styles.gridContainer}>
         {/* First row */}
@@ -367,6 +394,11 @@ export default function OddOneOutComponent({
             const anim = cardAnims[idx];
 
             let cardStyle: any[] = [styles.card, isLight && styles.cardLight];
+
+            // Show hint highlight on correct answer if hint was used
+            if (hintUsed && !revealed && isOdd) {
+              cardStyle.push(styles.cardHint);
+            }
             let textStyle: any[] = [styles.cardText, isLight && styles.cardTextLight];
 
             if (!revealed && isSelected) {
@@ -410,6 +442,11 @@ export default function OddOneOutComponent({
             const anim = cardAnims[idx];
 
             let cardStyle: any[] = [styles.card, isLight && styles.cardLight];
+
+            // Show hint highlight on correct answer if hint was used
+            if (hintUsed && !revealed && isOdd) {
+              cardStyle.push(styles.cardHint);
+            }
             let textStyle: any[] = [styles.cardText, isLight && styles.cardTextLight];
 
             if (!revealed && isSelected) {
@@ -524,6 +561,33 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'Feather-Bold',
     textAlign: 'center',
+  },
+  hintButton: {
+    position: 'absolute',
+    top: 120,
+    left: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(252, 211, 77, 0.4)',
+    zIndex: 10,
+  },
+  hintButtonLight: {
+    backgroundColor: 'rgba(251, 191, 36, 0.2)',
+    borderColor: 'rgba(245, 158, 11, 0.5)',
+  },
+  cardHint: {
+    borderColor: '#4ED9CB',
+    borderWidth: 3,
+    shadowColor: '#4ED9CB',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 8,
   },
   gridContainer: {
     flex: 1,

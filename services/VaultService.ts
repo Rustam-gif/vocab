@@ -344,7 +344,29 @@ class VaultService {
     let word = this.getWordById(wordKey);
     if (!word) {
       word = this.words.find(item => item.word.toLowerCase() === wordKey.toLowerCase());
-      if (!word) return null;
+      if (!word) {
+        // Auto-create word in vault if it doesn't exist (for mastery tracking)
+        console.log('[VaultService] Auto-adding word to vault for mastery tracking:', wordKey);
+        const newWord: Word = {
+          id: Date.now().toString() + '_' + Math.random().toString(36).substring(7),
+          word: wordKey,
+          definition: '', // Will be filled later if user bookmarks
+          example: '',
+          phonetics: '',
+          savedAt: new Date(),
+          notes: '',
+          tags: ['auto-added'],
+          score: 0,
+          practiceCount: 0,
+          correctCount: 0,
+          incorrectCount: 0,
+          exerciseStats: {},
+          isWeak: true,
+          isMastered: false,
+        };
+        this.words.push(newWord);
+        word = newWord;
+      }
     }
     const id = word.id;
 
@@ -376,6 +398,10 @@ class VaultService {
       maxOneMistakePerExercise,
       isMastered
     });
+
+    if (isMastered) {
+      console.log('[VaultService] 🎉 Word MASTERED:', word.word);
+    }
 
     const updatedWord: Word = {
       ...normalized,

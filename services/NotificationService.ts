@@ -19,11 +19,14 @@ const TODAY_WORDS_KEY = '@engniter.progress.wordsToday';
 const TODAY_DATE_KEY = '@engniter.progress.todayDate';
 
 const MESSAGES: string[] = [
-  'Quick win? 5 minutes improves your streak ✨',
-  'Your words miss you. Learn 3 now! 📚',
-  'Small steps today build fluency tomorrow 💪',
-  'Practice moment: one story or 5 words 🔁',
-  'You are close to your next milestone. Keep going! 🔥',
+  'Do you know these words? Test your vocabulary now! 📚',
+  "Today's articles are ready. Practice words while reading? 📰",
+  'Can you master 5 new words in 3 minutes? 🚀',
+  'Your daily vocab quiz awaits. Ready to shine? ✨',
+  'New stories unlocked! Learn words through reading 📖',
+  'Quick challenge: Match synonyms and build your streak 🔥',
+  "Today's word mission is calling. Will you answer? 🎯",
+  "Remember yesterday's words? Time for a quick review! 🔄",
 ];
 
 // Personalized messages based on daily goal and progress
@@ -55,31 +58,41 @@ const getPersonalizedMessage = async (): Promise<string> => {
     if (wordsToday >= dailyGoal) {
       // Goal completed - congratulations!
       const congratsMessages = [
-        'Amazing! You hit your daily goal! Keep the momentum going tomorrow',
-        'Goal crushed! You are building an impressive vocabulary',
-        'Champion! Daily goal complete. Rest up for tomorrow',
+        '🎉 Goal smashed! Want to learn even more today?',
+        'Daily mission complete! Ready for a bonus round? ⭐',
+        'You are on fire! Challenge yourself with today articles? 🔥',
       ];
       return congratsMessages[Math.floor(Math.random() * congratsMessages.length)];
     } else if (wordsToday === 0) {
       // Not started
       const startMessages = [
-        `Time for your daily vocabulary boost! ${dailyGoal} words waiting`,
-        `Start your day with ${dailyGoal} new words. Just ${mins} minutes!`,
-        'Fresh words await! Begin your learning streak today',
+        `Ready to learn ${dailyGoal} new words today? Let's go! 🚀`,
+        `Today's vocab adventure awaits! Can you master ${dailyGoal} words? 📚`,
+        `Fresh words ready! ${mins} minutes to boost your vocabulary? ✨`,
       ];
       return startMessages[Math.floor(Math.random() * startMessages.length)];
     } else if (percent >= 75) {
       // Almost there
-      return `Almost there! Just ${remaining} more words to hit your goal`;
+      const almostMessages = [
+        `So close! Just ${remaining} words to complete your goal 🎯`,
+        `Can you finish strong? Only ${remaining} words remaining! 💪`,
+        `${remaining} words away from victory! Quick finish? ⚡`,
+      ];
+      return almostMessages[Math.floor(Math.random() * almostMessages.length)];
     } else if (percent >= 50) {
       // Halfway
-      return `Halfway done! ${remaining} words left. You've got this!`;
+      const halfwayMessages = [
+        `Halfway there! ${remaining} words left. You've got this! 🔥`,
+        `${percent}% complete! Ready to finish the second half? 📖`,
+        `Great progress! Can you master ${remaining} more words? ⭐`,
+      ];
+      return halfwayMessages[Math.floor(Math.random() * halfwayMessages.length)];
     } else {
       // In progress
       const progressMessages = [
-        `${remaining} words left today! Just ${mins} more minutes`,
-        `You are ${percent}% done with today's goal! Keep going`,
-        `Quick session? ${remaining} words to complete your daily goal`,
+        `Quick ${mins}-minute session? ${remaining} words to go! ⚡`,
+        `${remaining} words waiting! Ready to continue your streak? 🔥`,
+        `Can you learn ${remaining} more words today? Let's do this! 💪`,
       ];
       return progressMessages[Math.floor(Math.random() * progressMessages.length)];
     }
@@ -166,7 +179,7 @@ export const NotificationService = {
         try {
           RNPush.localNotificationSchedule?.({
             channelId: 'engniter-reminders',
-            title: 'Practice Reminder',
+            title: 'Stellar Vocabulary 🌟',
             message,
             date: fireDate,
             allowWhileIdle: true,
@@ -183,7 +196,7 @@ export const NotificationService = {
         setTimeout(async () => {
           try {
             const personalizedMsg = await getPersonalizedMessage();
-            Alert.alert('Practice Reminder', personalizedMsg);
+            Alert.alert('Stellar Vocabulary 🌟', personalizedMsg);
           } catch {}
         }, Math.max(1000, ms));
       }
@@ -224,7 +237,7 @@ export const NotificationService = {
         try {
           RNPush.localNotificationSchedule?.({
             channelId: 'engniter-reminders',
-            title: 'Practice Reminder',
+            title: 'Stellar Vocabulary 🌟',
             message,
             date: fireDate,
             allowWhileIdle: true,
@@ -280,7 +293,7 @@ export const NotificationService = {
         RNPush.createChannel?.({ channelId: 'engniter-reminders', channelName: 'Practice Reminders', importance: 4 });
         RNPush.localNotificationSchedule?.({
           channelId: 'engniter-reminders',
-          title: 'Practice Reminder',
+          title: 'Stellar Vocabulary 🌟',
           message: msg,
           date: new Date(Date.now() + 2500),
           allowWhileIdle: true,

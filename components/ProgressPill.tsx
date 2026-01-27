@@ -14,6 +14,7 @@ const TODAY_WORDS_KEY = '@engniter.progress.wordsToday';
 const TODAY_DATE_KEY = '@engniter.progress.todayDate';
 const DAILY_GOAL_KEY = '@engniter.onboarding.dailyGoal';
 const TOOLTIP_DISMISSED_KEY = '@engniter.progress.tooltipDismissed';
+const TOOLTIP_SHOW_COUNT_KEY = '@engniter.progress.tooltipShowCount';
 
 export default function ProgressPill({ style }: Props) {
   const router = useRouter();
@@ -35,11 +36,12 @@ export default function ProgressPill({ style }: Props) {
   useEffect(() => {
     const loadProgress = async () => {
       try {
-        const [goalResult, wordsResult, dateResult, tooltipResult] = await AsyncStorage.multiGet([
+        const [goalResult, wordsResult, dateResult, tooltipResult, showCountResult] = await AsyncStorage.multiGet([
           DAILY_GOAL_KEY,
           TODAY_WORDS_KEY,
           TODAY_DATE_KEY,
           TOOLTIP_DISMISSED_KEY,
+          TOOLTIP_SHOW_COUNT_KEY,
         ]);
 
         const goal = goalResult[1] ? parseInt(goalResult[1], 10) : 10;
@@ -48,6 +50,7 @@ export default function ProgressPill({ style }: Props) {
         const today = new Date().toISOString().split('T')[0];
         const savedDate = dateResult[1];
         const tooltipDismissedDate = tooltipResult[1];
+        const showCount = showCountResult[1] ? parseInt(showCountResult[1], 10) : 0;
 
         let words = 0;
         // Reset if it's a new day
@@ -67,8 +70,8 @@ export default function ProgressPill({ style }: Props) {
         setIsCompleted(words >= goal);
         setIsInitialLoad(false);
 
-        // Show tooltip if: 0 words completed, not dismissed today, and after initial load
-        if (words === 0 && tooltipDismissedDate !== today) {
+        // Show tooltip if: 0 words completed, not dismissed today, shown less than 5 times total, and after initial load
+        if (words === 0 && tooltipDismissedDate !== today && showCount < 5) {
           setTimeout(() => {
             setShowTooltip(true);
             Animated.spring(tooltipAnim, {
@@ -77,6 +80,14 @@ export default function ProgressPill({ style }: Props) {
               friction: 8,
               tension: 100,
             }).start();
+
+            // Increment show count
+            AsyncStorage.setItem(TOOLTIP_SHOW_COUNT_KEY, String(showCount + 1));
+
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+              dismissTooltip();
+            }, 5000);
           }, 1500); // Show after 1.5 seconds
         }
       } catch (e) {
@@ -277,7 +288,7 @@ export default function ProgressPill({ style }: Props) {
               {randomMessage}
             </Text>
             <TouchableOpacity onPress={dismissTooltip} style={styles.tooltipClose}>
-              <X size={14} color={isLight ? '#6B7280' : '#9CA3AF'} />
+              <X size={14} color={isLight ? '#6B7280' : '#4ED9CB'} />
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -332,22 +343,24 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -50,
     right: 0,
-    backgroundColor: '#243B53',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    backgroundColor: '#1F2937',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
     zIndex: 100,
     minWidth: 160,
+    borderWidth: 2,
+    borderColor: 'rgba(78, 217, 203, 0.2)',
   },
   tooltipLight: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 2,
+    borderColor: 'rgba(78, 217, 203, 0.3)',
   },
   tooltipArrow: {
     position: 'absolute',
@@ -355,14 +368,17 @@ const styles = StyleSheet.create({
     right: 20,
     width: 12,
     height: 12,
-    backgroundColor: '#243B53',
+    backgroundColor: '#1F2937',
     transform: [{ rotate: '45deg' }],
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderColor: 'rgba(78, 217, 203, 0.2)',
   },
   tooltipArrowLight: {
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderColor: '#E5E7EB',
+    backgroundColor: '#F8FAFC',
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderColor: 'rgba(78, 217, 203, 0.3)',
   },
   tooltipContent: {
     flexDirection: 'row',
@@ -370,10 +386,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tooltipText: {
-    color: '#E5E7EB',
+    color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '600',
-    fontFamily: 'Ubuntu-Medium',
+    fontWeight: '700',
+    fontFamily: 'Feather-Bold',
     flex: 1,
   },
   tooltipTextLight: {

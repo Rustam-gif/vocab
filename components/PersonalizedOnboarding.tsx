@@ -40,6 +40,14 @@ const GOAL_OPTIONS: { value: DailyGoal; label: string; time: string; recommended
   { value: 15, label: '15', time: '10-12 min' },
 ];
 
+// Word preview lists for each focus type
+const WORD_PREVIEW_LISTS: Record<FocusType, string[]> = {
+  business: ['professional', 'presentation', 'negotiate', 'strategy', 'implement', 'analyze', 'collaborate', 'revenue', 'deadline', 'proposal', 'budget', 'meeting', 'project', 'deadline', 'stakeholder'],
+  travel: ['adventure', 'destination', 'explore', 'journey', 'culture', 'passport', 'accommodation', 'itinerary', 'cuisine', 'landmark', 'flight', 'hotel', 'tourist', 'vacation', 'expedition'],
+  exams: ['analyze', 'evaluate', 'synthesize', 'comprehend', 'interpret', 'demonstrate', 'formulate', 'articulate', 'distinguish', 'elaborate', 'assess', 'conclude', 'justify', 'illustrate', 'examine'],
+  general: ['beautiful', 'important', 'different', 'interesting', 'necessary', 'possible', 'significant', 'essential', 'particular', 'various', 'adequate', 'appropriate', 'considerable', 'fundamental', 'substantial'],
+};
+
 // Popular languages for quick selection
 const POPULAR_LANGS = ['ru', 'es', 'zh', 'ar', 'de', 'fr', 'pt', 'ja', 'ko', 'tr', 'it', 'hi'];
 
@@ -49,7 +57,7 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
   const setLanguagePreferences = useAppStore(s => s.setLanguagePreferences);
   const selectedLangs = useAppStore(s => s.languagePreferences);
 
-  const [step, setStep] = useState(0); // 0: welcome, 1: language, 2: focus, 3: goal, 4: wordKnowledge, 5: forecast
+  const [step, setStep] = useState(0); // 0: welcome, 1: language, 2: focus, 3: goal, 4: wordKnowledge, 5: forecast, 6: wordPreview
   const [selectedFocus, setSelectedFocus] = useState<FocusType | null>(null);
   const [selectedGoal, setSelectedGoal] = useState<DailyGoal>(10);
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(selectedLangs?.[0] || null);
@@ -91,6 +99,9 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
   const starAnim1 = useRef(new Animated.Value(0)).current;
   const starAnim2 = useRef(new Animated.Value(0.5)).current;
   const starAnim3 = useRef(new Animated.Value(1)).current;
+
+  // Word preview animations
+  const wordScrollAnim = useRef(new Animated.Value(0)).current;
 
   // Animated counters for forecast
   const monthlyCount = useRef(new Animated.Value(0)).current;
@@ -134,6 +145,27 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
       ])
     ).start();
   }, []);
+
+  // Word preview scroll animation
+  useEffect(() => {
+    if (step === 6 && selectedFocus) {
+      wordScrollAnim.setValue(0);
+      Animated.loop(
+        Animated.timing(wordScrollAnim, {
+          toValue: 1,
+          duration: 20000, // Slow continuous scroll
+          useNativeDriver: true,
+        })
+      ).start();
+
+      // Auto-advance to complete onboarding after 3.5 seconds
+      const timer = setTimeout(() => {
+        handleComplete();
+      }, 3500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [step, selectedFocus]);
 
   // Forecast counter animation
   useEffect(() => {
@@ -237,6 +269,7 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
     if (step === 1) return !!selectedLanguage;
     if (step === 2) return !!selectedFocus;
     if (step === 4) return selectedWords.size > 0; // Require at least 1 word selected
+    if (step === 6) return false; // Word preview auto-advances, no manual continue
     return true;
   };
 
@@ -349,7 +382,12 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
 
   // Step 2: Focus Selection
   const renderFocusStep = () => (
-    <View style={styles.stepContainer}>
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ alignItems: 'center', paddingBottom: 20 }}
+      showsVerticalScrollIndicator={false}
+      bounces={true}
+    >
       <LottieView
         source={require('../assets/lottie/learn/planets/colorful_planet.json')}
         autoPlay
@@ -394,10 +432,108 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
           </TouchableOpacity>
         ))}
       </View>
-    </View>
+    </ScrollView>
   );
 
-  // Step 3: Goal Selection
+  // Step 3: Word Preview
+  const renderWordPreview = () => {
+    if (!selectedFocus) return null;
+
+    const words = WORD_PREVIEW_LISTS[selectedFocus];
+    const focusLabel = FOCUS_OPTIONS.find(o => o.id === selectedFocus)?.title || '';
+
+    // Create 3 columns of words for a more dynamic effect
+    const column1 = words.slice(0, 5);
+    const column2 = words.slice(5, 10);
+    const column3 = words.slice(10, 15);
+
+    const scrollY = wordScrollAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, -400], // Scroll distance
+    });
+
+    return (
+      <View style={styles.stepContainer}>
+        <LottieView
+          source={require('../assets/lottie/learn/planets/space_craft.json')}
+          autoPlay
+          loop
+          speed={0.6}
+          style={styles.stepAnimationSmall}
+        />
+        <Text style={styles.stepTitle}>Words You'll Master</Text>
+        <Text style={styles.stepSubtitle}>{focusLabel} vocabulary</Text>
+
+        <View style={styles.wordPreviewContainer}>
+          <View style={styles.wordPreviewColumns}>
+            {/* Column 1 */}
+            <Animated.View
+              style={[
+                styles.wordPreviewColumn,
+                { transform: [{ translateY: scrollY }] },
+              ]}
+            >
+              {[...column1, ...column1].map((word, idx) => (
+                <View key={`col1-${idx}`} style={styles.wordPreviewChip}>
+                  <Text style={styles.wordPreviewText}>{word}</Text>
+                </View>
+              ))}
+            </Animated.View>
+
+            {/* Column 2 - slightly offset scroll */}
+            <Animated.View
+              style={[
+                styles.wordPreviewColumn,
+                {
+                  transform: [{
+                    translateY: wordScrollAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-100, -500],
+                    }),
+                  }],
+                },
+              ]}
+            >
+              {[...column2, ...column2].map((word, idx) => (
+                <View key={`col2-${idx}`} style={styles.wordPreviewChip}>
+                  <Text style={styles.wordPreviewText}>{word}</Text>
+                </View>
+              ))}
+            </Animated.View>
+
+            {/* Column 3 - different offset */}
+            <Animated.View
+              style={[
+                styles.wordPreviewColumn,
+                {
+                  transform: [{
+                    translateY: wordScrollAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-50, -450],
+                    }),
+                  }],
+                },
+              ]}
+            >
+              {[...column3, ...column3].map((word, idx) => (
+                <View key={`col3-${idx}`} style={styles.wordPreviewChip}>
+                  <Text style={styles.wordPreviewText}>{word}</Text>
+                </View>
+              ))}
+            </Animated.View>
+          </View>
+
+          {/* Gradient overlays for fade effect */}
+          <View style={styles.gradientTop} />
+          <View style={styles.gradientBottom} />
+        </View>
+
+        <Text style={styles.wordPreviewHint}>✨ And many more...</Text>
+      </View>
+    );
+  };
+
+  // Step 4: Goal Selection
   const renderGoalStep = () => (
     <View style={styles.stepContainer}>
       <LottieView
@@ -524,7 +660,7 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
     );
   };
 
-  const steps = [renderWelcome, renderLanguageStep, renderFocusStep, renderGoalStep, renderWordKnowledge, renderForecast];
+  const steps = [renderWelcome, renderLanguageStep, renderFocusStep, renderGoalStep, renderWordKnowledge, renderForecast, renderWordPreview];
 
   return (
     <View style={styles.container}>
@@ -533,7 +669,7 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
 
       {/* Progress indicator */}
       <View style={styles.progressContainer}>
-        {[0, 1, 2, 3, 4, 5].map((s) => (
+        {[0, 1, 2, 3, 4, 5, 6].map((s) => (
           <View
             key={s}
             style={[
@@ -558,29 +694,31 @@ export default function PersonalizedOnboarding({ onComplete }: Props) {
         {steps[step]()}
       </Animated.View>
 
-      {/* Footer */}
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={[
-            styles.continueButton,
-            !canContinue() && styles.continueButtonDisabled,
-          ]}
-          onPress={() => {
-            soundService.playTabSwitch();
-            if (step < 5) {
-              animateToNextStep(step + 1);
-            } else {
-              handleComplete();
-            }
-          }}
-          disabled={!canContinue()}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.continueButtonText}>
-            {step === 0 ? 'Get Started' : step === 5 ? "Let's Go!" : 'Continue'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {/* Footer - Hidden on step 6 (Word Preview auto-advances) */}
+      {step !== 6 && (
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[
+              styles.continueButton,
+              !canContinue() && styles.continueButtonDisabled,
+            ]}
+            onPress={() => {
+              soundService.playTabSwitch();
+              if (step < 6) {
+                animateToNextStep(step + 1);
+              } else {
+                handleComplete();
+              }
+            }}
+            disabled={!canContinue()}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.continueButtonText}>
+              {step === 0 ? 'Get Started' : step === 5 ? "Let's Go!" : 'Continue'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -756,6 +894,7 @@ const styles = StyleSheet.create({
   focusContainer: {
     width: '100%',
     gap: 12,
+    paddingBottom: 100,
   },
   focusCard: {
     flexDirection: 'row',
@@ -1004,5 +1143,75 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Feather-Bold',
     textAlign: 'center',
+  },
+  // Word Preview styles
+  wordPreviewContainer: {
+    width: '100%',
+    height: 280,
+    marginVertical: 20,
+    overflow: 'hidden',
+    borderRadius: 20,
+    backgroundColor: 'rgba(27, 38, 59, 0.5)',
+    position: 'relative',
+  },
+  wordPreviewColumns: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    gap: 8,
+  },
+  wordPreviewColumn: {
+    flex: 1,
+    gap: 10,
+    paddingVertical: 20,
+  },
+  wordPreviewChip: {
+    backgroundColor: '#1B263B',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 2,
+    borderColor: 'rgba(78, 217, 203, 0.15)',
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderBottomColor: 'rgba(78, 217, 203, 0.2)',
+    borderRightColor: 'rgba(78, 217, 203, 0.18)',
+    alignItems: 'center',
+  },
+  wordPreviewText: {
+    color: '#4ED9CB',
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Feather-Bold',
+    textAlign: 'center',
+  },
+  gradientTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 50,
+    backgroundColor: '#1A2744',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    opacity: 0.9,
+  },
+  gradientBottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 50,
+    backgroundColor: '#1A2744',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    opacity: 0.9,
+  },
+  wordPreviewHint: {
+    color: '#F8B070',
+    fontSize: 15,
+    fontFamily: 'Feather-Bold',
+    textAlign: 'center',
+    marginTop: 10,
   },
 });

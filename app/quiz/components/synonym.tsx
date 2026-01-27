@@ -17,7 +17,7 @@ import { getTheme } from '../../../lib/theme';
 import { analyticsService } from '../../../services/AnalyticsService';
 import { soundService } from '../../../services/SoundService';
 import AnimatedNextButton from './AnimatedNextButton';
-import { Volume2 } from 'lucide-react-native';
+import { Volume2, Lightbulb } from 'lucide-react-native';
 import { speak, setWebViewAudioPlayer } from '../../../lib/speech';
 import { levels } from '../data/levels';
 import LottieView from 'lottie-react-native';
@@ -35,6 +35,8 @@ interface SynonymProps {
   wordsOverride?: Array<{ word: string; phonetic: string; definition: string; example: string; synonyms?: string[] }>;
   showUfoAnimation?: boolean;
   ufoAnimationKey?: number;
+  hintsRemaining?: number;
+  onHintUsed?: () => void;
 }
 
 interface WordEntry {
@@ -740,11 +742,12 @@ const CORRECT_COLOR_LIGHT = '#4ED9CB';
 const INCORRECT_COLOR_LIGHT = '#F25E86';
 const ACCENT_COLOR = '#F25E86';
 
-export default function SynonymComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, onCorrectAnswer, onIncorrectAnswer, wordRange, wordsOverride, showUfoAnimation, ufoAnimationKey = 0 }: SynonymProps) {
+export default function SynonymComponent({ setId, levelId, onPhaseComplete, hearts, onHeartLost, onCorrectAnswer, onIncorrectAnswer, wordRange, wordsOverride, showUfoAnimation, ufoAnimationKey = 0, hintsRemaining = 0, onHintUsed }: SynonymProps) {
   const themeName = useAppStore(s => s.theme);
   const recordResult = useAppStore(s => s.recordExerciseResult);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
+  const [hiddenOptions, setHiddenOptions] = useState<number[]>([]); // Indices of options to hide when hint used
 
   // Stabilize wordsOverride with a ref to prevent re-shuffling when parent re-renders
   const wordsOverrideRef = useRef(wordsOverride);
@@ -1079,8 +1082,29 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
       onPhaseComplete(phaseCorrect, wordsData.length);
     } else {
       setCurrentIndex(prev => prev + 1);
+      setHiddenOptions([]); // Reset hidden options for next question
       itemStartRef.current = Date.now();
     }
+  };
+
+  // Handle hint button - eliminate 2 wrong options
+  const handleHint = () => {
+    if (hintsRemaining <= 0 || revealed || hiddenOptions.length > 0) return;
+
+    const currentOpts = options[currentIndex] || [];
+    // Find all wrong option indices
+    const wrongIndices = currentOpts
+      .map((choice, idx) => ({ choice, idx }))
+      .filter(({ choice }) => !currentWord.correct.includes(choice))
+      .map(({ idx }) => idx);
+
+    // Randomly select 2 wrong options to hide
+    const shuffled = wrongIndices.sort(() => Math.random() - 0.5);
+    const toHide = shuffled.slice(0, 2);
+
+    setHiddenOptions(toHide);
+    onHintUsed?.();
+    soundService.playCorrectAnswer();
   };
 
   const progress = currentIndex / wordsData.length;
@@ -1165,8 +1189,24 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
             <Text style={[styles.ipaText, isLight && { color: '#6B7280' }]}>{currentWord.ipa}</Text>
           </View>
 
+          {/* Hint Button */}
+          {hintsRemaining > 0 && !revealed && hiddenOptions.length === 0 && (
+            <TouchableOpacity
+              style={[styles.hintButton, isLight && styles.hintButtonLight]}
+              onPress={handleHint}
+              activeOpacity={0.7}
+            >
+              <Lightbulb size={16} color={isLight ? '#F59E0B' : '#FCD34D'} fill={isLight ? '#F59E0B' : '#FCD34D'} />
+            </TouchableOpacity>
+          )}
+
           <View style={styles.grid}>
             {options[currentIndex].map((choice, idx) => {
+              // Skip rendering if this option is hidden by hint
+              if (hiddenOptions.includes(idx)) {
+                return null;
+              }
+
               const isSelected = selected.includes(choice);
               const isCorrect = currentWord.correct.includes(choice);
               const buttonStyles: Array<ViewStyle> = [styles.optionButton];
@@ -1380,6 +1420,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
     flexGrow: 1,
+  },
+  hintButton: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(252, 211, 77, 0.4)',
+    zIndex: 10,
+  },
+  hintButtonLight: {
+    backgroundColor: 'rgba(251, 191, 36, 0.2)',
+    borderColor: 'rgba(245, 158, 11, 0.5)',
   },
   optionButton: {
     width: '100%',

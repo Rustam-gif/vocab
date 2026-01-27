@@ -6,10 +6,11 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Flame, Target, BookOpen, Trophy } from 'lucide-react-native';
+import { ArrowLeft, Flame, Target, BookOpen, Trophy, Sliders } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 import { useAppStore } from '../lib/store';
 import { analyticsService } from '../services/AnalyticsService';
@@ -126,7 +127,23 @@ export default function StatsScreen() {
           <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
         </TouchableOpacity>
         <Text style={[styles.title, isLight && styles.titleLight]}>Your Progress</Text>
-        <View style={styles.placeholder} />
+        <TouchableOpacity
+          style={[styles.levelButton, isLight && styles.levelButtonLight]}
+          onPress={() => {
+            router.replace('/quiz/learn');
+            // Trigger modal opening via event after navigation
+            setTimeout(() => {
+              try {
+                DeviceEventEmitter.emit('OPEN_LEVEL_TOPIC_MODAL');
+              } catch (e) {
+                console.error('Failed to emit event:', e);
+              }
+            }, 300);
+          }}
+          activeOpacity={0.8}
+        >
+          <Sliders size={20} color={isLight ? '#0D9488' : '#4ED9CB'} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -234,6 +251,20 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 40,
+  },
+  levelButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(30, 41, 59, 0.9)',
+    borderWidth: 2,
+    borderColor: 'rgba(78, 217, 203, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  levelButtonLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(78, 217, 203, 0.4)',
   },
   content: {
     flex: 1,

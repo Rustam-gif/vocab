@@ -153,6 +153,40 @@ export default function App() {
   // Save settings and flush caches when app goes to background
   // This ensures SQLite WAL checkpoints before force-close
   const appStateRef = useRef(AppState.currentState);
+  const hasVerifiedOnStartup = useRef(false);
+
+  // Verify subscription on initial app startup (cold start)
+  useEffect(() => {
+    const verifyOnStartup = async () => {
+      if (hasVerifiedOnStartup.current) return;
+      hasVerifiedOnStartup.current = true;
+
+      // Wait a bit for app to fully initialize
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      try {
+        const SubscriptionService = require('./services/SubscriptionService').default;
+        const { premiumStatusService } = require('./services/PremiumStatusService');
+        const { DeviceEventEmitter } = require('react-native');
+
+        console.log('[App] Verifying subscription on startup...');
+        const status = await SubscriptionService.verifySubscription();
+        console.log('[App] Subscription verified on startup:', status.active ? 'Premium' : 'Free');
+
+        // Update premium status cache and store
+        await premiumStatusService.refresh();
+        await useAppStore.getState().refreshPremiumStatus();
+
+        // Notify all screens
+        DeviceEventEmitter.emit('PREMIUM_STATUS_CHANGED', status.active);
+      } catch (e) {
+        console.error('[App] Failed to verify subscription on startup:', e);
+      }
+    };
+
+    verifyOnStartup();
+  }, []);
+
   useEffect(() => {
     const handleAppStateChange = async (nextState: AppStateStatus) => {
       const previousState = appStateRef.current;
@@ -189,6 +223,31 @@ export default function App() {
       // Track app_open when returning from background
       if (nextState === 'active' && (previousState === 'background' || previousState === 'inactive')) {
         engagementTrackingService.trackEvent('app_open');
+
+        // Verify subscription status with App Store/Play Store
+        // This ensures expired subscriptions are detected and premium access is revoked
+        // Note: SubscriptionService handles simulator detection internally
+        try {
+          const SubscriptionService = require('./services/SubscriptionService').default;
+          const { premiumStatusService } = require('./services/PremiumStatusService');
+          const { DeviceEventEmitter } = require('react-native');
+
+          const previousStatus = useAppStore.getState().premiumStatus;
+          const status = await SubscriptionService.verifySubscription();
+          console.log('[App] Subscription verified on foreground:', status.active ? 'Premium' : 'Free');
+
+          // Update premium status cache and store
+          await premiumStatusService.refresh();
+          await useAppStore.getState().refreshPremiumStatus();
+
+          // Notify all screens if status changed
+          if (previousStatus !== status.active) {
+            console.log(`[App] Subscription status changed: ${previousStatus ? 'Premium' : 'Free'} → ${status.active ? 'Premium' : 'Free'}`);
+            DeviceEventEmitter.emit('PREMIUM_STATUS_CHANGED', status.active);
+          }
+        } catch (e) {
+          console.error('[App] Failed to verify subscription on foreground:', e);
+        }
       }
     };
 
@@ -373,7 +432,7 @@ export default function App() {
                   ref={launchRef}
                   source={require('./assets/lottie/Onboarding/race_ufo.json')}
                   autoPlay={true}
-                  loop={true}
+                  loop={false}
                   speed={1}
                   resizeMode="contain"
                   __bypassGate={true}

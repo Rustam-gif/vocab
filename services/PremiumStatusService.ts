@@ -25,13 +25,9 @@ class PremiumStatusServiceClass {
       return this.cachedStatus;
     }
 
-    // Prevent concurrent checks
+    // Prevent concurrent checks - return cached immediately instead of waiting
     if (this.isChecking) {
-      console.log('[PremiumStatus] Already checking, waiting...');
-      // Wait for ongoing check to complete
-      while (this.isChecking) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+      console.log('[PremiumStatus] Already checking, returning cached status immediately');
       return this.cachedStatus || { active: false, renews: false, expiryDate: null };
     }
 
@@ -130,6 +126,13 @@ class PremiumStatusServiceClass {
    */
   async refresh(): Promise<SubscriptionStatus> {
     console.log('[PremiumStatus] Force refresh requested');
+
+    // Wait for any in-progress check to complete (max 5 seconds)
+    const startWait = Date.now();
+    while (this.isChecking && Date.now() - startWait < 5000) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+
     // Clear cache to ensure fresh fetch
     this.cachedStatus = null;
     this.lastCheckTime = 0;

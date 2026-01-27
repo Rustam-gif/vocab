@@ -135,6 +135,10 @@ export default function AtlasPracticeIntegrated() {
   const [mlIndex, setMlIndex] = useState(0);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
 
+  // Hint system - 2 hints per set
+  const [hintsRemaining, setHintsRemaining] = useState(2);
+  const [hintsUsed, setHintsUsed] = useState(0);
+
   // Combo/Fire streak system
   const [comboStreak, setComboStreak] = useState(0);
   const [showFireAnimation, setShowFireAnimation] = useState(false);
@@ -226,6 +230,15 @@ export default function AtlasPracticeIntegrated() {
     });
   };
 
+  // Handle hint used
+  const handleHintUsed = () => {
+    if (hintsRemaining > 0) {
+      setHintsRemaining(prev => prev - 1);
+      setHintsUsed(prev => prev + 1);
+      // Sound is played by child components
+    }
+  };
+
   // Restart the exercise
   const handleRestart = () => {
     // Clear UFO animation timeout
@@ -250,6 +263,9 @@ export default function AtlasPracticeIntegrated() {
     setComboStreak(0);
     setComboMultiplier(1);
     setShowFireAnimation(false);
+    // Reset hints
+    setHintsRemaining(2);
+    setHintsUsed(0);
     setPhases(phases.map(p => ({ ...p, completed: false, score: undefined, totalQuestions: undefined })));
   };
 
@@ -375,6 +391,7 @@ export default function AtlasPracticeIntegrated() {
         score: Math.max(0, finalCorrect).toString(),
         totalQuestions: Math.max(0, finalQuestions).toString(),
         hearts: hearts.toString(),
+        hintsUsed: hintsUsed.toString(),
         setId,
         levelId
       }
@@ -527,6 +544,8 @@ export default function AtlasPracticeIntegrated() {
           hearts={hearts}
           showUfoAnimation={showUfoAnimation}
           ufoAnimationKey={ufoAnimationKey}
+          hintsRemaining={hintsRemaining}
+          onHintUsed={handleHintUsed}
           onResult={({ mistakes, usedReveal }) => {
             const hasMistake = (mistakes || 0) > 0 || usedReveal;
             const isCorrect = (mistakes || 0) === 0 && !usedReveal;
@@ -574,6 +593,8 @@ export default function AtlasPracticeIntegrated() {
         wordsOverride={componentWords.length > 0 ? componentWords : undefined}
         showUfoAnimation={showUfoAnimation}
         ufoAnimationKey={ufoAnimationKey}
+        hintsRemaining={hintsRemaining}
+        onHintUsed={handleHintUsed}
       />
     );
   };

@@ -2588,7 +2588,7 @@ export default function HomeScreen(props?: { preview?: boolean }) {
   const lastNewsFetchTime = useRef<number>(0); // Timestamp of last API fetch
   const initRanRef = useRef(false);
   const missionFetchKeyRef = useRef<string | null>(null);
-  const NEWS_CACHE_VERSION = 'v12-24h-refresh';
+  const NEWS_CACHE_VERSION = 'v13-250words';
   const addVaultWord = useAppStore(s => s.addWord);
   const getVaultFolders = useAppStore(s => s.getFolders);
   const createVaultFolder = useAppStore(s => s.createFolder);
@@ -5337,7 +5337,7 @@ EXAMPLE: [sentence in ${langName}]`
                           </View>
                         </View>
 
-                        <Text style={{ fontSize: 15, color: colors.counterText, fontWeight: '600', fontFamily: 'Ubuntu-Bold' }}>
+                        <Text style={{ fontSize: 15, color: colors.counterText, fontWeight: '600', fontFamily: 'Feather-Bold' }}>
                           {displayQuestionNumber}/{totalQuestions}
                         </Text>
                       </View>
@@ -5442,7 +5442,7 @@ EXAMPLE: [sentence in ${langName}]`
                                       fontSize: 16,
                                       fontWeight: '700',
                                       textAlign: 'center',
-                                      fontFamily: 'Ubuntu-Bold',
+                                      fontFamily: 'Feather-Bold',
                                     }}>
                                       {opt}
                                     </Text>
@@ -6188,15 +6188,15 @@ EXAMPLE: [sentence in ${langName}]`
                         <View style={{ padding: 12 }}>
                           {/* Quiz Header */}
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                            <Text style={{ color: '#4ED9CB', fontSize: 15, fontWeight: '400' }}>
+                            <Text style={{ color: '#4ED9CB', fontSize: 15, fontWeight: '400', fontFamily: 'Feather-Bold' }}>
                               Question {vocabQuizIndex + 1}/{sheetArticle.vocab.length}
                             </Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                              <Text style={{ color: getArticleTextColor(), fontSize: 13, fontWeight: '300' }}>
+                              <Text style={{ color: getArticleTextColor(), fontSize: 13, fontWeight: '300', fontFamily: 'Feather-Bold' }}>
                                 Score: {vocabQuizScore}
                               </Text>
                               <TouchableOpacity onPress={exitVocabQuiz} style={{ padding: 2 }}>
-                                <Text style={{ color: '#EF4444', fontWeight: '400', fontSize: 13 }}>Exit</Text>
+                                <Text style={{ color: '#EF4444', fontWeight: '400', fontSize: 13, fontFamily: 'Feather-Bold' }}>Exit</Text>
                               </TouchableOpacity>
                             </View>
                           </View>
@@ -6212,7 +6212,7 @@ EXAMPLE: [sentence in ${langName}]`
                                 borderWidth: 1,
                                 borderColor: 'rgba(78,217,203,0.15)'
                               }}>
-                                <Text style={{ color: getArticleTextColor(), fontSize: 15, fontWeight: '400', marginBottom: 8 }}>
+                                <Text style={{ color: getArticleTextColor(), fontSize: 15, fontWeight: '400', marginBottom: 8, fontFamily: 'Feather-Bold' }}>
                                   What does "{sheetArticle.vocab[vocabQuizIndex].word}" mean?
                                 </Text>
                                 <TouchableOpacity
@@ -6221,7 +6221,7 @@ EXAMPLE: [sentence in ${langName}]`
                                   activeOpacity={0.6}
                                 >
                                   <Volume2 size={14} color="#4ED9CB" strokeWidth={1.5} />
-                                  <Text style={{ color: '#4ED9CB', fontSize: 11, fontWeight: '300' }}>
+                                  <Text style={{ color: '#4ED9CB', fontSize: 11, fontWeight: '300', fontFamily: 'Feather-Bold' }}>
                                     Listen
                                   </Text>
                                 </TouchableOpacity>
@@ -6268,7 +6268,7 @@ EXAMPLE: [sentence in ${langName}]`
                                       activeOpacity={0.7}
                                     >
                                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <Text style={{ color: textColor, fontSize: 14, flex: 1, fontWeight: '300', lineHeight: 20 }}>
+                                        <Text style={{ color: textColor, fontSize: 14, flex: 1, fontWeight: '300', lineHeight: 20, fontFamily: 'Feather-Bold' }}>
                                           {option}
                                         </Text>
                                         {showFeedback && isCorrectOption && (
@@ -6297,7 +6297,7 @@ EXAMPLE: [sentence in ${langName}]`
                                   }}
                                   activeOpacity={0.8}
                                 >
-                                  <Text style={{ color: '#1E1E1E', fontWeight: '400', fontSize: 14 }}>
+                                  <Text style={{ color: '#1E1E1E', fontWeight: '400', fontSize: 14, fontFamily: 'Feather-Bold' }}>
                                     {vocabQuizIndex + 1 < sheetArticle.vocab.length ? 'Next Question →' : 'See Results'}
                                   </Text>
                                 </TouchableOpacity>
@@ -6315,13 +6315,13 @@ EXAMPLE: [sentence in ${langName}]`
                                 return (
                                   <>
                                     <Text style={{ fontSize: 56, marginBottom: 16 }}>{emoji}</Text>
-                                    <Text style={{ color: getArticleTextColor(), fontSize: 18, fontWeight: '400', marginBottom: 10 }}>
+                                    <Text style={{ color: getArticleTextColor(), fontSize: 18, fontWeight: '400', marginBottom: 10, fontFamily: 'Feather-Bold' }}>
                                       {message}
                                     </Text>
-                                    <Text style={{ color: '#4ED9CB', fontSize: 36, fontWeight: '300', marginBottom: 4, letterSpacing: -1 }}>
+                                    <Text style={{ color: '#4ED9CB', fontSize: 36, fontWeight: '300', marginBottom: 4, letterSpacing: -1, fontFamily: 'Feather-Bold' }}>
                                       {vocabQuizScore}/{maxScore}
                                     </Text>
-                                    <Text style={{ color: getArticleTextColor(), fontSize: 14, opacity: 0.6, marginBottom: 24, fontWeight: '300' }}>
+                                    <Text style={{ color: getArticleTextColor(), fontSize: 14, opacity: 0.6, marginBottom: 24, fontWeight: '300', fontFamily: 'Feather-Bold' }}>
                                       {percentage}% correct
                                     </Text>
                                   </>
@@ -6337,7 +6337,7 @@ EXAMPLE: [sentence in ${langName}]`
                                 }}
                                 activeOpacity={0.8}
                               >
-                                <Text style={{ color: '#1E1E1E', fontWeight: '400', fontSize: 14 }}>
+                                <Text style={{ color: '#1E1E1E', fontWeight: '400', fontSize: 14, fontFamily: 'Feather-Bold' }}>
                                   Back to Article
                                 </Text>
                               </TouchableOpacity>
@@ -7590,10 +7590,14 @@ const styles = StyleSheet.create({
   vocabSectionSepia: {
     backgroundColor: 'rgba(180,160,130,0.2)',
     borderColor: 'rgba(180,83,9,0.3)',
+    shadowColor: 'rgba(180,83,9,0.5)',
+    shadowOpacity: 0.3,
   },
   vocabSectionDark: {
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderColor: 'rgba(255,255,255,0.1)',
+    shadowColor: '#000',
+    shadowOpacity: 0.6,
   },
   vocabTitleRow: {
     flexDirection: 'row',

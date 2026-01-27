@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, memo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, memo, useReducer } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Image, Animated, Easing, InteractionManager, Dimensions, DeviceEventEmitter, Platform, Modal } from 'react-native';
 
 // Use local haptic feedback shim (no-op since native module not available)
@@ -21,7 +21,7 @@ import { getTheme } from '../../lib/theme';
 import TopStatusPanel from '../components/TopStatusPanel';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import LimitModal from '../../lib/LimitModal';
-import { Lock, Check, Star, CheckCircle, Flag, Trophy, Crown } from 'lucide-react-native';
+import { Lock, Check, Star, CheckCircle, Flag, Trophy, Crown, Settings } from 'lucide-react-native';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { LinearGradient } from '../../lib/LinearGradient';
 import StarField from './components/StarField';
@@ -262,6 +262,13 @@ export default function LearnScreen() {
   const isLight = theme === 'light';
   const insets = useSafeAreaInsets();
   const [showSignupModal, setShowSignupModal] = useState(false);
+  const [showExamModal, setShowExamModal] = useState(false);
+  const [showLevelTopicModal, setShowLevelTopicModal] = useState(false);
+  const modalSelectedLevelRef = useRef<string | null>(null);
+  const modalSelectedTopicRef = useRef<SetCategory | null>(null);
+  const shouldApplyChangesRef = useRef(false);
+  // Force update for visual feedback without heavy re-renders
+  const [, forceModalUpdate] = useReducer((x: number) => x + 1, 0);
   const [panelHeight, setPanelHeight] = useState<number>(insets.top + 48);
   const { level: levelId, completedSetId } = useLocalSearchParams<{ level: string; completedSetId: string }>();
   const routeKey = useRouteKey(); // Changes when route params change
@@ -283,8 +290,10 @@ export default function LearnScreen() {
   const [activeLevelId, setActiveLevelId] = useState<string | null>(levelId ?? cachedLevelId ?? null);
   const [highestLevel, setHighestLevel] = useState<string | null>(null);
   const [placementLevel, setPlacementLevel] = useState<string | null>(null);
-  // Always show loading initially on every mount/tab switch
-  const [isLoadingLevel, setIsLoadingLevel] = useState(true);
+  // Start with loading false if we have cached data available
+  const [isLoadingLevel, setIsLoadingLevel] = useState(() => {
+    return !cachedCurrentLevel || (levelId && cachedLevelId !== levelId);
+  });
   const levelNodeAnims = useRef<Animated.Value[]>([]);
   const levelPulseAnim = useRef(new Animated.Value(1)).current;
   const levelPulseOpacity = useRef(new Animated.Value(0.4)).current;
@@ -847,8 +856,11 @@ export default function LearnScreen() {
             groupIndex += 1;
             const startNum = (groupIndex - 1) * 4 + 1;
             const endNum = startNum + 3;
+            // Generate unique quiz ID based on the sets it covers
+            const firstSetId = group[0]?.id || 'unknown';
+            const lastSetId = group[group.length - 1]?.id || 'unknown';
             const quiz: any = {
-              id: `quiz-${groupIndex}`,
+              id: `quiz-${firstSetId}-${lastSetId}`,
               title: `Quiz ${groupIndex}`,
               type: 'quiz',
               description: `Recap of Sets ${startNum}–${endNum}`,
@@ -982,14 +994,8 @@ export default function LearnScreen() {
       const completed = setsWithProgress.filter(s => s.completed).length;
       setProgress({ completed, total: setsWithProgress.length });
 
-      // Hide loading indicator with minimum display time (800ms)
-      const elapsedTime = Date.now() - loadingStartTimeRef.current;
-      const minDisplayTime = 800;
-      const remainingTime = Math.max(0, minDisplayTime - elapsedTime);
-
-      setTimeout(() => {
-        setIsLoadingLevel(false);
-      }, remainingTime);
+      // Hide loading indicator immediately (no minimum display time since we use cached data)
+      setIsLoadingLevel(false);
 
       // Performance logging - only warn if slow
       const perfEnd = performance.now();
@@ -1282,7 +1288,7 @@ export default function LearnScreen() {
   }, [refreshLevel, getCurrentPlanetIndex, getScrollXForIndex, spacecraftAnim, scrollToPlanet, logScroll]);
 
   // ========== LEVEL CHANGE STATE UPDATE (NO SCROLL) ==========
-  // Only updates state, does NOT scroll - scroll is handled by layout handler
+  // Only updates state, does NOT scroll - scroll is handled by modal close
   useEffect(() => {
     if (!currentLevel) return;
     // Skip if scroll is locked (spacecraft animation in progress)
@@ -1297,6 +1303,7 @@ export default function LearnScreen() {
     // Update cache for next mount
     cachedCurrentPlanetIndex = targetIndex;
   }, [currentLevel, logScroll]);
+
 
   // ========== CONTINUE FLOW (returning from completed set) ==========
   // Handles spacecraft animation when returning from quiz screen
@@ -1467,6 +1474,55 @@ export default function LearnScreen() {
     });
     return () => subscription.remove();
   }, [checkPremiumStatus]);
+
+  // Listen for modal open request from stats screen
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('OPEN_LEVEL_TOPIC_MODAL', () => {
+      console.log('[LEARN] 🎯 OPEN_LEVEL_TOPIC_MODAL event received');
+      // Initialize modal selections with current values
+      modalSelectedLevelRef.current = activeLevelId;
+      modalSelectedTopicRef.current = userFocus;
+      shouldApplyChangesRef.current = false;
+      setShowLevelTopicModal(true);
+    });
+    return () => subscription.remove();
+  }, [activeLevelId, userFocus]);
+
+  // Apply changes when modal closes
+  useEffect(() => {
+    if (!showLevelTopicModal && shouldApplyChangesRef.current) {
+      shouldApplyChangesRef.current = false;
+
+      const newLevelId = modalSelectedLevelRef.current || activeLevelId;
+      const newTopic = modalSelectedTopicRef.current || userFocus;
+
+      if (newLevelId && (newLevelId !== activeLevelId || newTopic !== userFocus)) {
+        console.log('[MODAL] Applying changes:', { newLevelId, newTopic });
+
+        // Update caches
+        cachedLevelId = newLevelId;
+        cachedUserFocus = newTopic;
+        cachedCurrentLevel = null;
+
+        // Persist to storage
+        AsyncStorage.setItem(SELECTED_LEVEL_KEY, newLevelId).catch(console.error);
+        AsyncStorage.setItem(USER_FOCUS_KEY, newTopic || 'general').catch(console.error);
+
+        // Update state directly without navigation to prevent freeze
+        setActiveLevelId(newLevelId);
+        setUserFocus(newTopic);
+
+        // Force refresh by clearing params and calling refreshLevel directly
+        lastRefreshParams.current = { levelId: null, premium: null, focus: null };
+
+        // Small delay to let state update propagate
+        setTimeout(() => {
+          console.log('[MODAL] Calling refreshLevel with:', { newLevelId, newTopic });
+          refreshLevel();
+        }, 100);
+      }
+    }
+  }, [showLevelTopicModal, activeLevelId, userFocus, router, refreshLevel]);
 
   // Calculate stage gate positions and trigger haptic when scrolling past
   const stageGateIndices = useRef<number[]>([]);
@@ -1778,6 +1834,24 @@ export default function LearnScreen() {
           )}
 
         </TouchableOpacity>
+
+        {/* "Fly here" indicator for quizzes that can be accessed - shows on current quiz or quizzes that can be skipped to */}
+        {isQuiz && !isCompleted && ((isCurrent) || (quizCanSkipAhead)) && (
+          <TouchableOpacity
+            style={styles.flyHereContainer}
+            onPress={() => handleSetPress(set, allSets)}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.flyHereArrow, isLight && styles.flyHereArrowLight]}>
+              <Text style={styles.flyHereArrowText}>↑</Text>
+            </View>
+            <View style={[styles.flyHereBubble, isLight && styles.flyHereBubbleLight]}>
+              <Text style={[styles.flyHereText, isLight && styles.flyHereTextLight]}>
+                Fly here
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
       </View>
     );
   };
@@ -2172,8 +2246,7 @@ export default function LearnScreen() {
               {/* Black hole animation */}
               <TouchableOpacity
                 onPress={() => {
-                  // TODO: Navigate to exam when ready
-                  console.log('Exam pressed - coming soon!');
+                  setShowExamModal(true);
                 }}
                 activeOpacity={0.9}
                 style={{
@@ -2183,13 +2256,15 @@ export default function LearnScreen() {
                   justifyContent: 'center',
                 }}
               >
-                <LottieView
-                  source={require('../../assets/lottie/learn/planets/black_hole.json')}
-                  autoPlay
-                  loop
-                  cacheComposition={true}
-                  style={{ width: blackHoleSize, height: blackHoleSize }}
-                />
+                <View style={{ transform: [{ rotate: '90deg' }] }}>
+                  <LottieView
+                    source={require('../../assets/lottie/learn/planets/black_hole.json')}
+                    autoPlay
+                    loop
+                    cacheComposition={true}
+                    style={{ width: blackHoleSize, height: blackHoleSize }}
+                  />
+                </View>
               </TouchableOpacity>
             </View>
           );
@@ -2284,49 +2359,6 @@ export default function LearnScreen() {
         </TouchableOpacity>
       )}
 
-      {/* DEV: Test complete set button */}
-      {displayLevel && centeredSet && !centeredSet.completed && !scrollLockedState && (
-        <TouchableOpacity
-          style={{
-            position: 'absolute',
-            right: 16,
-            top: insets.top + 60,
-            backgroundColor: '#8B5CF6',
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            borderRadius: 12,
-            zIndex: 9999,
-            elevation: 9999,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.3,
-            shadowRadius: 4,
-          }}
-          onPress={async () => {
-            const setIdToComplete = centeredSet.id;
-            const points = 100;
-
-            console.log(`[TEST] 🎯 Completing set ${setIdToComplete} from Learn screen`);
-
-            // Mark set as completed
-            if (activeLevelId && setIdToComplete) {
-              await SetProgressService.markCompleted(String(activeLevelId), String(setIdToComplete), points);
-              await SetProgressService.flushSave();
-              console.log(`[TEST] ✅ Set ${setIdToComplete} marked as completed`);
-
-              // Emit event to trigger spacecraft animation
-              // (quiz skip-ahead logic is handled in the event handler)
-              DeviceEventEmitter.emit('SPACECRAFT_ANIMATE', { setId: String(setIdToComplete) });
-              console.log(`[TEST] 🚀 Emitted SPACECRAFT_ANIMATE event for setId=${setIdToComplete}`);
-            }
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 11, fontFamily: 'Ubuntu-Bold' }}>
-            Test Complete
-          </Text>
-        </TouchableOpacity>
-      )}
 
       {/* Signup modal disabled to avoid invisible overlays blocking touches */}
 
@@ -2535,6 +2567,142 @@ export default function LearnScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Exam Modal */}
+      <LimitModal
+        visible={showExamModal}
+        title="Complete Previous Sets"
+        message="Finish all vocabulary sets in this level before attempting the exam."
+        onClose={() => setShowExamModal(false)}
+        onSubscribe={() => setShowExamModal(false)}
+        primaryText="OK"
+        secondaryText=""
+      />
+
+      {/* Level & Topic Selection Modal */}
+      {showLevelTopicModal && (
+        <Modal
+          visible={showLevelTopicModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowLevelTopicModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity
+              style={styles.modalBackdrop}
+              activeOpacity={1}
+              onPress={() => setShowLevelTopicModal(false)}
+            />
+            <View style={[styles.modalCard, isLight && styles.modalCardLight]}>
+              <Text style={[styles.modalTitle, isLight && styles.modalTitleLight]}>
+                Adjust Difficulty
+              </Text>
+              <Text style={[styles.modalSubtitle, isLight && styles.modalSubtitleLight]}>
+                Change your learning level or topic focus
+              </Text>
+
+              {/* Level Selection */}
+              <View style={styles.modalSection}>
+                <Text style={[styles.modalSectionTitle, isLight && styles.modalSectionTitleLight]}>
+                  Level
+                </Text>
+                <View style={styles.optionsGrid}>
+                  {levels.map((level) => (
+                    <TouchableOpacity
+                      key={level.id}
+                      style={[
+                        styles.optionChip,
+                        isLight && styles.optionChipLight,
+                        modalSelectedLevelRef.current === level.id && styles.optionChipSelected,
+                        isLight && modalSelectedLevelRef.current === level.id && styles.optionChipSelectedLight,
+                      ]}
+                      onPress={() => {
+                        try {
+                          try { soundService?.playTap(); } catch {}
+
+                          // Update ref and force re-render for visual feedback
+                          modalSelectedLevelRef.current = level.id;
+                          forceModalUpdate();
+                        } catch (e) {
+                          console.error('Failed to change level:', e);
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[
+                        styles.optionChipText,
+                        isLight && styles.optionChipTextLight,
+                        modalSelectedLevelRef.current === level.id && styles.optionChipTextSelected,
+                      ]}>
+                        {level.icon} {level.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Topic Selection */}
+              <View style={styles.modalSection}>
+                <Text style={[styles.modalSectionTitle, isLight && styles.modalSectionTitleLight]}>
+                  Topic Focus
+                </Text>
+                <View style={styles.optionsGrid}>
+                  {[
+                    { id: 'general', label: '🌍 General', icon: '🌍' },
+                    { id: 'travel', label: '✈️ Travel', icon: '✈️' },
+                    { id: 'business', label: '💼 Business', icon: '💼' },
+                    { id: 'exams', label: '📚 Exams', icon: '📚' },
+                  ].map((topic) => (
+                    <TouchableOpacity
+                      key={topic.id}
+                      style={[
+                        styles.optionChip,
+                        isLight && styles.optionChipLight,
+                        modalSelectedTopicRef.current === topic.id && styles.optionChipSelected,
+                        isLight && modalSelectedTopicRef.current === topic.id && styles.optionChipSelectedLight,
+                      ]}
+                      onPress={() => {
+                        try {
+                          try { soundService?.playTap(); } catch {}
+
+                          // Update ref and force re-render for visual feedback
+                          modalSelectedTopicRef.current = topic.id as SetCategory;
+                          forceModalUpdate();
+                        } catch (e) {
+                          console.error('Failed to change topic:', e);
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[
+                        styles.optionChipText,
+                        isLight && styles.optionChipTextLight,
+                        modalSelectedTopicRef.current === topic.id && styles.optionChipTextSelected,
+                      ]}>
+                        {topic.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Close Button */}
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => {
+                  // Mark that changes should be applied after modal closes
+                  shouldApplyChangesRef.current = true;
+                  // Close modal - useEffect will apply changes
+                  setShowLevelTopicModal(false);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalCloseButtonText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -2647,6 +2815,49 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     zIndex: 20,
+  },
+  flyHereContainer: {
+    position: 'absolute',
+    bottom: -60,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 15,
+  },
+  flyHereArrow: {
+    marginBottom: 4,
+  },
+  flyHereArrowLight: {},
+  flyHereArrowText: {
+    fontSize: 20,
+    color: '#4ED9CB',
+    fontFamily: 'Feather-Bold',
+  },
+  flyHereBubble: {
+    backgroundColor: '#1F2937',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#4ED9CB',
+    shadowColor: '#4ED9CB',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  flyHereBubbleLight: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#4ED9CB',
+  },
+  flyHereText: {
+    color: '#4ED9CB',
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: 'Feather-Bold',
+  },
+  flyHereTextLight: {
+    color: '#0F766E',
   },
   planetTouchableH: {
     width: PLANET_SIZE,
@@ -3833,5 +4044,123 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     zIndex: 1,
     pointerEvents: 'none',
+  },
+  // Level & Topic Button
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#1E293B',
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 2,
+    borderColor: 'rgba(78, 217, 203, 0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  modalCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(78, 217, 203, 0.3)',
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#E5E7EB',
+    marginBottom: 8,
+    fontFamily: 'Feather-Bold',
+    textAlign: 'center',
+  },
+  modalTitleLight: {
+    color: '#1E293B',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#94A3B8',
+    marginBottom: 24,
+    fontFamily: 'Feather-Bold',
+    textAlign: 'center',
+  },
+  modalSubtitleLight: {
+    color: '#64748B',
+  },
+  modalSection: {
+    marginBottom: 24,
+  },
+  modalSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#CBD5E1',
+    marginBottom: 12,
+    fontFamily: 'Feather-Bold',
+  },
+  modalSectionTitleLight: {
+    color: '#475569',
+  },
+  optionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  optionChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#0F172A',
+    borderWidth: 2,
+    borderColor: 'rgba(78, 217, 203, 0.15)',
+  },
+  optionChipLight: {
+    backgroundColor: '#F8FAFC',
+    borderColor: 'rgba(78, 217, 203, 0.2)',
+  },
+  optionChipSelected: {
+    backgroundColor: 'rgba(78, 217, 203, 0.15)',
+    borderColor: '#4ED9CB',
+  },
+  optionChipSelectedLight: {
+    backgroundColor: 'rgba(78, 217, 203, 0.2)',
+    borderColor: '#4ED9CB',
+  },
+  optionChipText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#94A3B8',
+    fontFamily: 'Feather-Bold',
+  },
+  optionChipTextLight: {
+    color: '#64748B',
+  },
+  optionChipTextSelected: {
+    color: '#4ED9CB',
+  },
+  modalCloseButton: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#4ED9CB',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  modalCloseButtonText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0D1B2A',
+    fontFamily: 'Feather-Bold',
   },
 });

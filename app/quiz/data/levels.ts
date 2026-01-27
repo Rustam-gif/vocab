@@ -114,13 +114,14 @@ export const getOrderedSetsForLevel = (levelId: string, userFocus: SetCategory |
   if (userFocus && categoryOrder.includes(userFocus)) {
     const reordered = [userFocus, ...categoryOrder.filter(c => c !== userFocus)];
     const orderedSets = reordered.flatMap(cat => setsByCategory[cat] || []);
-    // Assign sequential IDs
-    return orderedSets.map((set, index) => ({ ...set, id: index + 1 }));
+    // Keep original unique IDs (e.g., 'bg1', 'bt1', 'bb1', 'bi1')
+    return orderedSets;
   }
 
   // Default order if no preference
   const orderedSets = categoryOrder.flatMap(cat => setsByCategory[cat] || []);
-  return orderedSets.map((set, index) => ({ ...set, id: index + 1 }));
+  // Keep original unique IDs (e.g., 'bg1', 'bt1', 'bb1', 'bi1')
+  return orderedSets;
 };
 
 // Default sets (general first) for backwards compatibility
@@ -162,27 +163,28 @@ export const levels: Level[] = [
     icon: '🏔️',
     sets: advancedSetsNew,
   },
-  {
-    id: 'advanced-plus',
-    name: 'Advanced Plus',
-    description: '150 Sets, 750 words at CEFR C1+ Level',
-    cefr: 'C1+',
-    icon: '⛰️',
-    sets: [
-      {
-        id: 1,
-        title: 'Academic Adjectives',
-        words: [
-          { word: 'paradigm', definition: 'A typical example or pattern', example: 'This represents a new paradigm', phonetic: '/ˈpærədaɪm/', synonyms: ['model', 'framework'] },
-          { word: 'ephemeral', definition: 'Lasting for a very short time', example: 'Beauty is often ephemeral', phonetic: '/ɪˈfemərəl/', synonyms: ['temporary', 'transient'] },
-          { word: 'ubiquitous', definition: 'Present everywhere', example: 'Technology is ubiquitous', phonetic: '/juːˈbɪkwɪtəs/', synonyms: ['omnipresent', 'universal'] },
-          { word: 'meticulous', definition: 'Very careful and precise', example: 'She is meticulous in her work', phonetic: '/məˈtɪkjələs/', synonyms: ['thorough', 'precise'] },
-          { word: 'resilient', definition: 'Able to recover quickly', example: 'The economy is resilient', phonetic: '/rɪˈzɪliənt/', synonyms: ['tough', 'flexible'] }
-        ],
-        completed: false
-      }
-    ]
-  },
+  // TEMPORARILY HIDDEN: Advanced Plus - needs more content (only 1 set defined)
+  // {
+  //   id: 'advanced-plus',
+  //   name: 'Advanced Plus',
+  //   description: '150 Sets, 750 words at CEFR C1+ Level',
+  //   cefr: 'C1+',
+  //   icon: '⛰️',
+  //   sets: [
+  //     {
+  //       id: 1,
+  //       title: 'Academic Adjectives',
+  //       words: [
+  //         { word: 'paradigm', definition: 'A typical example or pattern', example: 'This represents a new paradigm', phonetic: '/ˈpærədaɪm/', synonyms: ['model', 'framework'] },
+  //         { word: 'ephemeral', definition: 'Lasting for a very short time', example: 'Beauty is often ephemeral', phonetic: '/ɪˈfemərəl/', synonyms: ['temporary', 'transient'] },
+  //         { word: 'ubiquitous', definition: 'Present everywhere', example: 'Technology is ubiquitous', phonetic: '/juːˈbɪkwɪtəs/', synonyms: ['omnipresent', 'universal'] },
+  //         { word: 'meticulous', definition: 'Very careful and precise', example: 'She is meticulous in her work', phonetic: '/məˈtɪkjələs/', synonyms: ['thorough', 'precise'] },
+  //         { word: 'resilient', definition: 'Able to recover quickly', example: 'The economy is resilient', phonetic: '/rɪˈzɪliənt/', synonyms: ['tough', 'flexible'] }
+  //       ],
+  //       completed: false
+  //     }
+  //   ]
+  // },
   {
     id: 'proficient',
     name: 'Proficient',

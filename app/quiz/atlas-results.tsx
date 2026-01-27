@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from '../../lib/LinearGradient';
 import ReactNativeHapticFeedback from '../../lib/haptics';
 import LottieView from 'lottie-react-native';
+import { Lightbulb } from 'lucide-react-native';
 
 // Colors matching Learn section
 const DARK_BG = '#1B263B';
@@ -44,13 +45,14 @@ export default function AtlasResults() {
   const { loadProgress } = useAppStore();
   const themeName = useAppStore(s => s.theme);
   const isLight = themeName === 'light';
-  const { score, totalQuestions, setId, levelId, hearts: heartsParam, exerciseType } = useLocalSearchParams<{
+  const { score, totalQuestions, setId, levelId, hearts: heartsParam, exerciseType, hintsUsed: hintsUsedParam } = useLocalSearchParams<{
     score?: string;
     totalQuestions?: string;
     setId?: string;
     levelId?: string;
     hearts?: string;
     exerciseType?: string;
+    hintsUsed?: string;
   }>();
 
   // Parse hearts from params (default to 5 if not provided)
@@ -58,6 +60,12 @@ export default function AtlasResults() {
     const parsed = parseInt(heartsParam || '5', 10);
     return Number.isNaN(parsed) ? 5 : Math.max(0, Math.min(5, parsed));
   }, [heartsParam]);
+
+  // Parse hints used (default to 0 if not provided)
+  const hintsUsed = useMemo(() => {
+    const parsed = parseInt(hintsUsedParam || '0', 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }, [hintsUsedParam]);
 
   // Simple fade-in animation
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -260,15 +268,23 @@ export default function AtlasResults() {
             {getSuccessMessage()}
           </Text>
 
-          {/* Words Mastered - redesigned */}
-          <View style={styles.wordsMasteredContainer}>
-            <Text style={[styles.wordsMasteredNumber, isLight && styles.wordsMasteredNumberLight]}>
-              5
-            </Text>
-            <Text style={[styles.wordsMasteredLabel, isLight && styles.wordsMasteredLabelLight]}>
-              New Words Mastered
-            </Text>
-          </View>
+          {/* Thumbs up animation */}
+          <LottieView
+            source={require('../../assets/lottie/learn/finish.lottie')}
+            autoPlay
+            loop={false}
+            style={{ width: 120, height: 120, marginVertical: 16 }}
+          />
+
+          {/* Hint achievement badge - show if no hints used */}
+          {hintsUsed === 0 && (
+            <View style={[styles.achievementBadge, isLight && styles.achievementBadgeLight]}>
+              <Lightbulb size={20} color={isLight ? '#F59E0B' : '#FCD34D'} fill={isLight ? '#F59E0B' : '#FCD34D'} />
+              <Text style={[styles.achievementText, isLight && styles.achievementTextLight]}>
+                No Hints Used!
+              </Text>
+            </View>
+          )}
 
           {/* Hearts display - no background card */}
           <View style={styles.heartsContainer}>
@@ -348,6 +364,33 @@ const styles = StyleSheet.create({
   },
   wordsMasteredLabelLight: {
     color: '#1B263B',
+  },
+
+  // Achievement badge
+  achievementBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: 'rgba(252, 211, 77, 0.4)',
+    marginBottom: 24,
+  },
+  achievementBadgeLight: {
+    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+  },
+  achievementText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FCD34D',
+    fontFamily: 'Ubuntu-Bold',
+  },
+  achievementTextLight: {
+    color: '#D97706',
   },
 
   // Hearts container - no background
