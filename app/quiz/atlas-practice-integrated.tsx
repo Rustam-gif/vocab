@@ -81,29 +81,56 @@ export default function AtlasPracticeIntegrated() {
     if (!level) return null;
     // If a static quiz set exists in data, no need to compute
     if (set) return null;
-    if (!setId || !/^quiz-\d+$/.test(String(setId))) return null;
-    // Rebuild the same visible list used in Learn:
-    // - For Upper-Intermediate: drop first 10 numeric sets
-    // - For others: include all sets
-    // - Always exclude existing quiz-type sets
-    const baseSets = level.sets.filter(s => {
-      const n = Number(s.id);
-      const dropFirstTen = level.id === 'upper-intermediate' ? (isNaN(n) || n > 10) : true;
-      return dropFirstTen && (s as any).type !== 'quiz';
-    });
-    const groupIndex = Math.max(1, parseInt(String(setId).split('-')[1], 10));
-    const start = (groupIndex - 1) * 4;
-    const group = baseSets.slice(start, start + 4);
-    if (group.length < 1) return null;
-    const words: any[] = [];
-    group.forEach(g => {
-      words.push(...(g.words || []).slice(0, 5));
-    });
-    return words.length ? words : null;
+
+    // Support both old format (quiz-1) and new format (quiz-bg1-bg4)
+    const setIdStr = String(setId);
+    if (!setId || !setIdStr.startsWith('quiz-')) return null;
+
+    // Parse quiz ID: new format is quiz-<firstSetId>-<lastSetId>
+    // Old format is quiz-<number>
+    const parts = setIdStr.split('-');
+
+    if (parts.length >= 3) {
+      // New format: quiz-bg1-bg4 -> find sets between bg1 and bg4
+      const firstSetId = parts[1];
+      const lastSetId = parts[2];
+
+      const baseSets = level.sets.filter(s => (s as any).type !== 'quiz');
+      const firstIdx = baseSets.findIndex(s => String(s.id) === firstSetId);
+      const lastIdx = baseSets.findIndex(s => String(s.id) === lastSetId);
+
+      if (firstIdx >= 0 && lastIdx >= 0 && lastIdx >= firstIdx) {
+        const group = baseSets.slice(firstIdx, lastIdx + 1);
+        const words: any[] = [];
+        group.forEach(g => {
+          words.push(...(g.words || []).slice(0, 5));
+        });
+        return words.length ? words : null;
+      }
+    } else if (parts.length === 2) {
+      // Old format: quiz-1, quiz-2, etc.
+      const baseSets = level.sets.filter(s => {
+        const n = Number(s.id);
+        const dropFirstTen = level.id === 'upper-intermediate' ? (isNaN(n) || n > 10) : true;
+        return dropFirstTen && (s as any).type !== 'quiz';
+      });
+      const groupIndex = Math.max(1, parseInt(parts[1], 10));
+      const start = (groupIndex - 1) * 4;
+      const group = baseSets.slice(start, start + 4);
+      if (group.length < 1) return null;
+      const words: any[] = [];
+      group.forEach(g => {
+        words.push(...(g.words || []).slice(0, 5));
+      });
+      return words.length ? words : null;
+    }
+
+    return null;
   }, [level, set, setId]);
 
   // Treat any dynamically-inserted quiz id as a quiz, or static quiz type sets
-  const isQuizId = (!!setId && /^quiz-\d+$/.test(String(setId)));
+  // Support both old format (quiz-1) and new format (quiz-bg1-bg4)
+  const isQuizId = (!!setId && String(setId).startsWith('quiz-'));
   const isQuiz = (set?.type === 'quiz') || !!computedQuizWords || isQuizId;
   
   const [currentPhase, setCurrentPhase] = useState(0);
@@ -333,12 +360,30 @@ export default function AtlasPracticeIntegrated() {
             return dropFirstTen && (s as any).type !== 'quiz';
           });
 
-          // Check if this is a dynamic quiz (quiz-N format)
-          const dynamicQuizMatch = String(setId).match(/^quiz-(\d+)$/);
-          if (dynamicQuizMatch) {
-            // For quiz-N, mark the N groups of 4 sets as completed (indices 0 to N*4-1)
-            const quizNumber = parseInt(dynamicQuizMatch[1], 10);
-            const endIndex = quizNumber * 4; // quiz-1 covers sets 0-3, quiz-2 covers 4-7, etc.
+          // Check if this is a dynamic quiz
+          const setIdStr = String(setId);
+          const parts = setIdStr.split('-');
+
+          if (parts.length >= 3) {
+            // New format: quiz-bg1-bg4 -> mark all sets up to and including bg4
+            const lastSetId = parts[2];
+            const lastIdx = baseSets.findIndex(s => String(s.id) === lastSetId);
+
+            if (lastIdx >= 0) {
+              for (let i = 0; i <= lastIdx; i++) {
+                const prevSet = baseSets[i];
+                if (prevSet) {
+                  const prevProgress = SetProgressService.get(String(levelId), String(prevSet.id));
+                  if (!prevProgress || prevProgress.status !== 'completed') {
+                    await SetProgressService.markCompleted(String(levelId), String(prevSet.id), 80);
+                  }
+                }
+              }
+            }
+          } else if (parts.length === 2 && /^\d+$/.test(parts[1])) {
+            // Old format: quiz-1, quiz-2 -> mark N groups of 4 sets
+            const quizNumber = parseInt(parts[1], 10);
+            const endIndex = quizNumber * 4;
             for (let i = 0; i < endIndex && i < baseSets.length; i++) {
               const prevSet = baseSets[i];
               if (prevSet) {

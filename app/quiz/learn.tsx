@@ -294,6 +294,8 @@ export default function LearnScreen() {
   const [isLoadingLevel, setIsLoadingLevel] = useState(() => {
     return !cachedCurrentLevel || (levelId && cachedLevelId !== levelId);
   });
+  // Hide TopStatusPanel until component is ready to prevent flash on startup
+  const [showTopStatus, setShowTopStatus] = useState(false);
   const levelNodeAnims = useRef<Animated.Value[]>([]);
   const levelPulseAnim = useRef(new Animated.Value(1)).current;
   const levelPulseOpacity = useRef(new Animated.Value(0.4)).current;
@@ -367,6 +369,11 @@ export default function LearnScreen() {
     // Reset loading start time on every mount (for minimum display time calculation)
     loadingStartTimeRef.current = Date.now();
 
+    // Show TopStatusPanel after a brief delay to prevent flash
+    const statusTimer = setTimeout(() => {
+      setShowTopStatus(true);
+    }, 100);
+
     // On FRESH app start (no cached level), reset module-level flags
     // On tab switch remount, keep the flags as-is to preserve scroll position
     if (!isRemount) {
@@ -399,6 +406,7 @@ export default function LearnScreen() {
       const ts2 = new Date().toISOString().substr(11, 12);
       console.log(`\n[${ts2}] ========== LEARN UNMOUNT ========== mountId=${mountId.current}`);
       console.log(`[${ts2}] [LEARN] ⚠️  UNMOUNTING - This should NOT happen on tab switch!`);
+      clearTimeout(statusTimer);
       clearTimeout(unlockTimer);
       resetListener.remove();
     };
@@ -799,16 +807,17 @@ export default function LearnScreen() {
     return () => t.cancel?.();
   }, [loadStoredLevel]);
 
-  const refreshLevel = useCallback(async () => {
+  const refreshLevel = useCallback(async (overrideLevelId?: string, overrideUserFocus?: SetCategory | null) => {
     const perfStart = performance.now();
     const ts = new Date().toISOString().substr(11, 12);
 
-    // CRITICAL: Use cachedUserFocus if userFocus hasn't loaded yet
-    // This prevents set reordering on remount which breaks completion tracking
-    // (Set IDs are assigned based on order, so different order = different IDs!)
-    const effectiveUserFocus = userFocus ?? cachedUserFocus;
+    // Use overrides if provided (for immediate refresh after modal), otherwise use state/cache
+    const levelIdToUse = overrideLevelId ?? activeLevelId;
+    const effectiveUserFocus = overrideUserFocus !== undefined ? overrideUserFocus : (userFocus ?? cachedUserFocus);
 
-    if (!activeLevelId) {
+    console.log('[REFRESH] Using:', { levelId: levelIdToUse, focus: effectiveUserFocus });
+
+    if (!levelIdToUse) {
       setCurrentLevel(null);
       setIsLoadingLevel(false);
       return;
@@ -817,7 +826,7 @@ export default function LearnScreen() {
     // Never show loading indicator - we always have cached data or show empty view
     // Loading only shows on very first app launch (set in initial state)
 
-    let level = levels.find(l => l.id === activeLevelId);
+    let level = levels.find(l => l.id === levelIdToUse);
     if (!level && levels.length > 0) {
       level = levels[0];
       try { await debouncedStorage.setItem(SELECTED_LEVEL_KEY, level.id); } catch {}
@@ -880,7 +889,7 @@ export default function LearnScreen() {
         for (let i = withQuizzes.length - 1; i >= 0; i--) {
           const s = withQuizzes[i];
           if ((s as any).type === 'quiz') {
-            const flags = SetProgressService.getSetFlags(activeLevelId, s.id);
+            const flags = SetProgressService.getSetFlags(levelIdToUse, s.id);
             const isCompleted = typeof flags.completed === 'boolean' ? flags.completed : !!s.completed;
             if (isCompleted) return i;
           }
@@ -900,7 +909,7 @@ export default function LearnScreen() {
       const nextQuizIdx = lastCompletedQuizIdx >= 0 ? findNextQuizIndex(lastCompletedQuizIdx) : findNextQuizIndex(-1);
 
       const setsWithProgress = withQuizzes.map((set, index) => {
-        const flags = SetProgressService.getSetFlags(activeLevelId, set.id);
+        const flags = SetProgressService.getSetFlags(levelIdToUse, set.id);
         const isQuizSet = (set as any).type === 'quiz';
         const baseSet = {
           ...set,
@@ -936,7 +945,7 @@ export default function LearnScreen() {
 
         // Check if previous set is completed
         const prevSet = withQuizzes[index - 1];
-        const prevFlags = SetProgressService.getSetFlags(activeLevelId, prevSet.id);
+        const prevFlags = SetProgressService.getSetFlags(levelIdToUse, prevSet.id);
         const prevCompleted = prevFlags.completed === true;
 
         // For regular sets: unlock only if previous set is completed
@@ -954,7 +963,7 @@ export default function LearnScreen() {
           const quizIdx = index;
           const setsBeforeQuiz = withQuizzes.slice(quizIdx - 4, quizIdx).filter(s => (s as any).type !== 'quiz');
           const allSetsCompleted = setsBeforeQuiz.every(s => {
-            const sFlags = SetProgressService.getSetFlags(activeLevelId, s.id);
+            const sFlags = SetProgressService.getSetFlags(levelIdToUse, s.id);
             return sFlags.completed === true;
           });
           return { ...baseSet, locked: !allSetsCompleted, premiumLocked: false };
@@ -1499,30 +1508,27 @@ export default function LearnScreen() {
       if (newLevelId && (newLevelId !== activeLevelId || newTopic !== userFocus)) {
         console.log('[MODAL] Applying changes:', { newLevelId, newTopic });
 
+        // Persist to storage first
+        AsyncStorage.setItem(SELECTED_LEVEL_KEY, newLevelId).catch(console.error);
+        AsyncStorage.setItem(USER_FOCUS_KEY, newTopic || 'general').catch(console.error);
+
         // Update caches
         cachedLevelId = newLevelId;
         cachedUserFocus = newTopic;
         cachedCurrentLevel = null;
 
-        // Persist to storage
-        AsyncStorage.setItem(SELECTED_LEVEL_KEY, newLevelId).catch(console.error);
-        AsyncStorage.setItem(USER_FOCUS_KEY, newTopic || 'general').catch(console.error);
-
-        // Update state directly without navigation to prevent freeze
+        // Update state first
         setActiveLevelId(newLevelId);
         setUserFocus(newTopic);
 
-        // Force refresh by clearing params and calling refreshLevel directly
-        lastRefreshParams.current = { levelId: null, premium: null, focus: null };
-
-        // Small delay to let state update propagate
+        // Force immediate refresh with new values (bypassing state delay)
         setTimeout(() => {
-          console.log('[MODAL] Calling refreshLevel with:', { newLevelId, newTopic });
-          refreshLevel();
-        }, 100);
+          console.log('[MODAL] Calling refreshLevel directly with new values');
+          refreshLevel(newLevelId, newTopic);
+        }, 50);
       }
     }
-  }, [showLevelTopicModal, activeLevelId, userFocus, router, refreshLevel]);
+  }, [showLevelTopicModal, activeLevelId, userFocus, refreshLevel]);
 
   // Calculate stage gate positions and trigger haptic when scrolling past
   const stageGateIndices = useRef<number[]>([]);
@@ -1716,7 +1722,7 @@ export default function LearnScreen() {
     // No data at all - show empty view
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <TopStatusPanel floating includeTopInset />
+        {showTopStatus && <TopStatusPanel floating includeTopInset />}
       </SafeAreaView>
     );
   }
@@ -2283,8 +2289,8 @@ export default function LearnScreen() {
       {/* Space background with stars */}
       <StarField />
 
-      {/* Top status panel */}
-      <TopStatusPanel floating includeTopInset />
+      {/* Top status panel - delayed to prevent flash on startup */}
+      {showTopStatus && <TopStatusPanel floating includeTopInset />}
 
       {/* Main HORIZONTAL scrollable content */}
       <ScrollView
