@@ -1,29 +1,12 @@
-import React, { forwardRef, useImperativeHandle } from 'react';
-import { View } from 'react-native';
+// Re-export real lottie-react-native for New Architecture
+// Using real Lottie v7.3.4 with Fabric support
+// @ts-ignore - Import from actual node_modules, not our alias
+const LottieView = require('../../node_modules/lottie-react-native').default;
 
 export type LottieViewHandle = {
   play?: () => void;
   reset?: () => void;
   pause?: () => void;
 };
-
-type Props = {
-  style?: any;
-  source?: any;
-  autoPlay?: boolean;
-  loop?: boolean;
-};
-
-const LottieView = forwardRef<LottieViewHandle, Props>(function LottieShim(
-  { style }: Props,
-  ref
-) {
-  useImperativeHandle(ref, () => ({
-    play: () => {},
-    reset: () => {},
-    pause: () => {},
-  }), []);
-  return <View style={style} />;
-});
 
 export default LottieView;

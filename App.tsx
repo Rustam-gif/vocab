@@ -365,7 +365,7 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider
         initialMetrics={{
-          insets: { top: 59, bottom: 34, left: 0, right: 0 },
+          insets: { top: 47, bottom: 34, left: 0, right: 0 },
           frame: { x: 0, y: 0, width: Dimensions.get('window').width, height: Dimensions.get('window').height },
         }}
       >

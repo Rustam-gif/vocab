@@ -1129,6 +1129,18 @@ export default function SynonymComponent({ setId, levelId, onPhaseComplete, hear
         <View style={[styles.progressBarPill, isLight && { backgroundColor: '#E5E7EB' }]}>
           <Animated.View style={[styles.progressFillPill, { width: `${progress * 100}%` }]} />
         </View>
+        <TouchableOpacity
+          onPress={() => onPhaseComplete(wordsData.length * 5, wordsData.length)}
+          style={{
+            backgroundColor: '#F59E0B',
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 8,
+            marginLeft: 8,
+          }}
+        >
+          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600' }}>SKIP</Text>
+        </TouchableOpacity>
         <Animated.View style={[styles.heartsContainerSmall, { transform: [{ scale: heartLostAnim }] }]}>
           <View style={{ position: 'relative' }}>
             <LottieView

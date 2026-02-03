@@ -1,6 +1,5 @@
-// Ensure gesture + Reanimated are initialized before any RN imports
+// Ensure gesture handler is initialized before any RN imports
 import 'react-native-gesture-handler';
-import 'react-native-reanimated';
 // Critical polyfills must be loaded before anything else
 import './lib/polyfills';
 // Safe global fetch: prevent redbox on offline/connection errors
@@ -47,6 +46,65 @@ import './lib/polyfills';
     }
   }) as any;
 })();
+
+// Fix React Native blob responseType warnings
+// React Native's Image component and other native modules try to use 'blob' responseType
+// but RN doesn't support it, causing console spam. Patch XMLHttpRequest to ignore it.
+(() => {
+  const OriginalXHR = (globalThis as any).XMLHttpRequest;
+  if (!OriginalXHR) return;
+
+  const descriptor = Object.getOwnPropertyDescriptor(OriginalXHR.prototype, 'responseType');
+  if (!descriptor) return;
+
+  const originalSetter = descriptor.set;
+  if (!originalSetter) return;
+
+  // Patch the responseType setter to silently ignore 'blob'
+  Object.defineProperty(OriginalXHR.prototype, 'responseType', {
+    ...descriptor,
+    set: function(value: any) {
+      // Silently convert 'blob' to '' (default text response)
+      if (value === 'blob') {
+        value = '';
+      }
+      originalSetter.call(this, value);
+    }
+  });
+})();
+
+// Suppress benign system warnings that don't affect functionality
+(() => {
+  const originalWarn = console.warn;
+  const originalLog = console.log;
+
+  console.warn = function(...args: any[]) {
+    const msg = String(args[0] || '');
+    // Filter out benign Fabric/system warnings
+    if (msg.includes('Could not locate shadow view') ||
+        msg.includes('instanceHandle is null') ||
+        msg.includes('UIScene') ||
+        msg.includes('ShellSceneKit') ||
+        msg.includes('ProfileActivation') ||
+        msg.includes('ATAudioSessionClientImpl') ||
+        msg.includes('activation failed')) {
+      return; // Suppress these warnings
+    }
+    originalWarn.apply(console, args);
+  };
+
+  console.log = function(...args: any[]) {
+    const msg = String(args[0] || '');
+    // Filter out benign system logs
+    if (msg.includes('unable to decode "ShellSceneKit') ||
+        msg.includes('Could not decode object for setting') ||
+        msg.includes('No value decoded for key')) {
+      return; // Suppress these logs
+    }
+    originalLog.apply(console, args);
+  };
+})();
+
 import { AppRegistry, Text } from 'react-native';
 
 // Global default font faces using local assets/fonts (linked via react-native.config.js)

@@ -475,6 +475,7 @@ export default function WordIntroComponent({ setId, levelId, onComplete, wordsOv
               <TouchableOpacity
                 style={[styles.iconButton, speakingWord === word.word && styles.iconButtonActive]}
                 onPress={() => speakWord(word)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Volume2 size={16} color={speakingWord === word.word ? '#fff' : ACCENT_TEAL} />
               </TouchableOpacity>
@@ -485,6 +486,7 @@ export default function WordIntroComponent({ setId, levelId, onComplete, wordsOv
               style={[styles.saveButton, isSaved && styles.iconButtonSaved]}
               onPress={() => handleSaveWord(word.word)}
               disabled={savingWords.has(word.word) || isSaved}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               {isSaved ? (
                 <Check size={16} color="#fff" />
@@ -641,6 +643,21 @@ export default function WordIntroComponent({ setId, levelId, onComplete, wordsOv
             ]}
           />
         ))}
+        <TouchableOpacity
+          onPress={handleStartPractice}
+          style={{
+            backgroundColor: '#F59E0B',
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 8,
+            marginLeft: 'auto',
+            position: 'absolute',
+            right: 20,
+            top: 0,
+          }}
+        >
+          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600' }}>SKIP</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Word cards carousel */}

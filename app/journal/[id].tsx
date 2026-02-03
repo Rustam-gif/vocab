@@ -37,7 +37,7 @@ export default function JournalDetailScreen() {
   return (
     <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
       <View style={[styles.header, isLight && styles.headerLight]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
         </TouchableOpacity>
         <Text style={[styles.title, isLight && styles.titleLight]} numberOfLines={1}>
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#0D1B2A',
   },
   headerLight: { borderBottomColor: '#E5DED3' },
-  backButton: { padding: 8 },
+  backButton: { padding: 12 },
   title: { fontSize: 18, fontWeight: '700', color: '#fff', flex: 1, textAlign: 'center' },
   titleLight: { color: '#111827' },
   content: { flex: 1, padding: 20 },

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, PanResponder, Dimensions } from 'react-native';
 import { X, Eye, CheckCircle2 } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
@@ -8,13 +8,20 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
 
-export default function Flashcards() {
-  const router = useRouter();
-  const { folderId, title } = useLocalSearchParams<{ folderId: string; title?: string }>();
+interface FlashcardsContentProps {
+  folderId: string;
+  title?: string;
+  onBack: () => void;
+  isEmbedded?: boolean;
+}
+
+export function FlashcardsContent({ folderId, title, onBack, isEmbedded }: FlashcardsContentProps) {
   const { words, loadWords, getDueWords, gradeWordSrs } = useAppStore();
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
+  const insets = useSafeAreaInsets();
+  const Container = isEmbedded ? View : ({ children, ...props }: any) => <SafeAreaView edges={['bottom']} {...props}>{children}</SafeAreaView>;
   const [index, setIndex] = useState(0);
   const [queue, setQueue] = useState<any[]>([]);
   const rotate = useRef(new Animated.Value(0)).current;
@@ -274,16 +281,16 @@ export default function Flashcards() {
 
   if (!current) {
     return (
-      <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
-        <View style={styles.doneHeader}>
-          <TouchableOpacity onPress={() => router.back()} style={[styles.closeBtn, isLight && { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' }]}>
+      <Container style={[styles.container, isLight && { backgroundColor: colors.background }]}>
+        <View style={[styles.doneHeader, !isEmbedded && { paddingTop: insets.top + 12 }]}>
+          <TouchableOpacity onPress={onBack} style={[styles.closeBtn, isLight && { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' }]}>
             <X size={20} color={isLight ? '#111827' : '#FFFFFF'} />
           </TouchableOpacity>
         </View>
         <View style={styles.center}>
           <Text style={[styles.empty, isLight && { color: '#6B7280' }]}>All done for now.</Text>
         </View>
-      </SafeAreaView>
+      </Container>
     );
   }
 
@@ -299,9 +306,9 @@ export default function Flashcards() {
   const swipeStyle = { transform: [{ perspective: 900 }, { translateX: panX }, { rotate: swipeRotate }] } as const;
 
   return (
-    <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }]}>
-      <View style={[styles.header, isLight && { borderBottomColor: '#E5E7EB' }]}>
-        <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, isLight && { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' }]}><Text style={[styles.backTxt, isLight && { color: '#111827' }]}>Back</Text></TouchableOpacity>
+    <Container style={[styles.container, isLight && { backgroundColor: colors.background }]}>
+      <View style={[styles.header, isLight && { borderBottomColor: '#E5E7EB' }, !isEmbedded && { paddingTop: insets.top + 16 }]}>
+        <TouchableOpacity onPress={onBack} style={[styles.backBtn, isLight && { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB' }]}><Text style={[styles.backTxt, isLight && { color: '#111827' }]}>Back</Text></TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={[styles.title, isLight && { color: '#111827' }]}>{title || 'Common Phrasal Verbs'}</Text>
           <Text style={[styles.subLabel, isLight && { color: '#6B7280' }]}>Tap to reveal • {`${Math.min(index + 1, items.length)}/${items.length}`}</Text>
@@ -440,8 +447,14 @@ export default function Flashcards() {
         </Animated.View>
       </View>
       {/* Tabs moved to Home screen as requested */}
-    </SafeAreaView>
+    </Container>
   );
+}
+
+export default function Flashcards() {
+  const router = useRouter();
+  const { folderId, title } = useLocalSearchParams<{ folderId: string; title?: string }>();
+  return <FlashcardsContent folderId={folderId as string} title={title} onBack={() => router.back()} />;
 }
 
 const SW = Dimensions.get('window').width;
@@ -452,7 +465,7 @@ const CARD_H = Math.min(500, Math.round(SH * 0.48));
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1B263B' },
   doneHeader: { paddingHorizontal: 16, paddingTop: 12, alignItems: 'flex-end' },
-  closeBtn: { padding: 8, borderRadius: 12, backgroundColor: '#243B53', borderWidth: 2, borderColor: '#0D1B2A' },
+  closeBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#243B53', borderWidth: 2, borderColor: '#0D1B2A' },
   header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerCenter: { alignItems: 'center', justifyContent: 'center' },
   backBtn: { paddingVertical: 8, paddingHorizontal: 14, backgroundColor: '#243B53', borderRadius: 12, borderWidth: 2, borderColor: '#0D1B2A' },

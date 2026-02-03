@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -10,13 +10,20 @@ import { ProgressService } from '../services/ProgressService';
 
 const QUESTION_TIME_MS = 10000; // 10 seconds per question
 
-export default function WordSprint() {
-  const router = useRouter();
-  const { folderId, title } = useLocalSearchParams<{ folderId: string; title?: string }>();
+interface WordSprintContentProps {
+  folderId: string;
+  title?: string;
+  onBack: () => void;
+  isEmbedded?: boolean;
+}
+
+export function WordSprintContent({ folderId, title, onBack, isEmbedded }: WordSprintContentProps) {
   const { words, loadWords, loadProgress } = useAppStore();
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
+  const insets = useSafeAreaInsets();
+  const Container = isEmbedded ? View : ({ children, ...props }: any) => <SafeAreaView edges={['bottom']} {...props}>{children}</SafeAreaView>;
   const [index, setIndex] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [revealed, setRevealed] = useState(false);
@@ -323,11 +330,11 @@ export default function WordSprint() {
 
   if (!current) {
     return (
-      <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
+      <Container style={[styles.container, isLight && styles.containerLight, !isEmbedded && { paddingTop: insets.top }]}>
         <View style={styles.center}>
           <Text style={styles.emptyText}>No words in this folder.</Text>
         </View>
-      </SafeAreaView>
+      </Container>
     );
   }
 
@@ -338,13 +345,13 @@ export default function WordSprint() {
   });
 
   return (
-    <SafeAreaView style={[styles.container, isLight && styles.containerLight]}>
+    <Container style={[styles.container, isLight && styles.containerLight]}>
       <View style={styles.content}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, !isEmbedded && { paddingTop: insets.top + 16 }]}>
           <TouchableOpacity
             accessibilityRole="button"
-            onPress={() => router.back()}
+            onPress={onBack}
             style={[styles.closeBtn, isLight && styles.closeBtnLight]}
           >
             <Text style={[styles.closeBtnText, isLight && styles.closeBtnTextLight]}>✕</Text>
@@ -447,7 +454,7 @@ export default function WordSprint() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.resultButtonSecondary, isLight && styles.resultButtonSecondaryLight]}
-                onPress={() => router.back()}
+                onPress={onBack}
                 activeOpacity={0.8}
               >
                 <Text style={[styles.resultButtonSecondaryText, isLight && styles.resultButtonSecondaryTextLight]}>Done</Text>
@@ -456,8 +463,14 @@ export default function WordSprint() {
           </View>
         </Animated.View>
       )}
-    </SafeAreaView>
+    </Container>
   );
+}
+
+export default function WordSprint() {
+  const router = useRouter();
+  const { folderId, title } = useLocalSearchParams<{ folderId: string; title?: string }>();
+  return <WordSprintContent folderId={folderId as string} title={title} onBack={() => router.back()} />;
 }
 
 const styles = StyleSheet.create({
@@ -493,9 +506,9 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: '#243B53',
     alignItems: 'center',
     justifyContent: 'center',

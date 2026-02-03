@@ -382,6 +382,18 @@ export default function MissingLetters({ word, ipa, clue, onResult, onNext, them
     <View style={themeStyles.container}>
       <View style={themeStyles.progressContainer}>
         <Text style={themeStyles.progressText}>Word {wordIndex + 1} of {totalWords}</Text>
+        <TouchableOpacity
+          onPress={() => onPhaseComplete(totalWords * 5, totalWords)}
+          style={{
+            backgroundColor: '#F59E0B',
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 8,
+            marginLeft: 8,
+          }}
+        >
+          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600' }}>SKIP</Text>
+        </TouchableOpacity>
         <Animated.View style={[themeStyles.heartsContainer, { transform: [{ scale: heartLostAnim }] }]}>
           <View style={{ position: 'relative', flexDirection: 'row', alignItems: 'center' }}>
             <LottieView

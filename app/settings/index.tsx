@@ -77,7 +77,7 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={[styles.container, isLight && { backgroundColor: colors.background }] }>
       <View style={[styles.header, isLight && styles.headerLight]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <ArrowLeft size={22} color={isLight ? '#111827' : '#fff'} />
         </TouchableOpacity>
         <Text style={[styles.title, isLight && styles.titleLight]}>Settings</Text>
@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0D1B2A' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
   headerLight: { },
-  backButton: { padding: 8 },
+  backButton: { padding: 12 },
   title: { fontSize: 16, fontWeight: '800', color: '#E5E7EB' },
   titleLight: { color: '#111827' },
   content: { flex: 1, padding: 20 },
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   windowLabel: { color: '#E5E7EB', fontWeight: '600' },
   windowLabelLight: { color: '#111827' },
   windowControls: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  circleBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: 'rgba(255,255,255,0.6)', alignItems: 'center', justifyContent: 'center' },
+  circleBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: 'rgba(255,255,255,0.6)', alignItems: 'center', justifyContent: 'center' },
   circleBtnLight: { borderColor: '#9CA3AF' },
   circleText: { color: '#E5E7EB', fontSize: 18, fontWeight: '800' },
   circleTextLight: { color: '#2D4A66' },

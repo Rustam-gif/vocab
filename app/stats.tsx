@@ -122,6 +122,7 @@ export default function StatsScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           onPress={() => router.replace('/quiz/learn')}
         >
           <ArrowLeft size={24} color={isLight ? '#111827' : '#fff'} />
@@ -129,6 +130,7 @@ export default function StatsScreen() {
         <Text style={[styles.title, isLight && styles.titleLight]}>Your Progress</Text>
         <TouchableOpacity
           style={[styles.levelButton, isLight && styles.levelButtonLight]}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           onPress={() => {
             router.replace('/quiz/learn');
             // Trigger modal opening via event after navigation
@@ -239,7 +241,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   backButton: {
-    padding: 8,
+    padding: 12,
   },
   title: {
     fontSize: 20,

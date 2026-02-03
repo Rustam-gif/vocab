@@ -234,10 +234,11 @@ export default function StoryExerciseScreen() {
   const pickWordsAnim = useRef(new Animated.Value(1)).current;
   const [isScreenFocused, setIsScreenFocused] = useState(false);
 
-  // Track screen focus
+  // Track screen focus and ensure nav bar is visible
   useFocusEffect(
     useCallback(() => {
       setIsScreenFocused(true);
+      DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
       return () => {
         setIsScreenFocused(false);
       };

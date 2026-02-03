@@ -335,6 +335,18 @@ export default function OddOneOutComponent({
         <View style={[styles.progressBarPill, isLight && { backgroundColor: '#E5E7EB' }]}>
           <View style={[styles.progressFillPill, { width: `${progress * 100}%` }]} />
         </View>
+        <TouchableOpacity
+          onPress={() => onPhaseComplete(questions.length * 5, questions.length)}
+          style={{
+            backgroundColor: '#F59E0B',
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 8,
+            marginLeft: 8,
+          }}
+        >
+          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600' }}>SKIP</Text>
+        </TouchableOpacity>
         <Animated.View style={[styles.heartsContainerSmall, { transform: [{ scale: heartLostAnim }] }]}>
           <View style={{ position: 'relative' }}>
             <LottieView

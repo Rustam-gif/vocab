@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Platform,
   InteractionManager,
   Image,
+  DeviceEventEmitter,
 } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,11 +29,20 @@ import { useCanMountTextInput } from '../lib/TextInputGate';
 export default function VaultScreen() {
   const renderCount = useRef(0);
   renderCount.current++;
-  console.log('[VAULT] RENDER', renderCount.current);
+  if (__DEV__ && renderCount.current <= 2) {
+    console.log('[VAULT] RENDER', renderCount.current);
+  }
 
   const router = useRouter();
   const params = useLocalSearchParams<{ add?: string; create?: string }>();
-  const { words, loading, loadWords, addWord, searchWords, getFolders, createFolder, moveWordToFolder, deleteFolder } = useAppStore();
+  // Only subscribe to specific values to prevent unnecessary re-renders
+  const words = useAppStore(s => s.words);
+  const loading = useAppStore(s => s.loading);
+  const loadWords = useAppStore(s => s.loadWords);
+  const addWord = useAppStore(s => s.addWord);
+  const getFolders = useAppStore(s => s.getFolders);
+  const createFolder = useAppStore(s => s.createFolder);
+  const deleteFolder = useAppStore(s => s.deleteFolder);
   const themeName = useAppStore(s => s.theme);
   const colors = getTheme(themeName);
   const isLight = themeName === 'light';
@@ -69,11 +79,22 @@ export default function VaultScreen() {
   }, [words, foldersToShow]);
 
   // Refresh folders when screen regains focus (don't replay entrance animation)
-  useFocusEffect(() => {
+  useFocusEffect(useCallback(() => {
+    // Ensure nav bar is visible
+    DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
     // Refresh folders when screen regains focus (new folders may be created elsewhere)
-    try { setFolders(getFolders()); } catch {}
+    try {
+      const freshFolders = getFolders();
+      // Only update if folders actually changed to avoid unnecessary re-renders
+      setFolders(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(freshFolders)) {
+          return prev; // No change, skip re-render
+        }
+        return freshFolders;
+      });
+    } catch {}
     // Don't replay entrance animation on tab switch - it causes a flash
-  });
+  }, [getFolders]));
 
   useEffect(() => {
     (async () => {
@@ -207,12 +228,13 @@ export default function VaultScreen() {
   }
 
   return (
-    <SafeAreaView edges={['bottom']} style={[styles.container, isLight && { backgroundColor: colors.background }, { paddingTop: insets.top }]}>
-      <View style={[styles.header, isLight && styles.headerLight]}>
+    <SafeAreaView edges={['bottom']} style={[styles.container, isLight && { backgroundColor: colors.background }]}>
+      <View style={[styles.header, isLight && styles.headerLight, { paddingTop: insets.top + 16 }]}>
         <View style={{ width: 32 }} />
         <Text style={[styles.title, isLight && styles.titleLight]}>Vocabulary Vault</Text>
         <TouchableOpacity
           style={styles.addButtonIcon}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           onPress={() => {
             setIsAddModalOpen(true);
             if (!selectedModalFolderId) {
@@ -501,7 +523,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
   },
   headerLight: {
   },
@@ -539,13 +562,17 @@ const styles = StyleSheet.create({
   },
   titleLight: { color: '#0D1B2A' },
   addButtonIcon: {
-    padding: 8,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 20,
-    marginVertical: 16,
+    marginTop: 0,
+    marginBottom: 20,
     backgroundColor: '#1B263B',
     borderRadius: 16,
     paddingHorizontal: 16,
@@ -570,8 +597,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 20,
-    marginTop: 8,
-    marginBottom: 6,
+    marginTop: 4,
+    marginBottom: 12,
     backgroundColor: '#1B263B',
     borderRadius: 16,
     padding: 14,

@@ -246,6 +246,13 @@ export default function ProfileScreen() {
     NotificationService.getSettings().then(s => { setNotifyEnabled(!!s.enabled); setNotifyFreq(s.freq as any); }).catch(() => {});
   }, []);
 
+  // Ensure nav bar is visible when profile screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
+    }, [])
+  );
+
   // Load sound effects setting
   useEffect(() => {
     AsyncStorage.getItem('@engniter.soundEnabled').then(val => {

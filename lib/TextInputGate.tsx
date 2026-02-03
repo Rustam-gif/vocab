@@ -9,7 +9,7 @@
  * 2. App has been running for at least 2 seconds (ensuring stability)
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { View } from 'react-native';
 
 type TextInputGateContextType = {
@@ -39,36 +39,37 @@ export function useCanMountTextInput(): boolean {
  */
 export function TextInputGateProvider({ children }: { children: React.ReactNode }) {
   const [isTextInputAllowed, setIsTextInputAllowed] = useState(false);
-  const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const interactedRef = useRef(false);
   const [hasTimePassed, setHasTimePassed] = useState(false);
-
-  // Require both user interaction AND minimum time
-  useEffect(() => {
-    if (hasUserInteracted && hasTimePassed) {
-      setIsTextInputAllowed(true);
-    }
-  }, [hasUserInteracted, hasTimePassed]);
 
   // Minimum time gate (2 seconds after mount)
   useEffect(() => {
     const timer = setTimeout(() => {
       setHasTimePassed(true);
+      // If user already interacted before timer, open gate now
+      if (interactedRef.current) {
+        setIsTextInputAllowed(true);
+      }
     }, 2000);
     return () => clearTimeout(timer);
   }, []);
 
   const allowTextInput = useCallback(() => {
-    setHasUserInteracted(true);
-  }, []);
+    if (interactedRef.current) return; // already handled, skip setState
+    interactedRef.current = true;
+    if (hasTimePassed) {
+      setIsTextInputAllowed(true);
+    }
+  }, [hasTimePassed]);
 
-  // Wrap children in a touch detector to capture first interaction
+  // Wrap children in a View with flex:1 for layout.
+  // Use onTouchEnd (not onStartShouldSetResponderCapture) to detect first
+  // interaction without interfering with the responder negotiation system.
   return (
     <TextInputGateContext.Provider value={{ isTextInputAllowed, allowTextInput }}>
       <View
         style={{ flex: 1 }}
-        // Capture touches without blocking child responders/scroll views
-        onStartShouldSetResponderCapture={() => { allowTextInput(); return false; }}
-        onTouchStart={allowTextInput}
+        onTouchEnd={!isTextInputAllowed ? allowTextInput : undefined}
       >
         {children}
       </View>

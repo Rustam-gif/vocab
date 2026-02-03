@@ -215,6 +215,7 @@ export default function TranslateScreen(props?: { preview?: boolean }) {
                 style={[styles.swapIcon, isLight && styles.swapIconLight]}
                 onPress={() => setReverse(r => !r)}
                 accessibilityLabel="Swap direction"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Repeat2 size={16} color={isLight ? '#0D3B4A' : '#4ED9CB'} />
               </TouchableOpacity>

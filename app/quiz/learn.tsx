@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, memo, useReducer } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Image, Animated, Easing, InteractionManager, Dimensions, DeviceEventEmitter, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Animated, Easing, InteractionManager, Dimensions, DeviceEventEmitter, Platform, Modal } from 'react-native';
 
 // Use local haptic feedback shim (no-op since native module not available)
 import ReactNativeHapticFeedback from '../../lib/haptics';
 import { useRouter, useLocalSearchParams, useRouteKey } from 'expo-router';
-import { useNavigation } from '@react-navigation/native';
+// import { useNavigation } from '@react-navigation/native'; // Not used with custom router
 import LottieView from 'lottie-react-native';
 import { levels, getOrderedSetsForLevel } from './data/levels';
 import type { Level, Set as VocabSet, SetCategory } from './data/levels';
@@ -18,8 +18,9 @@ import { SubscriptionService } from '../../services/SubscriptionService';
 import { soundService } from '../../services/SoundService';
 import { useAppStore } from '../../lib/store';
 import { getTheme } from '../../lib/theme';
+import { PERF_CONFIG, getAnimationDuration } from '../../lib/perfConfig';
 import TopStatusPanel from '../components/TopStatusPanel';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import LimitModal from '../../lib/LimitModal';
 import { Lock, Check, Star, CheckCircle, Flag, Trophy, Crown, Settings } from 'lucide-react-native';
 import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
@@ -251,10 +252,11 @@ const StaticPlanet = memo(({
 export default function LearnScreen() {
   const renderCount = useRef(0);
   renderCount.current++;
-  console.log('[LEARN] RENDER', renderCount.current);
+  if (__DEV__ && renderCount.current <= 3) {
+    console.log('[LEARN] RENDER', renderCount.current);
+  }
 
   const router = useRouter();
-  const navigation = useNavigation<any>();
   const theme = useAppStore(s => s.theme);
   const user = useAppStore(s => s.user);
   const isSignedIn = !!(user && (user as any)?.id);
@@ -296,6 +298,19 @@ export default function LearnScreen() {
   });
   // Hide TopStatusPanel until component is ready to prevent flash on startup
   const [showTopStatus, setShowTopStatus] = useState(false);
+
+  if (__DEV__ && renderCount.current <= 3) {
+    console.log('[LEARN] 🎬 Component state:', {
+      renderNum: renderCount.current,
+      hasCurrentLevel: !!currentLevel,
+      currentLevelSets: currentLevel?.sets?.length || 0,
+      hasCachedCurrentLevel: !!cachedCurrentLevel,
+      cachedCurrentLevelSets: cachedCurrentLevel?.sets?.length || 0,
+      activeLevelId,
+      levelIdFromParams: levelId
+    });
+  }
+
   const levelNodeAnims = useRef<Animated.Value[]>([]);
   const levelPulseAnim = useRef(new Animated.Value(1)).current;
   const levelPulseOpacity = useRef(new Animated.Value(0.4)).current;
@@ -322,6 +337,7 @@ export default function LearnScreen() {
   // Track scroll end for haptic
   const scrollEndTimer = useRef<NodeJS.Timeout | null>(null);
   const isScrollingRef = useRef(false);
+  const currentScrollX = useRef(0); // Track current scroll position for smooth FAB animation
 
   // Helper to access module-level scroll flags
   const getLayoutReady = () => moduleLayoutReady;
@@ -340,6 +356,7 @@ export default function LearnScreen() {
   // Premium status for gating content - initialize from cache to prevent flickering
   const [isPremium, setIsPremium] = useState<boolean>(() => cachedIsPremium);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
+  const [paywallTrigger, setPaywallTrigger] = useState<'skip-ahead' | 'default'>('default');
   const [showLockedPopup, setShowLockedPopup] = useState<boolean>(false);
 
   // User's focus preference from onboarding (business, travel, exams, general)
@@ -443,6 +460,9 @@ export default function LearnScreen() {
     return Math.max(0, index * HORIZONTAL_SPACING + 60 + PLANET_SIZE / 2 + 20 - SCREEN_WIDTH / 2);
   }, []);
 
+  // Animated value for smooth FAB scrolling
+  const fabScrollAnim = useRef<Animated.Value | null>(null);
+
   // ========== THE ONLY SCROLL FUNCTION ==========
   // Rule: All scrolling MUST go through this function
   const scrollToPlanet = useCallback((index: number, animated: boolean = true) => {
@@ -460,7 +480,45 @@ export default function LearnScreen() {
     }
 
     logScroll('SCROLL', `scrollToPlanet index=${index}, x=${scrollX}, animated=${animated}`);
-    scrollViewRef.current.scrollTo({ x: scrollX, y: 0, animated });
+
+    // If not animated, use instant scroll
+    if (!animated) {
+      scrollViewRef.current.scrollTo({ x: scrollX, y: 0, animated: false });
+      currentScrollX.current = scrollX; // Update tracked position
+    } else {
+      // Use smooth animated scroll with easing for FAB button
+      // Stop any existing animation first
+      if (fabScrollAnim.current) {
+        fabScrollAnim.current.stopAnimation();
+        fabScrollAnim.current.removeAllListeners();
+      }
+
+      // Create animated value starting at current position
+      fabScrollAnim.current = new Animated.Value(currentScrollX.current);
+
+      // Listen to animation and update scroll position
+      const listener = fabScrollAnim.current.addListener(({ value }) => {
+        if (scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({ x: value, y: 0, animated: false });
+        }
+      });
+
+      // Animate with smooth easing
+      Animated.timing(fabScrollAnim.current, {
+        toValue: scrollX,
+        duration: 600, // Smooth 600ms animation
+        easing: Easing.out(Easing.cubic), // Speed ramp: fast start, slow end
+        useNativeDriver: false, // Can't use native driver for scrollTo
+      }).start(() => {
+        // Clean up listener when done
+        if (fabScrollAnim.current) {
+          fabScrollAnim.current.removeListener(listener);
+          fabScrollAnim.current = null;
+        }
+        // Update tracked position to final value
+        currentScrollX.current = scrollX;
+      });
+    }
 
     // Update state
     setCenteredPlanetIndex(index);
@@ -481,8 +539,11 @@ export default function LearnScreen() {
       targetIndex = idx === -1 ? 0 : idx;
     }
     const x = targetIndex * HORIZONTAL_SPACING + 60 + PLANET_SIZE / 2 + 20 - SCREEN_WIDTH / 2;
-    logScroll('SCROLL', `initialScrollOffset calculated index=${targetIndex}, x=${Math.max(0, x)}`);
-    return { x: Math.max(0, x), y: 0 };
+    const scrollX = Math.max(0, x);
+    // Initialize currentScrollX ref with initial position
+    currentScrollX.current = scrollX;
+    logScroll('SCROLL', `initialScrollOffset calculated index=${targetIndex}, x=${scrollX}`);
+    return { x: scrollX, y: 0 };
   }, []); // Empty deps - calculate ONCE on mount
 
   // ========== LAYOUT HANDLER ==========
@@ -568,70 +629,56 @@ export default function LearnScreen() {
     }
   }, [checkPremiumStatus, loadUserFocus]);
 
-  // ========== FOCUS/BLUR - AUTO-SCROLL TO CURRENT PLANET ==========
-  // When tab becomes visible, scroll to current planet so user doesn't have to hunt for it
-  // BUT skip if we just returned from completing a set (spacecraft animation will handle scroll)
+  // ========== FOCUS/BLUR - HANDLE TAB VISIBILITY ==========
+  // When tab becomes visible, refresh premium status and enable animations
+  // No auto-scroll - preserve user's manual scroll position when switching tabs
   const lastFocusTimeRef = useRef(0);
-  const hasInitialScrolledRef = useRef(false);
+  const lastBlurTimeRef = useRef(0);
   const loadingStartTimeRef = useRef<number>(Date.now());
   useFocusEffect(
     useCallback(() => {
-      // Debounce: ignore rapid focus events (caused by router state changes)
       const now = Date.now();
-      if (now - lastFocusTimeRef.current < 3000) {
-        return; // Skip if focused less than 3 seconds ago
+
+      // Debounce: Skip if we just focused recently (prevents rapid FOCUS/BLUR cycles)
+      if (now - lastFocusTimeRef.current < 200) {
+        return;
       }
       lastFocusTimeRef.current = now;
 
       const ts = new Date().toISOString().substr(11, 12);
       console.log(`[${ts}] [LEARN] 👁️  FOCUS (tab visible)${completedSetId ? `, completedSetId=${completedSetId}` : ''}`);
 
-      // Enable animations when screen is focused
+      // Ensure nav bar is visible
+      DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
+
+      // ALWAYS enable animations when screen is focused (critical for spacecraft animation)
       setIsScreenFocused(true);
 
-      // Refresh premium status on focus (in case user just subscribed)
-      checkPremiumStatus();
+      // Expensive operations (premium check, sounds) - run less frequently
+      const shouldRunExpensiveOps = now - lastBlurTimeRef.current >= 1000;
+      if (shouldRunExpensiveOps) {
+        // Refresh premium status on focus (in case user just subscribed)
+        checkPremiumStatus();
 
-      // Play tab switch sound asynchronously to avoid blocking UI
-      setTimeout(() => soundService.playTabSwitch(), 0);
-
-      // Skip auto-scroll if:
-      // 1. Scroll is locked (animation in progress)
-      // 2. We have completedSetId param (returning from completed set - let spacecraft animation handle it)
-      if (getScrollLocked()) {
-        logScroll('FOCUS', 'skip auto-scroll (scroll locked)');
-        return;
+        // Play tab switch sound asynchronously to avoid blocking UI
+        setTimeout(() => soundService.playTabSwitch(), 0);
       }
-
-      if (completedSetId) {
-        logScroll('FOCUS', 'skip auto-scroll (completedSetId present, spacecraft will handle)');
-        return;
-      }
-
-      // Skip auto-scroll if already scrolled once (only scroll on initial launch)
-      if (hasInitialScrolledRef.current) {
-        logScroll('FOCUS', 'skip auto-scroll (already scrolled on launch)');
-        return;
-      }
-
-      // Auto-scroll to current planet after a short delay (let layout settle)
-      const scrollTimer = setTimeout(() => {
-        if (currentLevel && !getScrollLocked()) {
-          const targetIndex = getCurrentPlanetIndex(currentLevel);
-          logScroll('FOCUS', `auto-scroll to current planet index=${targetIndex}`);
-          scrollToPlanet(targetIndex, true); // animated=true for smooth scroll
-          hasInitialScrolledRef.current = true; // Mark as scrolled
-        }
-      }, 150);
 
       return () => {
-        clearTimeout(scrollTimer);
+        const blurNow = Date.now();
+
+        // Debounce blur too - only actually blur if enough time has passed
+        if (blurNow - lastBlurTimeRef.current < 200) {
+          return;
+        }
+        lastBlurTimeRef.current = blurNow;
+
         const ts2 = new Date().toISOString().substr(11, 12);
         console.log(`[${ts2}] [LEARN] 🙈 BLUR (tab hidden)`);
         // Disable animations to save CPU when tab is hidden
         setIsScreenFocused(false);
       };
-    }, [currentLevel, completedSetId, getCurrentPlanetIndex, scrollToPlanet, logScroll, checkPremiumStatus])
+    }, [checkPremiumStatus, completedSetId])
   );
 
   // Track if screen is focused to control animations
@@ -643,10 +690,14 @@ export default function LearnScreen() {
   // Stop all animations when screen loses focus to prevent background CPU usage
   useEffect(() => {
     if (!isScreenFocused) {
-      // Stop spacecraft animation
-      spacecraftAnim.stopAnimation();
-      spacecraftAnim.removeAllListeners();
-      spacecraftAnim.setValue(0);
+      // Only stop animations if we're not in the middle of a spacecraft animation
+      // (which can happen if user switches tabs during the animation)
+      if (!spacecraftAnimating) {
+        // Stop spacecraft animation
+        spacecraftAnim.stopAnimation();
+        spacecraftAnim.removeAllListeners();
+        spacecraftAnim.setValue(0);
+      }
 
       // Stop pulse animations
       levelPulseAnim.stopAnimation();
@@ -654,19 +705,16 @@ export default function LearnScreen() {
       levelPulseOpacity.stopAnimation();
       levelPulseOpacity.setValue(0.4);
 
-      // Stop scroll progress animation
-      if (scrollProgressRef.current) {
+      // Don't stop scroll progress if spacecraft is animating
+      if (!spacecraftAnimating && scrollProgressRef.current) {
         scrollProgressRef.current.stopAnimation();
         scrollProgressRef.current.removeAllListeners();
         scrollProgressRef.current.setValue(0);
       }
 
-      // Disable spacecraft rendering
-      setSpacecraftAnimating(false);
-
-      console.log('[LEARN] Stopped all animations (screen unfocused)');
+      console.log('[LEARN] Stopped animations (screen unfocused), spacecraftAnimating:', spacecraftAnimating);
     }
-  }, [isScreenFocused, spacecraftAnim, levelPulseAnim, levelPulseOpacity]);
+  }, [isScreenFocused, spacecraftAnim, levelPulseAnim, levelPulseOpacity, spacecraftAnimating]);
 
   // BREATHING ANIMATION REMOVED FOR PERFORMANCE
   // useEffect(() => {
@@ -750,6 +798,36 @@ export default function LearnScreen() {
   const lockedColor = isLight ? '#D1D5DB' : '#4A4A4A';
 
   const loadStoredLevel = useCallback(async () => {
+    // Pre-initialize services in background (non-blocking) with granular timing
+    const servicesInitStart = performance.now();
+
+    const progressStart = performance.now();
+    const progressPromise = ProgressService.initialize()
+      .then(() => {
+        const duration = performance.now() - progressStart;
+        console.log(`[INIT] ProgressService initialized in ${duration.toFixed(2)}ms`);
+        if (duration > 1000) {
+          console.warn(`[INIT] ⚠️ ProgressService took ${duration.toFixed(2)}ms - TOO SLOW`);
+        }
+      });
+
+    const setProgressStart = performance.now();
+    const setProgressPromise = SetProgressService.initialize()
+      .then(() => {
+        const duration = performance.now() - setProgressStart;
+        console.log(`[INIT] SetProgressService initialized in ${duration.toFixed(2)}ms`);
+        if (duration > 1000) {
+          console.warn(`[INIT] ⚠️ SetProgressService took ${duration.toFixed(2)}ms - TOO SLOW`);
+        }
+      });
+
+    Promise.all([progressPromise, setProgressPromise])
+      .then(() => {
+        const totalDuration = performance.now() - servicesInitStart;
+        console.log(`[INIT] All services initialized in ${totalDuration.toFixed(2)}ms`);
+      })
+      .catch(err => console.error('[INIT] Services init error:', err));
+
     // Load highest level
     const highest = await AsyncStorage.getItem(HIGHEST_LEVEL_KEY);
     if (highest) setHighestLevel(highest);
@@ -815,9 +893,18 @@ export default function LearnScreen() {
     const levelIdToUse = overrideLevelId ?? activeLevelId;
     const effectiveUserFocus = overrideUserFocus !== undefined ? overrideUserFocus : (userFocus ?? cachedUserFocus);
 
-    console.log('[REFRESH] Using:', { levelId: levelIdToUse, focus: effectiveUserFocus });
+    console.log('[REFRESH] 🔄 refreshLevel called:', { levelId: levelIdToUse, focus: effectiveUserFocus, activeLevelId, overrideLevelId, levelsLength: levels.length });
 
-    if (!levelIdToUse) {
+    // If no level ID, use the first available level
+    let actualLevelId = levelIdToUse;
+    if (!actualLevelId && levels.length > 0) {
+      actualLevelId = levels[0].id;
+      console.log('[REFRESH] No levelId specified, using first level:', actualLevelId);
+      setActiveLevelId(actualLevelId);
+    }
+
+    if (!actualLevelId) {
+      console.log('[REFRESH] ❌ No levels available - showing empty state');
       setCurrentLevel(null);
       setIsLoadingLevel(false);
       return;
@@ -826,13 +913,25 @@ export default function LearnScreen() {
     // Never show loading indicator - we always have cached data or show empty view
     // Loading only shows on very first app launch (set in initial state)
 
-    let level = levels.find(l => l.id === levelIdToUse);
+    let level = levels.find(l => l.id === actualLevelId);
     if (!level && levels.length > 0) {
       level = levels[0];
       try { await debouncedStorage.setItem(SELECTED_LEVEL_KEY, level.id); } catch {}
     }
+
+    console.log('[REFRESH] Found level:', level?.id, 'sets:', level?.sets.length);
     if (level) {
-      await Promise.all([ProgressService.initialize(), SetProgressService.initialize()]);
+      // Initialize services in the background - DON'T BLOCK UI RENDERING
+      const servicesInitStart = performance.now();
+      Promise.all([ProgressService.initialize(), SetProgressService.initialize()])
+        .then(() => {
+          const duration = performance.now() - servicesInitStart;
+          console.log(`[REFRESH] Services initialized in ${duration.toFixed(2)}ms`);
+          if (duration > 1000) {
+            console.warn(`[REFRESH] ⚠️ Services took ${duration.toFixed(2)}ms - this is TOO SLOW`);
+          }
+        })
+        .catch(err => console.error('[REFRESH] Services init error:', err));
 
       // Get sets ordered by user's focus preference (Business, Travel, IELTS, General)
       // For levels with category-based sets, use the ordered sets
@@ -975,11 +1074,14 @@ export default function LearnScreen() {
 
       const levelWithProgress = { ...level, sets: setsWithProgress };
 
+      console.log('[REFRESH] 📝 About to setCurrentLevel with', setsWithProgress.length, 'sets');
       setCurrentLevel(levelWithProgress);
+      console.log('[REFRESH] ✅ setCurrentLevel called, updating cachedCurrentLevel');
       // Update module-level cache
       cachedCurrentLevel = levelWithProgress;
       cachedLevelId = level.id;
       cachedUserFocus = effectiveUserFocus;
+      console.log('[REFRESH] 💾 Module cache updated - cachedCurrentLevel has', cachedCurrentLevel.sets.length, 'sets');
 
       // Set initial scroll index immediately with level to avoid flash
       // BUT skip if scroll is locked (animation in progress) to prevent jumping
@@ -1018,10 +1120,11 @@ export default function LearnScreen() {
   // Refresh level when dependencies change (activeLevelId, isPremium, userFocus)
   // Debounced to prevent multiple rapid calls during initialization
   const refreshTimer = useRef<NodeJS.Timeout | null>(null);
-  const lastRefreshParams = useRef<{levelId: string | null, premium: boolean, focus: string | null}>({
+  const lastRefreshParams = useRef<{levelId: string | null, premium: boolean, focus: string | null, initialized: boolean}>({
     levelId: null,
     premium: false,
-    focus: null
+    focus: null,
+    initialized: false
   });
 
   useEffect(() => {
@@ -1029,7 +1132,10 @@ export default function LearnScreen() {
     const currentParams = { levelId: activeLevelId, premium: isPremium, focus: userFocus };
     const lastParams = lastRefreshParams.current;
 
-    if (lastParams.levelId === currentParams.levelId &&
+    // Always run on first mount
+    if (!lastParams.initialized) {
+      console.log('[LEARN] First mount - forcing level load');
+    } else if (lastParams.levelId === currentParams.levelId &&
         lastParams.premium === currentParams.premium &&
         lastParams.focus === currentParams.focus) {
       return;
@@ -1042,7 +1148,7 @@ export default function LearnScreen() {
 
     // Debounce refresh by 200ms to batch rapid changes during initialization
     refreshTimer.current = setTimeout(() => {
-      lastRefreshParams.current = currentParams;
+      lastRefreshParams.current = { ...currentParams, initialized: true };
       refreshLevel();
     }, 200);
 
@@ -1114,8 +1220,8 @@ export default function LearnScreen() {
       return;
     }
 
-    // Premium-locked sets show paywall
-    if ((set as any).premiumLocked) {
+    // Premium-locked sets show paywall (but not to premium users)
+    if ((set as any).premiumLocked && !isPremium) {
       setShowPaywall(true);
       return;
     }
@@ -1131,6 +1237,7 @@ export default function LearnScreen() {
     // For locked quiz sets, check if this specific quiz can skip ahead (premium only)
     if (set.locked && isQuizSet && allSets && (!isPremium || !canQuizSkipAhead(set, allSets))) {
       if (!isPremium) {
+        setPaywallTrigger('skip-ahead');
         setShowPaywall(true);
         return;
       }
@@ -1201,6 +1308,8 @@ export default function LearnScreen() {
       // If this is a quiz, mark all previous non-quiz sets as completed (skip-ahead logic)
       const completedSet = levelBefore.sets[completedIndex];
       const isQuiz = completedSet && (completedSet as any).type === 'quiz';
+      const isSkipAhead = isQuiz && completedIndex > centeredPlanetIndex;
+
       if (isQuiz && activeLevelId) {
         logScroll('FLOW', `📝 Quiz completed, marking previous sets as completed`);
 
@@ -1219,8 +1328,13 @@ export default function LearnScreen() {
       }
 
       // CRITICAL: Set animation state IMMEDIATELY to keep static spacecraft mounted
-      // and show animated spacecraft - this prevents any disappearance
-      setSpacecraftFromIndex(completedIndex);
+      // For skip-ahead quiz, animate from current position to next set
+      // For regular progression, animate from completed set to next set
+      const animationStartIndex = isSkipAhead ? centeredPlanetIndex : completedIndex;
+
+      logScroll('FLOW', `🚀 Animation setup: start=${animationStartIndex}, end=${nextIndex}, isSkipAhead=${isSkipAhead}`);
+
+      setSpacecraftFromIndex(animationStartIndex);
       setSpacecraftToIndex(nextIndex);
       spacecraftAnim.setValue(0);
       setSpacecraftAnimating(true);
@@ -1230,14 +1344,14 @@ export default function LearnScreen() {
       // Mark as animated
       animatedSetIds.add(setIdStr);
 
-      logScroll('FLOW', `🚀 EVENT: Animating spacecraft from ${completedIndex} to ${nextIndex}`);
+      logScroll('FLOW', `🚀 EVENT: Animating spacecraft from ${animationStartIndex} to ${nextIndex}`);
 
       // Now refresh level data in the background (animation state keeps spacecraft visible)
       // This will pick up all the newly completed sets from the quiz skip-ahead
       await refreshLevel();
 
       // Start animation immediately - no setTimeout delay needed since we already have state set
-      const startScrollX = getScrollXForIndex(completedIndex);
+      const startScrollX = getScrollXForIndex(animationStartIndex);
       const endScrollX = getScrollXForIndex(nextIndex);
       const scrollDistance = endScrollX - startScrollX;
 
@@ -1247,16 +1361,36 @@ export default function LearnScreen() {
       // Play spacecraft sound
       soundService.playSpacecraft();
 
+      // Skip animation in Debug mode for better performance
+      if (!PERF_CONFIG.ENABLE_SPACECRAFT_ANIMATION) {
+        logScroll('FLOW', '⚡ Skipping spacecraft animation (Debug mode optimization)');
+
+        // Jump directly to end
+        spacecraftAnim.setValue(1);
+        scrollProgress.setValue(1);
+
+        if (scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({ x: endScrollX, y: 0, animated: false });
+        }
+
+        setCurrentSetIndex(nextIndex);
+        setCenteredPlanetIndex(nextIndex);
+        lastCenteredPlanet.current = nextIndex;
+        setScrollLocked(false);
+      } else {
+        // Full animation in Release mode
+        const duration = getAnimationDuration(1500);
+
         Animated.parallel([
           Animated.timing(spacecraftAnim, {
             toValue: 1,
-            duration: 1500,
+            duration,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: true,
           }),
           Animated.timing(scrollProgress, {
             toValue: 1,
-            duration: 1500,
+            duration,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: false,
           }),
@@ -1282,6 +1416,7 @@ export default function LearnScreen() {
           // Keep spacecraftAnimating TRUE - never switch back to static spacecraft
           // This prevents position adjustment
         });
+      }
 
       scrollProgress.addListener(({ value }) => {
         const currentScrollX = startScrollX + (scrollDistance * value);
@@ -1294,7 +1429,7 @@ export default function LearnScreen() {
     return () => {
       subscription.remove();
     };
-  }, [refreshLevel, getCurrentPlanetIndex, getScrollXForIndex, spacecraftAnim, scrollToPlanet, logScroll]);
+  }, [refreshLevel, getCurrentPlanetIndex, getScrollXForIndex, spacecraftAnim, scrollToPlanet, logScroll, centeredPlanetIndex, activeLevelId, currentLevel]);
 
   // ========== LEVEL CHANGE STATE UPDATE (NO SCROLL) ==========
   // Only updates state, does NOT scroll - scroll is handled by modal close
@@ -1386,51 +1521,72 @@ export default function LearnScreen() {
         const scrollProgress = new Animated.Value(0);
         scrollProgressRef.current = scrollProgress;
 
-        Animated.parallel([
-          // Spacecraft animation
-          Animated.timing(spacecraftAnim, {
-            toValue: 1,
-            duration: 1500, // Smooth 1.5 second flight
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          // Screen scroll follows spacecraft smoothly
-          Animated.timing(scrollProgress, {
-            toValue: 1,
-            duration: 1500,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: false,
-          }),
-        ]).start(() => {
-          logScroll('FLOW', '✅ Spacecraft animation complete');
+        // Skip animation in Debug mode for better performance
+        if (!PERF_CONFIG.ENABLE_SPACECRAFT_ANIMATION) {
+          logScroll('FLOW', '⚡ Skipping spacecraft animation (Debug mode optimization)');
 
-          // Clean up scroll listener immediately
-          scrollProgress.removeAllListeners();
+          // Jump directly to end
+          spacecraftAnim.setValue(1);
+          scrollProgress.setValue(1);
 
-          // Force scroll to exact final position
           if (scrollViewRef.current) {
             scrollViewRef.current.scrollTo({ x: endScrollX, y: 0, animated: false });
           }
 
-          // Update indices immediately - animation is complete so no stutter
           setCurrentSetIndex(nextIndex);
           setCenteredPlanetIndex(nextIndex);
           lastCenteredPlanet.current = nextIndex;
-
-          // Unlock scroll
           setScrollLocked(false);
+        } else {
+          // Full animation in Release mode
+          const duration = getAnimationDuration(1500);
 
-          // Keep spacecraftAnimating TRUE - never switch back to static spacecraft
-          // This prevents position adjustment
-        });
+          Animated.parallel([
+            // Spacecraft animation
+            Animated.timing(spacecraftAnim, {
+              toValue: 1,
+              duration,
+              easing: Easing.inOut(Easing.ease),
+              useNativeDriver: true,
+            }),
+            // Screen scroll follows spacecraft smoothly
+            Animated.timing(scrollProgress, {
+              toValue: 1,
+              duration,
+              easing: Easing.inOut(Easing.ease),
+              useNativeDriver: false,
+            }),
+          ]).start(() => {
+            logScroll('FLOW', '✅ Spacecraft animation complete');
 
-        // Listen to scroll progress and update ScrollView position
-        scrollProgress.addListener(({ value }) => {
-          const currentScrollX = startScrollX + (scrollDistance * value);
-          if (scrollViewRef.current) {
-            scrollViewRef.current.scrollTo({ x: currentScrollX, y: 0, animated: false });
-          }
-        });
+            // Clean up scroll listener immediately
+            scrollProgress.removeAllListeners();
+
+            // Force scroll to exact final position
+            if (scrollViewRef.current) {
+              scrollViewRef.current.scrollTo({ x: endScrollX, y: 0, animated: false });
+            }
+
+            // Update indices immediately - animation is complete so no stutter
+            setCurrentSetIndex(nextIndex);
+            setCenteredPlanetIndex(nextIndex);
+            lastCenteredPlanet.current = nextIndex;
+
+            // Unlock scroll
+            setScrollLocked(false);
+
+            // Keep spacecraftAnimating TRUE - never switch back to static spacecraft
+            // This prevents position adjustment
+          });
+
+          // Listen to scroll progress and update ScrollView position
+          scrollProgress.addListener(({ value }) => {
+            const currentScrollX = startScrollX + (scrollDistance * value);
+            if (scrollViewRef.current) {
+              scrollViewRef.current.scrollTo({ x: currentScrollX, y: 0, animated: false });
+            }
+          });
+        }
       }, 300);
     };
 
@@ -1577,6 +1733,9 @@ export default function LearnScreen() {
 
   // Scroll handler to detect centered planet
   const handleScroll = useCallback((event: any) => {
+    // Guard against events on unmounted components (Fabric issue)
+    if (!event?.nativeEvent) return;
+
     // Mark as scrolling and clear any pending end timer
     isScrollingRef.current = true;
     if (scrollEndTimer.current) {
@@ -1588,6 +1747,7 @@ export default function LearnScreen() {
     }, 150);
 
     const scrollX = event.nativeEvent.contentOffset.x;
+    currentScrollX.current = scrollX; // Track for smooth FAB scrolling
     const viewportWidth = event.nativeEvent.layoutMeasurement.width;
     const viewportCenter = scrollX + viewportWidth / 2;
 
@@ -1718,8 +1878,21 @@ export default function LearnScreen() {
 
   // Use current level or cached for instant display
   const displayLevel = currentLevel || cachedCurrentLevel;
+
+  if (__DEV__ && renderCount.current <= 3) {
+    console.log('[LEARN] 🔍 displayLevel check:', {
+      hasDisplayLevel: !!displayLevel,
+      hasCurrentLevel: !!currentLevel,
+      hasCachedCurrentLevel: !!cachedCurrentLevel,
+      displayLevelSets: displayLevel?.sets?.length || 0
+    });
+  }
+
   if (!displayLevel) {
     // No data at all - show empty view
+    if (__DEV__) {
+      console.log('[LEARN] ⚠️ EARLY RETURN - No displayLevel, showing blank screen');
+    }
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         {showTopStatus && <TopStatusPanel floating includeTopInset />}
@@ -2084,23 +2257,29 @@ export default function LearnScreen() {
       outputRange: [fromY, toY],
     });
 
-    // Add a slight arc to the path
-    const arcOffset = spacecraftAnim.interpolate({
-      inputRange: [0, 0.5, 1],
-      outputRange: [0, -60, 0], // Arc up in the middle
-    });
+    // Add a slight arc to the path (disabled in Debug for performance)
+    const arcOffset = PERF_CONFIG.ENABLE_ARC_INTERPOLATION
+      ? spacecraftAnim.interpolate({
+          inputRange: [0, 0.5, 1],
+          outputRange: [0, -60, 0], // Arc up in the middle
+        })
+      : new Animated.Value(0);
 
-    // Rotate spacecraft to face direction of travel
-    const rotate = spacecraftAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: ['0deg', '0deg'],
-    });
+    // Rotate spacecraft to face direction of travel (disabled in Debug)
+    const rotate = PERF_CONFIG.ENABLE_ROTATION_INTERPOLATION
+      ? spacecraftAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: ['0deg', '0deg'],
+        })
+      : new Animated.Value(0);
 
-    // Scale animation (grow slightly in middle)
-    const scale = spacecraftAnim.interpolate({
-      inputRange: [0, 0.5, 1],
-      outputRange: [1, 1.3, 1],
-    });
+    // Scale animation (grow slightly in middle) - disabled in Debug for performance
+    const scale = PERF_CONFIG.ENABLE_ARC_INTERPOLATION
+      ? spacecraftAnim.interpolate({
+          inputRange: [0, 0.5, 1],
+          outputRange: [1, 1.3, 1],
+        })
+      : new Animated.Value(1);
 
     return (
       <Animated.View
@@ -2132,7 +2311,12 @@ export default function LearnScreen() {
   // Build the path for current level only - DIAGONAL WINDING S-CURVE
   const buildCurrentLevelPath = () => {
     const level = currentLevel || cachedCurrentLevel;
-    if (!level) return null;
+    if (!level) {
+      if (__DEV__) {
+        console.log('[LEARN] ⚠️ No level data - returning null');
+      }
+      return null;
+    }
 
     const setsToRender = level.sets;
     const spacing = HORIZONTAL_SPACING; // Use constant from scroll handler
@@ -2284,6 +2468,13 @@ export default function LearnScreen() {
   const allCompleted = displayLevel && displayLevel.sets.every(s => s.completed);
   const isCenteredSetLocked = centeredSet?.locked && !((centeredSet as any).type === 'quiz' && canQuizSkipAhead(centeredSet as any, displayLevel?.sets || []));
 
+  if (__DEV__ && renderCount.current <= 3) {
+    console.log('[LEARN] About to render - displayLevel:', !!displayLevel, 'currentLevel:', !!currentLevel, 'cachedCurrentLevel:', !!cachedCurrentLevel);
+    if (displayLevel) {
+      console.log('[LEARN] displayLevel exists with', displayLevel.sets.length, 'sets');
+    }
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: SPACE_BG }]}>
       {/* Space background with stars */}
@@ -2302,7 +2493,7 @@ export default function LearnScreen() {
         onScroll={handleScroll}
         onLayout={handleScrollViewLayout}
         scrollEventThrottle={64}
-        removeClippedSubviews={true}
+        removeClippedSubviews={false}
         decelerationRate="fast"
         disableIntervalMomentum={true}
         contentOffset={initialScrollOffset}
@@ -2392,12 +2583,16 @@ export default function LearnScreen() {
 
             {/* Title */}
             <Text style={[styles.paywallTitle, isLight && styles.paywallTitleLight]}>
-              Unlock All Lessons
+              {paywallTrigger === 'skip-ahead'
+                ? 'Skip Ahead and Unlock All Levels'
+                : 'Unlock All Lessons'}
             </Text>
 
             {/* Subtitle */}
             <Text style={[styles.paywallSubtitle, isLight && styles.paywallSubtitleLight]}>
-              Get unlimited access to all vocabulary sets and learning features with Vocadoo Premium
+              {paywallTrigger === 'skip-ahead'
+                ? 'Jump to any quiz and unlock all levels with Premium. No need to wait!'
+                : 'Get unlimited access to all vocabulary sets and learning features with Vocadoo Premium'}
             </Text>
 
             {/* Features list */}

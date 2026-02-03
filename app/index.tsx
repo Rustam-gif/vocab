@@ -5,7 +5,7 @@ import { InteractionManager } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop, Pattern, Circle } from 'react-native-svg';
 import { LinearGradient } from '../lib/LinearGradient';
-import { Plus, Camera, Type, Flame, Clock, MessageSquare, XCircle, Search, Users, ShieldCheck, BookOpenCheck, Lightbulb, Globe, HeartPulse, Sparkles, Check, X, Lock, Crown, Volume2, Bookmark, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { Plus, Camera, Type, Flame, Clock, MessageSquare, XCircle, Search, Users, ShieldCheck, BookOpenCheck, Lightbulb, Globe, HeartPulse, Sparkles, Check, X, Lock, Crown, Volume2, Bookmark, ChevronDown, ChevronUp, CheckCircle, RotateCcw } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppStore } from '../lib/store';
 import { getTheme } from '../lib/theme';
@@ -16,6 +16,7 @@ import Speech from '../lib/speech';
 import OnboardingModal from './components/OnboardingModal';
 // No focus animation hook needed
 import { usePathname, useRouter } from 'expo-router';
+import { useFocusEffect } from '../lib/reactNavigation';
 import { Launch } from '../lib/launch';
 import LottieView from 'lottie-react-native';
 import LimitModal from '../lib/LimitModal';
@@ -1874,6 +1875,7 @@ export default function HomeScreen(props?: { preview?: boolean }) {
 	  const [exerciseAnswered, setExerciseAnswered] = useState(false);
 	  const [exerciseSelectedAnswer, setExerciseSelectedAnswer] = useState<string | null>(null);
 	  const [showStreakCelebrate, setShowStreakCelebrate] = useState(false);
+	  const [showStreakPaywall, setShowStreakPaywall] = useState(false);
 	  const countAnim = useRef(new Animated.Value(0)).current;
 	  const [displayCount, setDisplayCount] = useState(0);
 	  // Synonym Match state
@@ -1884,9 +1886,22 @@ export default function HomeScreen(props?: { preview?: boolean }) {
 	  const [synonymMatchLoading, setSynonymMatchLoading] = useState(false);
 	  const synonymMatchLoadedFromVault = useRef(false);
 
+  // Word of the Day state
+  const wotdCompletionKey = useMemo(() => `@vocadoo.wotd.completed.${todayKey}`, [todayKey]);
+  const wotdStreakKey = '@vocadoo.wotd.streak';
+  const [wotdCompleted, setWotdCompleted] = useState(false);
+  const [wotdStreak, setWotdStreak] = useState(0);
+
   // Premium status for gating daily articles
   const [isPremium, setIsPremium] = useState<boolean>(false);
   const [showArticlePaywall, setShowArticlePaywall] = useState<boolean>(false);
+
+  // Ensure nav bar is visible when home screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
+    }, [])
+  );
 
   // Check premium status on mount - use cached status from store
   useEffect(() => {
@@ -1999,6 +2014,51 @@ export default function HomeScreen(props?: { preview?: boolean }) {
     }
     // If not enough pairs, keep the default fallback words
   }, [synonymMatchDone, words.length]);
+
+  // Load Word of the Day completion status and streak
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const completedRaw = await AsyncStorage.getItem(wotdCompletionKey);
+        const streakRaw = await AsyncStorage.getItem(wotdStreakKey);
+        if (!alive) return;
+        setWotdCompleted(completedRaw === 'true');
+        setWotdStreak(parseInt(streakRaw || '0', 10));
+      } catch {
+        if (!alive) return;
+        setWotdCompleted(false);
+        setWotdStreak(0);
+      }
+    })();
+    return () => { alive = false; };
+  }, [wotdCompletionKey, wotdStreakKey]);
+
+  // Refresh Word of the Day status when returning to home screen
+  useEffect(() => {
+    if (pathname !== '/') return;
+    (async () => {
+      try {
+        const completedRaw = await AsyncStorage.getItem(wotdCompletionKey);
+        const streakRaw = await AsyncStorage.getItem(wotdStreakKey);
+        setWotdCompleted(completedRaw === 'true');
+        setWotdStreak(parseInt(streakRaw || '0', 10));
+      } catch {
+        setWotdCompleted(false);
+        setWotdStreak(0);
+      }
+    })();
+  }, [pathname, wotdCompletionKey, wotdStreakKey]);
+
+  // Reset Word of the Day completion
+  const resetWotdCompletion = async () => {
+    try {
+      await AsyncStorage.removeItem(wotdCompletionKey);
+      setWotdCompleted(false);
+    } catch (error) {
+      console.error('[WOTD] Reset error:', error);
+    }
+  };
 
   useEffect(() => {
     storyViewerVisibleRef.current = storyViewerVisible;
@@ -2273,22 +2333,37 @@ export default function HomeScreen(props?: { preview?: boolean }) {
   const [newsCardWidth, setNewsCardWidth] = useState(0);
   const NEWS_CAROUSEL_HORIZONTAL_PADDING = 16;
   const closeNewsModalRef = useRef<() => void>(() => {});
+  const newsScrollY = useRef(0);
   const newsPan = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 6,
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Only intercept drag-to-close when:
+        // 1. Scrolled to the very top (scrollY <= 1)
+        // 2. Dragging DOWN (dy > 0)
+        // 3. Predominantly vertical gesture (more vertical than horizontal)
+        const isDraggingDown = gestureState.dy > 5;
+        const isVerticalGesture = Math.abs(gestureState.dy) > Math.abs(gestureState.dx) * 1.5;
+        const isAtTop = newsScrollY.current <= 1;
+
+        // Only take over when all conditions are met
+        return isDraggingDown && isVerticalGesture && isAtTop;
+      },
       onPanResponderGrant: () => {
         newsDrag.setValue(0);
       },
       onPanResponderMove: (_, gestureState) => {
+        // Only allow downward drag
         const dy = Math.max(0, gestureState.dy);
         newsDrag.setValue(dy);
       },
       onPanResponderRelease: (_, gestureState) => {
         const dy = Math.max(0, gestureState.dy);
-        if (dy > 80) {
+        // Close if dragged down more than 100px or fast swipe
+        if (dy > 100 || gestureState.vy > 0.5) {
           closeNewsModalRef.current();
         } else {
+          // Spring back
           Animated.spring(newsDrag, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
         }
       },
@@ -3817,6 +3892,13 @@ Avoid fiction and avoid specific unverifiable claims.
       // setShowOnboarding(!done);
       try { await loadProgress(); } catch {}
     })();
+
+    // Failsafe: ensure loading screen never hangs
+    const timeout = setTimeout(() => {
+      setInitialLoading(false);
+    }, 3000);
+
+    return () => clearTimeout(timeout);
   }, []);
 
   // Load today's mission summary for the home card without blocking the screen
@@ -4552,6 +4634,7 @@ Avoid fiction and avoid specific unverifiable claims.
     setNewsModalVisible(true);
     newsModalAnim.setValue(0);
     newsDrag.setValue(0);
+    newsScrollY.current = 0; // Reset scroll position for drag-to-close
     Animated.timing(newsModalAnim, { toValue: 1, duration: 220, useNativeDriver: true }).start();
 
     const summaryWords = wordCount(article.summary || '');
@@ -4713,6 +4796,8 @@ EXAMPLE: [sentence in ${langName}]`
       setVocabPreviewIndex(0);
       setVocabPreviewFlipped(false);
       setVocabPreviewLoading(false);
+      // Ensure nav bar is visible after closing article
+      DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
     });
   };
   // Keep ref updated for PanResponder
@@ -4823,7 +4908,7 @@ EXAMPLE: [sentence in ${langName}]`
   // Show loading animation on initial mount
   if (initialLoading) {
     return (
-      <SafeAreaView edges={['left','right']} style={[styles.container, { backgroundColor: background }, styles.loadingContainer]}>
+      <View style={[styles.container, { backgroundColor: background, flex: 1, justifyContent: 'center', alignItems: 'center' }]}>
         <LottieView
           source={require('../assets/lottie/learn/loading_inlearn.json')}
           autoPlay
@@ -4831,7 +4916,7 @@ EXAMPLE: [sentence in ${langName}]`
           style={{ width: 140, height: 140 }}
         />
         <Text style={[styles.loadingText, theme === 'light' && { color: '#6B7280' }]}>Loading your daily content...</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -5114,6 +5199,65 @@ EXAMPLE: [sentence in ${langName}]`
               )}
 
             </View>
+          )}
+        </View>
+
+        {/* Word of the Day Card */}
+        <View style={[styles.wotdCard, theme === 'light' && styles.wotdCardLight]}>
+          <TouchableOpacity
+            onPress={() => {
+              if (!(user && (user as any)?.id)) {
+                setShowSignupNudge(true);
+                return;
+              }
+              router.push('/daily/word-of-day');
+            }}
+            activeOpacity={0.7}
+            style={{ flex: 1 }}
+          >
+            <View style={styles.wotdHeader}>
+              <View style={styles.wotdTitleRow}>
+                <Text style={[styles.wotdLabel, theme === 'light' && styles.wotdLabelLight]}>
+                  Word of the Day
+                </Text>
+                {wotdStreak > 0 && (
+                  <View style={[styles.wotdStreakBadge, theme === 'light' && styles.wotdStreakBadgeLight]}>
+                    <Text style={styles.wotdStreakText}>🔥 {wotdStreak}</Text>
+                  </View>
+                )}
+              </View>
+              {wotdCompleted ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={styles.wotdCompletedBadge}>
+                    <CheckCircle size={16} color="#437F76" strokeWidth={2} />
+                    <Text style={styles.wotdCompletedText}>Completed</Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={[styles.wotdCta, theme === 'light' && styles.wotdCtaLight]}>
+                  <Text style={[styles.wotdCtaText, theme === 'light' && styles.wotdCtaTextLight]}>
+                    Start
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text style={[styles.wotdDescription, theme === 'light' && styles.wotdDescriptionLight]}>
+              {wotdCompleted
+                ? 'Great job! Come back tomorrow for a new word.'
+                : 'Learn a new word with interactive exercises and earn XP.'}
+            </Text>
+          </TouchableOpacity>
+          {wotdCompleted && (
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                resetWotdCompletion();
+              }}
+              style={[styles.wotdResetBtn, theme === 'light' && styles.wotdResetBtnLight]}
+              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+            >
+              <RotateCcw size={16} color={theme === 'light' ? '#0F766E' : '#4ED9CB'} strokeWidth={2.5} />
+            </TouchableOpacity>
           )}
         </View>
 
@@ -5819,6 +5963,7 @@ EXAMPLE: [sentence in ${langName}]`
 	          <View style={styles.newsModalOverlay}>
 	            <TouchableOpacity style={styles.newsModalBackdrop} activeOpacity={1} onPress={() => { setArticleSettingsOpen(false); closeNewsModal(); }} />
 	            <Animated.View
+              {...newsPan.panHandlers}
               style={[
                 styles.newsModalSheet,
                 theme === 'light' && styles.newsModalSheetLight,
@@ -5837,7 +5982,7 @@ EXAMPLE: [sentence in ${langName}]`
                 },
               ]}
             >
-              <View {...newsPan.panHandlers} style={{ paddingVertical: 12, alignItems: 'center', marginBottom: 4 }}>
+              <View style={{ paddingVertical: 12, alignItems: 'center', marginBottom: 4 }}>
                 <View style={[styles.newsModalHandle, { marginBottom: 0 }, articleBgColor === 'sepia' ? { backgroundColor: '#C9B99A' } : (articleBgColor === 'dark' || articleBgColor === 'black') ? { backgroundColor: '#2D4A66' } : theme === 'light' ? styles.newsModalHandleLight : null]} />
               </View>
               {/* Text Settings Button */}
@@ -5848,6 +5993,22 @@ EXAMPLE: [sentence in ${langName}]`
               >
                 <Text style={{ fontSize: 16, fontWeight: '700', color: articleBgColor === 'sepia' ? '#5D4E37' : (articleBgColor === 'dark' || articleBgColor === 'black') ? '#E5E7EB' : theme === 'light' ? '#0D3B4A' : '#E5E7EB' }}>Aa</Text>
               </TouchableOpacity>
+              {/* Settings Popup Backdrop - close on tap anywhere */}
+              {articleSettingsOpen && (
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={() => setArticleSettingsOpen(false)}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    zIndex: 99,
+                    backgroundColor: 'transparent',
+                  }}
+                />
+              )}
               {/* Settings Popup */}
               {articleSettingsOpen && (
                 <View style={{
@@ -5953,8 +6114,17 @@ EXAMPLE: [sentence in ${langName}]`
               {sheetArticle && (
                 <ScrollView
                   showsVerticalScrollIndicator
-                  bounces
+                  bounces={true}
+                  scrollEnabled={true}
                   scrollEventThrottle={16}
+                  directionalLockEnabled={true}
+                  onScroll={(e) => {
+                    newsScrollY.current = e.nativeEvent.contentOffset.y;
+                  }}
+                  onScrollBeginDrag={() => {
+                    // Track that user started scrolling
+                    newsScrollY.current = newsScrollY.current || 0;
+                  }}
                   contentContainerStyle={{
                     paddingBottom: insets.bottom + 60,
                     paddingHorizontal: 10,
@@ -6682,6 +6852,14 @@ EXAMPLE: [sentence in ${langName}]`
                     ['@engniter.streak_celebrate_date', todayKey],
                     ['@engniter.streak_celebrate_value', String(userProgress?.streak || 0)],
                   ]);
+
+                  // Show paywall if 3-day streak and not premium
+                  const streak = userProgress?.streak || 0;
+                  if (streak === 3 && !isPremium) {
+                    setTimeout(() => {
+                      setShowStreakPaywall(true);
+                    }, 300);
+                  }
                 } catch {}
               }}
               activeOpacity={0.8}
@@ -6810,6 +6988,20 @@ EXAMPLE: [sentence in ${langName}]`
           </View>
         </View>
       </Modal>
+
+      {/* 3-Day Streak Paywall */}
+      <LimitModal
+        visible={showStreakPaywall}
+        title="Amazing 3-Day Streak!"
+        message="Keep your streak alive across all topics with Premium. Unlock unlimited vocabulary and never lose momentum."
+        onClose={() => setShowStreakPaywall(false)}
+        onSubscribe={() => {
+          setShowStreakPaywall(false);
+          router.push('/profile?paywall=1');
+        }}
+        primaryText="Go Premium"
+        secondaryText="Not now"
+      />
     </SafeAreaView>
   );
 }
@@ -7548,6 +7740,126 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
+  },
+  // Word of the Day Card Styles
+  wotdCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: '#1B263B',
+    borderWidth: 2,
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomColor: 'rgba(78,217,203,0.3)',
+    borderRightColor: 'rgba(78,217,203,0.25)',
+  },
+  wotdCardLight: {
+    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(78,217,203,0.2)',
+    borderBottomColor: 'rgba(78,217,203,0.25)',
+    borderRightColor: 'rgba(78,217,203,0.22)',
+  },
+  wotdHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  wotdTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  wotdLabel: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#E5E7EB',
+    fontFamily: 'Feather-Bold',
+  },
+  wotdLabelLight: {
+    color: '#111827',
+  },
+  wotdStreakBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(248,176,112,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(248,176,112,0.3)',
+  },
+  wotdStreakBadgeLight: {
+    backgroundColor: 'rgba(248,176,112,0.1)',
+    borderColor: 'rgba(248,176,112,0.25)',
+  },
+  wotdStreakText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#F8B070',
+    fontFamily: 'Feather-Bold',
+  },
+  wotdCompletedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(67,127,118,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(67,127,118,0.3)',
+  },
+  wotdCompletedText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#437F76',
+    fontFamily: 'Feather-Bold',
+  },
+  wotdResetBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(78,217,203,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(78,217,203,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wotdResetBtnLight: {
+    backgroundColor: 'rgba(78,217,203,0.1)',
+    borderColor: 'rgba(78,217,203,0.25)',
+  },
+  wotdCta: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#4ED9CB',
+  },
+  wotdCtaLight: {
+    backgroundColor: '#4ED9CB',
+  },
+  wotdCtaText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0D1B2A',
+    fontFamily: 'Feather-Bold',
+  },
+  wotdCtaTextLight: {
+    color: '#0D1B2A',
+  },
+  wotdDescription: {
+    fontSize: 14,
+    color: '#C7D2FE',
+    lineHeight: 20,
+    fontFamily: 'Ubuntu-Regular',
+  },
+  wotdDescriptionLight: {
+    color: '#2D4A66',
   },
   newsHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   newsLabel: { fontSize: 12, fontWeight: '700', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.6, fontFamily: 'Ubuntu-Bold' },

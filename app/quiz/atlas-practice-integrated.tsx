@@ -737,6 +737,7 @@ export default function AtlasPracticeIntegrated() {
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => setShowLeaveModal(true)}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <X size={24} color={isLight ? '#9CA3AF' : '#6B7280'} strokeWidth={2.5} />
         </TouchableOpacity>

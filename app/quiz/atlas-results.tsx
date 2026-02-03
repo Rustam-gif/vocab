@@ -9,6 +9,9 @@ import { LinearGradient } from '../../lib/LinearGradient';
 import ReactNativeHapticFeedback from '../../lib/haptics';
 import LottieView from 'lottie-react-native';
 import { Lightbulb } from 'lucide-react-native';
+import LimitModal from '../../lib/LimitModal';
+import { SubscriptionService } from '../../services/SubscriptionService';
+import { SetProgressService } from '../../services/SetProgressService';
 
 // Colors matching Learn section
 const DARK_BG = '#1B263B';
@@ -78,6 +81,10 @@ export default function AtlasResults() {
       scale: new Animated.Value(0),
     }))
   ).current;
+
+  // Paywall state
+  const [showPerfectScorePaywall, setShowPerfectScorePaywall] = useState(false);
+  const isPremium = useAppStore(s => s.isPremium);
 
   useEffect(() => {
     // Main screen fade-in
@@ -167,6 +174,43 @@ export default function AtlasResults() {
 
     return () => timeouts.forEach(t => clearTimeout(t));
   }, [fadeAnim, scaleAnim, heartsRemaining, heartAnims]);
+
+  // Check if should show perfect score paywall
+  useEffect(() => {
+    const checkPerfectScorePaywall = async () => {
+      // Only show if:
+      // 1. User got perfect score (all hearts remaining)
+      // 2. This is the first set (setId === '1')
+      // 3. User is not premium
+      // 4. This is the first completed set overall
+      if (heartsRemaining === TOTAL_HEARTS && setId === '1' && !isPremium && levelId) {
+        try {
+          // Check if this is their first completed set
+          const level = levels.find(l => l.id === levelId);
+          if (!level) return;
+
+          let completedSets = 0;
+          for (const set of level.sets) {
+            const flags = SetProgressService.getSetFlags(levelId, set.id);
+            if (flags.completed) {
+              completedSets++;
+            }
+          }
+
+          // Show paywall only if this is the first completed set
+          if (completedSets === 1) {
+            setTimeout(() => {
+              setShowPerfectScorePaywall(true);
+            }, 1500); // Delay to let celebration animation play first
+          }
+        } catch (error) {
+          console.error('[Results] Error checking perfect score paywall:', error);
+        }
+      }
+    };
+
+    checkPerfectScorePaywall();
+  }, [heartsRemaining, setId, isPremium, levelId]);
 
   const handleDone = async () => {
     console.log('[Results] 🎯 handleDone called with levelId:', levelId, 'setId:', setId);
@@ -306,6 +350,20 @@ export default function AtlasResults() {
           </View>
         </Animated.View>
       </LinearGradient>
+
+      {/* Perfect Score Paywall */}
+      <LimitModal
+        visible={showPerfectScorePaywall}
+        title="You're a Natural!"
+        message="Keep your momentum going! Unlock all 150 sets and master vocabulary faster."
+        onClose={() => setShowPerfectScorePaywall(false)}
+        onSubscribe={() => {
+          setShowPerfectScorePaywall(false);
+          router.push('/profile?paywall=1');
+        }}
+        primaryText="Unlock All Sets"
+        secondaryText="Not now"
+      />
     </View>
   );
 }

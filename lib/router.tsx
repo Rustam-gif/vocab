@@ -96,24 +96,18 @@ export function RouterProvider({ children }: { children: React.ReactNode }) {
   const [currentTab, setCurrentTab] = React.useState<string>('quiz');
 
   // Keep tab stack in sync when navigating within a tab
-  const prevStackLengthRef = React.useRef(stack.length);
   React.useEffect(() => {
     const top = stack[stack.length - 1];
     if (!top) return;
     const tab = getTabForRoute(top.pathname);
 
-    // Only update if tab changed (to avoid redundant updates during tab switch)
+    // Update currentTab if navigating to a different tab via push/replace
     if (tab !== currentTab) {
       setCurrentTab(tab);
     }
-
-    // Only update tab stack if stack length changed (actual navigation happened)
-    // Skip if just switching tabs (length stays 1)
-    if (stack.length !== prevStackLengthRef.current) {
-      setTabStacks(prev => ({ ...prev, [tab]: [...stack] }));
-      prevStackLengthRef.current = stack.length;
-    }
-  }, [stack, currentTab]);
+    // Always update the current tab's stack
+    setTabStacks(prev => ({ ...prev, [tab]: [...stack] }));
+  }, [stack]);
 
   // Expose current params to hooks used inside screens
   const top = stack[stack.length - 1];
@@ -389,13 +383,35 @@ export function RouteRenderer() {
   }>({ visible: false, feature: null, redirect: null });
   const [navHidden, setNavHidden] = React.useState(false);
   const navAnim = React.useRef(new Animated.Value(0)).current;
+
+  // Ensure nav bar is visible on mount
+  React.useEffect(() => {
+    console.log('[NAV] Mount - showing nav bar');
+    setNavHidden(false);
+    navAnim.setValue(0);
+  }, []);
+
   React.useEffect(() => {
     const sub = DeviceEventEmitter.addListener('NAV_VISIBILITY', (payload: any) => {
+      console.log('[NAV] NAV_VISIBILITY event:', payload);
       if (payload === 'hide' || payload === true) setNavHidden(true);
       else setNavHidden(false);
     });
     return () => sub.remove();
   }, []);
+
+  // Ensure nav bar is visible when switching to main tabs
+  React.useEffect(() => {
+    const mainTabs = ['home', 'story', 'quiz', 'vault', 'account'];
+    if (mainTabs.includes(ctx.currentTab)) {
+      console.log('[NAV] Showing nav bar for tab:', ctx.currentTab);
+      setNavHidden(false);
+      // Also force the animation value to 0 immediately
+      try {
+        navAnim.setValue(0);
+      } catch {}
+    }
+  }, [ctx.currentTab, navAnim]);
 
   // Global auth state listener - syncs user across the entire app
   const authInitializedRef = React.useRef(false);
@@ -501,12 +517,6 @@ export function RouteRenderer() {
     return React.createElement(C, { key: routeKeyFor(r) + '::fresh::' + suffix, ...props });
   }
   const currentEl = getScreenEl(top);
-  const homeRoute: Route = { pathname: '/' };
-  const homeEl = getScreenEl(homeRoute);
-
-  // Create stable Learn element using same pattern as Home to prevent remounting
-  const learnRoute: Route = { pathname: '/quiz/learn' };
-  const learnEl = getScreenEl(learnRoute);
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
 
@@ -623,26 +633,44 @@ export function RouteRenderer() {
   const tabStacksRef = React.useRef(ctx.tabStacks);
   const currentTabRef = React.useRef(ctx.currentTab);
   const stackRef = React.useRef(ctx.stack);
-  React.useEffect(() => { tabStacksRef.current = ctx.tabStacks; }, [ctx.tabStacks]);
-  React.useEffect(() => { currentTabRef.current = ctx.currentTab; }, [ctx.currentTab]);
-  React.useEffect(() => { stackRef.current = ctx.stack; }, [ctx.stack]);
+  const setTabStacksRef = React.useRef(ctx.setTabStacks);
+  const setCurrentTabRef = React.useRef(ctx.setCurrentTab);
+  const setStackRef = React.useRef(ctx.setStack);
 
-  // Tab switching function that preserves state
+  // Update refs on every render to always have latest values
+  tabStacksRef.current = ctx.tabStacks;
+  currentTabRef.current = ctx.currentTab;
+  stackRef.current = ctx.stack;
+  setTabStacksRef.current = ctx.setTabStacks;
+  setCurrentTabRef.current = ctx.setCurrentTab;
+  setStackRef.current = ctx.setStack;
+
+  // Tab switching function that preserves state - uses refs so it never goes stale
   const switchToTab = React.useCallback((tabKey: string, defaultRoute: Route) => {
+    console.log('[NAV] switchToTab:', tabKey);
+
     // CRITICAL: Dismiss keyboard before tab switch to prevent iOS UIEmojiSearchOperations deadlock
     dismissKeyboardBeforeNavigation();
 
+    // Always show nav bar when switching tabs (in case a screen hid it and didn't clean up)
+    DeviceEventEmitter.emit('NAV_VISIBILITY', 'show');
+
     const currentTabKey = currentTabRef.current;
     const currentStack = stackRef.current;
+    const setTabStacks = setTabStacksRef.current;
+    const setCurrentTab = setCurrentTabRef.current;
+    const setStack = setStackRef.current;
+
+    console.log('[NAV] current tab:', currentTabKey, '-> target:', tabKey);
 
     // Home tab should always reset to home screen, never restore saved stack
     if (tabKey === 'home') {
       if (currentTabKey !== 'home') {
         soundService.playTabSwitch();
-        ctx.setTabStacks(prev => ({ ...prev, [currentTabKey]: [...currentStack] }));
+        setTabStacks(prev => ({ ...prev, [currentTabKey]: [...currentStack] }));
       }
-      ctx.setCurrentTab('home');
-      ctx.setStack([{ pathname: '/' }]);
+      setCurrentTab('home');
+      setStack([{ pathname: '/' }]);
       return;
     }
 
@@ -650,16 +678,16 @@ export function RouteRenderer() {
     if (tabKey === 'account') {
       if (currentTabKey !== 'account') {
         soundService.playTabSwitch();
-        ctx.setTabStacks(prev => ({ ...prev, [currentTabKey]: [...currentStack] }));
+        setTabStacks(prev => ({ ...prev, [currentTabKey]: [...currentStack] }));
       }
-      ctx.setCurrentTab('account');
-      ctx.setStack([{ pathname: '/profile' }]);
+      setCurrentTab('account');
+      setStack([{ pathname: '/profile' }]);
       return;
     }
 
     // If clicking the same tab that's already active, reset to default route
     if (tabKey === currentTabKey) {
-      ctx.setStack([defaultRoute]);
+      setStack([defaultRoute]);
       return;
     }
 
@@ -667,27 +695,28 @@ export function RouteRenderer() {
     soundService.playTabSwitch();
 
     // Save current stack to current tab before switching
-    ctx.setTabStacks(prev => ({ ...prev, [currentTabKey]: [...currentStack] }));
+    setTabStacks(prev => ({ ...prev, [currentTabKey]: [...currentStack] }));
 
     // Switch to new tab
-    ctx.setCurrentTab(tabKey);
+    setCurrentTab(tabKey);
 
     // Restore the saved stack for the new tab, or use default
     const savedStack = tabStacksRef.current[tabKey];
+    console.log('[NAV] restored stack for', tabKey, ':', savedStack?.map(r => r.pathname));
     if (savedStack && savedStack.length > 0) {
-      ctx.setStack([...savedStack]);
+      setStack([...savedStack]);
     } else {
-      ctx.setStack([defaultRoute]);
+      setStack([defaultRoute]);
     }
-  }, [ctx.setTabStacks, ctx.setCurrentTab, ctx.setStack]);
+  }, []); // Empty deps - all values accessed via refs
 
-  const navItems = [
+  const navItems = React.useMemo(() => [
     { key: 'home', label: 'Home', icon: require('../assets/homepageicons/11.png'), color: '#D97EB0', go: () => switchToTab('home', { pathname: '/' }) },
     { key: 'story', label: 'Story', icon: require('../assets/homepageicons/13.png'), color: '#2D4B73', go: () => switchToTab('story', { pathname: '/story/StoryExercise' }) },
     { key: 'quiz', label: 'Learn', icon: require('../assets/homepageicons/12.png'), color: '#F2AB27', go: () => switchToTab('quiz', { pathname: '/quiz/learn' }) },
     { key: 'vault', label: 'Vault', icon: require('../assets/homepageicons/15.png'), color: '#C4A484', go: () => switchToTab('vault', { pathname: '/vault' }) },
     { key: 'account', label: 'Profile', icon: require('../assets/homepageicons/14.png'), color: '#E07850', go: () => switchToTab('account', { pathname: '/profile' }) },
-  ] as const;
+  ], [switchToTab]);
   // Bottom-sheet style overlay for Translate
   const sheetAnim = React.useRef(new Animated.Value(0)).current; // 0 closed, 1 open
   const sheetClosingRef = React.useRef(false);
@@ -826,15 +855,13 @@ export function RouteRenderer() {
     });
   }, [basePath, navItems]);
 
-  const showHomeBase =
-    top.pathname === '/' ||
-    (!!sheetRoute && prevRoute?.pathname === '/');
-
-  // Keep Learn screen always mounted (like Home) to preserve scroll position and state
-  // Only control visibility with display property, never unmount with conditional rendering
-  const showLearnBase =
-    basePath === '/quiz/learn' ||
-    (!!sheetRoute && prevRoute?.pathname === '/quiz/learn');
+  // Determine which tab is active for rendering
+  const activeTab = ctx.currentTab;
+  // Force navAnim to 0 if navHidden is false (defensive)
+  if (!navHidden) {
+    try { navAnim.setValue(0); } catch {}
+  }
+  console.log('[NAV] Rendering RouteRenderer - activeTab:', activeTab, 'navHidden:', navHidden);
 
   // Horizontal dock (bottom) – no edge swipe; we animate in/out with translateY
   const dockPan = React.useRef(
@@ -863,29 +890,42 @@ export function RouteRenderer() {
         </Animated.View>
       ) : null}
 
-      {/* Keep Home mounted; also show it beneath Translate overlay */}
-      <View style={{ flex: 1, display: showHomeBase ? 'flex' : 'none' }}>
-        {homeEl}
-      </View>
+      {/* Tab-based screen containers - all tabs stay mounted, inactive moved off-screen */}
+      {/* Helper function to get screen element for a tab */}
+      {(() => {
+        const getTabScreen = (tabKey: string, defaultRoute: Route) => {
+          // For active tab, use current stack (top); for inactive tabs, use saved tabStacks
+          if (tabKey === activeTab) {
+            return currentEl;
+          }
+          const savedStack = ctx.tabStacks[tabKey];
+          const tabTop = savedStack?.[savedStack.length - 1] || defaultRoute;
+          return getScreenEl(tabTop);
+        };
 
-      {/* Keep Learn screen ALWAYS mounted (never null) to preserve scroll position and state */}
-      {/* Control visibility ONLY with display property - never unmount with conditional */}
-      <View style={{ flex: 1, display: showLearnBase ? 'flex' : 'none' }}>
-        {learnEl}
-      </View>
+        const tabConfigs = [
+          { key: 'home', default: { pathname: '/' } },
+          { key: 'story', default: { pathname: '/story/StoryExercise' } },
+          { key: 'quiz', default: { pathname: '/quiz/learn' } },
+          { key: 'vault', default: { pathname: '/vault' } },
+          { key: 'account', default: { pathname: '/profile' } },
+        ];
 
-      {/* Main content area - show current route unless it's Home or Learn */}
-      <View style={{ flex: 1, display: (showHomeBase || showLearnBase) ? 'none' : 'flex' }}>
-        {/* When showing overlay, keep previous screen as base (unless it's Home or Learn, which are shown above) */}
-        {isSheetOverlay && prevRoute ? (
-          prevRoute.pathname === '/' || prevRoute.pathname === '/quiz/learn'
-            ? null
-            : getClonedEl(prevRoute, 'base-prev')
-        ) : (
-          // Don't render Learn here - it has its own persistent View above
-          top.pathname === '/quiz/learn' ? null : currentEl
-        )}
-      </View>
+        return tabConfigs.map(tab => (
+          <View
+            key={tab.key}
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              zIndex: activeTab === tab.key ? 1 : 0,
+              transform: [{ translateX: activeTab === tab.key ? 0 : screenWidth * 2 }],
+            }}
+            pointerEvents={activeTab === tab.key ? 'auto' : 'none'}
+          >
+            {getTabScreen(tab.key, tab.default)}
+          </View>
+        ));
+      })()}
 
       {/* Outgoing (previous) screen sliding left when applicable */}
       {!sheetRoute && outgoing && outgoingEl ? (
@@ -986,37 +1026,19 @@ export function RouteRenderer() {
       {/* Microflash overlay removed per request */}
 
       {/* Bottom nav */}
-      <Animated.View
-        pointerEvents={navHidden ? 'none' : 'auto'}
+      <View
+        pointerEvents={navHidden ? 'none' : 'box-none'}
         style={{
           position: 'absolute',
           left: 0,
           right: 0,
           bottom: 0,
-          zIndex: 50,
-          transform: [{ translateY: navAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 120] }) }],
-          opacity: navAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+          zIndex: 9999,
+          transform: [{ translateY: navHidden ? 120 : 0 }],
+          opacity: navHidden ? 0 : 1,
         }}
-        {...dockPan.panHandlers}
       >
-        <View style={{ overflow: 'hidden' }}>
-          <View
-            style={{
-              position: 'absolute',
-              top: 0,
-              bottom: 0,
-              left: 0,
-              right: 0,
-              backgroundColor: '#1A2744',
-              borderTopWidth: 3,
-              borderTopColor: '#0D1B2A',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: -2 },
-              shadowOpacity: themeName === 'light' ? 0.1 : 0.4,
-              shadowRadius: 0,
-              elevation: 3,
-            }}
-          />
+        <View pointerEvents="auto" style={{ overflow: 'hidden', backgroundColor: '#1A2744', borderTopWidth: 3, borderTopColor: '#0D1B2A' }}>
           <View
             style={{
               flexDirection: 'row',
@@ -1030,7 +1052,10 @@ export function RouteRenderer() {
           {navItems.map((item, idx) => (
             <TouchableOpacity
               key={item.key}
-              onPress={item.go}
+              onPress={() => {
+                console.log('[NAV] Tab pressed:', item.key);
+                item.go();
+              }}
               activeOpacity={0.75}
               style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-start', paddingVertical: 2 }}
             >
@@ -1067,7 +1092,7 @@ export function RouteRenderer() {
           ))}
           </View>
         </View>
-	      </Animated.View>
+	      </View>
 
       <LimitModal
         visible={signupGate.visible}
